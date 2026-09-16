@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+const ACE_STEP_VERSION = "74e3a7d383b18815e277de5223f5fe9d53d38832de15aa567fe729fa129d0d85";
+
 function jsonError(message: string, status = 500) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -60,32 +62,40 @@ export async function POST(request: Request) {
   }
 
   if (type === "music") {
-    const baseUrl = process.env.ACE_STEP_API_URL?.replace(/\/$/, "");
-    if (!baseUrl) return jsonError("ACE_STEP_API_URL is not configured in Vercel.", 503);
-    const apiKey = process.env.ACE_STEP_API_KEY;
-    const response = await fetch(`${baseUrl}/release_task`, {
+    const token = process.env.REPLICATE_API_TOKEN;
+    if (!token) return jsonError("REPLICATE_API_TOKEN is not configured in Vercel.", 503);
+    const duration = Math.min(Math.max(Number(body?.duration || 60), 5), 600);
+    const lyrics = typeof body?.lyrics === "string" && body.lyrics.trim() ? body.lyrics.trim() : "[Instrumental]";
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        task_type: "text2music",
-        sample_query: prompt,
-        thinking: true,
-        use_format: true,
-        audio_format: "mp3",
-        audio_duration: Math.min(Math.max(Number(body?.duration || 60), 10), 600),
-        vocal_language: body?.vocal_language || "en",
-        model: process.env.ACE_STEP_MODEL || "acestep-v15-turbo",
-        batch_size: 1,
+        version: ACE_STEP_VERSION,
+        input: {
+          seed: -1,
+          shift: 3,
+          lyrics,
+          prompt,
+          duration,
+          thinking: true,
+          key_scale: "",
+          batch_size: 1,
+          audio_format: "mp3",
+          guidance_scale: 7,
+          time_signature: "auto",
+          inference_steps: 8,
+        },
       }),
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return jsonError(payload?.error || payload?.message || "ACE-Step music generation failed.", response.status);
-    const taskId = payload?.data?.task_id || payload?.task_id || "";
-    if (!taskId) return jsonError("ACE-Step returned no task ID.", 502);
-    return NextResponse.json({ type, status: "pending", taskId, model: process.env.ACE_STEP_MODEL || "acestep-v15-turbo" });
+    if (!response.ok) return jsonError(payload?.detail || payload?.error || "ACE-Step music generation failed.", response.status);
+    return NextResponse.json({
+      type,
+      status: payload?.status || "starting",
+      predictionId: payload?.id || "",
+      output: payload?.output || null,
+      model: "ACE-Step 1.5",
+    });
   }
 
   return jsonError("Unsupported asset type. Use image, video, voice, or music.", 400);
