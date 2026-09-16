@@ -1,6 +1,6 @@
 export type ProjectEvent = { id: string; label: string; action: string; detail: string };
 export type ProjectAsset = { name: string; type: string; url?: string };
-export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean };
+export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean; visible: boolean };
 export type Project = {
   id: string;
   name: string;
@@ -28,7 +28,7 @@ export const demoProjects: Project[] = [
       { id: "hide", label: "HIDE CHARACTER", action: "character.toggle", detail: "Toggle the character layer" },
     ],
     assets: [{ name: "Creator Character", type: "PNG" }, { name: "Horror SFX", type: "Audio" }, { name: "Neon Fog", type: "Generated" }],
-    overlay: { title: "HAUNTED NIGHT", subtitle: "FOLLOW FOR A SURPRISE", showChat: true, showAlerts: true, showCharacter: true }, wheel: { enabled: false, title: "Game Wheel", segments: ["Prize", "Challenge", "Bonus", "Mystery"], spinning: false },
+    overlay: { title: "HAUNTED NIGHT", subtitle: "FOLLOW FOR A SURPRISE", showChat: true, showAlerts: true, showCharacter: true }, wheel: { enabled: false, title: "Game Wheel", segments: ["Prize", "Challenge", "Bonus", "Mystery"], spinning: false, visible: false },
   },
   { id: "space-battle", name: "Space Battle", slug: "space-battle-2m9qp", description: "Futuristic battles with interactive audience events.", status: "Published", theme: "purple", updatedAt: "Yesterday", prompt: "Create a futuristic space battle stream with interactive audience events.", messages: [{ role: "user", text: "Create a futuristic space battle stream with interactive audience events." }, { role: "assistant", text: "Your battle arena, alert HUD, and host triggers are ready." }], controls: [{ id: "attack", label: "LASER ATTACK", action: "scene.attack", detail: "Launch a laser volley" }, { id: "boost", label: "SHIELD BOOST", action: "scene.shield", detail: "Raise the shield" }, { id: "follow", label: "TEST FOLLOW", action: "alert.follow", detail: "Play the follower animation" }], assets: [{ name: "Ship", type: "Generated" }, { name: "Starfield", type: "Generated" }], overlay: { title: "SPACE BATTLE", subtitle: "PILOT STATUS: READY", showChat: true, showAlerts: true, showCharacter: false }, wheel: { enabled: true, title: "Battle Wheel", segments: ["LASER ATTACK", "SHIELD BOOST", "BONUS", "WILD CARD"], spinning: false } },
   { id: "christmas-giveaway", name: "Christmas Giveaway", slug: "christmas-giveaway-4x1tt", description: "Festive scenes, giveaways and animated alerts.", status: "Draft", theme: "pink", updatedAt: "Dec 18", prompt: "Create a Christmas giveaway stream with festive animated alerts.", messages: [], controls: [{ id: "draw", label: "DRAW WINNER", action: "giveaway.draw", detail: "Run a giveaway winner animation" }, { id: "snow", label: "SNOW", action: "effect.snow", detail: "Toggle snowfall" }], assets: [{ name: "Holiday Logo", type: "PNG" }], overlay: { title: "HOLIDAY GIVEAWAY", subtitle: "GOOD LUCK!", showChat: true, showAlerts: true, showCharacter: false }, wheel: { enabled: false, title: "Giveaway Wheel", segments: ["WINNER", "BONUS", "TRY AGAIN", "DOUBLE"], spinning: false } },
