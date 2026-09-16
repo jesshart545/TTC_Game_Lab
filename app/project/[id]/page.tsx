@@ -57,10 +57,29 @@ export default function ProjectWorkspace() {
     const config = triviaConfig || TRIVIA_CONFIG;
     const category = config.categories[categoryIndex];
     const question = category.questions[questionIndex];
+    if (question.used) return;
+    const nextConfig = {
+      ...config,
+      categories: config.categories.map((c:any, ci:number) =>
+        ci === categoryIndex
+          ? { ...c, questions: c.questions.map((q:any, qi:number) => qi === questionIndex ? { ...q, used:true } : q) }
+          : c
+      )
+    };
+    setTriviaConfig(nextConfig);
+    const latest = loadProjects().find(p => p.id === project.id) || project;
+    const trivia = (latest.gameTools || []).find(t => t.name === "Trivia Board");
+    if (trivia) {
+      persist({
+        ...latest,
+        gameTools: (latest.gameTools || []).map(t => t.id === trivia.id ? { ...t, config: nextConfig } : t),
+        updatedAt: "just now"
+      });
+    }
     const channel = new BroadcastChannel(`ttc-project-${project.id}`);
     channel.postMessage({ type:"TRIVIA_QUESTION", category:category.name, value:question.value, prompt:question.prompt, answer:question.answer, source:question.source, sourceUrl:question.sourceUrl });
     channel.close();
-    setEventLog(v => [`${category.name} ${question.value} → question shown`, ...v].slice(0,4));
+    setEventLog(v => [`${category.name} ${question.value} → question shown and consumed`, ...v].slice(0,4));
   }
 
   function revealTriviaAnswer(categoryIndex:number, questionIndex:number) {
