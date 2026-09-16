@@ -38,6 +38,17 @@ export default function NewProject() {
     event.target.value = "";
   }
 
+  async function pollMusic(taskId: string) {
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      const response = await fetch(`/api/generate-music-status?taskId=${encodeURIComponent(taskId)}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Music generation failed.");
+      if (data.status === "complete" && data.url) return data.url as string;
+    }
+    throw new Error("Music generation is taking longer than expected. The task may still be running.");
+  }
+
   async function generateAsset(type: GeneratorType) {
     const requested = window.prompt(`Describe the ${type} you want to generate`, prompt.trim() || `A neon futuristic ${type} for a TikTok LIVE experience`);
     if (!requested?.trim() || assetBusy) return;
@@ -52,10 +63,16 @@ export default function NewProject() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
-      const url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+
+      let url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${assets.length + 1}`;
+      if (type === "music" && data.taskId) {
+        setAssetStatus(`${name} is being generated…`);
+        url = await pollMusic(data.taskId);
+      }
+      if (!url && type !== "video") throw new Error(`${type} generation returned no asset URL.`);
       setAssets((current) => [...current, { name, type: data.model || type, url }]);
-      setAssetStatus(data.status === "pending" ? `${name} started — generation is processing.` : `${name} generated`);
+      setAssetStatus(`${name} generated`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : `${type} generation failed.`);
     } finally {
