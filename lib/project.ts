@@ -16,7 +16,8 @@ export type Project = {
   controls: ProjectEvent[];
   assets: ProjectAsset[];
   overlay: { title: string; subtitle: string; showChat: boolean; showAlerts: boolean; showCharacter: boolean };
-  wheel: GameWheel;\n  gameTools: GameTool[];
+  wheel: GameWheel;
+  gameTools: GameTool[];
 };
 
 export const demoProjects: Project[] = [
