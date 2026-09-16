@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import { ChangeEvent, useRef, useState } from "react";
 import { createProject, loadProjects, ProjectAsset, saveProjects } from "../../../lib/project";
 
+const GENERATORS = [
+  { type: "image", label: "Image", icon: "▣" },
+  { type: "video", label: "Video", icon: "▶" },
+  { type: "voice", label: "Voice", icon: "◖" },
+  { type: "music", label: "Music", icon: "♫" },
+] as const;
+
+type GeneratorType = (typeof GENERATORS)[number]["type"];
+
 export default function NewProject() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,6 +22,7 @@ export default function NewProject() {
   const [assets, setAssets] = useState<ProjectAsset[]>([]);
   const [assetBusy, setAssetBusy] = useState(false);
   const [assetStatus, setAssetStatus] = useState("");
+  const [showGenerator, setShowGenerator] = useState(false);
 
   function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
@@ -28,24 +38,26 @@ export default function NewProject() {
     event.target.value = "";
   }
 
-  async function generateAsset() {
-    const requested = window.prompt("Describe the asset you want to generate", prompt.trim() || "A neon futuristic livestream character asset");
+  async function generateAsset(type: GeneratorType) {
+    const requested = window.prompt(`Describe the ${type} you want to generate`, prompt.trim() || `A neon futuristic ${type} for a TikTok LIVE experience`);
     if (!requested?.trim() || assetBusy) return;
+    setShowGenerator(false);
     setAssetBusy(true);
-    setAssetStatus("Generating with Agnes…");
+    setAssetStatus(`Generating ${type}…`);
     try {
       const response = await fetch("/api/generate-asset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requested.trim() }),
+        body: JSON.stringify({ prompt: requested.trim(), type }),
       });
       const data = await response.json();
-      if (!response.ok || !data.url) throw new Error(data.error || "Asset generation failed.");
-      const asset = { name: `Generated ${assets.length + 1}`, type: "Generated", url: data.url };
-      setAssets((current) => [...current, asset]);
-      setAssetStatus("Asset generated");
+      if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
+      const url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+      const name = `${type[0].toUpperCase()}${type.slice(1)} ${assets.length + 1}`;
+      setAssets((current) => [...current, { name, type: data.model || type, url }]);
+      setAssetStatus(data.status === "pending" ? `${name} started — generation is processing.` : `${name} generated`);
     } catch (error) {
-      setAssetStatus(error instanceof Error ? error.message : "Asset generation failed.");
+      setAssetStatus(error instanceof Error ? error.message : `${type} generation failed.`);
     } finally {
       setAssetBusy(false);
     }
@@ -70,7 +82,17 @@ export default function NewProject() {
             <div className="message ai"><div className="message-icon">✦</div><div><strong>TTCGameLab AI</strong><p>Tell me what you want your TikTok LIVE experience to feel like. You can describe the idea, upload assets, or just give me a rough concept. I&apos;ll turn it into a working dashboard, overlay, interactions, and visuals.</p></div></div>
             <div className="idea-card"><span>QUICK START</span><button onClick={() => setPrompt("Create a spooky gaming stream where my character reacts dramatically whenever someone follows.")}>👻 Spooky gaming stream <b>→</b></button><button onClick={() => setPrompt("Create a futuristic space battle stream with interactive audience events and neon effects.")}>🚀 Interactive space battle <b>→</b></button><button onClick={() => setPrompt("Create a cyberpunk livestream with animated alerts, particles and a reactive character.")}>⚡ Neon cyberpunk <b>→</b></button></div>
           </div>
-          <div className="composer"><textarea value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Describe your livestream idea..."/><div className="composer-bottom"><input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/><button type="button" onClick={() => fileInputRef.current?.click()}>＋ Upload</button><button type="button" onClick={generateAsset}>{assetBusy ? "Generating…" : "◈ Generate asset"}</button><button className="send" type="button" onClick={build}>{building ? "Building…" : "Build experience →"}</button></div>{assetStatus&&<div className="asset-empty">{assetStatus}</div>}</div>
+          <div className="composer">
+            <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Describe your livestream idea..."/>
+            <div className="composer-bottom">
+              <input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/>
+              <button type="button" onClick={() => fileInputRef.current?.click()}>＋ Upload</button>
+              <button type="button" onClick={() => setShowGenerator(v => !v)}>{assetBusy ? "Generating…" : "◈ Generate asset"}</button>
+              <button className="send" type="button" onClick={build}>{building ? "Building…" : "Build experience →"}</button>
+            </div>
+            {showGenerator && <div className="idea-card"><span>GENERATE WITH AI</span>{GENERATORS.map((item) => <button key={item.type} type="button" onClick={() => generateAsset(item.type)}>{item.icon} {item.label} <b>→</b></button>)}</div>}
+            {assetStatus&&<div className="asset-empty">{assetStatus}</div>}
+          </div>
         </section>
         <section className="preview-panel"><div className="preview-head"><div><small>LIVE PREVIEW</small><h2>{building ? "Building your experience…" : "Your experience will appear here"}</h2></div></div><div className="stage"><div className="stage-scan"/><div className="stage-content"><div className="stage-live">● AI BUILD PIPELINE</div><div className="stage-title">YOUR<br/><span>LIVESTREAM</span></div><p>{building ? "Creating project state, host controls and overlay runtime." : "Start with an idea. The finished project becomes editable and publishable."}</p></div><div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></div></section>
         <aside className="assets-panel"><div className="assets-head"><div><small>PROJECT ASSETS</small><h2>Assets</h2></div><button type="button" onClick={() => fileInputRef.current?.click()}>＋</button></div><div className="upload-box" onClick={() => fileInputRef.current?.click()}><div>↑</div><strong>Drop assets here</strong><span>Images, video, audio, logos</span></div>{assets.length>0 ? <div className="asset-empty">{assets.map((asset) => <div key={asset.name}>{asset.name} · {asset.type}</div>)}</div> : <div className="asset-empty">Your uploaded and generated assets will appear here.</div>}</aside>
