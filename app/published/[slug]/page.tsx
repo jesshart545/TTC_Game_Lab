@@ -5,7 +5,7 @@ import { loadProjects, Project } from "../../../lib/project";
 
 export default function PublishedProject() {
   const { slug } = useParams<{ slug: string }>();
-  const [project, setProject] = useState<Project | null>(null); const [triviaQuestion, setTriviaQuestion] = useState<{category:string;value:number;prompt:string} | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [flash, setFlash] = useState(false); const [spinning, setSpinning] = useState(false); const [wheelVisible, setWheelVisible] = useState(false); const [activeTool, setActiveTool] = useState<any>(null); const [triviaQuestion, setTriviaQuestion] = useState<any>(null);
   useEffect(() => { const p = loadProjects().find(x => x.slug === slug) || loadProjects()[0]; setProject(p); if (!p) return; const bc = new BroadcastChannel(`ttc-project-${p.id}`); bc.onmessage = e => { if (e.data?.type === "PROJECT_EVENT") { setFlash(true); setTimeout(() => setFlash(false), 700); } if (e.data?.type === "WHEEL_SPIN") { setWheelVisible(true); setSpinning(true); setTimeout(() => setSpinning(false), 2200); setTimeout(() => setWheelVisible(false), 3200); } if (e.data?.type === "GAME_TOOL_TRIGGER") { setActiveTool(e.data.tool); setTimeout(() => setActiveTool(null), e.data.tool?.type === "countdown" ? Math.max(1000, Number(e.data.tool?.config?.seconds || 10) * 1000) : 5000); } if (e.data?.type === "TRIVIA_QUESTION") { setTriviaQuestion({ category:e.data.category, value:Number(e.data.value), prompt:e.data.prompt, answer:e.data.answer, source:e.data.source, sourceUrl:e.data.sourceUrl }); } }; return () => bc.close(); }, [slug]);
   if (!project) return <div className="runtime-page">Project not found.</div>;
