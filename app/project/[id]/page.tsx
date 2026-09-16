@@ -41,19 +41,69 @@ export default function ProjectWorkspace() {
   const projectUrl = useMemo(() => project ? `/published/${project.slug}` : "", [project]);
 
   const TOOL_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
+    { type:"poll", name:"Trivia Board", description:"Jeopardy-style 5×5 board with host-selected questions." },
     { type:"wheel", name:"Game Wheel", description:"Spin configurable segments on the live overlay." },
     { type:"random-picker", name:"Random Picker", description:"Pick one name or item from a list." },
     { type:"countdown", name:"Countdown", description:"Show a host-triggered countdown timer." },
     { type:"poll", name:"Live Poll", description:"Show choices and a live audience poll." },
     { type:"dice", name:"Dice Roll", description:"Roll animated dice for a quick game." },
   ];
+  const TRIVIA_CONFIG = {
+    categories: [
+      { name:"Science", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
+        "What planet is known as the Red Planet?",
+        "What gas do plants absorb during photosynthesis?",
+        "What is the largest organ in the human body?",
+        "What particle has a negative electric charge?",
+        "What is the process by which a cell divides into two identical daughter cells?"
+      ][i] })) },
+      { name:"History", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
+        "Which ancient civilization built the pyramids at Giza?",
+        "Who was the first President of the United States?",
+        "In what year did the Titanic sink?",
+        "Which empire was ruled by Julius Caesar?",
+        "What treaty formally ended World War I?"
+      ][i] })) },
+      { name:"Pop Culture", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
+        "What movie features Elsa singing “Let It Go”?",
+        "Which superhero is also known as Bruce Wayne?",
+        "Which band recorded the album Abbey Road?",
+        "What TV series is set in the fictional town of Hawkins?",
+        "Which artist released the album Lemonade?"
+      ][i] })) },
+      { name:"Gaming", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
+        "What company created the Mario video game series?",
+        "In Minecraft, what tool is commonly used to mine stone?",
+        "What princess is often rescued in The Legend of Zelda?",
+        "Which game franchise features the character Master Chief?",
+        "What year was the first commercial PlayStation released in Japan?"
+      ][i] })) },
+      { name:"Space", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
+        "What is Earth’s natural satellite?",
+        "What star is at the center of our solar system?",
+        "Which planet has the most prominent ring system?",
+        "What is the name of the galaxy that contains our solar system?",
+        "What is the boundary around a black hole beyond which nothing can escape called?"
+      ][i] })) }
+    ]
+  };
+  function triggerTriviaQuestion(categoryIndex:number, questionIndex:number) {
+    if (!project) return;
+    const category = TRIVIA_CONFIG.categories[categoryIndex];
+    const question = category.questions[questionIndex];
+    const channel = new BroadcastChannel(`ttc-project-${project.id}`);
+    channel.postMessage({ type:"TRIVIA_QUESTION", category:category.name, value:question.value, prompt:question.prompt });
+    channel.close();
+    setEventLog(v => [`${category.name} ${question.value} → shown on overlay`, ...v].slice(0,4));
+  }
+
   function addGameTool(type: GameToolType) {
     if (!project) return;
     const latest = loadProjects().find(p=>p.id===project.id) || project;
     const existing = latest.gameTools || [];
     if (existing.some(t=>t.type===type && t.enabled)) { setAssetStatus("That game tool is already added."); return; }
     const info = TOOL_LIBRARY.find(t=>t.type===type)!;
-    const tool: GameTool = { id: `${type}-${Date.now()}`, type, name: info.name, enabled:true, config: type==="wheel" ? { title:"Game Wheel", segments:["Prize","Challenge","Bonus","Mystery"] } : type==="random-picker" ? { items:["Player 1","Player 2","Player 3"] } : type==="countdown" ? { seconds:10 } : type==="poll" ? { question:"Choose what happens next", options:["Option A","Option B"] } : { sides:6 } };
+    const tool: GameTool = { id: `${type}-${Date.now()}`, type, name: info.name, enabled:true, config: info.name==="Trivia Board" ? TRIVIA_CONFIG : type==="wheel" ? { title:"Game Wheel", segments:["Prize","Challenge","Bonus","Mystery"] } : type==="random-picker" ? { items:["Player 1","Player 2","Player 3"] } : type==="countdown" ? { seconds:10 } : type==="poll" ? { question:"Choose what happens next", options:["Option A","Option B"] } : { sides:6 } };
     const next = { ...latest, gameTools:[...existing,tool], updatedAt:"just now" };
     if (type==="wheel") next.wheel = { ...(latest.wheel || { enabled:false,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false,visible:false }), enabled:true, visible:false };
     persist(next); setAssetStatus(`${info.name} added to your game tools.`);
@@ -132,14 +182,22 @@ export default function ProjectWorkspace() {
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
     setDraft(""); setBuilding(true);
     const wheelRequest = /game wheel|spin(ning)? wheel|wheel.*overlay|custom(ize|izable).*wheel/i.test(text);
+    const triviaRequest = /jeopardy|trivia board|trivia game|trivia categories/i.test(text);
+    if (triviaRequest) {
+      const latest = loadProjects().find(p => p.id === project.id) || project;
+      const existing = latest.gameTools || [];
+      const trivia = existing.find(t => t.name === "Trivia Board");
+      const tool: GameTool = trivia || { id:`trivia-${Date.now()}`, type:"poll", name:"Trivia Board", enabled:true, config:TRIVIA_CONFIG };
+      persist({ ...latest, gameTools:[...existing.filter(t=>t.name !== "Trivia Board"), tool], messages:[...latest.messages, {role:"user",text}, {role:"assistant",text:"Added a Jeopardy-style Trivia Board with five categories and five increasing-value questions per category. Pick any question from the dashboard to take over the live overlay."}], updatedAt:"just now" });
+      setBuilding(false);
+      return;
+    }
     if (wheelRequest) {
       const latest = loadProjects().find(p => p.id === project.id) || project;
       const wheel = latest.wheel || { enabled:false,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false,visible:false };
       const wheelProject: Project = { ...latest, updatedAt:"just now", wheel:{ ...wheel, enabled:true }, messages:[...latest.messages,{role:"user",text},{role:"assistant",text:"Added a customizable Game Wheel to the dashboard and live overlay. You can edit its title and segments in the dashboard, then spin it for viewers."}] };
       persist(wheelProject); setBuilding(false); return;
     }
-    const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
-    persist(updated);
     try {
       const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated.messages }) });
       const data = await response.json();
