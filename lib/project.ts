@@ -1,4 +1,5 @@
 export type ProjectEvent = { id: string; label: string; action: string; detail: string };
+export type ProjectAsset = { name: string; type: string; url?: string };
 export type Project = {
   id: string;
   name: string;
@@ -10,7 +11,7 @@ export type Project = {
   prompt: string;
   messages: { role: "user" | "assistant"; text: string }[];
   controls: ProjectEvent[];
-  assets: { name: string; type: string }[];
+  assets: ProjectAsset[];
   overlay: { title: string; subtitle: string; showChat: boolean; showAlerts: boolean; showCharacter: boolean };
 };
 
