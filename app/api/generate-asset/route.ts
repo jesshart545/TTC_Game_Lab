@@ -20,10 +20,20 @@ export async function POST(request: Request) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) return jsonError(payload?.error?.message || payload?.message || "Agnes image generation failed.", response.status);
+
     const item = Array.isArray(payload?.data) ? payload.data[0] : null;
-    const url = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : "");
+    let url = item?.b64_json ? `data:image/png;base64,${item.b64_json}` : item?.url || "";
     if (!url) return jsonError("Agnes returned no image.", 502);
-    return NextResponse.json({ url, type, model: "agnes-image-2.1-flash" });
+
+    if (!url.startsWith("data:")) {
+      const imageResponse = await fetch(url);
+      if (!imageResponse.ok) return jsonError("Agnes returned an image URL that TTCGameLab could not retrieve.", 502);
+      const contentType = imageResponse.headers.get("content-type") || "image/png";
+      const bytes = new Uint8Array(await imageResponse.arrayBuffer());
+      url = `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
+    }
+
+    return NextResponse.json({ url, type: "image", model: "agnes-image-2.1-flash" });
   }
 
   if (type === "video") {
