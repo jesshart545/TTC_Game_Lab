@@ -96,7 +96,7 @@ export default function ProjectWorkspace() {
     const category = config.categories[categoryIndex];
     const question = category.questions[questionIndex];
     const channel = new BroadcastChannel(`ttc-project-${project.id}`);
-    channel.postMessage({ type:"TRIVIA_QUESTION", category:category.name, value:question.value, prompt:question.prompt });
+    channel.postMessage({ type:"TRIVIA_QUESTION", category:category.name, value:question.value, prompt:question.prompt, answer:question.answer, source:question.source, sourceUrl:question.sourceUrl });
     channel.close();
     setEventLog(v => [`${category.name} ${question.value} → shown on overlay`, ...v].slice(0,4));
   }
