@@ -14,6 +14,18 @@ const GENERATORS = [
 
 type GeneratorType = (typeof GENERATORS)[number]["type"];
 
+function isImage(asset: ProjectAsset) {
+  return Boolean(asset.url && (asset.type.toLowerCase().includes("image") || asset.name.toLowerCase().startsWith("image")));
+}
+
+function isVideo(asset: ProjectAsset) {
+  return Boolean(asset.url && (asset.type.toLowerCase().includes("video") || asset.name.toLowerCase().startsWith("video")));
+}
+
+function isAudio(asset: ProjectAsset) {
+  return Boolean(asset.url && (asset.type.toLowerCase().includes("audio") || asset.name.toLowerCase().startsWith("voice") || asset.name.toLowerCase().startsWith("music")));
+}
+
 export default function NewProject() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,18 +50,12 @@ export default function NewProject() {
     event.target.value = "";
   }
 
-  async function pollMusic(taskId: string) {
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-      const response = await fetch(`/api/generate-music-status?taskId=${encodeURIComponent(taskId)}`, { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Music generation failed.");
-      if (data.status === "complete" && data.url) return data.url as string;
-    }
-    throw new Error("Music generation is taking longer than expected. The task may still be running.");
-  }
-
   async function generateAsset(type: GeneratorType) {
+    if (type === "music") {
+      setShowGenerator(false);
+      setAssetStatus("Music generation is disabled until the self-hosted ACE-Step server is connected.");
+      return;
+    }
     const requested = window.prompt(`Describe the ${type} you want to generate`, prompt.trim() || `A neon futuristic ${type} for a TikTok LIVE experience`);
     if (!requested?.trim() || assetBusy) return;
     setShowGenerator(false);
@@ -63,14 +69,9 @@ export default function NewProject() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
-
-      let url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+      const url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+      if (!url) throw new Error(`${type} generation returned no asset URL.`);
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${assets.length + 1}`;
-      if (type === "music" && data.taskId) {
-        setAssetStatus(`${name} is being generated…`);
-        url = await pollMusic(data.taskId);
-      }
-      if (!url && type !== "video") throw new Error(`${type} generation returned no asset URL.`);
       setAssets((current) => [...current, { name, type: data.model || type, url }]);
       setAssetStatus(`${name} generated`);
     } catch (error) {
@@ -87,6 +88,14 @@ export default function NewProject() {
     project.assets = assets;
     saveProjects([project, ...loadProjects().filter(p => p.id !== project.id)]);
     setTimeout(() => router.push(`/project/${project.id}`), 500);
+  }
+
+  function renderAsset(asset: ProjectAsset) {
+    if (!asset.url) return null;
+    if (isImage(asset)) return <img src={asset.url} alt={asset.name} className="asset-thumb" />;
+    if (isVideo(asset)) return <video src={asset.url} className="asset-thumb" controls preload="metadata" />;
+    if (isAudio(asset)) return <audio src={asset.url} controls />;
+    return null;
   }
 
   return (
@@ -112,7 +121,7 @@ export default function NewProject() {
           </div>
         </section>
         <section className="preview-panel"><div className="preview-head"><div><small>LIVE PREVIEW</small><h2>{building ? "Building your experience…" : "Your experience will appear here"}</h2></div></div><div className="stage"><div className="stage-scan"/><div className="stage-content"><div className="stage-live">● AI BUILD PIPELINE</div><div className="stage-title">YOUR<br/><span>LIVESTREAM</span></div><p>{building ? "Creating project state, host controls and overlay runtime." : "Start with an idea. The finished project becomes editable and publishable."}</p></div><div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></div></section>
-        <aside className="assets-panel"><div className="assets-head"><div><small>PROJECT ASSETS</small><h2>Assets</h2></div><button type="button" onClick={() => fileInputRef.current?.click()}>＋</button></div><div className="upload-box" onClick={() => fileInputRef.current?.click()}><div>↑</div><strong>Drop assets here</strong><span>Images, video, audio, logos</span></div>{assets.length>0 ? <div className="asset-empty">{assets.map((asset) => <div key={asset.name}>{asset.name} · {asset.type}</div>)}</div> : <div className="asset-empty">Your uploaded and generated assets will appear here.</div>}</aside>
+        <aside className="assets-panel"><div className="assets-head"><div><small>PROJECT ASSETS</small><h2>Assets</h2></div><button type="button" onClick={() => fileInputRef.current?.click()}>＋</button></div><div className="upload-box" onClick={() => fileInputRef.current?.click()}><div>↑</div><strong>Drop assets here</strong><span>Images, video, audio, logos</span></div>{assets.length>0 ? <div className="asset-empty">{assets.map((asset) => <div className="asset-card" key={asset.name}><div className="asset-card-title"><b>{asset.name}</b><em>{asset.type}</em></div>{renderAsset(asset)}</div>)}</div> : <div className="asset-empty">Your uploaded and generated assets will appear here.</div>}</aside>
       </div>
     </main>
   );
