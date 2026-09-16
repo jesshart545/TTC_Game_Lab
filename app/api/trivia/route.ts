@@ -17,45 +17,53 @@ function extractJson(text: string) {
 
 async function sourceContext(topic: string, category: string) {
   const sourceGroups: Record<string, string[]> = {
-    science: [
-      "https://www.nasa.gov/",
-      "https://science.nasa.gov/",
-      "https://www.nih.gov/",
-      "https://www.nps.gov/",
-      "https://www.si.edu/",
-    ],
-    history: [
-      "https://www.loc.gov/",
-      "https://www.archives.gov/",
-      "https://www.si.edu/",
-      "https://www.nps.gov/",
-    ],
-    "pop culture": [
-      "https://www.grammy.com/",
-      "https://www.oscars.org/",
-      "https://www.si.edu/",
-    ],
-    gaming: [
-      "https://www.nintendo.com/",
-      "https://www.playstation.com/",
-      "https://www.xbox.com/",
-      "https://www.si.edu/",
-    ],
-    space: [
-      "https://science.nasa.gov/",
-      "https://www.nasa.gov/",
-      "https://www.si.edu/",
-    ],
+    science: ["nasa.gov", "nih.gov", "si.edu", "nps.gov"],
+    history: ["loc.gov", "archives.gov", "si.edu", "nps.gov"],
+    "pop culture": ["grammy.com", "oscars.org", "si.edu"],
+    gaming: ["nintendo.com", "playstation.com", "xbox.com"],
+    space: ["science.nasa.gov", "nasa.gov", "si.edu"],
   };
 
   const normalized = category.toLowerCase();
-  const preferred = Object.entries(sourceGroups).find(([key]) => normalized.includes(key))?.[1] || [
-    "https://www.loc.gov/",
-    "https://www.si.edu/",
-    "https://www.nasa.gov/",
-  ];
+  const domains =
+    Object.entries(sourceGroups).find(([key]) => normalized.includes(key))?.[1] ||
+    ["loc.gov", "si.edu", "nasa.gov"];
 
-  return preferred.map((url) => ({ source: url })).filter(Boolean);
+  const results: { title: string; extract: string; url: string }[] = [];
+
+  for (const domain of domains) {
+    const q = encodeURIComponent(`site:${domain} ${topic}`);
+    const url = `https://www.google.com/search?q=${q}&num=5`;
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36",
+      },
+    }).catch(() => null);
+    if (!response?.ok) continue;
+
+    const html = await response.text();
+    const blocks = html.match(/<a href="\/url\?q=([^"&]+)[^>]*>([\s\S]*?)<\/a>/g) || [];
+    for (const block of blocks.slice(0, 5)) {
+      const href = block.match(/<a href="\/url\?q=([^"&]+)/)?.[1];
+      const text = block
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!href || !text || !href.includes(domain)) continue;
+      results.push({
+        title: text.slice(0, 180),
+        extract: text.slice(0, 1000),
+        url: href,
+      });
+    }
+  }
+
+  return results.slice(0, 12);
 }
 
 export async function POST(request: Request) {
