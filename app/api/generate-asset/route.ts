@@ -60,34 +60,7 @@ export async function POST(request: Request) {
   }
 
   if (type === "music") {
-    const token = process.env.REPLICATE_API_TOKEN;
-    if (!token) return jsonError("REPLICATE_API_TOKEN is not configured in Vercel.", 503);
-    const duration = Math.min(Math.max(Number(body?.duration || 60), 10), 600);
-    const version = "fishaudio/ace-step-1.5:74e3a7d383b18815e277de5223f5fe9d53d38832de15aa567fe729fa129d0d85";
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        version,
-        input: {
-          prompt: prompt.slice(0, 512),
-          lyrics: typeof body?.lyrics === "string" && body.lyrics.trim() ? body.lyrics.slice(0, 4096) : "[Instrumental]",
-          duration,
-          thinking: true,
-          key_scale: "",
-          batch_size: 1,
-          audio_format: "mp3",
-          guidance_scale: 7,
-          time_signature: "auto",
-          inference_steps: 8,
-          shift: 3,
-          seed: -1,
-        },
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return jsonError(payload?.detail || payload?.error || "ACE-Step music generation failed.", response.status);
-    return NextResponse.json({ type, status: payload?.status || "starting", taskId: payload?.id || "", model: "fishaudio/ace-step-1.5", predictionUrl: payload?.urls?.get || "" });
+    return jsonError("Music generation is temporarily disabled. Connect a self-hosted ACE-Step 1.5 server to enable it.", 503);
   }
 
   return jsonError("Unsupported asset type. Use image, video, voice, or music.", 400);
