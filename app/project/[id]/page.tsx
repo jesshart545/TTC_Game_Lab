@@ -40,7 +40,7 @@ export default function ProjectWorkspace() {
   const [triviaBusy, setTriviaBusy] = useState(false);
   const [triviaTopics, setTriviaTopics] = useState<string[]>([]);
 
-  useEffect(() => { const all = loadProjects(); const found = all.find(p => p.id === params.id) || all[0]; if (found) { setProject(found); const tool = (found.gameTools || []).find(t => t.name === "Trivia Board"); setTriviaConfig(tool?.config || null); } }, [params.id]);
+  useEffect(() => { const all = loadProjects(); const found = all.find(p => p.id === params.id) || all[0]; if (found) { setProject(found); const tool = (found.gameTools || []).find(t => t.name === "Trivia Board"); setTriviaConfig(tool?.config || null); setTriviaTopics(Array.isArray(tool?.config?.categories) ? tool.config.categories.map((c:any)=>String(c.name)) : []); } }, [params.id]);
   const projectUrl = useMemo(() => project ? `/published/${project.slug}` : "", [project]);
 
   const TOOL_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
@@ -51,45 +51,7 @@ export default function ProjectWorkspace() {
     { type:"poll", name:"Live Poll", description:"Show choices and a live audience poll." },
     { type:"dice", name:"Dice Roll", description:"Roll animated dice for a quick game." },
   ];
-  const TRIVIA_CONFIG = {
-    categories: [
-      { name:"Science", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
-        "What planet is known as the Red Planet?",
-        "What gas do plants absorb during photosynthesis?",
-        "What is the largest organ in the human body?",
-        "What particle has a negative electric charge?",
-        "What is the process by which a cell divides into two identical daughter cells?"
-      ][i] })) },
-      { name:"History", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
-        "Which ancient civilization built the pyramids at Giza?",
-        "Who was the first President of the United States?",
-        "In what year did the Titanic sink?",
-        "Which empire was ruled by Julius Caesar?",
-        "What treaty formally ended World War I?"
-      ][i] })) },
-      { name:"Pop Culture", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
-        "What movie features Elsa singing “Let It Go”?",
-        "Which superhero is also known as Bruce Wayne?",
-        "Which band recorded the album Abbey Road?",
-        "What TV series is set in the fictional town of Hawkins?",
-        "Which artist released the album Lemonade?"
-      ][i] })) },
-      { name:"Gaming", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
-        "What company created the Mario video game series?",
-        "In Minecraft, what tool is commonly used to mine stone?",
-        "What princess is often rescued in The Legend of Zelda?",
-        "Which game franchise features the character Master Chief?",
-        "What year was the first commercial PlayStation released in Japan?"
-      ][i] })) },
-      { name:"Space", questions:[100,200,300,400,500].map((value,i)=>({ value, prompt:[
-        "What is Earth’s natural satellite?",
-        "What star is at the center of our solar system?",
-        "Which planet has the most prominent ring system?",
-        "What is the name of the galaxy that contains our solar system?",
-        "What is the boundary around a black hole beyond which nothing can escape called?"
-      ][i] })) }
-    ]
-  };
+  const TRIVIA_CONFIG = { categories: [] as any[] };
   function triggerTriviaQuestion(categoryIndex:number, questionIndex:number) {
     if (!project) return;
     const config = triviaConfig || TRIVIA_CONFIG;
