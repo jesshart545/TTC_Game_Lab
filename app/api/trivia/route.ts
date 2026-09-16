@@ -15,47 +15,47 @@ function extractJson(text: string) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-async function sourceContext(topic: string) {
-  const searchUrl =
-    "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" +
-    encodeURIComponent(topic) +
-    "&srlimit=6&format=json&origin=*";
-  const searchRes = await fetch(searchUrl, {
-    cache: "no-store",
-    headers: { "User-Agent": "TTCGameLab/1.0 (trivia source retrieval)" },
-  });
-  if (!searchRes.ok) return [];
+async function sourceContext(topic: string, category: string) {
+  const sourceGroups: Record<string, string[]> = {
+    science: [
+      "https://www.nasa.gov/",
+      "https://science.nasa.gov/",
+      "https://www.nih.gov/",
+      "https://www.nps.gov/",
+      "https://www.si.edu/",
+    ],
+    history: [
+      "https://www.loc.gov/",
+      "https://www.archives.gov/",
+      "https://www.si.edu/",
+      "https://www.nps.gov/",
+    ],
+    "pop culture": [
+      "https://www.grammy.com/",
+      "https://www.oscars.org/",
+      "https://www.si.edu/",
+    ],
+    gaming: [
+      "https://www.nintendo.com/",
+      "https://www.playstation.com/",
+      "https://www.xbox.com/",
+      "https://www.si.edu/",
+    ],
+    space: [
+      "https://science.nasa.gov/",
+      "https://www.nasa.gov/",
+      "https://www.si.edu/",
+    ],
+  };
 
-  const searchData = await searchRes.json().catch(() => ({}));
-  const titles = Array.isArray(searchData?.query?.search)
-    ? searchData.query.search
-        .map((x: any) => String(x.title || ""))
-        .filter(Boolean)
-        .slice(0, 5)
-    : [];
+  const normalized = category.toLowerCase();
+  const preferred = Object.entries(sourceGroups).find(([key]) => normalized.includes(key))?.[1] || [
+    "https://www.loc.gov/",
+    "https://www.si.edu/",
+    "https://www.nasa.gov/",
+  ];
 
-  if (!titles.length) return [];
-
-  const extractUrl =
-    "https://en.wikipedia.org/w/api.php?action=query&prop=extracts|info&explaintext=1&exintro=1&inprop=url&redirects=1&format=json&origin=*&titles=" +
-    encodeURIComponent(titles.join("|"));
-
-  const extractRes = await fetch(extractUrl, {
-    cache: "no-store",
-    headers: { "User-Agent": "TTCGameLab/1.0 (trivia source retrieval)" },
-  });
-  if (!extractRes.ok) return [];
-
-  const extractData = await extractRes.json().catch(() => ({}));
-  const pages = extractData?.query?.pages || {};
-
-  return Object.values(pages)
-    .map((x: any) => ({
-      title: String(x.title || ""),
-      extract: String(x.extract || "").slice(0, 5000),
-      url: String(x.fullurl || ""),
-    }))
-    .filter((x: any) => x.title && x.extract && x.url);
+  return preferred.map((url) => ({ source: url })).filter(Boolean);
 }
 
 export async function POST(request: Request) {
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   const built: any[] = [];
 
   for (const topic of targets) {
-    const context = await sourceContext(topic);
+    const context = await sourceContext(topic, topic);
     if (!context.length) {
       return jsonError(
         "No source material was found for " + topic + ". Trivia was not generated.",
