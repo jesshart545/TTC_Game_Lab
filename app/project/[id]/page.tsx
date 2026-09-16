@@ -98,7 +98,16 @@ export default function ProjectWorkspace() {
     if (!project || !draft.trim() || building) return;
     const text = draft.trim();
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
-    persist(updated); setDraft(""); setBuilding(true);
+    setDraft(""); setBuilding(true);
+    const wheelRequest = /game wheel|spin(ning)? wheel|wheel.*overlay|custom(ize|izable).*wheel/i.test(text);
+    if (wheelRequest) {
+      const latest = loadProjects().find(p => p.id === project.id) || project;
+      const wheel = latest.wheel || { enabled:false,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false };
+      const wheelProject: Project = { ...latest, updatedAt:"just now", wheel:{ ...wheel, enabled:true }, messages:[...latest.messages,{role:"user",text},{role:"assistant",text:"Added a customizable Game Wheel to the dashboard and live overlay. You can edit its title and segments in the dashboard, then spin it for viewers."}] };
+      persist(wheelProject); setBuilding(false); return;
+    }
+    const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
+    persist(updated);
     try {
       const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated.messages }) });
       const data = await response.json();
