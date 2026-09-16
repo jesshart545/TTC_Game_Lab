@@ -180,7 +180,7 @@ ${JSON.stringify(context)}
           value: Number(q.value),
           prompt: String(q.prompt),
           answer: String(q.answer),
-          source: String(q.source || "Wikipedia"),
+          source: String(q.source || "Approved institutional source"),
           sourceUrl: String(q.sourceUrl),
           evidence: String(q.evidence),
         })),
