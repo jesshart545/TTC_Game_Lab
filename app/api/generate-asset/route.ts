@@ -12,54 +12,6 @@ function extractImageUrl(payload: any) {
   return "";
 }
 
-function extractVideoUrl(payload: any) {
-  return String(
-    payload?.metadata?.url ||
-    payload?.url ||
-    payload?.video_url ||
-    payload?.output_url ||
-    payload?.data?.metadata?.url ||
-    payload?.data?.url ||
-    "",
-  );
-}
-
-async function waitForAgnesVideo(token: string, videoId: string, model: string, maxAttempts = 90) {
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const response = await fetch(
-      `https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(model)}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      },
-    );
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (response.status === 429) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        continue;
-      }
-      throw new Error(payload?.error || payload?.message || "Unable to check Agnes video status.");
-    }
-
-    const status = String(payload?.status || "").toLowerCase();
-    const outputUrl = extractVideoUrl(payload);
-
-    if (["completed", "succeeded", "success", "done"].includes(status) && outputUrl) {
-      return outputUrl;
-    }
-
-    if (["failed", "error", "cancelled", "canceled"].includes(status)) {
-      throw new Error(payload?.error || "Agnes video generation failed.");
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  }
-
-  throw new Error("Agnes video generation is taking longer than expected. Please try again.");
-}
-
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
@@ -112,12 +64,8 @@ export async function POST(request: Request) {
     const videoId = payload?.video_id || payload?.id || payload?.data?.video_id || payload?.data?.id || "";
     if (!videoId) return jsonError("Agnes accepted the video request but returned no video id.", 502);
 
-    try {
-      const url = await waitForAgnesVideo(key, String(videoId), model);
-      return NextResponse.json({ type, status: "completed", videoId, url, model });
-    } catch (error) {
-      return jsonError(error instanceof Error ? error.message : "Agnes video generation failed.", 502);
-    }
+    const url = `/api/generate-asset/video?id=${encodeURIComponent(String(videoId))}&model=${encodeURIComponent(model)}`;
+    return NextResponse.json({ type, status: "processing", videoId: String(videoId), url, model });
   }
 
   if (type === "voice") {
