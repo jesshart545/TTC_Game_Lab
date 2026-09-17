@@ -16,10 +16,12 @@ export async function GET(request: Request) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) return NextResponse.json({ error: payload?.error || payload?.message || "Unable to read video generation status." }, { status: response.status });
 
+  const outputUrl = payload?.url || payload?.video_url || payload?.remixed_from_video_id || payload?.output_url || null;
+
   return NextResponse.json({
     status: payload?.status || "unknown",
     progress: Number(payload?.progress || 0),
-    url: payload?.url || null,
+    url: outputUrl,
     error: payload?.error || null,
     videoId: payload?.video_id || id,
     model: payload?.model || model,
