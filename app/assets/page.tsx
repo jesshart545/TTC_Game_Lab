@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { loadProjects, ProjectAsset } from "../../lib/project";
+import { hydrateProjectAssets } from "../../lib/asset-store";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string };
 
@@ -26,16 +27,21 @@ export default function AssetLibraryPage() {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    const projects = loadProjects();
-    setAssets(
-      projects.flatMap(project =>
-        (project.assets || []).map(asset => ({
-          ...asset,
-          projectName: project.name,
-          projectId: project.id,
-        }))
-      )
-    );
+    let cancelled = false;
+    (async () => {
+      const projects = await Promise.all(loadProjects().map(project => hydrateProjectAssets(project)));
+      if (cancelled) return;
+      setAssets(
+        projects.flatMap(project =>
+          (project.assets || []).map(asset => ({
+            ...asset,
+            projectName: project.name,
+            projectId: project.id,
+          }))
+        )
+      );
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const filtered = useMemo(() => {
