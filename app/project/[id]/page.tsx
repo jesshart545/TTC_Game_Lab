@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createProject, loadProjects, Project, ProjectAsset, saveProjects, GameTool, GameToolType } from "../../../lib/project";
+import { hydrateProjectAssets, storeUploadedAsset } from "../../../lib/asset-store";
 
 const GENERATORS = [
   { type: "image", label: "Image", icon: "▣" },
@@ -40,7 +41,26 @@ export default function ProjectWorkspace() {
   const [triviaBusy, setTriviaBusy] = useState(false);
   const [triviaTopics, setTriviaTopics] = useState<string[]>([]);
 
-  useEffect(() => { const all = loadProjects(); const found = all.find(p => p.id === params.id) || all[0]; if (found) { setProject(found); const tool = (found.gameTools || []).find(t => t.name === "Trivia Board"); setTriviaConfig(tool?.config || null); setTriviaTopics(Array.isArray(tool?.config?.categories) ? tool.config.categories.map((c:any)=>String(c.name)) : []); } }, [params.id]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const all = loadProjects();
+      const found = all.find(p => p.id === params.id) || all[0];
+      if (!found) return;
+      let hydrated = found;
+      try {
+        hydrated = await hydrateProjectAssets(found);
+      } catch {
+        hydrated = found;
+      }
+      if (cancelled) return;
+      setProject(hydrated);
+      const tool = (found.gameTools || []).find(t => t.name === "Trivia Board");
+      setTriviaConfig(tool?.config || null);
+      setTriviaTopics(Array.isArray(tool?.config?.categories) ? tool.config.categories.map((c:any)=>String(c.name)) : []);
+    })();
+    return () => { cancelled = true; };
+  }, [params.id]);
   const projectUrl = useMemo(() => project ? `/published/${project.slug}` : "", [project]);
 
   const TOOL_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
@@ -152,23 +172,31 @@ export default function ProjectWorkspace() {
 
   function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = loadProjects().find(p=>p.id===project.id) || project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); const channel = new BroadcastChannel(`ttc-project-${project.id}`); channel.postMessage({ type:"WHEEL_SPIN", at:Date.now() }); channel.close(); setTimeout(()=>{ const current=loadProjects().find(p=>p.id===project.id); if(current) persist({ ...current, wheel:{...current.wheel, spinning:false, visible:false}, updatedAt:"just now" }); }, 3200); }
 
-  function persist(next: Project) { const all = loadProjects(); saveProjects(all.some(p => p.id === next.id) ? all.map(p => p.id === next.id ? next : p) : [next, ...all]); setProject(next); }
+  function persist(next: Project) {
+    const storedNext: Project = {
+      ...next,
+      assets: next.assets.map(asset => asset.storageKey ? { ...asset, url: undefined } : asset),
+    };
+    const all = loadProjects();
+    saveProjects(all.some(p => p.id === storedNext.id) ? all.map(p => p.id === storedNext.id ? storedNext : p) : [storedNext, ...all]);
+    setProject(next);
+  }
 
-  function handleFiles(event: ChangeEvent<HTMLInputElement>) {
+  async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     if (!project) return;
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const latest = loadProjects().find(p => p.id === project.id) || project;
-        const asset: ProjectAsset = { name: file.name, type: file.type || "File", url: String(reader.result) };
-        persist({ ...latest, assets: [...latest.assets, asset], updatedAt: "just now" });
-        setAssetStatus(`${file.name} added`);
-      };
-      reader.readAsDataURL(file);
-    });
-    event.target.value = "";
+    setAssetStatus(files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} files…`);
+    try {
+      const uploaded = await Promise.all(files.map(file => storeUploadedAsset(project.id, file)));
+      const latest = loadProjects().find(p => p.id === project.id) || project;
+      persist({ ...latest, assets: [...latest.assets, ...uploaded], updatedAt: "just now" });
+      setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} added` : `${uploaded.length} files added`);
+    } catch (error) {
+      setAssetStatus(error instanceof Error ? error.message : "The file could not be added.");
+    } finally {
+      event.target.value = "";
+    }
   }
 
   async function generateAsset(type: GeneratorType) {
