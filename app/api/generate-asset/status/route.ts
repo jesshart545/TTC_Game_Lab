@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server";
 
+function extractVideoUrl(payload: any) {
+  return String(
+    payload?.metadata?.url ||
+    payload?.url ||
+    payload?.video_url ||
+    payload?.output_url ||
+    payload?.data?.metadata?.url ||
+    payload?.data?.url ||
+    "",
+  ) || null;
+}
+
 export async function GET(request: Request) {
   const token = process.env.AGNES_API_KEY;
   if (!token) return NextResponse.json({ error: "AGNES_API_KEY is not configured in Vercel." }, { status: 503 });
@@ -16,7 +28,7 @@ export async function GET(request: Request) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) return NextResponse.json({ error: payload?.error || payload?.message || "Unable to read video generation status." }, { status: response.status });
 
-  const outputUrl = payload?.url || payload?.video_url || payload?.remixed_from_video_id || payload?.output_url || null;
+  const outputUrl = extractVideoUrl(payload);
 
   return NextResponse.json({
     status: payload?.status || "unknown",
