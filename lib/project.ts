@@ -1,5 +1,5 @@
 export type ProjectEvent = { id: string; label: string; action: string; detail: string };
-export type ProjectAsset = { name: string; type: string; url?: string };
+export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string };
 export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean; visible: boolean };
 export type GameToolType = "wheel" | "random-picker" | "countdown" | "poll" | "dice" | "trivia-board";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown> };
