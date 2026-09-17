@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createProject, loadProjects, Project, ProjectAsset, saveProjects, GameTool, GameToolType } from "../../../lib/project";
-import { hydrateProjectAssets, storeUploadedAsset } from "../../../lib/asset-store";
+import { hydrateAsset, hydrateProjectAssets, storeUploadedAsset } from "../../../lib/asset-store";
 
 const GENERATORS = [
   { type: "image", label: "Image", icon: "▣" },
@@ -189,8 +189,9 @@ export default function ProjectWorkspace() {
     setAssetStatus(files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} files…`);
     try {
       const uploaded = await Promise.all(files.map(file => storeUploadedAsset(project.id, file)));
+      const hydratedUploaded = await Promise.all(uploaded.map(asset => hydrateAsset(asset)));
       const latest = loadProjects().find(p => p.id === project.id) || project;
-      persist({ ...latest, assets: [...latest.assets, ...uploaded], updatedAt: "just now" });
+      persist({ ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" });
       setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} added` : `${uploaded.length} files added`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "The file could not be added.");
