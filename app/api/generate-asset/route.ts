@@ -12,6 +12,43 @@ function extractImageUrl(payload: any) {
   return "";
 }
 
+async function waitForAgnesVideo(token: string, videoId: string, model: string, maxAttempts = 45) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const response = await fetch(
+      `https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(model)}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      },
+    );
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error || payload?.message || "Unable to check Agnes video status.");
+    }
+
+    const status = String(payload?.status || "").toLowerCase();
+    const outputUrl =
+      payload?.url ||
+      payload?.video_url ||
+      payload?.remixed_from_video_id ||
+      payload?.output_url ||
+      "";
+
+    if (["completed", "succeeded", "success", "done"].includes(status) && outputUrl) {
+      return String(outputUrl);
+    }
+
+    if (["failed", "error", "cancelled", "canceled"].includes(status)) {
+      throw new Error(payload?.error || "Agnes video generation failed.");
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  throw new Error("Agnes video generation is taking longer than expected. Please try again.");
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
@@ -42,11 +79,13 @@ export async function POST(request: Request) {
   if (type === "video") {
     const key = process.env.AGNES_API_KEY;
     if (!key) return jsonError("AGNES_API_KEY is not configured in Vercel.", 503);
+
+    const model = "agnes-video-2.5-flash";
     const response = await fetch("https://apihub.agnes-ai.com/v1/videos", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "agnes-video-2.5-flash",
+        model,
         prompt,
         mode: "text",
         seconds: 5,
@@ -55,11 +94,19 @@ export async function POST(request: Request) {
         n: 1,
       }),
     });
+
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) return jsonError(payload?.error?.message || payload?.message || "Agnes video generation failed.", response.status);
+
     const videoId = payload?.video_id || payload?.id || payload?.data?.video_id || payload?.data?.id || "";
     if (!videoId) return jsonError("Agnes accepted the video request but returned no video id.", 502);
-    return NextResponse.json({ type, status: "pending", videoId, model: "agnes-video-2.5-flash" });
+
+    try {
+      const url = await waitForAgnesVideo(key, String(videoId), model);
+      return NextResponse.json({ type, status: "completed", videoId, url, model });
+    } catch (error) {
+      return jsonError(error instanceof Error ? error.message : "Agnes video generation failed.", 502);
+    }
   }
 
   if (type === "voice") {
