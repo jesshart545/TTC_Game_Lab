@@ -12,7 +12,19 @@ function extractImageUrl(payload: any) {
   return "";
 }
 
-async function waitForAgnesVideo(token: string, videoId: string, model: string, maxAttempts = 45) {
+function extractVideoUrl(payload: any) {
+  return String(
+    payload?.metadata?.url ||
+    payload?.url ||
+    payload?.video_url ||
+    payload?.output_url ||
+    payload?.data?.metadata?.url ||
+    payload?.data?.url ||
+    "",
+  );
+}
+
+async function waitForAgnesVideo(token: string, videoId: string, model: string, maxAttempts = 90) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const response = await fetch(
       `https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(model)}`,
@@ -24,19 +36,18 @@ async function waitForAgnesVideo(token: string, videoId: string, model: string, 
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 429) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        continue;
+      }
       throw new Error(payload?.error || payload?.message || "Unable to check Agnes video status.");
     }
 
     const status = String(payload?.status || "").toLowerCase();
-    const outputUrl =
-      payload?.url ||
-      payload?.video_url ||
-      payload?.remixed_from_video_id ||
-      payload?.output_url ||
-      "";
+    const outputUrl = extractVideoUrl(payload);
 
     if (["completed", "succeeded", "success", "done"].includes(status) && outputUrl) {
-      return String(outputUrl);
+      return outputUrl;
     }
 
     if (["failed", "error", "cancelled", "canceled"].includes(status)) {
