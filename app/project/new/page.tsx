@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useRef, useState } from "react";
 import { createProject, loadProjects, ProjectAsset, saveProjects } from "../../../lib/project";
+import { storeGeneratedAsset } from "../../../lib/asset-store";
+import { waitForGeneratedVideo } from "../../../lib/video-generation";
+import MediaEditor from "../../../components/MediaEditor";
 
 const GENERATORS = [
   { type: "image", label: "Image", icon: "▣" },
@@ -35,6 +38,7 @@ export default function NewProject() {
   const [assetBusy, setAssetBusy] = useState(false);
   const [assetStatus, setAssetStatus] = useState("");
   const [showGenerator, setShowGenerator] = useState(false);
+  const [editingAssetIndex, setEditingAssetIndex] = useState<number | null>(null);
 
   function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
@@ -62,17 +66,25 @@ export default function NewProject() {
     setAssetBusy(true);
     setAssetStatus(`Generating ${type}…`);
     try {
-      const response = await fetch("/api/generate-asset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requested.trim(), type }),
-      });
+      const response = await fetch("/api/generate-asset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: requested.trim(), type }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
-      const url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
-      if (!url) throw new Error(`${type} generation returned no asset URL.`);
+
+      let url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+      if (type === "video" && data.videoId) {
+        setAssetStatus("Video accepted. Generating frames… 0%");
+        url = await waitForGeneratedVideo(data.videoId, data.model || "agnes-video-2.5-flash", progress => setAssetStatus(`Generating video… ${Math.round(progress)}%`));
+      }
+      if (!url) throw new Error(`${type} generation returned no asset output.`);
+
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${assets.length + 1}`;
-      setAssets((current) => [...current, { name, type: data.model || type, url }]);
+      let asset: ProjectAsset = { name, type: data.model || type, url };
+      try {
+        asset = await storeGeneratedAsset(`new-project-${Date.now()}`, asset);
+      } catch {
+        // Keep the direct URL as a fallback if browser storage cannot cache the generated result.
+      }
+      setAssets((current) => [...current, asset]);
       setAssetStatus(`${name} generated`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : `${type} generation failed.`);
@@ -90,10 +102,10 @@ export default function NewProject() {
     setTimeout(() => router.push(`/project/${project.id}`), 500);
   }
 
-  function renderAsset(asset: ProjectAsset) {
+  function renderAsset(asset: ProjectAsset, index: number) {
     if (!asset.url) return null;
-    if (isImage(asset)) return <img src={asset.url} alt={asset.name} className="asset-thumb" />;
-    if (isVideo(asset)) return <video src={asset.url} className="asset-thumb" controls preload="metadata" />;
+    if (isImage(asset)) return <div className="editable-media-preview" style={asset.edits?.crop && asset.edits.crop !== "original" ? { aspectRatio: asset.edits.crop === "square" ? "1 / 1" : asset.edits.crop === "portrait" ? "9 / 16" : "16 / 9" } : undefined}><img src={asset.url} alt={asset.name} className="asset-thumb" style={{ objectFit: asset.edits?.crop === "original" ? "contain" : "cover" }} /><button type="button" className="media-edit-btn" onClick={() => setEditingAssetIndex(index)}>Edit / Crop</button></div>;
+    if (isVideo(asset)) return <div className="editable-media-preview"><video src={asset.url} className="asset-thumb" controls preload="metadata" /><button type="button" className="media-edit-btn" onClick={() => setEditingAssetIndex(index)}>Edit / Crop / Trim</button></div>;
     if (isAudio(asset)) return <audio src={asset.url} controls />;
     return null;
   }
@@ -121,8 +133,9 @@ export default function NewProject() {
           </div>
         </section>
         <section className="preview-panel"><div className="preview-head"><div><small>LIVE PREVIEW</small><h2>{building ? "Building your experience…" : "Your experience will appear here"}</h2></div></div><div className="stage"><div className="stage-scan"/><div className="stage-content"><div className="stage-live">● AI BUILD PIPELINE</div><div className="stage-title">YOUR<br/><span>LIVESTREAM</span></div><p>{building ? "Creating project state, host controls and overlay runtime." : "Start with an idea. The finished project becomes editable and publishable."}</p></div><div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></div></section>
-        <aside className="assets-panel"><div className="assets-head"><div><small>PROJECT ASSETS</small><h2>Assets</h2></div><button type="button" onClick={() => fileInputRef.current?.click()}>＋</button></div><div className="upload-box" onClick={() => fileInputRef.current?.click()}><div>↑</div><strong>Drop assets here</strong><span>Images, video, audio, logos</span></div>{assets.length>0 ? <div className="asset-empty">{assets.map((asset) => <div className="asset-card" key={asset.name}><div className="asset-card-title"><b>{asset.name}</b><em>{asset.type}</em></div>{renderAsset(asset)}</div>)}</div> : <div className="asset-empty">Your uploaded and generated assets will appear here.</div>}</aside>
+        <aside className="assets-panel"><div className="assets-head"><div><small>PROJECT ASSETS</small><h2>Assets</h2></div><button type="button" onClick={() => fileInputRef.current?.click()}>＋</button></div><div className="upload-box" onClick={() => fileInputRef.current?.click()}><div>↑</div><strong>Drop assets here</strong><span>Images, video, audio, logos</span></div>{assets.length>0 ? <div className="asset-empty">{assets.map((asset, index) => <div className="asset-card" key={asset.name + index}><div className="asset-card-title"><b>{asset.name}</b><em>{asset.type}</em></div>{renderAsset(asset,index)}</div>)}</div> : <div className="asset-empty">Your uploaded and generated assets will appear here.</div>}</aside>
       </div>
+      {editingAssetIndex !== null && assets[editingAssetIndex] && <MediaEditor asset={assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => setAssets(current => current.map((asset, index) => index === editingAssetIndex ? next : asset))} />}
     </main>
   );
 }
