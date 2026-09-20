@@ -78,9 +78,10 @@ export default function NewProject() {
       if (!url) throw new Error(`${type} generation returned no asset output.`);
 
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${assets.length + 1}`;
-      let asset: ProjectAsset = { name, type: data.model || type, url };
+      const generatedAsset = { name, type: data.model || type, url };
+      let asset: ProjectAsset = generatedAsset;
       try {
-        asset = await storeGeneratedAsset(`new-project-${Date.now()}`, asset);
+        asset = await storeGeneratedAsset(`new-project-${Date.now()}`, generatedAsset);
       } catch {
         // Keep the direct URL as a fallback if browser storage cannot cache the generated result.
       }
