@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createProject, loadProjects, Project, ProjectAsset, saveProjects, GameTool, GameToolType } from "../../../lib/project";
-import { hydrateAsset, hydrateProjectAssets, storeUploadedAsset } from "../../../lib/asset-store";
+import { createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, GameTool, GameToolType } from "../../../lib/project";
+import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeUploadedAsset } from "../../../lib/asset-store";
 
 const GENERATORS = [
   { type: "image", label: "Image", icon: "▣" },
@@ -182,6 +182,32 @@ export default function ProjectWorkspace() {
     setProject(next);
   }
 
+  async function handleDeleteProject() {
+    if (!project) return;
+    const confirmed = window.confirm(`Delete "${project.name}"? This will permanently remove the project and its saved assets from this browser.`);
+    if (!confirmed) return;
+    try { await deleteProjectStoredAssets(project.id); } catch {}
+    deleteProject(project.id);
+    window.location.href = "/projects";
+  }
+
+  async function handleDeleteAsset(asset: ProjectAsset) {
+    if (!project) return;
+    const confirmed = window.confirm(`Delete "${asset.name}" from this project?`);
+    if (!confirmed) return;
+    if (asset.storageKey) {
+      try { await deleteStoredAsset(asset.storageKey); } catch {}
+    }
+    const current = loadProjects().find(item => item.id === project.id) || project;
+    const index = current.assets.findIndex(item =>
+      asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
+    );
+    if (index < 0) return;
+    const nextAssets = current.assets.filter((_, i) => i !== index);
+    replaceProjectAssets(project.id, nextAssets);
+    setProject(await hydrateProjectAssets({ ...current, assets: nextAssets }));
+  }
+
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     if (!project) return;
     const files = Array.from(event.target.files || []);
@@ -273,7 +299,7 @@ export default function ProjectWorkspace() {
 
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   return <main className="workspace-page">
-    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{project.name} <span>{project.status}</span></div><div className="workspace-actions"><Link href={projectUrl} className="preview-link">Preview</Link><button onClick={publish} className="publish-btn">Publish ↗</button></div></header>
+    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{project.name} <span>{project.status}</span></div><div className="workspace-actions"><Link href={projectUrl} className="preview-link">Preview</Link><button onClick={publish} className="publish-btn">Publish ↗</button><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
     <div className="workspace-grid">
       <section className="chat-panel"><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h1>Keep building it.</h1></div><div className="ai-orb">✦</div></div><div className="messages">{project.messages.map((m,i)=><div key={i} className={`message ${m.role}`}><div className="message-icon">{m.role === "assistant" ? "✦" : "YOU"}</div><div><strong>{m.role === "assistant" ? "TTCGameLab AI" : "You"}</strong><p>{m.text}</p></div></div>)}{building&&<div className="build-activity"><span>✦</span><div><strong>Building your change...</strong><small>Sending project context to the AI engine</small></div></div>}<div className="idea-card"><span>QUICK ACTIONS</span><button onClick={()=>setDraft("Make the main character bigger and move it slightly left.")}>Make character bigger <b>→</b></button><button onClick={()=>setDraft("Add a follower alert with a dramatic entrance animation.")}>Add follower alert <b>→</b></button><button onClick={()=>setDraft("Give the whole experience a stronger neon glow.")}>Increase neon <b>→</b></button></div></div><form className="composer" onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Tell me what to change..."/><div className="composer-bottom"><input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/><button type="button" onClick={() => fileInputRef.current?.click()}>＋ Upload</button><button type="button" onClick={() => setShowGenerator(v => !v)}>{assetBusy ? "Generating…" : "◈ Generate asset"}</button><button className="send" type="submit">{building ? "Building…" : "Update experience →"}</button></div>{showGenerator&&<div className="idea-card"><span>GENERATE WITH AI</span>{GENERATORS.map((item)=><button key={item.type} type="button" onClick={()=>generateAsset(item.type)}>{item.icon} {item.label} <b>→</b></button>)}</div>}{assetStatus&&<div className="asset-empty">{assetStatus}</div>}</form></section>
       <section className="preview-panel"><div className="preview-head"><div><small>LIVE PROJECT</small><h2>{project.name}</h2></div><Link href={`${projectUrl}/overlay`} className="preview-link">Open overlay</Link></div><div className="stage"><div className="stage-scan"/><div className="overlay-demo"><div className="overlay-live">● LIVE</div><div className="overlay-headline">{project.overlay.title}</div><div className="overlay-sub">{project.overlay.subtitle}</div>{project.overlay.showCharacter&&<div className="demo-character">◉</div>}<div className="demo-alert">FOLLOW ALERT</div></div><div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></div><div className="preview-foot"><span>Dashboard <b>/</b> Overlay <b>/</b> Events</span><span>{project.status} · {project.updatedAt}</span></div><div className="control-strip"><div><small>HOST CONTROLS</small><strong>Trigger your generated experience</strong></div><div className="control-buttons">{project.controls.map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div>{eventLog.length>0&&<div className="event-log">{eventLog.map((x,i)=><span key={i}>✓ {x}</span>)}</div>}</div></section>
@@ -380,8 +406,11 @@ export default function ProjectWorkspace() {
           {project.assets.map(a => (
             <div className="asset-card" key={a.name}>
               <div className="asset-card-title">
-                <b>{a.name}</b>
-                <em>{a.type}</em>
+                <div>
+                  <b>{a.name}</b>
+                  <em>{a.type}</em>
+                </div>
+                <button type="button" className="danger-btn asset-delete-btn" onClick={() => handleDeleteAsset(a)}>Delete</button>
               </div>
               {renderAsset(a)}
             </div>
