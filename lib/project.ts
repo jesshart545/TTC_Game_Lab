@@ -60,6 +60,28 @@ export function saveProjects(projects: Project[]) {
   if (typeof window !== "undefined") window.localStorage.setItem(KEY, JSON.stringify(projects));
 }
 
+export function deleteProject(projectId: string): boolean {
+  if (typeof window === "undefined") return false;
+  const projects = loadProjects();
+  const next = projects.filter(project => project.id !== projectId);
+  if (next.length === projects.length) return false;
+  saveProjects(next);
+  return true;
+}
+
+export function replaceProjectAssets(projectId: string, assets: ProjectAsset[]): boolean {
+  if (typeof window === "undefined") return false;
+  const projects = loadProjects();
+  let changed = false;
+  const next = projects.map(project => {
+    if (project.id !== projectId) return project;
+    changed = true;
+    return { ...project, assets, updatedAt: "just now" };
+  });
+  if (changed) saveProjects(next);
+  return changed;
+}
+
 export function createProject(prompt: string): Project {
   const id = `project-${Date.now()}`;
   const base = prompt.toLowerCase();
