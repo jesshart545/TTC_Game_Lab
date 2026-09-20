@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { loadProjects, ProjectAsset } from "../../lib/project";
+import { deleteStoredAsset } from "../../lib/asset-store";
+import { loadProjects, ProjectAsset, replaceProjectAssets } from "../../lib/project";
 import { hydrateProjectAssets } from "../../lib/asset-store";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string };
@@ -26,6 +27,19 @@ export default function AssetLibraryPage() {
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [query, setQuery] = useState("");
 
+  async function refreshAssets() {
+    const projects = await Promise.all(loadProjects().map(project => hydrateProjectAssets(project)));
+    setAssets(
+      projects.flatMap(project =>
+        (project.assets || []).map(asset => ({
+          ...asset,
+          projectName: project.name,
+          projectId: project.id,
+        }))
+      )
+    );
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -43,6 +57,22 @@ export default function AssetLibraryPage() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  async function handleDelete(asset: LibraryAsset) {
+    const confirmed = window.confirm(`Delete "${asset.name}" from ${asset.projectName}?`);
+    if (!confirmed) return;
+    if (asset.storageKey) {
+      try { await deleteStoredAsset(asset.storageKey); } catch {}
+    }
+    const project = loadProjects().find(item => item.id === asset.projectId);
+    if (!project) return;
+    const index = project.assets.findIndex(item =>
+      asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
+    );
+    if (index < 0) return;
+    replaceProjectAssets(asset.projectId, project.assets.filter((_, i) => i !== index));
+    await refreshAssets();
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,7 +114,7 @@ export default function AssetLibraryPage() {
           ) : (
             <div className="asset-library-grid">
               {filtered.map((asset, index) => (
-                <article className="library-card" key={asset.projectId + asset.name + index}>
+                <article className="library-card" key={asset.projectId + (asset.storageKey || asset.name) + index}>
                   <div className="library-preview">
                     {asset.url && isImage(asset) && <img src={asset.url} alt={asset.name} />}
                     {asset.url && isVideo(asset) && <video src={asset.url} controls preload="metadata" />}
@@ -95,6 +125,7 @@ export default function AssetLibraryPage() {
                     <strong>{asset.name}</strong>
                     <span>{asset.type}</span>
                     <Link href={'/project/' + asset.projectId}>Open project →</Link>
+                    <button type="button" className="danger-btn" onClick={() => handleDelete(asset)}>Delete asset</button>
                   </div>
                 </article>
               ))}
