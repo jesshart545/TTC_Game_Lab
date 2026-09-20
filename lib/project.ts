@@ -76,7 +76,11 @@ export function replaceProjectAssets(projectId: string, assets: ProjectAsset[]):
   const next = projects.map(project => {
     if (project.id !== projectId) return project;
     changed = true;
-    return { ...project, assets, updatedAt: "just now" };
+    return {
+      ...project,
+      assets: assets.map(asset => asset.storageKey ? { ...asset, url: undefined } : asset),
+      updatedAt: "just now",
+    };
   });
   if (changed) saveProjects(next);
   return changed;
