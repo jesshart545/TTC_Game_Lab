@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, GameTool, GameToolType } from "../../../lib/project";
-import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeUploadedAsset } from "../../../lib/asset-store";
+import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
+import { waitForGeneratedVideo } from "../../../lib/video-generation";
 
 const GENERATORS = [
   { type: "image", label: "Image", icon: "▣" },
@@ -235,21 +236,52 @@ export default function ProjectWorkspace() {
     }
     const requested = window.prompt(`Describe the ${type} you want to generate`, project.prompt || `A neon futuristic ${type} for this TikTok LIVE experience`);
     if (!requested?.trim()) return;
-    setShowGenerator(false); setAssetBusy(true); setAssetStatus(`Generating ${type}…`);
+    setShowGenerator(false);
+    setAssetBusy(true);
+    setAssetStatus(`Generating ${type}…`);
+
     try {
-      const response = await fetch("/api/generate-asset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: requested.trim(), type }) });
+      const response = await fetch("/api/generate-asset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: requested.trim(), type }),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
-      const url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
-      if (!url) throw new Error(`${type} generation returned no asset URL.`);
-      const name = `${type[0].toUpperCase()}${type.slice(1)} ${(loadProjects().find(p => p.id === project.id) || project).assets.length + 1}`;
+
+      let url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+      if (type === "video" && data.videoId) {
+        setAssetStatus("Video accepted. Generating frames… 0%");
+        url = await waitForGeneratedVideo(
+          String(data.videoId),
+          data.model || "agnes-video-2.5-flash",
+          progress => setAssetStatus(`Generating video… ${Math.round(progress)}%`),
+        );
+      }
+      if (!url) throw new Error(`${type} generation returned no asset output.`);
+
       const latest = loadProjects().find(p => p.id === project.id) || project;
-      const asset: ProjectAsset = { name, type: data.model || type, url };
-      persist({ ...latest, assets: [...latest.assets, asset], updatedAt: "just now" });
-      setAssetStatus(`${name} generated`);
+      const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
+      const generatedAsset = { name, type: data.model || type, url };
+
+      let asset: ProjectAsset = generatedAsset;
+      try {
+        asset = await storeGeneratedAsset(project.id, generatedAsset);
+      } catch {
+        // Keep the direct URL as a fallback if browser storage cannot cache the generated result.
+      }
+
+      persist({
+        ...latest,
+        assets: [...latest.assets, asset],
+        updatedAt: "just now",
+      });
+      setAssetStatus(`${name} generated and saved`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : `${type} generation failed.`);
-    } finally { setAssetBusy(false); }
+    } finally {
+      setAssetBusy(false);
+    }
   }
 
   function renderAsset(asset: ProjectAsset) {
