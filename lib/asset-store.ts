@@ -95,3 +95,43 @@ export async function hydrateProjectAssets(project: Project): Promise<Project> {
   }));
   return { ...project, assets };
 }
+
+
+export async function deleteStoredAsset(storageKey: string): Promise<void> {
+  const db = await openAssetDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).delete(storageKey);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error("Unable to delete the asset."));
+      tx.onabort = () => reject(tx.error || new Error("Unable to delete the asset."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function deleteProjectStoredAssets(projectId: string): Promise<void> {
+  const db = await openAssetDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result as IDBCursorWithValue | null;
+        if (!cursor) return;
+        const value = cursor.value as StoredAsset;
+        if (value.projectId === projectId) cursor.delete();
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error || new Error("Unable to clean up project assets."));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error("Unable to clean up project assets."));
+      tx.onabort = () => reject(tx.error || new Error("Unable to clean up project assets."));
+    });
+  } finally {
+    db.close();
+  }
+}
