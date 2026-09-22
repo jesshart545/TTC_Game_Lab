@@ -25,6 +25,8 @@ export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:Pr
   const [blur,setBlur]=useState(asset.edits?.blur??0), [width,setWidth]=useState(asset.edits?.width||0), [height,setHeight]=useState(asset.edits?.height||0);
   const [offsetX,setOffsetX]=useState(asset.edits?.offsetX||0), [offsetY,setOffsetY]=useState(asset.edits?.offsetY||0);
   const [aiPrompt,setAiPrompt]=useState("");
+  const [aiEditing,setAiEditing]=useState(false);
+  const [aiError,setAiError]=useState("");
   const [savingNew,setSavingNew]=useState(false);
 
   const effectiveEnd=useMemo(()=>!video||!duration?0:(trimEnd>0?Math.min(trimEnd,duration):duration),[duration,trimEnd,video]);
@@ -45,6 +47,36 @@ export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:Pr
   function apply() {
     onSave(editedAsset());
     onClose();
+  }
+  async function runAiEdit() {
+    if (!asset.url || !aiPrompt.trim() || aiEditing) return;
+    setAiEditing(true);
+    setAiError("");
+    try {
+      const response = await fetch("/api/edit-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt.trim(), imageUrl: asset.url }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "AI image edit failed.");
+      if (!data.url) throw new Error("Agnes returned no edited image.");
+      const next: ProjectAsset = {
+        ...asset,
+        name: (name.replace(/\.[^.]+$/, "") || "image") + "-ai-edit.png",
+        type: "image/png",
+        url: data.url,
+        storageKey: undefined,
+        edits: undefined,
+      };
+      if (onSaveAsNew) await onSaveAsNew(next);
+      else onSave(next);
+      onClose();
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : "AI image edit failed.");
+    } finally {
+      setAiEditing(false);
+    }
   }
 
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true"><div className="media-editor-modal">
@@ -67,7 +99,7 @@ export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:Pr
         <label><span>Blur {blur}px</span><input type="range" min="0" max="20" step=".5" value={blur} onChange={e=>setBlur(+e.target.value)}/></label>
       </div><div className="media-editor-inline-actions"><button className="outline-btn" onClick={()=>setRotation(v=>v-90)}>↶ Rotate 90°</button><button className="outline-btn" onClick={()=>setRotation(v=>v+90)}>↷ Rotate 90°</button><button className="outline-btn" onClick={()=>setFlipX(v=>!v)}>↔ Flip</button><button className="outline-btn" onClick={()=>setFlipY(v=>!v)}>↕ Flip</button></div>
       <div className="media-editor-size"><label><span>Width px</span><input type="number" min="0" value={width||""} placeholder="Auto" onChange={e=>setWidth(+e.target.value)}/></label><label><span>Height px</span><input type="number" min="0" value={height||""} placeholder="Auto" onChange={e=>setHeight(+e.target.value)}/></label></div>
-      <div className="media-editor-ai"><span>AI EDIT</span><div><input value={aiPrompt} onChange={e=>setAiPrompt(e.target.value)} placeholder="Remove background, make it haunted, change shirt color…"/><button type="button" disabled title="AI image editing endpoint is the next connection">AI Edit</button></div><small>Prompt workspace is ready; AI image-to-image editing requires a compatible Agnes edit endpoint.</small></div></>}
+      <div className="media-editor-ai"><span>AI EDIT</span><div><input value={aiPrompt} onChange={e=>setAiPrompt(e.target.value)} placeholder="Remove background, make it haunted, change shirt color…" onKeyDown={e=>{if(e.key==="Enter")void runAiEdit()}}/><button type="button" disabled={!aiPrompt.trim()||aiEditing} onClick={()=>void runAiEdit()}>{aiEditing?"Editing…":"AI Edit"}</button></div><small>Uses Agnes Image 2.5 Flash image-to-image and saves the result as a new asset.</small>{aiError&&<small className="media-editor-error">{aiError}</small>}</div></>}
       {video&&<div className="media-editor-field"><span>TRIM VIDEO</span><div className="media-editor-trim"><label>Start<input type="number" min="0" step=".1" value={trimStart} onChange={e=>setTrimStart(+e.target.value)}/></label><label>End<input type="number" min=".1" step=".1" value={effectiveEnd||trimEnd||0} onChange={e=>setTrimEnd(+e.target.value)}/></label><span>{duration?duration.toFixed(1)+"s total":"Loading…"}</span></div></div>}
     </div>
     <div className="media-editor-actions"><button className="outline-btn" onClick={reset}>Reset</button><button className="outline-btn" onClick={onClose}>Cancel</button>{!video&&onSaveAsNew&&<button className="outline-btn" disabled={savingNew} onClick={async()=>{setSavingNew(true);try{await onSaveAsNew(editedAsset());onClose();}finally{setSavingNew(false)}}}>{savingNew?"Rendering…":"Save as New Asset"}</button>}<button className="build-btn" onClick={apply}>Replace Asset</button></div>
