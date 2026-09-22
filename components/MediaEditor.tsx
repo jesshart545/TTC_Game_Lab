@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ProjectAsset, ProjectAssetEdits } from "../lib/project";
 
-const CROP_OPTIONS = [
+const CROP_OPTIONS: Array<{ id: NonNullable<ProjectAssetEdits["crop"]>; label: string; ratio?: string }> = [
   { id: "original", label: "Original" }, { id: "square", label: "Square", ratio: "1:1" },
   { id: "landscape", label: "Landscape", ratio: "16:9" }, { id: "portrait", label: "Portrait", ratio: "9:16" },
-] as const;
+];
 
 function isVideo(asset: ProjectAsset) { return asset.type.toLowerCase().includes("video") || /\.(mp4|webm|mov|m4v)$/i.test(asset.name); }
 function ratioStyle(crop: ProjectAssetEdits["crop"]) {
@@ -34,8 +34,17 @@ export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:Pr
   const mediaStyle={transform,opacity,filter:`brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) blur(${blur}px)`};
 
   function reset(){setCrop("original");setZoom(1);setRotation(0);setFlipX(false);setFlipY(false);setOpacity(1);setBrightness(100);setContrast(100);setSaturation(100);setBlur(0);setWidth(0);setHeight(0);setOffsetX(0);setOffsetY(0);}
-  function editedAsset(){
-    onSave(editedAsset());onClose();
+  function editedAsset(): ProjectAsset {
+    const edits: ProjectAssetEdits = { crop, zoom, rotation, flipX, flipY, opacity, brightness, contrast, saturation, blur, width: width || undefined, height: height || undefined, offsetX, offsetY };
+    if (video) {
+      edits.trimStart = Math.max(0, Math.min(trimStart, Math.max(0, duration - .05)));
+      if (effectiveEnd > edits.trimStart + .05 && effectiveEnd < duration - .05) edits.trimEnd = effectiveEnd;
+    }
+    return { ...asset, name: name.trim() || asset.name, edits };
+  }
+  function apply() {
+    onSave(editedAsset());
+    onClose();
   }
 
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true"><div className="media-editor-modal">
