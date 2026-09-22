@@ -25,3 +25,11 @@
 
 
 .danger-btn{border:1px solid rgba(255,92,124,.42);background:rgba(255,92,124,.07);color:#ff9aae;border-radius:7px;padding:7px 10px;font-size:9px;font-weight:700}.danger-btn:hover{border-color:rgba(255,92,124,.7);background:rgba(255,92,124,.12);color:#ffc1cd}.workspace-actions{display:flex;align-items:center;gap:6px}.asset-card-title{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.asset-delete-btn{padding:4px 7px}.project-library-card{display:flex;flex-direction:column}.project-library-link{display:block}.project-card-actions{display:flex;gap:6px;padding:0 13px 13px}.project-card-actions .outline-btn{flex:1;text-align:center}.library-body .danger-btn{margin-top:8px;width:100%}.asset-card{border:1px solid #20242d;background:#0c0e13;border-radius:8px;padding:8px;margin-top:8px}.asset-card-title em{display:block;font-style:normal;color:#5d6573;font-size:8px;margin-top:3px}
+
+
+/* Compact project asset previews */
+.assets-panel .asset-card{overflow:hidden}
+.assets-panel .asset-thumb{display:block;width:100%;height:118px;max-height:118px;object-fit:cover;border-radius:6px;margin-top:8px;background:#050609}
+.assets-panel .editable-media-preview{position:relative;width:100%;max-height:150px;overflow:hidden;border-radius:6px;margin-top:8px}
+.assets-panel .editable-media-preview .asset-thumb{margin-top:0}
+.assets-panel audio{width:100%;height:34px;margin-top:8px}
