@@ -23,6 +23,7 @@ export type Project = {
   overlay: { title: string; subtitle: string; showChat: boolean; showAlerts: boolean; showCharacter: boolean };
   wheel: GameWheel;
   gameTools: GameTool[];
+  publishedSnapshot?: Omit<Project, "publishedSnapshot">;
 };
 
 export const demoProjects: Project[] = [
