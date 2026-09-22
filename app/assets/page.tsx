@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { deleteStoredAsset, hydrateProjectAssets } from "../../lib/asset-store";
+import { deleteStoredAsset, hydrateProjectAssets, storeUploadedAsset } from "../../lib/asset-store";
+import MediaEditor from "../../components/MediaEditor";
 import { loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjectToServer, saveProjects } from "../../lib/project";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string; assetIndex: number };
@@ -22,6 +23,7 @@ export default function AssetLibraryPage() {
   const [query,setQuery]=useState("");
   const [filter,setFilter]=useState<Filter>("all");
   const [status,setStatus]=useState("");
+  const [editing,setEditing]=useState<LibraryAsset|null>(null);
 
   async function refreshAssets() {
     const raw=loadProjects();
@@ -63,6 +65,25 @@ export default function AssetLibraryPage() {
     await persistProject(next); setStatus(adding?"Added to project preview.":"Removed from project preview.");
   }
 
+  async function saveEdits(asset:LibraryAsset,nextAsset:ProjectAsset) {
+    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
+    await persistProject({...project,assets:project.assets.map((a,i)=>i===asset.assetIndex?nextAsset:a),updatedAt:"just now"});
+    setStatus("Asset edit settings saved.");
+  }
+
+  async function saveAsNew(asset:LibraryAsset,nextAsset:ProjectAsset) {
+    if(!nextAsset.url)return;
+    setStatus("Saving edited image…");
+    const response=await fetch(nextAsset.url);
+    if(!response.ok)throw new Error("Could not load edited image.");
+    const blob=await response.blob();
+    const file=new File([blob],nextAsset.name||"ai-edited-image.png",{type:blob.type||"image/png"});
+    const stored=await storeUploadedAsset(asset.projectId,file);
+    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
+    await persistProject({...project,assets:[...project.assets,{...stored,name:file.name}],updatedAt:"just now"});
+    setStatus("Edited image saved as a new permanent asset.");
+  }
+
   async function copyToProject(asset:LibraryAsset,targetId:string) {
     if(!targetId||targetId===asset.projectId)return;
     const target=loadProjects().find(p=>p.id===targetId); if(!target)return;
@@ -88,10 +109,10 @@ export default function AssetLibraryPage() {
       {asset.url&&kind(asset)==="audio"&&<audio src={asset.url} controls/>}
       {!asset.url&&<div className="library-no-preview">No preview</div>}</div>
       <div className="library-body"><strong>{asset.name}</strong><span>{kind(asset).toUpperCase()} · {asset.projectName}</span>
-        <div className="library-action-grid"><button className="outline-btn" onClick={()=>void toggleInProject(asset)}>{asset.inProject?"✓ In Project":"+ Add to Project"}</button><button className="outline-btn" onClick={()=>void rename(asset)}>Rename</button></div>
+        <div className="library-action-grid"><button className="outline-btn" onClick={()=>void toggleInProject(asset)}>{asset.inProject?"✓ In Project":"+ Add to Project"}</button><button className="outline-btn" onClick={()=>void rename(asset)}>Rename</button>{kind(asset)==="image"&&<button className="outline-btn library-edit-btn" onClick={()=>setEditing(asset)}>✦ Edit / AI Edit</button>}</div>
         <select className="library-project-select" defaultValue="" onChange={e=>{void copyToProject(asset,e.target.value);e.currentTarget.value=""}}><option value="">Copy to another project…</option>{projects.filter(p=>p.id!==asset.projectId).map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select>
         <Link href={"/project/"+asset.projectId} className="outline-btn library-open-btn">{kind(asset)==="image"?"Open project to edit":"Open project"}</Link>
         <button type="button" className="danger-btn" onClick={()=>void handleDelete(asset)}>Delete asset</button>
       </div></article>)}</div>}
-  </div></section></main>;
+  </div></section>{editing&&<MediaEditor asset={editing} onClose={()=>setEditing(null)} onSave={next=>void saveEdits(editing,next)} onSaveAsNew={next=>saveAsNew(editing,next)}/>}</main>;
 }
