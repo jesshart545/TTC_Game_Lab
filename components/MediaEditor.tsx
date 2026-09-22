@@ -14,7 +14,8 @@ function ratioStyle(crop: ProjectAssetEdits["crop"]) {
 }
 
 export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:ProjectAsset;onSave:(asset:ProjectAsset)=>void;onSaveAsNew?:(asset:ProjectAsset)=>Promise<void>;onClose:()=>void}) {
-  const videoRef=useRef<HTMLVideoElement>(null), video=isVideo(asset);
+  const videoRef=useRef<HTMLVideoElement>(null), previewRef=useRef<HTMLDivElement>(null), video=isVideo(asset);
+  const dragRef=useRef<{x:number;y:number;offsetX:number;offsetY:number}|null>(null);
   const [name,setName]=useState(asset.name), [crop,setCrop]=useState<NonNullable<ProjectAssetEdits["crop"]>>(asset.edits?.crop||"original");
   const [trimStart,setTrimStart]=useState(Number(asset.edits?.trimStart||0)), [trimEnd,setTrimEnd]=useState(Number(asset.edits?.trimEnd||0));
   const [duration,setDuration]=useState(0), [currentTime,setCurrentTime]=useState(0);
@@ -34,6 +35,10 @@ export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:Pr
 
   const transform=`translate(${offsetX}px,${offsetY}px) scale(${zoom}) rotate(${rotation}deg) scaleX(${flipX?-1:1}) scaleY(${flipY?-1:1})`;
   const mediaStyle={transform,opacity,filter:`brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) blur(${blur}px)`};
+  function startDrag(e:React.PointerEvent<HTMLDivElement>){if(video)return;dragRef.current={x:e.clientX,y:e.clientY,offsetX,offsetY};e.currentTarget.setPointerCapture(e.pointerId)}
+  function moveDrag(e:React.PointerEvent<HTMLDivElement>){const d=dragRef.current;if(!d)return;setOffsetX(Math.round(d.offsetX+e.clientX-d.x));setOffsetY(Math.round(d.offsetY+e.clientY-d.y))}
+  function endDrag(){dragRef.current=null}
+  function setTikTokPreset(type:"full"|"safe"){setCrop("portrait");setWidth(1080);setHeight(1920);if(type==="safe"){setZoom(0.9);setOffsetX(0);setOffsetY(0)}}
 
   function reset(){setCrop("original");setZoom(1);setRotation(0);setFlipX(false);setFlipY(false);setOpacity(1);setBrightness(100);setContrast(100);setSaturation(100);setBlur(0);setWidth(0);setHeight(0);setOffsetX(0);setOffsetY(0);}
   function editedAsset(): ProjectAsset {
@@ -81,12 +86,12 @@ export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:Pr
 
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true"><div className="media-editor-modal">
     <div className="media-editor-head"><div><small>MEDIA EDITOR</small><h2>Edit asset</h2></div><button className="media-editor-close" onClick={onClose}>×</button></div>
-    <div className="media-editor-preview-wrap"><div className={`media-editor-preview crop-${crop}`} style={crop==="original"?undefined:ratioStyle(crop)}>
+    <div className="media-editor-preview-wrap"><div ref={previewRef} className={`media-editor-preview crop-${crop} ${!video?"media-editor-draggable":""}`} style={crop==="original"?undefined:ratioStyle(crop)} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
       {video?<video ref={videoRef} src={asset.url} controls style={mediaStyle} onLoadedMetadata={e=>{const d=e.currentTarget.duration;setDuration(Number.isFinite(d)?d:0);if(!trimEnd||trimEnd>d)setTrimEnd(d)}} onTimeUpdate={e=>{const t=e.currentTarget.currentTime;setCurrentTime(t);if(effectiveEnd&&t>=effectiveEnd){e.currentTarget.currentTime=trimStart;e.currentTarget.pause()}}}/>:<img src={asset.url} alt={asset.name} style={mediaStyle}/>}
-    </div></div>
+    </div>{!video&&<div className="media-editor-drag-note">Drag the image directly to reposition it inside the crop.</div>}</div>
     <div className="media-editor-fields">
       <label><span>ASSET NAME</span><input value={name} onChange={e=>setName(e.target.value)}/></label>
-      <div className="media-editor-field"><span>CROP / ASPECT</span><div className="media-editor-options">{CROP_OPTIONS.map(o=><button key={o.id} type="button" className={crop===o.id?"selected":""} onClick={()=>setCrop(o.id)}>{o.label}{o.ratio&&<small>{o.ratio}</small>}</button>)}</div></div>
+      <div className="media-editor-field"><span>CROP / ASPECT</span><div className="media-editor-options">{CROP_OPTIONS.map(o=><button key={o.id} type="button" className={crop===o.id?"selected":""} onClick={()=>setCrop(o.id)}>{o.label}{o.ratio&&<small>{o.ratio}</small>}</button>)}</div>{!video&&<div className="media-editor-presets"><button type="button" className="outline-btn" onClick={()=>setTikTokPreset("full")}>TikTok Fullscreen · 1080×1920</button><button type="button" className="outline-btn" onClick={()=>setTikTokPreset("safe")}>TikTok Safe Layout</button></div>}</div>
       {!video&&<><div className="media-editor-control-grid">
         <label><span>Zoom {zoom.toFixed(2)}×</span><input type="range" min=".25" max="3" step=".05" value={zoom} onChange={e=>setZoom(+e.target.value)}/></label>
         <label><span>Rotate {rotation}°</span><input type="range" min="-180" max="180" step="1" value={rotation} onChange={e=>setRotation(+e.target.value)}/></label>
@@ -102,6 +107,6 @@ export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:Pr
       <div className="media-editor-ai"><span>AI EDIT</span><div><input value={aiPrompt} onChange={e=>setAiPrompt(e.target.value)} placeholder="Remove background, make it haunted, change shirt color…" onKeyDown={e=>{if(e.key==="Enter")void runAiEdit()}}/><button type="button" disabled={!aiPrompt.trim()||aiEditing} onClick={()=>void runAiEdit()}>{aiEditing?"Editing…":"AI Edit"}</button></div><small>Uses Agnes Image 2.5 Flash image-to-image and saves the result as a new asset.</small>{aiError&&<small className="media-editor-error">{aiError}</small>}</div></>}
       {video&&<div className="media-editor-field"><span>TRIM VIDEO</span><div className="media-editor-trim"><label>Start<input type="number" min="0" step=".1" value={trimStart} onChange={e=>setTrimStart(+e.target.value)}/></label><label>End<input type="number" min=".1" step=".1" value={effectiveEnd||trimEnd||0} onChange={e=>setTrimEnd(+e.target.value)}/></label><span>{duration?duration.toFixed(1)+"s total":"Loading…"}</span></div></div>}
     </div>
-    <div className="media-editor-actions"><button className="outline-btn" onClick={reset}>Reset</button><button className="outline-btn" onClick={onClose}>Cancel</button>{!video&&onSaveAsNew&&<button className="outline-btn" disabled={savingNew} onClick={async()=>{setSavingNew(true);try{await onSaveAsNew(editedAsset());onClose();}finally{setSavingNew(false)}}}>{savingNew?"Rendering…":"Save as New Asset"}</button>}<button className="build-btn" onClick={apply}>Replace Asset</button></div>
+    <div className="media-editor-actions"><button className="outline-btn" onClick={reset}>Reset</button><button className="outline-btn" onClick={onClose}>Cancel</button>{!video&&onSaveAsNew&&<button className="outline-btn" disabled={savingNew} onClick={async()=>{setSavingNew(true);try{await onSaveAsNew(editedAsset());onClose();}finally{setSavingNew(false)}}}>{savingNew?"Rendering…":"Save as New Asset"}</button>}<button className="build-btn" onClick={apply}>Save Edit Settings</button></div>
   </div></div>;
 }
