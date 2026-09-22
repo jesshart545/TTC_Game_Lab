@@ -179,7 +179,7 @@ export default function ProjectWorkspace() {
   function persist(next: Project) {
     const storedNext: Project = {
       ...next,
-      assets: next.assets.map(asset => asset.storageKey ? { ...asset, url: undefined } : asset),
+      assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset),
     };
     const all = loadProjects();
     saveProjects(all.some(p => p.id === storedNext.id) ? all.map(p => p.id === storedNext.id ? storedNext : p) : [storedNext, ...all]);
