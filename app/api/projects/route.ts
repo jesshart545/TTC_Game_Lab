@@ -11,7 +11,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const db = getDb();
   if (!db) return NextResponse.json({ configured: false, error: "DATABASE_URL is not configured." }, { status: 503 });
-  const body = await request.json();
+  const incoming = await request.json();
+  const body = incoming.project ?? incoming;
   const id = String(body.id);
   const slug = String(body.slug);
   const name = String(body.name);
