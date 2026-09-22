@@ -304,6 +304,36 @@ export default function ProjectWorkspace() {
     persist({ ...project, assets: nextAssets, updatedAt: "just now" });
   }
 
+  async function saveAssetAsNew(nextAsset: ProjectAsset) {
+    if (!project || !nextAsset.url) return;
+    setAssetStatus("Rendering edited image…");
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.src = nextAsset.url;
+    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Could not load image for editing.")); });
+    const e = nextAsset.edits || {};
+    const ratio = e.crop === "square" ? 1 : e.crop === "portrait" ? 9/16 : e.crop === "landscape" ? 16/9 : image.naturalWidth/image.naturalHeight;
+    let w = e.width || image.naturalWidth;
+    let h = e.height || Math.round(w / ratio);
+    if (e.height && !e.width) w = Math.round(h * ratio);
+    w = Math.max(1, Math.min(4096, w)); h = Math.max(1, Math.min(4096, h));
+    const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Image renderer is unavailable.");
+    ctx.clearRect(0,0,w,h); ctx.globalAlpha = e.opacity ?? 1;
+    ctx.filter = `brightness(${e.brightness ?? 100}%) contrast(${e.contrast ?? 100}%) saturate(${e.saturation ?? 100}%) blur(${e.blur ?? 0}px)`;
+    ctx.translate(w/2 + (e.offsetX || 0), h/2 + (e.offsetY || 0));
+    ctx.rotate((e.rotation || 0) * Math.PI / 180);
+    ctx.scale((e.flipX ? -1 : 1) * (e.zoom || 1), (e.flipY ? -1 : 1) * (e.zoom || 1));
+    const scale = e.crop && e.crop !== "original" ? Math.max(w/image.naturalWidth,h/image.naturalHeight) : Math.min(w/image.naturalWidth,h/image.naturalHeight);
+    ctx.drawImage(image,-image.naturalWidth*scale/2,-image.naturalHeight*scale/2,image.naturalWidth*scale,image.naturalHeight*scale);
+    const blob = await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not render edited image.")),"image/png",.95));
+    const file = new File([blob], (nextAsset.name.replace(/\.[^.]+$/,"") || "edited-image") + "-edited.png", { type:"image/png" });
+    const stored = await storeUploadedAsset(project.id,file);
+    const latest = loadProjects().find(p=>p.id===project.id) || project;
+    persist({ ...latest, assets:[...latest.assets,{...stored,name:file.name}], updatedAt:"just now" });
+    setAssetStatus(file.name + " saved as a new permanent asset.");
+  }
+
   function renderAsset(asset: ProjectAsset, index: number) {
     if (!asset.url) return null;
     const cropStyle = asset.edits?.crop && asset.edits.crop !== "original"
@@ -487,6 +517,6 @@ export default function ProjectWorkspace() {
         </div>
       </aside>
     </div>
-    {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} />}
+    {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={saveAssetAsNew} />}
   </main>;
 }
