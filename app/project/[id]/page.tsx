@@ -6,6 +6,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, GameTool, GameToolType } from "../../../lib/project";
 import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
+import MediaEditor from "../../../components/MediaEditor";
 
 const GENERATORS = [
   { type: "image", label: "Image", icon: "▣" },
@@ -41,6 +42,7 @@ export default function ProjectWorkspace() {
   const [triviaConfig, setTriviaConfig] = useState<any>(null);
   const [triviaBusy, setTriviaBusy] = useState(false);
   const [triviaTopics, setTriviaTopics] = useState<string[]>([]);
+  const [editingAssetIndex, setEditingAssetIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,10 +286,19 @@ export default function ProjectWorkspace() {
     }
   }
 
-  function renderAsset(asset: ProjectAsset) {
+  function saveAssetEdits(index: number, nextAsset: ProjectAsset) {
+    if (!project) return;
+    const nextAssets = project.assets.map((asset, assetIndex) => assetIndex === index ? nextAsset : asset);
+    persist({ ...project, assets: nextAssets, updatedAt: "just now" });
+  }
+
+  function renderAsset(asset: ProjectAsset, index: number) {
     if (!asset.url) return null;
-    if (isImage(asset)) return <img src={asset.url} alt={asset.name} className="asset-thumb" />;
-    if (isVideo(asset)) return <video src={asset.url} className="asset-thumb" controls preload="metadata" />;
+    const cropStyle = asset.edits?.crop && asset.edits.crop !== "original"
+      ? { aspectRatio: asset.edits.crop === "square" ? "1 / 1" : asset.edits.crop === "portrait" ? "9 / 16" : "16 / 9" }
+      : undefined;
+    if (isImage(asset)) return <div className="editable-media-preview" style={cropStyle}><img src={asset.url} alt={asset.name} className="asset-thumb" style={{ objectFit: asset.edits?.crop === "original" ? "contain" : "cover" }} /><button type="button" className="media-edit-btn" onClick={() => setEditingAssetIndex(index)}>Edit / Crop</button></div>;
+    if (isVideo(asset)) return <div className="editable-media-preview" style={cropStyle}><video src={asset.url} className="asset-thumb" controls preload="metadata" /><button type="button" className="media-edit-btn" onClick={() => setEditingAssetIndex(index)}>Edit / Crop / Trim</button></div>;
     if (isAudio(asset)) return <audio src={asset.url} controls />;
     return null;
   }
@@ -435,8 +446,8 @@ export default function ProjectWorkspace() {
         </div>
         <div className="detail-block">
           <span>ASSETS</span>
-          {project.assets.map(a => (
-            <div className="asset-card" key={a.name}>
+          {project.assets.map((a, index) => (
+            <div className="asset-card" key={(a.storageKey || a.name) + index}>
               <div className="asset-card-title">
                 <div>
                   <b>{a.name}</b>
@@ -444,7 +455,7 @@ export default function ProjectWorkspace() {
                 </div>
                 <button type="button" className="danger-btn asset-delete-btn" onClick={() => handleDeleteAsset(a)}>Delete</button>
               </div>
-              {renderAsset(a)}
+              {renderAsset(a, index)}
             </div>
           ))}
           {project.assets.length === 0 && (
@@ -457,5 +468,6 @@ export default function ProjectWorkspace() {
         </div>
       </aside>
     </div>
+    {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} />}
   </main>;
 }
