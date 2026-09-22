@@ -4,6 +4,11 @@ function jsonError(message: string, status = 500) {
   return NextResponse.json({ error: message }, { status });
 }
 
+function readSecret(name: string) {
+  const raw = process.env[name] || "";
+  return raw.trim().replace(/^(['"])|(['"])$/g, "");
+}
+
 function extractImageUrl(payload: any) {
   const item = Array.isArray(payload?.data) ? payload.data[0] : payload?.data;
   if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
@@ -19,7 +24,7 @@ export async function POST(request: Request) {
   if (!prompt) return jsonError("A prompt is required.", 400);
 
   if (type === "image") {
-    const key = process.env.AGNES_API_KEY;
+    const key = readSecret("AGNES_API_KEY");
     if (!key) return jsonError("AGNES_API_KEY is not configured in Vercel.", 503);
     const response = await fetch("https://apihub.agnes-ai.com/v1/images/generations", {
       method: "POST",
@@ -40,7 +45,7 @@ export async function POST(request: Request) {
   }
 
   if (type === "video") {
-    const key = process.env.AGNES_API_KEY;
+    const key = readSecret("AGNES_API_KEY");
     if (!key) return jsonError("AGNES_API_KEY is not configured in Vercel.", 503);
 
     const model = "agnes-video-2.5-flash";
@@ -69,11 +74,11 @@ export async function POST(request: Request) {
   }
 
   if (type === "voice") {
-    const key = process.env.ELEVENLABS_API_KEY;
-    const voiceId = process.env.ELEVENLABS_VOICE_ID;
+    const key = readSecret("ELEVENLABS_API_KEY");
+    const voiceId = readSecret("ELEVENLABS_VOICE_ID");
     if (!key) return jsonError("ELEVENLABS_API_KEY is not configured in Vercel.", 503);
     if (!voiceId) return jsonError("ELEVENLABS_VOICE_ID is not configured in Vercel.", 503);
-    const modelId = process.env.ELEVENLABS_MODEL_ID || "eleven_v3";
+    const modelId = readSecret("ELEVENLABS_MODEL_ID") || "eleven_v3";
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
       method: "POST",
       headers: { "xi-api-key": key, "Content-Type": "application/json" },
