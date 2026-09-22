@@ -59,27 +59,38 @@ async function getStoredAsset(id: string): Promise<StoredAsset | null> {
   } finally { db.close(); }
 }
 
+async function uploadBlob(projectId: string, name: string, blob: Blob): Promise<ProjectAsset> {
+  const form = new FormData();
+  form.append("projectId", projectId);
+  form.append("file", blob, name);
+  const response = await fetch("/api/assets", { method: "POST", body: form });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Unable to store asset.");
+  return { name: data.name || name, type: data.type || blob.type || "application/octet-stream", storageKey: data.storageKey, url: data.url };
+}
+
 export async function storeUploadedAsset(projectId: string, file: File): Promise<ProjectAsset> {
-  const storageKey = makeStorageKey("upload");
-  await putStoredAsset({ id: storageKey, projectId, name: file.name, type: file.type || "application/octet-stream", blob: file });
-  return { name: file.name, type: file.type || "File", storageKey };
+  try {
+    return await uploadBlob(projectId, file.name, file);
+  } catch {
+    const storageKey = makeStorageKey("upload");
+    await putStoredAsset({ id: storageKey, projectId, name: file.name, type: file.type || "application/octet-stream", blob: file });
+    return { name: file.name, type: file.type || "File", storageKey };
+  }
 }
 
 export async function storeGeneratedAsset(projectId: string, asset: { name: string; type: string; url: string }): Promise<ProjectAsset> {
-  const storageKey = makeStorageKey("generated");
-  let blob: Blob;
-  if (asset.url.startsWith("data:")) {
-    const response = await fetch(asset.url);
-    if (!response.ok) throw new Error("Unable to read generated asset data.");
-    blob = await response.blob();
-  } else {
-    const response = await fetch(asset.url);
-    if (!response.ok) throw new Error("Unable to download generated asset.");
-    blob = await response.blob();
+  const response = await fetch(asset.url);
+  if (!response.ok) throw new Error("Unable to download generated asset.");
+  const blob = await response.blob();
+  try {
+    return await uploadBlob(projectId, asset.name, blob);
+  } catch {
+    const storageKey = makeStorageKey("generated");
+    const type = blob.type || asset.type || "application/octet-stream";
+    await putStoredAsset({ id: storageKey, projectId, name: asset.name, type, blob });
+    return { name: asset.name, type, storageKey, url: asset.url };
   }
-  const type = blob.type || asset.type || "application/octet-stream";
-  await putStoredAsset({ id: storageKey, projectId, name: asset.name, type, blob });
-  return { name: asset.name, type, storageKey };
 }
 
 export async function hydrateAsset(asset: ProjectAsset): Promise<ProjectAsset> {
