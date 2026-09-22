@@ -312,6 +312,35 @@ export default function ProjectWorkspace() {
 
   async function saveAssetAsNew(nextAsset: ProjectAsset) {
     if (!project || !nextAsset.url) return;
+    if (isVideo(nextAsset)) {
+      const start=Math.max(0,nextAsset.edits?.trimStart||0);
+      const source=document.createElement("video");
+      source.crossOrigin="anonymous"; source.preload="auto"; source.src=nextAsset.url;
+      setAssetStatus("Preparing trimmed video…");
+      await new Promise<void>((resolve,reject)=>{source.onloadedmetadata=()=>resolve();source.onerror=()=>reject(new Error("Could not load video for trimming."));});
+      const end=Math.min(nextAsset.edits?.trimEnd||source.duration,source.duration);
+      if(!Number.isFinite(end)||end<=start+.05) throw new Error("Choose a valid video trim range.");
+      const capture=(source as HTMLVideoElement & {captureStream?:()=>MediaStream}).captureStream;
+      if(!capture||typeof MediaRecorder==="undefined") throw new Error("Video trimming requires a browser with MediaRecorder support.");
+      source.currentTime=start;
+      await new Promise<void>(resolve=>{if(Math.abs(source.currentTime-start)<.05)return resolve();source.onseeked=()=>resolve();});
+      const stream=capture.call(source);
+      const preferred=["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"].find(t=>MediaRecorder.isTypeSupported(t))||"";
+      const recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);
+      const chunks:BlobPart[]=[];
+      recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+      const finished=new Promise<Blob>((resolve,reject)=>{recorder.onerror=()=>reject(new Error("Video trim recording failed."));recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType||"video/webm"}));});
+      recorder.start(250); await source.play();
+      setAssetStatus(`Trimming video from ${start.toFixed(1)}s to ${end.toFixed(1)}s…`);
+      await new Promise<void>(resolve=>{const watch=()=>{if(source.currentTime>=end||source.ended){source.pause();resolve();return}requestAnimationFrame(watch)};watch()});
+      recorder.stop(); const blob=await finished; stream.getTracks().forEach(track=>track.stop());
+      const file=new File([blob],(nextAsset.name.replace(/\.[^.]+$/,"")||"trimmed-video")+"-trimmed.webm",{type:blob.type||"video/webm"});
+      const stored=await storeUploadedAsset(project.id,file);
+      const latest=loadProjects().find(p=>p.id===project.id)||project;
+      persist({...latest,assets:[...latest.assets,{...stored,name:file.name,edits:undefined}],updatedAt:"just now"});
+      setAssetStatus(file.name+" saved as a new permanent video asset.");
+      return;
+    }
     setAssetStatus("Rendering edited image…");
     const image = new Image();
     image.crossOrigin = "anonymous";
