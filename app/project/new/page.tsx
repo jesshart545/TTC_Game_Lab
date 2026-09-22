@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useRef, useState } from "react";
-import { createProject, loadProjects, ProjectAsset, saveProjects } from "../../../lib/project";
-import { storeGeneratedAsset } from "../../../lib/asset-store";
+import { createProject, loadProjects, Project, ProjectAsset, saveProjects, saveProjectToServer } from "../../../lib/project";
+import { storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
 
@@ -33,6 +33,11 @@ export default function NewProject() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState("");
+  const draftProjectRef = useRef<Project | null>(null);
+  function ensureDraftProject() {
+    if (!draftProjectRef.current) draftProjectRef.current = createProject(prompt.trim() || "Untitled TikTok LIVE experience");
+    return draftProjectRef.current;
+  }
   const [building, setBuilding] = useState(false);
   const [assets, setAssets] = useState<ProjectAsset[]>([]);
   const [assetBusy, setAssetBusy] = useState(false);
@@ -40,18 +45,19 @@ export default function NewProject() {
   const [showGenerator, setShowGenerator] = useState(false);
   const [editingAssetIndex, setEditingAssetIndex] = useState<number | null>(null);
 
-  function handleFiles(event: ChangeEvent<HTMLInputElement>) {
+  async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
-    if (!files.length) return;
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setAssets((current) => [...current, { name: file.name, type: file.type || "File", url: String(reader.result) }]);
-        setAssetStatus(`${file.name} added`);
-      };
-      reader.readAsDataURL(file);
-    });
     event.target.value = "";
+    if (!files.length) return;
+    const draft = ensureDraftProject();
+    setAssetStatus(files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} files…`);
+    try {
+      const uploaded = await Promise.all(files.map(file => storeUploadedAsset(draft.id, file)));
+      setAssets(current => [...current, ...uploaded]);
+      setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} added` : `${uploaded.length} files added`);
+    } catch (error) {
+      setAssetStatus(error instanceof Error ? error.message : "Upload failed.");
+    }
   }
 
   async function generateAsset(type: GeneratorType) {
@@ -81,7 +87,7 @@ export default function NewProject() {
       const generatedAsset = { name, type: data.model || type, url };
       let asset: ProjectAsset = generatedAsset;
       try {
-        asset = await storeGeneratedAsset(`new-project-${Date.now()}`, generatedAsset);
+        asset = await storeGeneratedAsset(ensureDraftProject().id, generatedAsset);
       } catch {
         // Keep the direct URL as a fallback if browser storage cannot cache the generated result.
       }
@@ -94,13 +100,18 @@ export default function NewProject() {
     }
   }
 
-  function build() {
+  async function build() {
     if (!prompt.trim() || building) return;
     setBuilding(true);
-    const project = createProject(prompt.trim());
-    project.assets = assets;
+    const existing = draftProjectRef.current;
+    const generated = createProject(prompt.trim());
+    const project: Project = existing
+      ? { ...generated, id: existing.id, slug: existing.slug, assets }
+      : { ...generated, assets };
+    draftProjectRef.current = project;
     saveProjects([project, ...loadProjects().filter(p => p.id !== project.id)]);
-    setTimeout(() => router.push(`/project/${project.id}`), 500);
+    try { await saveProjectToServer(project); } catch {}
+    router.push(`/project/${project.id}`);
   }
 
   function renderAsset(asset: ProjectAsset, index: number) {
