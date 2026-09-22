@@ -94,3 +94,22 @@ export function createProject(prompt: string): Project {
   const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Math.random().toString(36).slice(2, 7)}`;
   return { id, name, slug, description: "AI-generated interactive TikTok LIVE experience.", status: "Draft", theme: "cyan", updatedAt: "just now", prompt, messages: [{ role: "user", text: prompt }], controls: [{ id: "alert", label: "TEST ALERT", action: "alert.test", detail: "Trigger a project alert" }, { id: "effect", label: "TRIGGER EFFECT", action: "effect.trigger", detail: "Play the generated visual effect" }], assets: [], overlay: { title: name.toUpperCase(), subtitle: "YOUR LIVE EXPERIENCE", showChat: true, showAlerts: true, showCharacter: true }, wheel: { enabled: false, title: "Game Wheel", segments: ["Prize", "Challenge", "Bonus", "Mystery"], spinning: false, visible: false }, gameTools: [] };
 }
+
+
+export async function saveProjectToServer(project: Project) {
+  const response = await fetch("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project }),
+  });
+  if (!response.ok) throw new Error("Could not save project to Neon.");
+  return response.json();
+}
+
+export async function loadProjectFromServer(idOrSlug: string): Promise<Project | null> {
+  const response = await fetch(`/api/projects/${encodeURIComponent(idOrSlug)}`, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("Could not load project from Neon.");
+  const data = await response.json();
+  return data.project as Project;
+}
