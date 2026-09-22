@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, GameTool, GameToolType } from "../../../lib/project";
+import { createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
 import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
@@ -48,7 +48,8 @@ export default function ProjectWorkspace() {
     let cancelled = false;
     (async () => {
       const all = loadProjects();
-      const found = all.find(p => p.id === params.id) || all[0];
+      let found = all.find(p => p.id === params.id) || all[0];
+      try { found = (await loadProjectFromServer(params.id)) || found; } catch {}
       if (!found) return;
       let hydrated = found;
       try {
@@ -183,6 +184,7 @@ export default function ProjectWorkspace() {
     const all = loadProjects();
     saveProjects(all.some(p => p.id === storedNext.id) ? all.map(p => p.id === storedNext.id ? storedNext : p) : [storedNext, ...all]);
     setProject(next);
+    void saveProjectToServer(storedNext).catch(() => {});
   }
 
   async function handleDeleteProject() {
