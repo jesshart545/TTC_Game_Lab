@@ -35,3 +35,6 @@
 .assets-panel audio{width:100%;height:34px;margin-top:8px}
 
 .asset-project-btn{width:100%;margin-top:8px}.asset-project-btn.active{border-color:rgba(66,231,165,.5);color:#7ff2bf;background:rgba(66,231,165,.08)}.runtime-project-assets{position:absolute;inset:0;pointer-events:none;z-index:2}.runtime-project-media{position:absolute;right:4%;bottom:8%;max-width:38%;max-height:55%;object-fit:contain}
+
+/* Builder livestream preview */
+.stage{isolation:isolate}.builder-preview-background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}.builder-preview-layers{position:absolute;inset:0;z-index:2;pointer-events:none}.builder-preview-media{position:absolute;right:5%;bottom:8%;max-width:38%;max-height:58%;object-fit:contain}.stage .stage-scan{z-index:1}.stage .overlay-demo{position:relative;z-index:3}.stage .stage-corner{z-index:4}.preview-mode-badge{font-size:8px;letter-spacing:1px;color:#7ff2bf;border:1px solid rgba(66,231,165,.35);background:rgba(66,231,165,.07);border-radius:6px;padding:7px 9px}
