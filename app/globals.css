@@ -33,3 +33,5 @@
 .assets-panel .editable-media-preview{position:relative;width:100%;max-height:150px;overflow:hidden;border-radius:6px;margin-top:8px}
 .assets-panel .editable-media-preview .asset-thumb{margin-top:0}
 .assets-panel audio{width:100%;height:34px;margin-top:8px}
+
+.asset-project-btn{width:100%;margin-top:8px}.asset-project-btn.active{border-color:rgba(66,231,165,.5);color:#7ff2bf;background:rgba(66,231,165,.08)}.runtime-project-assets{position:absolute;inset:0;pointer-events:none;z-index:2}.runtime-project-media{position:absolute;right:4%;bottom:8%;max-width:38%;max-height:55%;object-fit:contain}
