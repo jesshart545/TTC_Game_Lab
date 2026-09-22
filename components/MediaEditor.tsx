@@ -13,7 +13,7 @@ function ratioStyle(crop: ProjectAssetEdits["crop"]) {
   return { aspectRatio: crop === "square" ? "1 / 1" : crop === "portrait" ? "9 / 16" : "16 / 9" };
 }
 
-export default function MediaEditor({asset,onSave,onClose}:{asset:ProjectAsset;onSave:(asset:ProjectAsset)=>void;onClose:()=>void}) {
+export default function MediaEditor({asset,onSave,onSaveAsNew,onClose}:{asset:ProjectAsset;onSave:(asset:ProjectAsset)=>void;onSaveAsNew?:(asset:ProjectAsset)=>Promise<void>;onClose:()=>void}) {
   const videoRef=useRef<HTMLVideoElement>(null), video=isVideo(asset);
   const [name,setName]=useState(asset.name), [crop,setCrop]=useState<NonNullable<ProjectAssetEdits["crop"]>>(asset.edits?.crop||"original");
   const [trimStart,setTrimStart]=useState(Number(asset.edits?.trimStart||0)), [trimEnd,setTrimEnd]=useState(Number(asset.edits?.trimEnd||0));
@@ -25,6 +25,7 @@ export default function MediaEditor({asset,onSave,onClose}:{asset:ProjectAsset;o
   const [blur,setBlur]=useState(asset.edits?.blur??0), [width,setWidth]=useState(asset.edits?.width||0), [height,setHeight]=useState(asset.edits?.height||0);
   const [offsetX,setOffsetX]=useState(asset.edits?.offsetX||0), [offsetY,setOffsetY]=useState(asset.edits?.offsetY||0);
   const [aiPrompt,setAiPrompt]=useState("");
+  const [savingNew,setSavingNew]=useState(false);
 
   const effectiveEnd=useMemo(()=>!video||!duration?0:(trimEnd>0?Math.min(trimEnd,duration):duration),[duration,trimEnd,video]);
   useEffect(()=>{if(!video||!videoRef.current||effectiveEnd<=trimStart)return;const p=videoRef.current,t=currentTime<trimStart||currentTime>effectiveEnd?trimStart:currentTime;if(Math.abs(p.currentTime-t)>.15)p.currentTime=t;},[trimStart,effectiveEnd,currentTime,video]);
@@ -33,10 +34,8 @@ export default function MediaEditor({asset,onSave,onClose}:{asset:ProjectAsset;o
   const mediaStyle={transform,opacity,filter:`brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) blur(${blur}px)`};
 
   function reset(){setCrop("original");setZoom(1);setRotation(0);setFlipX(false);setFlipY(false);setOpacity(1);setBrightness(100);setContrast(100);setSaturation(100);setBlur(0);setWidth(0);setHeight(0);setOffsetX(0);setOffsetY(0);}
-  function apply(){
-    const edits:ProjectAssetEdits={crop,zoom,rotation,flipX,flipY,opacity,brightness,contrast,saturation,blur,width:width||undefined,height:height||undefined,offsetX,offsetY};
-    if(video){edits.trimStart=Math.max(0,Math.min(trimStart,Math.max(0,duration-.05)));if(effectiveEnd>edits.trimStart+.05&&effectiveEnd<duration-.05)edits.trimEnd=effectiveEnd;}
-    onSave({...asset,name:name.trim()||asset.name,edits});onClose();
+  function editedAsset(){
+    onSave(editedAsset());onClose();
   }
 
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true"><div className="media-editor-modal">
@@ -62,6 +61,6 @@ export default function MediaEditor({asset,onSave,onClose}:{asset:ProjectAsset;o
       <div className="media-editor-ai"><span>AI EDIT</span><div><input value={aiPrompt} onChange={e=>setAiPrompt(e.target.value)} placeholder="Remove background, make it haunted, change shirt color…"/><button type="button" disabled title="AI image editing endpoint is the next connection">AI Edit</button></div><small>Prompt workspace is ready; AI image-to-image editing requires a compatible Agnes edit endpoint.</small></div></>}
       {video&&<div className="media-editor-field"><span>TRIM VIDEO</span><div className="media-editor-trim"><label>Start<input type="number" min="0" step=".1" value={trimStart} onChange={e=>setTrimStart(+e.target.value)}/></label><label>End<input type="number" min=".1" step=".1" value={effectiveEnd||trimEnd||0} onChange={e=>setTrimEnd(+e.target.value)}/></label><span>{duration?duration.toFixed(1)+"s total":"Loading…"}</span></div></div>}
     </div>
-    <div className="media-editor-actions"><button className="outline-btn" onClick={reset}>Reset</button><button className="outline-btn" onClick={onClose}>Cancel</button><button className="build-btn" onClick={apply}>Save edits</button></div>
+    <div className="media-editor-actions"><button className="outline-btn" onClick={reset}>Reset</button><button className="outline-btn" onClick={onClose}>Cancel</button>{!video&&onSaveAsNew&&<button className="outline-btn" disabled={savingNew} onClick={async()=>{setSavingNew(true);try{await onSaveAsNew(editedAsset());onClose();}finally{setSavingNew(false)}}}>{savingNew?"Rendering…":"Save as New Asset"}</button>}<button className="build-btn" onClick={apply}>Replace Asset</button></div>
   </div></div>;
 }
