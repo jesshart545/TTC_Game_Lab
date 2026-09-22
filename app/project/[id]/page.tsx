@@ -286,6 +286,16 @@ export default function ProjectWorkspace() {
     }
   }
 
+  function toggleAssetInProject(index: number) {
+    if (!project) return;
+    const asset = project.assets[index];
+    const adding = !asset.inProject;
+    const role: ProjectAsset["role"] = isImage(asset) ? (project.assets.some(a => a.inProject && a.role === "background") ? "layer" : "background") : isVideo(asset) ? "video" : "audio";
+    const nextAssets = project.assets.map((item, i) => i === index ? { ...item, inProject: adding, role: adding ? role : item.role } : item);
+    persist({ ...project, assets: nextAssets, updatedAt: "just now" });
+    setAssetStatus(adding ? asset.name + " added to the live project." : asset.name + " removed from the live project.");
+  }
+
   function saveAssetEdits(index: number, nextAsset: ProjectAsset) {
     if (!project) return;
     const nextAssets = project.assets.map((asset, assetIndex) => assetIndex === index ? nextAsset : asset);
@@ -456,6 +466,7 @@ export default function ProjectWorkspace() {
                 <button type="button" className="danger-btn asset-delete-btn" onClick={() => handleDeleteAsset(a)}>Delete</button>
               </div>
               {renderAsset(a, index)}
+              <button type="button" className={a.inProject ? "outline-btn asset-project-btn active" : "outline-btn asset-project-btn"} onClick={() => toggleAssetInProject(index)}>{a.inProject ? "✓ Added to Project" : "+ Add to Project"}</button>
             </div>
           ))}
           {project.assets.length === 0 && (
