@@ -19,7 +19,8 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   const { id } = await context.params;
   await db`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'Draft', theme TEXT NOT NULL DEFAULT 'cyan', prompt TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
   const rows = await db`SELECT id FROM projects WHERE id = ${id} OR slug = ${id} LIMIT 1`;
-  if (!rows.length) return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  // Built-in demo projects may exist only in the client seed data and therefore have no Neon row.
+  if (!rows.length) return NextResponse.json({ ok: true, id, deletedAssets: 0, databaseRecord: false });
   const projectId = String(rows[0].id);
   let deletedAssets = 0;
   try {
