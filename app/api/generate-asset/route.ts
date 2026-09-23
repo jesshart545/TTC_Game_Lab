@@ -126,10 +126,17 @@ export async function POST(request: Request) {
 
     const submitPayload = await submitResponse.json().catch(() => ({}));
     if (!submitResponse.ok) {
-      return jsonError(
-        submitPayload?.detail || submitPayload?.message || submitPayload?.error || "fal music generation failed.",
-        submitResponse.status,
-      );
+      const falError =
+        typeof submitPayload?.detail === "string"
+          ? submitPayload.detail
+          : typeof submitPayload?.message === "string"
+            ? submitPayload.message
+            : typeof submitPayload?.error === "string"
+              ? submitPayload.error
+              : submitPayload?.detail || submitPayload?.error
+                ? JSON.stringify(submitPayload.detail || submitPayload.error)
+                : "fal music generation failed.";
+      return jsonError(falError, submitResponse.status);
     }
 
     const requestId = submitPayload?.request_id;
