@@ -49,21 +49,35 @@ export async function POST(request: Request) {
     if (!key) return jsonError("AGNES_API_KEY is not configured in Vercel.", 503);
 
     const model = "agnes-video-2.5-flash";
-    const response = await fetch("https://apihub.agnes-ai.com/v1/videos", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        prompt,
-        mode: "text",
-        seconds: 5,
-        size: "720P",
-        aspect_ratio: "16:9",
-        n: 1,
-      }),
+    const requestBody = JSON.stringify({
+      model,
+      prompt,
+      mode: "text",
+      seconds: 5,
+      size: "720P",
+      aspect_ratio: "16:9",
+      n: 1,
     });
-
-    const payload = await response.json().catch(() => ({}));
+    let response: Response | null = null;
+    let payload: any = {};
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      response = await fetch("https://apihub.agnes-ai.com/v1/videos", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+          "Content-Length": String(Buffer.byteLength(requestBody)),
+        },
+        body: requestBody,
+        cache: "no-store",
+      });
+      payload = await response.json().catch(async () => ({ message: await response!.text().catch(() => "") }));
+      const message = String(payload?.error?.message || payload?.message || "");
+      if (response.ok || !/failed to read request body/i.test(message) || attempt === 2) break;
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+    if (!response) return jsonError("Agnes video request could not be sent.", 502);
     if (!response.ok) return jsonError(payload?.error?.message || payload?.message || "Agnes video generation failed.", response.status);
 
     const videoId = payload?.video_id || payload?.id || payload?.data?.video_id || payload?.data?.id || "";
