@@ -25,8 +25,20 @@ export async function GET(request: Request) {
   }
 
   const base = `https://queue.fal.run/${MODEL}/requests/${encodeURIComponent(id)}`;
+  const query = new URL(request.url).searchParams;
+  const safeQueueUrl = (provided: string | null, fallback: string) => {
+    if (!provided) return fallback;
+    try {
+      const parsed = new URL(provided);
+      if (parsed.protocol !== "https:" || parsed.hostname !== "queue.fal.run" || parsed.username || parsed.password ||
+          !parsed.pathname.includes("/requests/" + id)) return fallback;
+      return parsed.toString();
+    } catch { return fallback; }
+  };
+  const statusUrl = safeQueueUrl(query.get("statusUrl"), base + "/status");
+  const resultUrl = safeQueueUrl(query.get("responseUrl"), base);
   try {
-    const response = await fetch(`${base}/status`, {
+    const response = await fetch(statusUrl, {
       headers: { Authorization: `Key ${key}` },
       cache: "no-store",
     });
@@ -42,7 +54,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ status: "processing", queuePosition: payload.queue_position ?? null });
     }
 
-    const resultResponse = await fetch(base, {
+    const resultResponse = await fetch(resultUrl, {
       headers: { Authorization: `Key ${key}` },
       cache: "no-store",
     });
