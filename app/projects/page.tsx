@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { loadProjects, deleteProject, Project } from "../../lib/project";
+import { loadProjects, deleteProject, deleteProjectFromServer, Project } from "../../lib/project";
 import { deleteProjectStoredAssets } from "../../lib/asset-store";
 import { useEffect, useState } from "react";
 
@@ -17,6 +17,12 @@ export default function ProjectsPage() {
       await deleteProjectStoredAssets(project.id);
     } catch {
       // Continue removing the project record even if a browser-storage cleanup fails.
+    }
+    try {
+      await deleteProjectFromServer(project.id);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not delete this project.");
+      return;
     }
     deleteProject(project.id);
     setProjects(current => current.filter(item => item.id !== project.id));
