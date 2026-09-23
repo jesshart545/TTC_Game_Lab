@@ -158,6 +158,8 @@ export async function POST(request: Request) {
       type: "music",
       status: "processing",
       requestId: String(requestId),
+      statusUrl: submitPayload.status_url || "",
+      responseUrl: submitPayload.response_url || "",
       model,
       provider: "fal",
     });
