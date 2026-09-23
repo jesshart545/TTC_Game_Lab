@@ -101,6 +101,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ type, url: `data:audio/mpeg;base64,${audioBase64}`, model: modelId });
   }
 
-  if (type === "music") return jsonError("Music generation is temporarily disabled. Connect a self-hosted ACE-Step 1.5 server to enable it.", 503);
+  if (type === "music") {
+    const key = readSecret("GEMINI_API_KEY");
+    if (!key) return jsonError("GEMINI_API_KEY is not configured in Vercel.", 503);
+
+    const model = readSecret("LYRIA_MODEL") || "lyria-3-clip-preview";
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": key,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+        cache: "no-store",
+      },
+    );
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return jsonError(
+        payload?.error?.message || payload?.message || "Google Lyria music generation failed.",
+        response.status,
+      );
+    }
+
+    const parts = payload?.candidates?.[0]?.content?.parts || [];
+    const audioPart = parts.find((part: any) => part?.inlineData?.data);
+    if (!audioPart?.inlineData?.data) return jsonError("Lyria returned no audio output.", 502);
+
+    const mimeType = audioPart.inlineData.mimeType || "audio/mpeg";
+    const lyrics = parts
+      .filter((part: any) => typeof part?.text === "string")
+      .map((part: any) => part.text)
+      .join("\\n")
+      .trim();
+
+    return NextResponse.json({
+      type: "music",
+      url: `data:${mimeType};base64,${audioPart.inlineData.data}`,
+      model,
+      lyrics,
+    });
+  }
   return jsonError("Unsupported asset type. Use image, video, voice, or music.", 400);
 }
