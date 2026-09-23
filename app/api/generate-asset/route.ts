@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       return jsonError(
-        payload?.error || payload?.message || payload?.detail || "Runway video generation failed.",
+        typeof payload?.error === "string" ? payload.error : payload?.error?.message || payload?.message || payload?.detail || (payload?.errors ? JSON.stringify(payload.errors) : "") || "Runway video generation failed.",
         response.status,
       );
     }
