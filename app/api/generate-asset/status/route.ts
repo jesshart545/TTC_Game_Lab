@@ -24,7 +24,36 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   const model = url.searchParams.get("model") || "agnes-video-2.5-flash";
+  const provider = url.searchParams.get("provider") || "agnes";
   if (!id) return NextResponse.json({ error: "A video id is required." }, { status: 400 });
+
+  if (provider === "runway") {
+    const runwayKey = readSecret("RUNWAYML_API_SECRET");
+    if (!runwayKey) return NextResponse.json({ error: "RUNWAYML_API_SECRET is not configured in Vercel." }, { status: 503 });
+    const response = await fetch(`https://api.dev.runwayml.com/v1/tasks/${encodeURIComponent(id)}`, {
+      headers: {
+        Authorization: `Bearer ${runwayKey}`,
+        "X-Runway-Version": "2024-11-06",
+      },
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return NextResponse.json({ error: payload?.error || payload?.message || "Unable to read Runway video status." }, { status: response.status });
+    const rawStatus = String(payload?.status || "").toUpperCase();
+    const status = rawStatus === "SUCCEEDED" ? "completed"
+      : ["FAILED","CANCELED","CANCELLED"].includes(rawStatus) ? "failed"
+      : "processing";
+    const output = Array.isArray(payload?.output) ? payload.output[0] : payload?.output;
+    return NextResponse.json({
+      status,
+      progress: status === "completed" ? 100 : Number(payload?.progress || 0),
+      url: output || null,
+      error: payload?.failure || payload?.failureCode || null,
+      videoId: id,
+      model,
+      provider: "runway",
+    });
+  }
 
   const response = await fetch(`https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(id)}&model_name=${encodeURIComponent(model)}`, {
     headers: { Authorization: `Bearer ${token}` },
