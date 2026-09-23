@@ -255,6 +255,24 @@ export default function ProjectWorkspace() {
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
 
       let url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+      if (type === "music" && data.requestId) {
+        setAssetStatus("Music queued with fal.ai. Waiting for the finished song…");
+        let completed = false;
+        for (let attempt = 0; attempt < 300; attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const statusResponse = await fetch(`/api/generate-asset/music-status?id=${encodeURIComponent(String(data.requestId))}`, { cache: "no-store" });
+          const statusData = await statusResponse.json().catch(() => ({}));
+          if (!statusResponse.ok) throw new Error(typeof statusData.error === "string" ? statusData.error : "Unable to check music generation status.");
+          if (statusData.status === "failed") throw new Error(statusData.error || "Music generation failed.");
+          if (statusData.status === "completed" && statusData.url) {
+            url = String(statusData.url);
+            completed = true;
+            break;
+          }
+          if (attempt % 10 === 0) setAssetStatus(statusData.queuePosition != null ? `Music queued: ${statusData.queuePosition} ahead…` : "Music is still generating…");
+        }
+        if (!completed) throw new Error("Music is still processing on fal.ai. The request may complete later; please avoid submitting duplicate generations.");
+      }
       if (type === "video" && data.videoId) {
         setAssetStatus("Video accepted. Generating frames… 0%");
         url = await waitForGeneratedVideo(
