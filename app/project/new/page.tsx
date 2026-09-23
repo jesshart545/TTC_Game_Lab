@@ -33,6 +33,7 @@ export default function NewProject() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState("");
+  const [projectTitle, setProjectTitle] = useState("");
   const draftProjectRef = useRef<Project | null>(null);
   function ensureDraftProject() {
     if (!draftProjectRef.current) draftProjectRef.current = createProject(prompt.trim() || "Untitled TikTok LIVE experience");
@@ -118,9 +119,10 @@ export default function NewProject() {
     setBuilding(true);
     const existing = draftProjectRef.current;
     const generated = createProject(prompt.trim());
+    const chosenName = projectTitle.trim();
     const project: Project = existing
-      ? { ...generated, id: existing.id, slug: existing.slug, assets }
-      : { ...generated, assets };
+      ? { ...generated, id: existing.id, slug: existing.slug, name: chosenName || generated.name, assets }
+      : { ...generated, name: chosenName || generated.name, assets };
     draftProjectRef.current = project;
     saveProjects([project, ...loadProjects().filter(p => p.id !== project.id)]);
     try { await saveProjectToServer(project); } catch {}
@@ -146,6 +148,8 @@ export default function NewProject() {
             <div className="idea-card"><span>QUICK START</span><button onClick={() => setPrompt("Create a spooky gaming stream where my character reacts dramatically whenever someone follows.")}>👻 Spooky gaming stream <b>→</b></button><button onClick={() => setPrompt("Create a futuristic space battle stream with interactive audience events and neon effects.")}>🚀 Interactive space battle <b>→</b></button><button onClick={() => setPrompt("Create a cyberpunk livestream with animated alerts, particles and a reactive character.")}>⚡ Neon cyberpunk <b>→</b></button></div>
           </div>
           <div className="composer">
+            <label htmlFor="new-project-title" style={{ display: "block", marginBottom: 10, fontWeight: 600 }}>Project title</label>
+            <input id="new-project-title" type="text" maxLength={100} value={projectTitle} onChange={event => setProjectTitle(event.target.value)} placeholder="Name your project (optional)" style={{ width: "100%", boxSizing: "border-box", marginBottom: 16, padding: "12px 14px", borderRadius: 10, border: "1px solid #3ddde6", background: "#111827", color: "#fff", fontSize: 15 }} />
             <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Describe your livestream idea..."/>
             <div className="composer-bottom">
               <input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/>
