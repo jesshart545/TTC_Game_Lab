@@ -47,44 +47,73 @@ export async function POST(request: Request) {
   }
 
   if (type === "video") {
-    const key = readSecret("AGNES_API_KEY");
-    if (!key) return jsonError("AGNES_API_KEY is not configured in Vercel.", 503);
-
-    const model = "agnes-video-2.5-flash";
-    const requestBody = JSON.stringify({
-      model,
-      prompt,
-      mode: "text",
-      seconds: "5",
-      size: "720P",
-      aspect_ratio: "16:9",
-    });
-    let response: Response | null = null;
-    let payload: any = {};
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      response = await fetch("https://apihub.agnes-ai.com/v1/videos", {
+    const runwayKey = readSecret("RUNWAYML_API_SECRET");
+    if (runwayKey) {
+      const model = "gen4.5";
+      const response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${key}`,
+          Authorization: `Bearer ${runwayKey}`,
           "Content-Type": "application/json",
-          Accept: "application/json",
+          "X-Runway-Version": "2024-11-06",
         },
-        body: requestBody,
+        body: JSON.stringify({
+          model,
+          promptText: prompt,
+          ratio: "1280:720",
+          duration: 5,
+        }),
         cache: "no-store",
       });
-      payload = await response.json().catch(async () => ({ message: await response!.text().catch(() => "") }));
-      const message = String(payload?.error?.message || payload?.message || "");
-      if (response.ok || !/failed to read request body/i.test(message) || attempt === 2) break;
-      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return jsonError(
+          payload?.error || payload?.message || `Runway video generation failed (HTTP ${response.status}).`,
+          response.status,
+        );
+      }
+      const taskId = payload?.id || payload?.taskId || "";
+      if (!taskId) return jsonError("Runway accepted the video request but returned no task id.", 502);
+      return NextResponse.json({
+        type,
+        status: "processing",
+        videoId: String(taskId),
+        url: `/api/generate-asset/video?id=${encodeURIComponent(String(taskId))}&model=${encodeURIComponent(`runway:${model}`)}`,
+        model: `runway:${model}`,
+        provider: "runway",
+      });
     }
-    if (!response) return jsonError("Agnes video request could not be sent.", 502);
+
+    const key = readSecret("AGNES_API_KEY");
+    if (!key) return jsonError("No video provider is configured. Add RUNWAYML_API_SECRET or AGNES_API_KEY in Vercel.", 503);
+
+    const model = "agnes-video-2.5-flash";
+    const response = await fetch("https://apihub.agnes-ai.com/v1/videos", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        prompt,
+        mode: "text",
+        seconds: "5",
+        size: "720P",
+        aspect_ratio: "16:9",
+      }),
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) return jsonError(payload?.error?.message || payload?.detail || payload?.message || "Agnes video generation failed.", response.status);
 
     const videoId = payload?.video_id || payload?.id || payload?.data?.video_id || payload?.data?.id || "";
     if (!videoId) return jsonError("Agnes accepted the video request but returned no video id.", 502);
-
-    const url = `/api/generate-asset/video?id=${encodeURIComponent(String(videoId))}&model=${encodeURIComponent(model)}`;
-    return NextResponse.json({ type, status: "processing", videoId: String(videoId), url, model });
+    return NextResponse.json({
+      type,
+      status: "processing",
+      videoId: String(videoId),
+      url: `/api/generate-asset/video?id=${encodeURIComponent(String(videoId))}&model=${encodeURIComponent(model)}`,
+      model,
+      provider: "agnes",
+    });
   }
 
   if (type === "voice") {
