@@ -30,8 +30,10 @@ export async function GET(request: Request) {
       headers: { Authorization: `Key ${key}` },
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return NextResponse.json({ error: errorText(payload.detail || payload.error || payload.message || "fal status check failed.") }, { status: response.status });
+    const rawStatus = await response.text();
+    let payload: any = {};
+    try { payload = JSON.parse(rawStatus); } catch {}
+    if (!response.ok) return NextResponse.json({ error: `fal status HTTP ${response.status}: ${errorText(payload.detail || payload.error || payload.message || rawStatus.slice(0, 400) || "Empty response")}` }, { status: response.status });
 
     if (payload.status === "FAILED") {
       return NextResponse.json({ status: "failed", error: errorText(payload.error || payload.detail || "fal music generation failed.") });
@@ -44,8 +46,10 @@ export async function GET(request: Request) {
       headers: { Authorization: `Key ${key}` },
       cache: "no-store",
     });
-    const result = await resultResponse.json().catch(() => ({}));
-    if (!resultResponse.ok) return NextResponse.json({ error: errorText(result.detail || result.error || "Unable to retrieve fal music.") }, { status: resultResponse.status });
+    const rawResult = await resultResponse.text();
+    let result: any = {};
+    try { result = JSON.parse(rawResult); } catch {}
+    if (!resultResponse.ok) return NextResponse.json({ error: `fal result HTTP ${resultResponse.status}: ${errorText(result.detail || result.error || rawResult.slice(0, 400) || "Empty response")}` }, { status: resultResponse.status });
     const audioUrl = result?.audio?.url;
     if (!audioUrl) return NextResponse.json({ status: "failed", error: "fal completed but returned no audio URL." });
     return NextResponse.json({ status: "completed", url: String(audioUrl) });
