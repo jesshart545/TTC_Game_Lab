@@ -2,8 +2,20 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-function jsonError(message: string, status = 500) {
-  return NextResponse.json({ error: message }, { status });
+function jsonError(message: unknown, status = 500) {
+  const format = (value: unknown): string => {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) return value.map(format).filter(Boolean).join(" | ");
+    if (value && typeof value === "object") {
+      const item = value as Record<string, unknown>;
+      const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+      const detail = typeof item.msg === "string" ? item.msg : typeof item.message === "string" ? item.message : "";
+      if (detail) return location ? `${location}: ${detail}` : detail;
+      try { return JSON.stringify(value); } catch { return "Unknown API error"; }
+    }
+    return String(value ?? "Unknown API error");
+  };
+  return NextResponse.json({ error: format(message) }, { status });
 }
 
 function readSecret(name: string) {
