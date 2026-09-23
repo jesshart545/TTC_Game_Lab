@@ -131,7 +131,7 @@ export async function POST(request: Request) {
         lyrics: "",
         lyrics_optimizer: true,
         is_instrumental: false,
-        audio_setting: { sample_rate: "44100", bitrate: "256000", format: "mp3" },
+        audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
       }),
       cache: "no-store",
     });
