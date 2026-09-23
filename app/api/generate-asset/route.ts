@@ -102,50 +102,72 @@ export async function POST(request: Request) {
   }
 
   if (type === "music") {
-    const key = readSecret("GEMINI_API_KEY");
-    if (!key) return jsonError("GEMINI_API_KEY is not configured in Vercel.", 503);
+    const key = readSecret("FAL_KEY");
+    if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
 
-    const model = readSecret("LYRIA_MODEL") || "lyria-3-clip-preview";
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": key,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-        cache: "no-store",
+    const model = "fal-ai/minimax-music/v2.6";
+    const stylePrompt = prompt.length >= 10 ? prompt.slice(0, 2000) : `${prompt} cinematic music`;
+
+    const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Key ${key}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        prompt: stylePrompt,
+        lyrics: "",
+        lyrics_optimizer: true,
+        is_instrumental: false,
+        audio_setting: { sample_rate: "44100", bitrate: "256000", format: "mp3" },
+      }),
+      cache: "no-store",
+    });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    const submitPayload = await submitResponse.json().catch(() => ({}));
+    if (!submitResponse.ok) {
       return jsonError(
-        payload?.error?.message || payload?.message || "Google Lyria music generation failed.",
-        response.status,
+        submitPayload?.detail || submitPayload?.message || submitPayload?.error || "fal music generation failed.",
+        submitResponse.status,
       );
     }
 
-    const parts = payload?.candidates?.[0]?.content?.parts || [];
-    const audioPart = parts.find((part: any) => part?.inlineData?.data);
-    if (!audioPart?.inlineData?.data) return jsonError("Lyria returned no audio output.", 502);
+    const requestId = submitPayload?.request_id;
+    if (!requestId) return jsonError("fal accepted the music request but returned no request id.", 502);
 
-    const mimeType = audioPart.inlineData.mimeType || "audio/mpeg";
-    const lyrics = parts
-      .filter((part: any) => typeof part?.text === "string")
-      .map((part: any) => part.text)
-      .join("\\n")
-      .trim();
+    const resultUrl = submitPayload?.response_url || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}`;
+    const statusUrl = submitPayload?.status_url || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}/status`;
 
-    return NextResponse.json({
-      type: "music",
-      url: `data:${mimeType};base64,${audioPart.inlineData.data}`,
-      model,
-      lyrics,
-    });
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const statusResponse = await fetch(statusUrl, {
+        headers: { Authorization: `Key ${key}` },
+        cache: "no-store",
+      });
+      const statusPayload = await statusResponse.json().catch(() => ({}));
+      if (!statusResponse.ok) {
+        return jsonError(statusPayload?.detail || statusPayload?.message || "Unable to check fal music status.", statusResponse.status);
+      }
+      if (statusPayload?.status === "COMPLETED") {
+        const resultResponse = await fetch(resultUrl, {
+          headers: { Authorization: `Key ${key}` },
+          cache: "no-store",
+        });
+        const resultPayload = await resultResponse.json().catch(() => ({}));
+        if (!resultResponse.ok) {
+          return jsonError(resultPayload?.detail || resultPayload?.message || "Unable to retrieve fal music result.", resultResponse.status);
+        }
+        const audioUrl = resultPayload?.audio?.url;
+        if (!audioUrl) return jsonError("fal completed the song but returned no audio URL.", 502);
+        return NextResponse.json({ type: "music", url: String(audioUrl), model, provider: "fal" });
+      }
+      if (statusPayload?.status === "FAILED") {
+        return jsonError(statusPayload?.error || "fal music generation failed.", 502);
+      }
+    }
+
+    return jsonError("fal music generation is taking longer than expected. Please try again.", 504);
   }
+
   return jsonError("Unsupported asset type. Use image, video, voice, or music.", 400);
 }
