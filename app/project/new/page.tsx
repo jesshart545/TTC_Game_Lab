@@ -34,6 +34,7 @@ export default function NewProject() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState("");
   const [projectTitle, setProjectTitle] = useState("");
+  const [titleSaved, setTitleSaved] = useState(false);
   const draftProjectRef = useRef<Project | null>(null);
   function ensureDraftProject() {
     if (!draftProjectRef.current) draftProjectRef.current = createProject(prompt.trim() || "Untitled TikTok LIVE experience");
@@ -114,6 +115,17 @@ export default function NewProject() {
     }
   }
 
+  async function saveTitle() {
+    const name = projectTitle.trim();
+    if (!name) { setAssetStatus("Enter a project title first."); return; }
+    const draft = ensureDraftProject();
+    const next: Project = { ...draft, name, updatedAt: "just now" };
+    draftProjectRef.current = next;
+    saveProjects([next, ...loadProjects().filter(p => p.id !== next.id)]);
+    try { await saveProjectToServer(next); setTitleSaved(true); setAssetStatus("Project title saved."); }
+    catch { setTitleSaved(true); setAssetStatus("Project title saved locally. It will sync when the server is available."); }
+  }
+
   async function build() {
     if (!prompt.trim() || building) return;
     setBuilding(true);
@@ -149,7 +161,7 @@ export default function NewProject() {
           </div>
           <div className="composer">
             <label htmlFor="new-project-title" style={{ display: "block", marginBottom: 10, fontWeight: 600 }}>Project title</label>
-            <input id="new-project-title" type="text" maxLength={100} value={projectTitle} onChange={event => setProjectTitle(event.target.value)} placeholder="Name your project (optional)" style={{ width: "100%", boxSizing: "border-box", marginBottom: 16, padding: "12px 14px", borderRadius: 10, border: "1px solid #3ddde6", background: "#111827", color: "#fff", fontSize: 15 }} />
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}><input id="new-project-title" type="text" maxLength={100} value={projectTitle} onChange={event => { setProjectTitle(event.target.value); setTitleSaved(false); }} placeholder="Name your project" style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "12px 14px", borderRadius: 10, border: "1px solid #3ddde6", background: "#111827", color: "#fff", fontSize: 15 }} /><button type="button" onClick={saveTitle} disabled={!projectTitle.trim() || titleSaved} className="publish-btn">{titleSaved ? "✓ Saved" : "Save title"}</button></div>
             <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Describe your livestream idea..."/>
             <div className="composer-bottom">
               <input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/>
