@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 function jsonError(message: string, status = 500) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -56,7 +58,6 @@ export async function POST(request: Request) {
       seconds: "5",
       size: "720P",
       aspect_ratio: "16:9",
-      n: 1,
     });
     let response: Response | null = null;
     let payload: any = {};
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
       await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
     }
     if (!response) return jsonError("Agnes video request could not be sent.", 502);
-    if (!response.ok) return jsonError(payload?.error?.message || payload?.message || "Agnes video generation failed.", response.status);
+    if (!response.ok) return jsonError(payload?.error?.message || payload?.detail || payload?.message || "Agnes video generation failed.", response.status);
 
     const videoId = payload?.video_id || payload?.id || payload?.data?.video_id || payload?.data?.id || "";
     if (!videoId) return jsonError("Agnes accepted the video request but returned no video id.", 502);
