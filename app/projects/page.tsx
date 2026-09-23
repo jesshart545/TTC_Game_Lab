@@ -21,8 +21,8 @@ export default function ProjectsPage() {
     try {
       await deleteProjectFromServer(project.id);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not delete this project.");
-      return;
+      // A seeded/demo project may not have a Neon row. Still allow its local copy to be removed.
+      console.warn("Server project cleanup was unavailable:", error);
     }
     deleteProject(project.id);
     setProjects(current => current.filter(item => item.id !== project.id));
