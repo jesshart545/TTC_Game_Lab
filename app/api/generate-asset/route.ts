@@ -154,38 +154,13 @@ export async function POST(request: Request) {
     const requestId = submitPayload?.request_id;
     if (!requestId) return jsonError("fal accepted the music request but returned no request id.", 502);
 
-    const resultUrl = submitPayload?.response_url || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}`;
-    const statusUrl = submitPayload?.status_url || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}/status`;
-
-    for (let attempt = 0; attempt < 90; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const statusResponse = await fetch(statusUrl, {
-        headers: { Authorization: `Key ${key}` },
-        cache: "no-store",
-      });
-      const statusPayload = await statusResponse.json().catch(() => ({}));
-      if (!statusResponse.ok) {
-        return jsonError(statusPayload?.detail || statusPayload?.message || "Unable to check fal music status.", statusResponse.status);
-      }
-      if (statusPayload?.status === "COMPLETED") {
-        const resultResponse = await fetch(resultUrl, {
-          headers: { Authorization: `Key ${key}` },
-          cache: "no-store",
-        });
-        const resultPayload = await resultResponse.json().catch(() => ({}));
-        if (!resultResponse.ok) {
-          return jsonError(resultPayload?.detail || resultPayload?.message || "Unable to retrieve fal music result.", resultResponse.status);
-        }
-        const audioUrl = resultPayload?.audio?.url;
-        if (!audioUrl) return jsonError("fal completed the song but returned no audio URL.", 502);
-        return NextResponse.json({ type: "music", url: String(audioUrl), model, provider: "fal" });
-      }
-      if (statusPayload?.status === "FAILED") {
-        return jsonError(statusPayload?.error || "fal music generation failed.", 502);
-      }
-    }
-
-    return jsonError("fal music generation is taking longer than expected. Please try again.", 504);
+    return NextResponse.json({
+      type: "music",
+      status: "processing",
+      requestId: String(requestId),
+      model,
+      provider: "fal",
+    });
   }
 
   return jsonError("Unsupported asset type. Use image, video, voice, or music.", 400);
