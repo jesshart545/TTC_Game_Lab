@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     if (!runwayKey) return jsonError("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
 
     const model = "gen4.5";
-    const response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+    const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${runwayKey}`,
