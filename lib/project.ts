@@ -119,6 +119,13 @@ export async function saveProjectToServer(project: Project) {
   return response.json();
 }
 
+export async function deleteProjectFromServer(idOrSlug: string) {
+  const response = await fetch(`/api/projects/${encodeURIComponent(idOrSlug)}`, { method: "DELETE" });
+  if (response.status === 404) return { ok: true };
+  if (!response.ok) throw new Error("Could not delete project from Neon.");
+  return response.json();
+}
+
 export async function loadProjectFromServer(idOrSlug: string): Promise<Project | null> {
   const response = await fetch(`/api/projects/${encodeURIComponent(idOrSlug)}`, { cache: "no-store" });
   if (response.status === 404) return null;
