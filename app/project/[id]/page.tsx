@@ -260,7 +260,7 @@ export default function ProjectWorkspace() {
         let completed = false;
         for (let attempt = 0; attempt < 300; attempt += 1) {
           await new Promise(resolve => setTimeout(resolve, 3000));
-          const statusResponse = await fetch(`/api/generate-asset/music-status?id=${encodeURIComponent(String(data.requestId))}`, { cache: "no-store" });
+          const statusResponse = await fetch(`/api/generate-asset/music-status?id=${encodeURIComponent(String(data.requestId))}&statusUrl=${encodeURIComponent(data.statusUrl || "")}&responseUrl=${encodeURIComponent(data.responseUrl || "")}`, { cache: "no-store" });
           const statusData = await statusResponse.json().catch(() => ({}));
           if (!statusResponse.ok) throw new Error(typeof statusData.error === "string" ? statusData.error : "Unable to check music generation status.");
           if (statusData.status === "failed") throw new Error(statusData.error || "Music generation failed.");
