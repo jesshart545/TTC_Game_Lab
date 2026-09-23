@@ -61,11 +61,6 @@ export default function NewProject() {
   }
 
   async function generateAsset(type: GeneratorType) {
-    if (type === "music") {
-      setShowGenerator(false);
-      setAssetStatus("Music generation is disabled until the self-hosted ACE-Step server is connected.");
-      return;
-    }
     const requested = window.prompt(`Describe the ${type} you want to generate`, prompt.trim() || `A neon futuristic ${type} for a TikTok LIVE experience`);
     if (!requested?.trim() || assetBusy) return;
     setShowGenerator(false);
