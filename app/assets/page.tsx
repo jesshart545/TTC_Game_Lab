@@ -93,6 +93,7 @@ export default function AssetLibraryPage() {
   }
 
   async function copyToProject(asset:LibraryAsset,targetId:string) {
+    if ((asset.visibility ?? "private") === "private") { setStatus("Private assets stay inside their original project. Move the asset to the Public Library first if you want to share it."); return; }
     if(!targetId||targetId===asset.projectId)return;
     const target=loadProjects().find(p=>p.id===targetId); if(!target)return;
     const copy:ProjectAsset={name:asset.name,type:asset.type,url:asset.url,storageKey:asset.storageKey,edits:asset.edits,inProject:false,role:asset.role};
@@ -116,9 +117,9 @@ export default function AssetLibraryPage() {
       {asset.url&&kind(asset)==="video"&&<video src={asset.url} controls preload="metadata"/>}
       {asset.url&&kind(asset)==="audio"&&<audio src={asset.url} controls/>}
       {!asset.url&&<div className="library-no-preview">No preview</div>}</div>
-      <div className="library-body"><strong>{asset.name}</strong><span>{kind(asset).toUpperCase()} · {asset.projectName}</span>
+      <div className="library-body"><strong>{asset.name}</strong><span>{kind(asset).toUpperCase()} · {asset.projectName} · {(asset.visibility ?? "private")==="private"?"🔒 Private":asset.visibility==="public-transfer"?"🌐 Public · one-of-one":"🌐 Public · reusable"}</span>
         <div className="library-action-grid"><button className="outline-btn" onClick={()=>void toggleInProject(asset)}>{asset.inProject?"✓ In Project":"+ Add to Project"}</button><button className="outline-btn" onClick={()=>void rename(asset)}>Rename</button>{kind(asset)==="image"&&<button className="outline-btn library-edit-btn" onClick={()=>setEditing(asset)}>✦ Edit / AI Edit</button>}</div>
-        <select className="library-project-select" defaultValue="" onChange={e=>{void copyToProject(asset,e.target.value);e.currentTarget.value=""}}><option value="">Copy to another project…</option>{projects.filter(p=>p.id!==asset.projectId).map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select>
+        <select className="library-project-select" defaultValue="" disabled={(asset.visibility ?? "private")==="private"} onChange={e=>{void copyToProject(asset,e.target.value);e.currentTarget.value=""}}><option value="">{(asset.visibility ?? "private")==="private"?"Private · project only":"Add public asset to another project…"}</option>{projects.filter(p=>p.id!==asset.projectId).map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select>
         <Link href={"/project/"+asset.projectId} className="outline-btn library-open-btn">{kind(asset)==="image"?"Open project to edit":"Open project"}</Link>
         <button type="button" className="danger-btn" onClick={()=>void handleDelete(asset)}>Delete asset</button>
       </div></article>)}</div>}
