@@ -243,19 +243,32 @@ export default function ProjectWorkspace() {
 
   async function handleDeleteAsset(asset: ProjectAsset) {
     if (!project) return;
-    const confirmed = window.confirm(`Delete "${asset.name}" from this project?`);
-    if (!confirmed) return;
-    if (asset.storageKey) {
-      try { await deleteStoredAsset(asset.storageKey); } catch {}
-    }
-    const current = loadProjects().find(item => item.id === project.id) || project;
+    const all = loadProjects();
+    const current = all.find(item => item.id === project.id) || project;
     const index = current.assets.findIndex(item =>
       asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
     );
     if (index < 0) return;
+    const compositionUses = (current.compositions || []).filter(comp => comp.clips.some(clip =>
+      asset.storageKey ? clip.storageKey === asset.storageKey : clip.assetName === asset.name
+    ));
+    const sharedUses = asset.storageKey ? all.filter(p => p.assets.some(a => a.storageKey === asset.storageKey)).length : 1;
+    const usage = compositionUses.length ? ` It is used in ${compositionUses.length} composition${compositionUses.length === 1 ? "" : "s"}; those clips will also be removed.` : "";
+    const shared = sharedUses > 1 ? " The stored file is also used by another project, so only this project's reference will be removed." : "";
+    if (!window.confirm(`Delete "${asset.name}" from this project?${usage}${shared}`)) return;
     const nextAssets = current.assets.filter((_, i) => i !== index);
-    replaceProjectAssets(project.id, nextAssets);
-    setProject(await hydrateProjectAssets({ ...current, assets: nextAssets }));
+    const nextCompositions = (current.compositions || []).map(comp => ({
+      ...comp,
+      clips: comp.clips.filter(clip => asset.storageKey ? clip.storageKey !== asset.storageKey : clip.assetName !== asset.name),
+    }));
+    const next = { ...current, assets: nextAssets, compositions: nextCompositions, updatedAt: "just now" };
+    persist(next);
+    if (asset.storageKey && sharedUses <= 1) {
+      try { await deleteStoredAsset(asset.storageKey); }
+      catch (error) { setAssetStatus(error instanceof Error ? `Asset removed, but storage cleanup failed: ${error.message}` : "Asset removed, but storage cleanup failed."); }
+    }
+    setProject(await hydrateProjectAssets(next));
+    setAssetStatus("Asset deleted and project references cleaned.");
   }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
