@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAssetUrl, putAsset } from "../../../lib/object-storage";
+import { deleteAsset, getAssetUrl, putAsset } from "../../../lib/object-storage";
 
 function safeName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "asset";
@@ -26,4 +26,16 @@ export async function GET(request: Request) {
   if (!/^projects\/[^/]+\/[^/]+$/.test(key)) return NextResponse.json({ error: "Invalid asset key." }, { status: 400 });
   try { return NextResponse.json({ url: await getAssetUrl(key) }); }
   catch { return NextResponse.json({ error: "Could not refresh the asset URL." }, { status: 500 }); }
+}
+
+
+export async function DELETE(request: Request) {
+  const key = new URL(request.url).searchParams.get("key") || "";
+  if (!/^projects\/[^/]+\/[^/]+$/.test(key)) return NextResponse.json({ error: "Invalid asset key." }, { status: 400 });
+  try {
+    await deleteAsset(key);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not delete the asset." }, { status: 500 });
+  }
 }
