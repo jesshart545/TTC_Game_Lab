@@ -8,17 +8,41 @@ export async function POST(request: Request) {
   if (!key) return NextResponse.json({ configured: false, error: "AGNES_API_KEY is not configured." }, { status: 503 });
   const body = await request.json();
   const draftEdit = body.mode === "draft-edit";
-  const response = await fetch("https://apihub.agnes-ai.com/v1/chat/completions", {
+  const configuredModel = (process.env.AGNES_MODEL || "").trim();
+  const models = Array.from(new Set([configuredModel, "agnes-2.5-flash"].filter(Boolean)));
+  let response: Response | null = null;
+  let payload: any = null;
+  let lastModel = models[0];
+
+  for (const model of models) {
+    lastModel = model;
+    response = await fetch("https://apihub.agnes-ai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.AGNES_MODEL || "agnes-2.5-flash",
+      model,
       messages: draftEdit ? [{ role: "system", content: DRAFT_SYSTEM }, { role: "user", content: JSON.stringify({ request: body.request, recentConversation: body.history, project: body.project }) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
       temperature: draftEdit ? .2 : .7,
     }),
-  });
-  const payload = await response.json();
-  if (!response.ok) return NextResponse.json({ configured: true, error: payload?.error?.message || "Agnes request failed.", details: payload }, { status: response.status });
+    });
+    payload = await response.json().catch(() => ({}));
+    if (response.ok) break;
+    const providerMessage = String(payload?.error?.message || payload?.message || "");
+    const unavailableModel = /no available channel|model.*not.*available|unsupported model/i.test(providerMessage);
+    if (!unavailableModel) break;
+  }
+
+  if (!response?.ok) {
+    const providerMessage = payload?.error?.message || payload?.message || "Agnes request failed.";
+    const unavailableModel = /no available channel|model.*not.*available|unsupported model/i.test(String(providerMessage));
+    return NextResponse.json({
+      configured: true,
+      error: unavailableModel
+        ? `The configured Agnes model (${lastModel}) is unavailable. Update AGNES_MODEL in Vercel to an Agnes model enabled for this API key.`
+        : providerMessage,
+      details: payload,
+    }, { status: response?.status || 502 });
+  }
   const message = payload?.choices?.[0]?.message?.content || "";
   if (draftEdit) {
     try {
