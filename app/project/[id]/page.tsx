@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
+import { AssetComposition, createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
 import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
+import AssetComposer from "../../../components/AssetComposer";
 
 const GENERATORS = [
   { type: "image", label: "Image · Nano Banana 2", icon: "▣" },
@@ -52,6 +53,7 @@ export default function ProjectWorkspace() {
   const [triviaBusy, setTriviaBusy] = useState(false);
   const [triviaTopics, setTriviaTopics] = useState<string[]>([]);
   const [editingAssetIndex, setEditingAssetIndex] = useState<number | null>(null);
+  const [showAssetComposer, setShowAssetComposer] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -448,6 +450,17 @@ export default function ProjectWorkspace() {
     persist({ ...project, status: "Published", publishedSnapshot: snapshot, updatedAt: "just now" });
     setAssetStatus("Live overlay updated from this preview.");
   }
+  function saveComposition(composition: AssetComposition) {
+    if (!project) return;
+    const latest = loadProjects().find(p => p.id === project.id) || project;
+    persist({ ...latest, compositions: [...(latest.compositions || []), composition], updatedAt: "just now" });
+    setShowAssetComposer(false);
+    setAssetStatus(composition.name + " saved as a reusable Action Package.");
+  }
+  function deleteComposition(id: string) {
+    if (!project) return;
+    persist({ ...project, compositions: (project.compositions || []).filter(c => c.id !== id), updatedAt: "just now" });
+  }
   function beginBlank() { const p = createProject("Create a new interactive TikTok LIVE experience"); saveProjects([p, ...loadProjects().filter(x => x.id !== p.id)]); window.location.href = `/project/${p.id}`; }
 
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
@@ -468,6 +481,12 @@ export default function ProjectWorkspace() {
           <span>PROJECT URL</span>
           <code>{projectUrl}</code>
           <Link href={projectUrl}>Open project ↗</Link>
+        </div>
+        <div className="detail-block asset-composer-launch">
+          <span>ASSET COMPOSER</span>
+          <p className="empty-note">Combine video, voice, music, SFX, text and effects on a synchronized multi-track timeline.</p>
+          <button className="build-btn composer-open-btn" onClick={() => setShowAssetComposer(true)}>◫ Open Asset Composer</button>
+          {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
         </div>
         <div className="detail-block">
           <span>GAME TOOLS</span>
@@ -579,6 +598,7 @@ export default function ProjectWorkspace() {
         </div>
       </aside>
     </div>
+    {showAssetComposer && <AssetComposer assets={project.assets} compositions={project.compositions || []} onSave={saveComposition} onClose={() => setShowAssetComposer(false)} />}
     {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={saveAssetAsNew} />}
   </main>;
 }
