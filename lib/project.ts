@@ -24,7 +24,16 @@ export type ProjectAssetEdits = {
   offsetX?: number;
   offsetY?: number;
 };
-export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio" };
+export type AssetVisibility = "private" | "public-transfer" | "public-reusable";
+export type ProjectAsset = {
+  name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean;
+  role?: "background" | "layer" | "video" | "audio";
+  visibility?: AssetVisibility;
+  assetId?: string;
+  ownerId?: string;
+  originalCreatorId?: string;
+  publicAt?: string;
+};
 export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
 export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
 export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string; inProject?:boolean };
@@ -48,6 +57,12 @@ export type Project = {
   wheel: GameWheel;
   gameTools: GameTool[];
   publishedSnapshot?: Omit<Project, "publishedSnapshot">;
+  ownerId?: string;
+  access?: {
+    passwordProtected?: boolean;
+    passwordHash?: string;
+    overlayViewKey?: string;
+  };
 };
 
 export const demoProjects: Project[] = [
