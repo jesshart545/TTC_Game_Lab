@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 function readSecret(name: string) {
   const raw = process.env[name] || "";
   return raw.trim().replace(/^(['"])|(['"])$/g, "");
 }
 
-function jsonError(message: string, status = 500) {
-  return NextResponse.json({ error: message }, { status });
-}
-
-function extractImageUrl(payload: any) {
-  const item = Array.isArray(payload?.data) ? payload.data[0] : payload?.data;
-  if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
-  if (item?.url) return String(item.url);
-  return "";
+function jsonError(message: unknown, status = 500) {
+  const text = typeof message === "string" ? message : (() => { try { return JSON.stringify(message); } catch { return "AI image edit failed."; } })();
+  return NextResponse.json({ error: text }, { status });
 }
 
 async function imageAsDataUri(source: string) {
@@ -33,29 +29,31 @@ export async function POST(request: Request) {
     if (!prompt) return jsonError("An edit instruction is required.", 400);
     if (!imageUrl) return jsonError("A source image is required.", 400);
 
-    const key = readSecret("AGNES_API_KEY");
-    if (!key) return jsonError("AGNES_API_KEY is not configured in Vercel.", 503);
+    const key = readSecret("FAL_KEY");
+    if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
 
     const image = await imageAsDataUri(imageUrl);
-    const response = await fetch("https://apihub.agnes-ai.com/v1/images/generations", {
+    const model = "fal-ai/nano-banana-2/edit";
+    const response = await fetch(`https://fal.run/${model}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "agnes-image-2.5-flash",
         prompt,
-        size: "1024x768",
-        extra_body: {
-          image: [image],
-          response_format: "b64_json",
-        },
+        image_urls: [image],
+        num_images: 1,
+        aspect_ratio: body?.aspectRatio || "auto",
+        output_format: "png",
+        resolution: body?.resolution || "1K",
+        limit_generations: true,
       }),
+      cache: "no-store",
     });
 
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return jsonError(payload?.error?.message || payload?.message || "Agnes image edit failed.", response.status);
-    const url = extractImageUrl(payload);
-    if (!url) return jsonError("Agnes returned no edited image.", 502);
-    return NextResponse.json({ url, type: "image", model: "agnes-image-2.5-flash" });
+    if (!response.ok) return jsonError(payload?.detail || payload?.error || payload?.message || "Nano Banana 2 image edit failed.", response.status);
+    const url = payload?.images?.[0]?.url || "";
+    if (!url) return jsonError("Nano Banana 2 returned no edited image.", 502);
+    return NextResponse.json({ url, type: "image", model, provider: "fal" });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "AI image edit failed.");
   }
