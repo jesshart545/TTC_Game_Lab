@@ -1,4 +1,11 @@
-export type ProjectEvent = { id: string; label: string; action: string; detail: string };
+export type OverlayResult = {
+  x: number; y: number; width: number; height: number;
+  entrance: "none" | "fade" | "slide" | "zoom";
+  exit: "none" | "fade" | "slide" | "zoom";
+  entranceSeconds: number; exitSeconds: number;
+  layer: number;
+};
+export type ProjectEvent = { id: string; label: string; action: string; detail: string; compositionId?: string; overlayResult?: OverlayResult };
 export type ProjectAssetEdits = {
   crop?: "original" | "square" | "landscape" | "portrait";
   trimStart?: number;
@@ -19,8 +26,8 @@ export type ProjectAssetEdits = {
 };
 export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio" };
 export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
-export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
-export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string };
+export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
+export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string; inProject?:boolean };
 export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean; visible: boolean };
 export type GameToolType = "wheel" | "random-picker" | "countdown" | "poll" | "dice" | "trivia-board";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown> };
@@ -113,11 +120,11 @@ export function createProject(prompt: string): Project {
 }
 
 
-export async function saveProjectToServer(project: Project) {
+export async function saveProjectToServer(project: Project, publish = false, hostKey?: string): Promise<{ ok: boolean; hostKey?: string }> {
   const response = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ project }),
+    body: JSON.stringify({ project, publish, hostKey }),
   });
   if (!response.ok) throw new Error("Could not save project to Neon.");
   return response.json();

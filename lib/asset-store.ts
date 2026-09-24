@@ -94,7 +94,14 @@ export async function storeGeneratedAsset(projectId: string, asset: { name: stri
 }
 
 export async function hydrateAsset(asset: ProjectAsset): Promise<ProjectAsset> {
-  if (!asset.storageKey || asset.url) return asset;
+  if (!asset.storageKey) return asset;
+  if (asset.storageKey.startsWith("projects/")) {
+    const response = await fetch(`/api/assets?key=${encodeURIComponent(asset.storageKey)}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Could not refresh the asset URL.");
+    const { url } = await response.json();
+    return { ...asset, url };
+  }
+  if (asset.url && !asset.url.startsWith("blob:")) return asset;
   const stored = await getStoredAsset(asset.storageKey);
   if (!stored?.blob) return asset;
   return { ...asset, type: stored.type || asset.type, url: URL.createObjectURL(stored.blob) };

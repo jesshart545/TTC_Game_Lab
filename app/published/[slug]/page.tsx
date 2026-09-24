@@ -1,23 +1,44 @@
 "use client";
+
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { loadProjectFromServer, loadProjects, Project, ProjectAsset } from "../../../lib/project";
+import { loadProjectFromServer, loadProjects, Project, ProjectEvent } from "../../../lib/project";
 
-function assetEditStyle(asset: ProjectAsset) {
-  const e=asset.edits||{};
-  return { transform:`translate(${e.offsetX||0}px,${e.offsetY||0}px) scale(${e.zoom||1}) rotate(${e.rotation||0}deg) scaleX(${e.flipX?-1:1}) scaleY(${e.flipY?-1:1})`, opacity:e.opacity??1, filter:`brightness(${e.brightness??100}%) contrast(${e.contrast??100}%) saturate(${e.saturation??100}%) blur(${e.blur??0}px)` };
-}
-
-
-
-export default function PublishedProject() {
+export default function PublishedDashboard() {
   const { slug } = useParams<{ slug: string }>();
   const [project, setProject] = useState<Project | null>(null);
-  const [flash, setFlash] = useState(false); const [spinning, setSpinning] = useState(false); const [wheelVisible, setWheelVisible] = useState(false); const [activeTool, setActiveTool] = useState<any>(null); const [triviaQuestion, setTriviaQuestion] = useState<any>(null); const [triviaRevealed, setTriviaRevealed] = useState(false); const [triviaTool, setTriviaTool] = useState<any>(null); const [usedTrivia, setUsedTrivia] = useState<Record<string, boolean>>({});
-  useEffect(() => { let bc: BroadcastChannel | null = null; let cancelled = false; (async () => { const localDraft = loadProjects().find(x => x.slug === slug) || loadProjects()[0]; let draft = localDraft; try { draft = (await loadProjectFromServer(slug)) || localDraft; } catch {} const p = draft?.publishedSnapshot || draft; if (cancelled) return; setProject(p || null); if (!p) return; setTriviaTool((p.gameTools || []).find((t:any)=>t.name === "Trivia Board") || null); bc = new BroadcastChannel(`ttc-project-${p.id}`); bc.onmessage = e => { if (e.data?.type === "PROJECT_EVENT") { setFlash(true); setTimeout(() => setFlash(false), 700); } if (e.data?.type === "WHEEL_SPIN") { setWheelVisible(true); setSpinning(true); setTimeout(() => setSpinning(false), 2200); setTimeout(() => setWheelVisible(false), 3200); } if (e.data?.type === "GAME_TOOL_TRIGGER") { setActiveTool(e.data.tool); setTimeout(() => setActiveTool(null), e.data.tool?.type === "countdown" ? Math.max(1000, Number(e.data.tool?.config?.seconds || 10) * 1000) : 5000); } if (e.data?.type === "TRIVIA_QUESTION") { setTriviaRevealed(false); setTriviaQuestion({ category:e.data.category, value:Number(e.data.value), prompt:e.data.prompt, answer:e.data.answer, source:e.data.source, sourceUrl:e.data.sourceUrl }); setUsedTrivia(v=>({ ...v, [`${e.data.category}:${e.data.value}`]:true })); } if (e.data?.type === "TRIVIA_ANSWER") { setTriviaRevealed(true); setTriviaQuestion((q:any)=>q ? { ...q, answer:e.data.answer } : null); } if (e.data?.type === "TRIVIA_CLOSE") { setTriviaQuestion(null); setTriviaRevealed(false); } }; })(); return () => { cancelled = true; bc?.close(); }; }, [slug]);
-  if (!project) return <div className="runtime-page">Project not found.</div>;
-  const placedAssets = (project.assets || []).filter(asset => asset.inProject && asset.url);
-  const backgroundAsset = placedAssets.find(asset => asset.role === "background");
-  const layerAssets = placedAssets.filter(asset => asset.role !== "background");
-  return <main className={`runtime-page runtime-${project.theme}`} style={backgroundAsset ? { backgroundImage: `url("${backgroundAsset.url}")`, backgroundSize:"cover", backgroundPosition:"center", ...assetEditStyle(backgroundAsset) } : undefined}><div className="runtime-grid"/><div className="runtime-vignette"/><div className="runtime-top"><span>● LIVE</span><strong>{project.overlay.title}</strong><span>{project.overlay.subtitle}</span></div>{project.overlay.showCharacter && <div className={`runtime-character ${flash ? "flash" : ""}`}>◉</div>} {project.overlay.showAlerts && <div className={`runtime-alert ${flash ? "visible" : ""}`}>FOLLOW ALERT<span>Someone just joined the party!</span></div>} {activeTool?.type !== "wheel" && project.wheel?.enabled && wheelVisible && <div className={`runtime-wheel ${spinning ? "spinning" : ""}`}><div className="runtime-wheel-pointer">▼</div><div className="runtime-wheel-inner"><strong>{project.wheel.title}</strong><div className="runtime-wheel-segments">{project.wheel.segments.map((segment,i)=><span key={i}>{segment}</span>)}</div></div><button className="runtime-wheel-spin" onClick={() => { setWheelVisible(true); setSpinning(true); const bc = new BroadcastChannel(`ttc-project-${project.id}`); bc.postMessage({type:"WHEEL_SPIN",at:Date.now()}); bc.close(); setTimeout(()=>setSpinning(false),2200); setTimeout(()=>setWheelVisible(false),3200); }}>SPIN</button></div>}{project.overlay.showChat && <div className="runtime-chat"><small>LIVE CHAT</small><span>Welcome to the stream 👋</span><span>Let&apos;s go!</span><span>This is insane 🔥</span></div>}<>{activeTool && activeTool.type !== "wheel" && <div className={`runtime-game-tool runtime-tool-${activeTool.type}`}>{activeTool.type==="random-picker" && <><small>RANDOM PICKER</small><strong>{(activeTool.config?.items || ["Winner"])[0]}</strong></>}{activeTool.type==="countdown" && <><small>COUNTDOWN</small><strong>{activeTool.config?.seconds || 10}</strong></>}{activeTool.type==="poll" && <><small>{activeTool.config?.question || "LIVE POLL"}</small><div>{(activeTool.config?.options || []).map((x:any)=><span key={x}>{x}</span>)}</div></>}{activeTool.type==="dice" && <><small>DICE ROLL</small><strong>{Math.floor(Math.random()*(Number(activeTool.config?.sides||6)))+1}</strong></>}</div>}</><>{triviaTool && !triviaQuestion && <div className="runtime-jeopardy"><div className="runtime-jeopardy-title">TTCGameLab TRIVIA</div><div className="runtime-jeopardy-grid">{(triviaTool.config?.categories || []).map((cat:any)=><div className="runtime-jeopardy-column" key={cat.name}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions || []).map((q:any)=><div className="runtime-jeopardy-value" key={q.value}>${q.value}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue in the host dashboard</div></div>}{triviaQuestion && <div className="runtime-trivia"><div className="runtime-trivia-board-label">TTCGameLab TRIVIA</div><div className="runtime-trivia-category">{triviaQuestion.category}</div><div className="runtime-trivia-value">${triviaQuestion.value}</div><div className="runtime-trivia-question">{triviaQuestion.prompt}</div>{triviaRevealed && <div className="runtime-trivia-answer"><span>ANSWER</span>{triviaQuestion.answer}</div>}{triviaQuestion.source && <div className="runtime-trivia-source">Source: {triviaQuestion.source}</div>}</div>}</><div className="runtime-project-assets">{layerAssets.map((asset:any, index:number) => asset.role === "video" ? <video key={(asset.storageKey || asset.name) + index} src={asset.url} className="runtime-project-media" style={assetEditStyle(asset)} autoPlay loop muted playsInline /> : asset.role === "audio" ? <audio key={(asset.storageKey || asset.name) + index} src={asset.url} autoPlay /> : <img key={(asset.storageKey || asset.name) + index} src={asset.url} alt={asset.name} className="runtime-project-media" style={assetEditStyle(asset)} />)}</div><div className="runtime-brand">TTCGameLab <span>interactive experience</span></div></main>;
+  const [status, setStatus] = useState("");
+  const [hostKey, setHostKey] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    const queryKey = new URLSearchParams(window.location.search).get("key") || "";
+    if (/^[a-f0-9]{64}$/.test(queryKey)) {
+      window.localStorage.setItem(`ttc-live-host-${slug}`, queryKey);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    setHostKey(window.localStorage.getItem(`ttc-live-host-${slug}`) || "");
+    (async () => {
+      const local = loadProjects().find(p => p.slug === slug);
+      let draft = local;
+      try { draft = (await loadProjectFromServer(slug)) || local; } catch {}
+      if (!cancelled) setProject(draft?.publishedSnapshot || (draft?.status === "Published" ? draft : null) || null);
+    })();
+    return () => { cancelled = true; };
+  }, [slug]);
+  async function trigger(control: ProjectEvent) {
+    if (!project) return;
+    if (!hostKey) { setStatus("Open the private dashboard link from your builder to enable controls."); return; }
+    if (control.compositionId && !project.compositions?.some(c => c.id === control.compositionId && c.inProject)) {
+      setStatus("This package is not in the published experience."); return;
+    }
+    try {
+      const response = await fetch(`/api/live/${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json", "x-host-key": hostKey }, body: JSON.stringify({ controlId: control.id }) });
+      if (!response.ok) throw new Error((await response.json()).error || "Trigger failed.");
+      setStatus(`${control.label} sent to the overlay.`);
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Could not reach the live server."); }
+  }
+  if (!project) return <main className="published-dashboard"><h1>Project not published.</h1></main>;
+  const projectHost = typeof window !== "undefined" && window.location.hostname === `${project.slug}.${process.env.NEXT_PUBLIC_PROJECT_BASE_DOMAIN}`;
+  const overlayPath = projectHost ? "/overlay" : `/published/${project.slug}/overlay`;
+  return <main className={`published-dashboard runtime-${project.theme}`}><header><div><small>TTCGameLab · HOST DASHBOARD</small><h1>{project.name}</h1><p>Control the approved live experience.</p></div><a href={overlayPath} target="_blank" rel="noopener noreferrer">Open Overlay ↗</a></header><section><h2>Live controls</h2><div className="published-controls">{project.controls.map(control => <button type="button" key={control.id} onClick={() => trigger(control)}><strong>{control.label}</strong><span>{control.detail}</span></button>)}</div>{!project.controls.length && <p>No controls were published for this project.</p>}{status && <p role="status">{status}</p>}</section><section><h2>Overlay URL</h2><code>{typeof window !== "undefined" ? `${window.location.origin}${overlayPath}` : ""}</code><p>Use this URL as the browser source in your livestream software.</p></section></main>;
 }

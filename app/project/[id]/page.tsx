@@ -8,6 +8,8 @@ import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProj
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
 import AssetComposer from "../../../components/AssetComposer";
+import CompositionPlayer, { defaultOverlayResult } from "../../../components/CompositionPlayer";
+import { applyDraftChanges } from "../../../lib/draft-edit";
 
 const GENERATORS = [
   { type: "image", label: "Image · Nano Banana 2", icon: "▣" },
@@ -45,6 +47,10 @@ export default function ProjectWorkspace() {
   const [renamingProject, setRenamingProject] = useState(false);
   const [projectTitleDraft, setProjectTitleDraft] = useState("");
   const [building, setBuilding] = useState(false);
+  const [chatDrawer, setChatDrawer] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [hostKey, setHostKey] = useState("");
+  const [dashboardLinkStatus, setDashboardLinkStatus] = useState("");
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [showGenerator, setShowGenerator] = useState(false);
   const [assetBusy, setAssetBusy] = useState(false);
@@ -54,6 +60,12 @@ export default function ProjectWorkspace() {
   const [triviaTopics, setTriviaTopics] = useState<string[]>([]);
   const [editingAssetIndex, setEditingAssetIndex] = useState<number | null>(null);
   const [showAssetComposer, setShowAssetComposer] = useState(false);
+  const [editingComposition, setEditingComposition] = useState<AssetComposition | undefined>();
+  const [previewMode, setPreviewMode] = useState<"overlay" | "dashboard">("overlay");
+  const [selectedControlId, setSelectedControlId] = useState<string | null>(null);
+  const [previewAction, setPreviewAction] = useState<{ composition: AssetComposition; control: Project["controls"][number]; at: number } | null>(null);
+  const [dragPlacement, setDragPlacement] = useState<{ id: string; x: number; y: number; width: number; height: number } | null>(null);
+  const placementPointer = useRef<{ id: string; clientX: number; clientY: number; x: number; y: number; width: number; height: number; resize: boolean; stageWidth: number; stageHeight: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,13 +82,21 @@ export default function ProjectWorkspace() {
       }
       if (cancelled) return;
       setProject(hydrated);
+      setHostKey(window.localStorage.getItem(`ttc-host-key-${found.id}`) || "");
       const tool = (found.gameTools || []).find(t => t.name === "Trivia Board");
       setTriviaConfig(tool?.config || null);
       setTriviaTopics(Array.isArray(tool?.config?.categories) ? tool.config.categories.map((c:any)=>String(c.name)) : []);
     })();
     return () => { cancelled = true; };
   }, [params.id]);
-  const projectUrl = useMemo(() => project ? `/published/${project.slug}` : "", [project]);
+  const projectUrl = useMemo(() => project ? (process.env.NEXT_PUBLIC_PROJECT_BASE_DOMAIN ? `https://${project.slug}.${process.env.NEXT_PUBLIC_PROJECT_BASE_DOMAIN}` : `/published/${project.slug}`) : "", [project]);
+  const privateDashboardUrl = projectUrl && hostKey ? `${projectUrl}?key=${encodeURIComponent(hostKey)}` : projectUrl;
+  async function copyDashboardLink() {
+    if (!hostKey) { setDashboardLinkStatus("Publish the project first to create its private dashboard link."); return; }
+    const url = new URL(privateDashboardUrl, window.location.origin).toString();
+    try { await navigator.clipboard.writeText(url); setDashboardLinkStatus("Private dashboard link copied. Send it to your phone or tablet."); }
+    catch { window.prompt("Copy this private dashboard link for your phone or tablet:", url); }
+  }
 
   const TOOL_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
     { type:"trivia-board", name:"Trivia Board", description:"Jeopardy-style 5×5 board with host-selected questions." },
@@ -433,42 +453,111 @@ export default function ProjectWorkspace() {
       persist(wheelProject); setBuilding(false); return;
     }
     try {
-      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: updated.messages }) });
+      const context = { ...updated, assets: updated.assets.map(({ url, ...asset }) => asset), publishedSnapshot: undefined };
+      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, history: updated.messages.slice(-8), project: context }) });
       const data = await response.json();
-      const reply = response.ok && data.message ? data.message : "I updated the project context and prepared the requested change. Add your Agnes API key in Vercel to turn on live AI generation.";
-      persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: reply }] });
-    } catch {
-      persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: "Your change is saved locally. The AI gateway is not reachable right now." }] });
+      if (!response.ok) throw new Error(data.error || "AI editing is unavailable right now.");
+      const result = applyDraftChanges(updated, data.changes);
+      const steps = Array.isArray(data.manualSteps) ? data.manualSteps.filter((step: unknown) => typeof step === "string") : [];
+      const reply = [data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
+      persist({ ...result.project, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: reply }] });
+    } catch (error) {
+      persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: error instanceof Error ? `${error.message} Your request is in this chat; no draft edit was applied.` : "AI editing is unavailable. No draft edit was applied." }] });
     } finally { setBuilding(false); }
   }
 
-  function trigger(control: Project["controls"][number]) { if (!project) return; if (control.action === "wheel.spin") { spinWheel(); return; } setEventLog(v => [`${control.label} → ${control.detail}`, ...v].slice(0, 4)); const channel = new BroadcastChannel(`ttc-project-${project.id}`); channel.postMessage({ type: "PROJECT_EVENT", action: control.action, at: Date.now() }); channel.close(); }
-  function publish() {
+  function trigger(control: Project["controls"][number]) {
     if (!project) return;
+    if (control.compositionId) {
+      const composition = project.compositions?.find(c => c.id === control.compositionId && c.inProject);
+      if (composition) { setPreviewMode("overlay"); setPreviewAction({ composition, control, at: Date.now() }); }
+      return;
+    }
+    if (control.action === "wheel.spin") { spinWheel(); return; }
+    setEventLog(v => [`${control.label} → ${control.detail}`, ...v].slice(0, 4));
+    const channel = new BroadcastChannel(`ttc-project-${project.id}`);
+    channel.postMessage({ type: "PROJECT_EVENT", action: control.action, at: Date.now() }); channel.close();
+  }
+  async function publish() {
+    if (!project || publishing) return;
+    if (project.assets.some(asset => asset.inProject && asset.storageKey && !asset.storageKey.startsWith("projects/"))) {
+      setAssetStatus("Publish needs cloud-stored assets. Re-upload any browser-only asset before publishing.");
+      return;
+    }
     const { publishedSnapshot: _previous, ...draft } = project;
-    const snapshot = { ...draft, status: "Published" as const, updatedAt: "just now" };
-    persist({ ...project, status: "Published", publishedSnapshot: snapshot, updatedAt: "just now" });
-    setAssetStatus("Live overlay updated from this preview.");
+    const snapshot = { ...draft, compositions: (draft.compositions || []).filter(c => c.inProject), status: "Published" as const, updatedAt: "just now" };
+    const next = { ...project, status: "Published" as const, publishedSnapshot: snapshot, updatedAt: "just now" };
+    setPublishing(true);
+    try {
+      const saved = await saveProjectToServer(next, true, hostKey);
+      if (!saved.hostKey) throw new Error("The server did not return host access.");
+      window.localStorage.setItem(`ttc-host-key-${next.id}`, saved.hostKey);
+      setHostKey(saved.hostKey);
+      saveProjects(loadProjects().map(p => p.id === next.id ? next : p));
+      setProject(next);
+      setAssetStatus("Approved preview published to the host dashboard and audience overlay.");
+    } catch (error) {
+      setAssetStatus(error instanceof Error ? `Publish failed: ${error.message}` : "Publish failed. Your draft is still available.");
+    } finally { setPublishing(false); }
   }
   function saveComposition(composition: AssetComposition) {
     if (!project) return;
     const latest = loadProjects().find(p => p.id === project.id) || project;
-    persist({ ...latest, compositions: [...(latest.compositions || []), composition], updatedAt: "just now" });
+    persist({ ...latest, compositions: [...(latest.compositions || []).filter(c => c.id !== composition.id), composition], updatedAt: "just now" });
     setShowAssetComposer(false);
+    setEditingComposition(undefined);
     setAssetStatus(composition.name + " saved as a reusable Action Package.");
   }
   function deleteComposition(id: string) {
     if (!project) return;
-    persist({ ...project, compositions: (project.compositions || []).filter(c => c.id !== id), updatedAt: "just now" });
+    persist({ ...project, compositions: (project.compositions || []).filter(c => c.id !== id), controls: project.controls.filter(c => c.compositionId !== id), updatedAt: "just now" });
+  }
+  function toggleComposition(id: string) {
+    if (!project) return;
+    persist({ ...project, compositions: (project.compositions || []).map(c => c.id === id ? { ...c, inProject: !c.inProject } : c), updatedAt: "just now" });
+  }
+  function addCompositionControl(composition: AssetComposition) {
+    if (!project) return;
+    const label = window.prompt("Dashboard button label", `PLAY ${composition.name.toUpperCase()}`)?.trim();
+    if (!label) return;
+    const id = crypto.randomUUID();
+    const control = { id, label, action: `composition.play.${composition.id}`, detail: `Play ${composition.name}`, compositionId: composition.id, overlayResult: { ...defaultOverlayResult } };
+    persist({ ...project, controls: [...project.controls, control], updatedAt: "just now" });
+    setSelectedControlId(id); setPreviewMode("dashboard");
+  }
+  function updateControl(id: string, change: Partial<Project["controls"][number]>) {
+    if (!project) return;
+    persist({ ...project, controls: project.controls.map(c => c.id === id ? { ...c, ...change } : c), updatedAt: "just now" });
+  }
+  function startPlacement(event: React.PointerEvent<HTMLDivElement>, control: Project["controls"][number], resize: boolean) {
+    const stage = event.currentTarget.parentElement?.getBoundingClientRect();
+    if (!stage) return;
+    const value = control.overlayResult || defaultOverlayResult;
+    placementPointer.current = { id: control.id, clientX: event.clientX, clientY: event.clientY, x: value.x, y: value.y, width: value.width, height: value.height, resize, stageWidth: stage.width, stageHeight: stage.height };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function movePlacement(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = placementPointer.current;
+    if (!drag) return;
+    const dx = (event.clientX - drag.clientX) / drag.stageWidth * 100;
+    const dy = (event.clientY - drag.clientY) / drag.stageHeight * 100;
+    setDragPlacement({ id: drag.id, x: drag.x + (drag.resize ? 0 : dx), y: drag.y + (drag.resize ? 0 : dy), width: Math.max(5, drag.width + (drag.resize ? dx : 0)), height: Math.max(5, drag.height + (drag.resize ? dy : 0)) });
+  }
+  function endPlacement() {
+    const drag = dragPlacement, pointer = placementPointer.current;
+    placementPointer.current = null; setDragPlacement(null);
+    if (!drag || !pointer || !project) return;
+    const control = project.controls.find(c => c.id === drag.id);
+    if (control) updateControl(control.id, { overlayResult: { ...(control.overlayResult || defaultOverlayResult), x: Math.max(0, Math.min(95, drag.x)), y: Math.max(0, Math.min(95, drag.y)), width: Math.min(100, drag.width), height: Math.min(100, drag.height) } });
   }
   function beginBlank() { const p = createProject("Create a new interactive TikTok LIVE experience"); saveProjects([p, ...loadProjects().filter(x => x.id !== p.id)]); window.location.href = `/project/${p.id}`; }
 
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   return <main className="workspace-page">
-    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => setProjectTitleDraft(event.target.value)} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span></div><div className="workspace-actions"><Link href={projectUrl} className="preview-link">Preview</Link><button onClick={publish} className="publish-btn">{project.publishedSnapshot ? "Update Live Overlay ↗" : "Publish Live Overlay ↗"}</button><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
+    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span></div><div className="workspace-actions"><Link href={privateDashboardUrl} className="preview-link">Open Host Dashboard</Link><button onClick={publish} disabled={publishing} className="publish-btn">{publishing ? "Publishing…" : project.publishedSnapshot ? "Update Published Experience ↗" : "Publish Experience ↗"}</button><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
     <div className="workspace-grid">
       <section className="chat-panel"><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h1>Keep building it.</h1></div><div className="ai-orb">✦</div></div><div className="messages">{project.messages.map((m,i)=><div key={i} className={`message ${m.role}`}><div className="message-icon">{m.role === "assistant" ? "✦" : "YOU"}</div><div><strong>{m.role === "assistant" ? "TTCGameLab AI" : "You"}</strong><p>{m.text}</p></div></div>)}{building&&<div className="build-activity"><span>✦</span><div><strong>Building your change...</strong><small>Sending project context to the AI engine</small></div></div>}<div className="idea-card"><span>QUICK ACTIONS</span><button onClick={()=>setDraft("Make the main character bigger and move it slightly left.")}>Make character bigger <b>→</b></button><button onClick={()=>setDraft("Add a follower alert with a dramatic entrance animation.")}>Add follower alert <b>→</b></button><button onClick={()=>setDraft("Give the whole experience a stronger neon glow.")}>Increase neon <b>→</b></button></div></div><form className="composer" onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Tell me what to change..."/><div className="composer-bottom"><input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/><button type="button" onClick={() => fileInputRef.current?.click()}>＋ Upload</button><button type="button" onClick={() => setShowGenerator(v => !v)}>{assetBusy ? "Generating…" : "◈ Generate asset"}</button><button className="send" type="submit">{building ? "Building…" : "Update experience →"}</button></div>{showGenerator&&<div className="idea-card"><span>GENERATE WITH AI</span>{GENERATORS.map((item)=><button key={item.type} type="button" onClick={()=>generateAsset(item.type)}>{item.icon} {item.label} <b>→</b></button>)}</div>}{assetStatus&&<div className="asset-empty">{assetStatus}</div>}</form></section>
-      <section className="preview-panel"><div className="preview-head"><div><small>FULL LIVESTREAM PREVIEW</small><h2>{project.name}</h2></div><span className="preview-mode-badge">DRAFT PREVIEW</span></div><div className="stage">{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <><div className="stage-scan"/>{bg && <img src={bg.url} alt={bg.name} className="builder-preview-background" style={assetEditStyle(bg)}/>}<div className="builder-preview-layers">{layers.map((a,i) => isVideo(a) ? <video key={(a.storageKey || a.name)+i} src={a.url} className="builder-preview-media" style={assetEditStyle(a)} autoPlay loop muted playsInline/> : isAudio(a) ? null : <img key={(a.storageKey || a.name)+i} src={a.url} alt={a.name} className="builder-preview-media" style={assetEditStyle(a)}/>)}</div><div className="overlay-demo"><div className="overlay-live">● PREVIEW</div><div className="overlay-headline">{project.overlay.title}</div><div className="overlay-sub">{project.overlay.subtitle}</div>{project.overlay.showCharacter&&<div className="demo-character">◉</div>}<div className="demo-alert">FOLLOW ALERT</div></div><div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></>; })()}</div><div className="preview-foot"><span>Dashboard <b>/</b> Overlay <b>/</b> Events</span><span>{project.status} · {project.updatedAt}</span></div><div className="control-strip"><div><small>HOST CONTROLS</small><strong>Trigger your generated experience</strong></div><div className="control-buttons">{project.controls.map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div>{eventLog.length>0&&<div className="event-log">{eventLog.map((x,i)=><span key={i}>✓ {x}</span>)}</div>}</div></section>
+      <section className="preview-panel"><div className="preview-head"><div><small>FULL LIVESTREAM PREVIEW</small><h2>{project.name}</h2></div><div className="preview-switch"><button className={previewMode==="overlay"?"active":""} onClick={()=>setPreviewMode("overlay")}>Audience Overlay</button><button className={previewMode==="dashboard"?"active":""} onClick={()=>setPreviewMode("dashboard")}>Host Dashboard</button><span className="preview-mode-badge">DRAFT PREVIEW</span></div></div>{previewMode==="overlay"?<div className="stage">{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <><div className="stage-scan"/>{bg && <img src={bg.url} alt={bg.name} className="builder-preview-background" style={assetEditStyle(bg)}/>}<div className="builder-preview-layers">{layers.map((a,i) => isVideo(a) ? <video key={(a.storageKey || a.name)+i} src={a.url} className="builder-preview-media" style={assetEditStyle(a)} autoPlay loop muted playsInline/> : isAudio(a) ? null : <img key={(a.storageKey || a.name)+i} src={a.url} alt={a.name} className="builder-preview-media" style={assetEditStyle(a)}/>)}</div><div className="overlay-demo"><div className="overlay-live">● PREVIEW</div><div className="overlay-headline">{project.overlay.title}</div><div className="overlay-sub">{project.overlay.subtitle}</div>{project.overlay.showCharacter&&<div className="demo-character">◉</div>}<div className="demo-alert">FOLLOW ALERT</div></div><div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></>; })()}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId&&c.compositionId);if(!control)return null;const r=dragPlacement?.id===control.id?dragPlacement:control.overlayResult||defaultOverlayResult;return <div className="overlay-placement-marker" style={{left:`${r.x}%`,top:`${r.y}%`,width:`${r.width}%`,height:`${r.height}%`}} onPointerDown={e=>startPlacement(e,control,e.target instanceof HTMLElement&&e.target.dataset.resize==="true")} onPointerMove={movePlacement} onPointerUp={endPlacement}><span>{control.label} · drag to position</span><i data-resize="true" title="Drag to resize"/></div>})()}{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</div>:<div className="dashboard-preview"><h3>{project.name} · Host Dashboard</h3><p>Assign a saved composition to a button, then test its audience result.</p><div className="dashboard-preview-buttons">{project.controls.map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div></div>}<div className="preview-foot"><span>Dashboard <b>/</b> Overlay <b>/</b> Events</span><span>{project.status} · {project.updatedAt}</span></div><div className="control-strip"><div><small>HOST CONTROLS</small><strong>Trigger your generated experience</strong></div><div className="control-buttons">{project.controls.map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div>{eventLog.length>0&&<div className="event-log">{eventLog.map((x,i)=><span key={i}>✓ {x}</span>)}</div>}</div><div className="dashboard-action-editor"><h3>Dashboard buttons</h3>{project.controls.map(control=><div className="dashboard-action-row" key={control.id}><button className="outline-btn" onClick={()=>{setSelectedControlId(control.id);setPreviewMode("overlay")}}>{control.label} · Edit Overlay Result</button>{control.compositionId&&<small>{project.compositions?.find(c=>c.id===control.compositionId)?.name||"Missing composition"}</small>}</div>)}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId);if(!control)return null;const result=control.overlayResult||defaultOverlayResult;return <div className="overlay-result-editor"><h4>Edit Overlay Result · {control.label}</h4><label>Button label<input value={control.label} onChange={e=>updateControl(control.id,{label:e.target.value})}/></label>{control.compositionId&&<><label>Composition<select value={control.compositionId} onChange={e=>updateControl(control.id,{compositionId:e.target.value})}>{(project.compositions||[]).filter(c=>c.inProject).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>{(["x","y","width","height","layer","entranceSeconds","exitSeconds"] as const).map(key=><label key={key}>{key}<input type="number" value={result[key]} min={key==="width"||key==="height"?1:0} max={key==="layer"?100:100} step={key.endsWith("Seconds")?.1:1} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:+e.target.value}})}/></label>)}{(["entrance","exit"] as const).map(key=><label key={key}>{key}<select value={result[key]} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:e.target.value as typeof result[typeof key]}})}>{["none","fade","slide","zoom"].map(option=><option key={option}>{option}</option>)}</select></label>)}<button className="build-btn" onClick={()=>trigger(control)}>Test Trigger</button></>}<button className="danger-btn" onClick={()=>{persist({...project,controls:project.controls.filter(c=>c.id!==control.id)});setSelectedControlId(null)}}>Remove button</button></div>})()}</div></section>
       <aside className="assets-panel">
         <div className="assets-head">
           <div>
@@ -480,13 +569,15 @@ export default function ProjectWorkspace() {
         <div className="detail-block">
           <span>PROJECT URL</span>
           <code>{projectUrl}</code>
-          <Link href={projectUrl}>Open project ↗</Link>
+          <Link href={privateDashboardUrl}>Open project ↗</Link>
+          <button className="outline-btn" onClick={copyDashboardLink}>Copy Dashboard Link for Phone</button>
+          {dashboardLinkStatus && <small role="status">{dashboardLinkStatus}</small>}
         </div>
         <div className="detail-block asset-composer-launch">
           <span>ASSET COMPOSER</span>
           <p className="empty-note">Combine video, voice, music, SFX, text and effects on a synchronized multi-track timeline.</p>
-          <button className="build-btn composer-open-btn" onClick={() => setShowAssetComposer(true)}>◫ Open Asset Composer</button>
-          {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
+          <button className="build-btn composer-open-btn" onClick={() => {setEditingComposition(undefined);setShowAssetComposer(true)}}>◫ Open Asset Composer</button>
+          {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="outline-btn" onClick={()=>toggleComposition(comp.id)}>{comp.inProject?"✓ In Preview":"+ Add to Preview"}</button><button className="outline-btn" onClick={()=>{setEditingComposition(comp);setShowAssetComposer(true)}}>Edit</button><button className="build-btn" disabled={!comp.inProject} onClick={()=>addCompositionControl(comp)}>Assign button</button><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
         </div>
         <div className="detail-block">
           <span>GAME TOOLS</span>
@@ -598,7 +689,8 @@ export default function ProjectWorkspace() {
         </div>
       </aside>
     </div>
-    {showAssetComposer && <AssetComposer assets={project.assets} compositions={project.compositions || []} onSave={saveComposition} onClose={() => setShowAssetComposer(false)} />}
+    {showAssetComposer && <AssetComposer assets={project.assets} compositions={project.compositions || []} initial={editingComposition} onSave={saveComposition} onClose={() => setShowAssetComposer(false)} />}
     {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={saveAssetAsNew} />}
+    {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}
   </main>;
 }

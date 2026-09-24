@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
+import { createHash, randomBytes } from "node:crypto";
 
 export async function GET() {
   const db = getDb();
@@ -24,5 +25,14 @@ export async function POST(request: Request) {
   const prompt = String(body.prompt ?? "");
   const data = JSON.stringify(body.data ?? body);
   await db`INSERT INTO projects (id, slug, name, description, status, theme, prompt, data, updated_at) VALUES (${id}, ${slug}, ${name}, ${description}, ${status}, ${theme}, ${prompt}, ${data}::jsonb, NOW()) ON CONFLICT (id) DO UPDATE SET slug=EXCLUDED.slug, name=EXCLUDED.name, description=EXCLUDED.description, status=EXCLUDED.status, theme=EXCLUDED.theme, prompt=EXCLUDED.prompt, data=EXCLUDED.data, updated_at=NOW()`;
+  if (incoming.publish === true && body.publishedSnapshot) {
+    await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
+    const existing = await db`SELECT token_hash FROM live_hosts WHERE project_id = ${id}`;
+    const suppliedKey = typeof incoming.hostKey === "string" && /^[a-f0-9]{64}$/.test(incoming.hostKey) ? incoming.hostKey : "";
+    const hostKey = suppliedKey && existing[0]?.token_hash === createHash("sha256").update(suppliedKey).digest("hex") ? suppliedKey : randomBytes(32).toString("hex");
+    const hash = createHash("sha256").update(hostKey).digest("hex");
+    await db`INSERT INTO live_hosts (project_id, token_hash) VALUES (${id}, ${hash}) ON CONFLICT (project_id) DO UPDATE SET token_hash = EXCLUDED.token_hash`;
+    return NextResponse.json({ ok: true, id, hostKey });
+  }
   return NextResponse.json({ ok: true, id });
 }

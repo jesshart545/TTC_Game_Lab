@@ -29,5 +29,9 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     return NextResponse.json({ error: error instanceof Error ? `Could not delete project assets: ${error.message}` : "Could not delete project assets." }, { status: 500 });
   }
   await db`DELETE FROM projects WHERE id = ${projectId}`;
+  await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
+  await db`CREATE TABLE IF NOT EXISTS live_events (id BIGSERIAL PRIMARY KEY, project_id TEXT NOT NULL, control_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
+  await db`DELETE FROM live_hosts WHERE project_id = ${projectId}`;
+  await db`DELETE FROM live_events WHERE project_id = ${projectId}`;
   return NextResponse.json({ ok: true, id: projectId, deletedAssets });
 }

@@ -20,3 +20,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Asset upload failed." }, { status: 500 });
   }
 }
+
+export async function GET(request: Request) {
+  const key = new URL(request.url).searchParams.get("key") || "";
+  if (!/^projects\/[^/]+\/[^/]+$/.test(key)) return NextResponse.json({ error: "Invalid asset key." }, { status: 400 });
+  try { return NextResponse.json({ url: await getAssetUrl(key) }); }
+  catch { return NextResponse.json({ error: "Could not refresh the asset URL." }, { status: 500 }); }
+}
