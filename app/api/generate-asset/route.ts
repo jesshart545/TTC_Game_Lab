@@ -38,24 +38,27 @@ export async function POST(request: Request) {
   if (!prompt) return jsonError("A prompt is required.", 400);
 
   if (type === "image") {
-    const key = readSecret("AGNES_API_KEY");
-    if (!key) return jsonError("AGNES_API_KEY is not configured in Vercel.", 503);
-    const response = await fetch("https://apihub.agnes-ai.com/v1/images/generations", {
+    const key = readSecret("FAL_KEY");
+    if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
+    const model = "fal-ai/nano-banana-2";
+    const response = await fetch(`https://fal.run/${model}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "agnes-image-2.5-flash",
         prompt,
-        size: "1024x768",
-        n: 1,
-        return_base64: true,
+        num_images: 1,
+        aspect_ratio: body?.aspectRatio || "auto",
+        output_format: "png",
+        resolution: body?.resolution || "1K",
+        limit_generations: true,
       }),
+      cache: "no-store",
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return jsonError(payload?.error?.message || payload?.message || "Agnes image generation failed.", response.status);
-    const url = extractImageUrl(payload);
-    if (!url) return jsonError("Agnes returned no image output.", 502);
-    return NextResponse.json({ url, type: "image", model: "agnes-image-2.5-flash" });
+    if (!response.ok) return jsonError(payload?.detail || payload?.error || payload?.message || "Nano Banana 2 image generation failed.", response.status);
+    const url = payload?.images?.[0]?.url || "";
+    if (!url) return jsonError("Nano Banana 2 returned no image output.", 502);
+    return NextResponse.json({ url, type: "image", model, provider: "fal" });
   }
 
   if (type === "video") {
@@ -113,6 +116,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ type, url: `data:audio/mpeg;base64,${audioBase64}`, model: modelId });
   }
 
+  if (type === "sfx") {
+    const key = readSecret("ELEVENLABS_API_KEY");
+    if (!key) return jsonError("ELEVENLABS_API_KEY is not configured in Vercel.", 503);
+    const response = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
+      method: "POST",
+      headers: { "xi-api-key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({ text: prompt, duration_seconds: 5, prompt_influence: 0.4 }),
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const message = await response.text().catch(() => "");
+      return jsonError(message || "ElevenLabs sound-effect generation failed.", response.status);
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const audioBase64 = Buffer.from(bytes).toString("base64");
+    return NextResponse.json({ type: "sfx", url: `data:audio/mpeg;base64,${audioBase64}`, model: "elevenlabs-sound-generation", provider: "elevenlabs" });
+  }
+
   if (type === "music") {
     const key = readSecret("FAL_KEY");
     if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
@@ -165,5 +186,5 @@ export async function POST(request: Request) {
     });
   }
 
-  return jsonError("Unsupported asset type. Use image, video, voice, or music.", 400);
+  return jsonError("Unsupported asset type. Use image, video, voice, music, or sfx.", 400);
 }
