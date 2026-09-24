@@ -42,11 +42,19 @@ export default function AssetLibraryPage() {
   }
 
   async function handleDelete(asset:LibraryAsset) {
-    if(!window.confirm(`Delete "${asset.name}" from ${asset.projectName}?`)) return;
-    if(asset.storageKey) try{await deleteStoredAsset(asset.storageKey)}catch{}
-    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
-    replaceProjectAssets(project.id,project.assets.filter((_,i)=>i!==asset.assetIndex));
-    await refreshAssets(); setStatus("Asset deleted.");
+    const all=loadProjects();
+    const project=all.find(p=>p.id===asset.projectId); if(!project)return;
+    const compositionUses=(project.compositions||[]).filter(c=>c.clips.some(clip=>asset.storageKey?clip.storageKey===asset.storageKey:clip.assetName===asset.name));
+    const sharedUses=asset.storageKey?all.filter(p=>p.assets.some(a=>a.storageKey===asset.storageKey)).length:1;
+    const usage=compositionUses.length? ` It is used in ${compositionUses.length} composition${compositionUses.length===1?"":"s"}; those clips will also be removed.`:"";
+    const shared=sharedUses>1?" The stored file is also used by another project, so only this project's reference will be removed.":"";
+    if(!window.confirm(`Delete "${asset.name}" from ${asset.projectName}?${usage}${shared}`)) return;
+    const nextCompositions=(project.compositions||[]).map(comp=>({...comp,clips:comp.clips.filter(clip=>asset.storageKey?clip.storageKey!==asset.storageKey:clip.assetName!==asset.name)}));
+    const next={...project,assets:project.assets.filter((_,i)=>i!==asset.assetIndex),compositions:nextCompositions,updatedAt:"just now"};
+    saveProjects(all.map(p=>p.id===project.id?next:p));
+    await saveProjectToServer(next).catch(()=>{});
+    if(asset.storageKey&&sharedUses<=1) try{await deleteStoredAsset(asset.storageKey)}catch(error){setStatus(error instanceof Error?`Asset removed, but storage cleanup failed: ${error.message}`:"Asset removed, but storage cleanup failed.");await refreshAssets();return}
+    await refreshAssets(); setStatus("Asset deleted and project references cleaned.");
   }
 
   async function rename(asset:LibraryAsset) {
