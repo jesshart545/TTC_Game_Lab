@@ -9,10 +9,11 @@ import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
 
 const GENERATORS = [
-  { type: "image", label: "Image", icon: "▣" },
+  { type: "image", label: "Image · Nano Banana 2", icon: "▣" },
   { type: "video", label: "Video", icon: "▶" },
   { type: "voice", label: "Voice", icon: "◖" },
   { type: "music", label: "Music", icon: "♫" },
+  { type: "sfx", label: "Sound Effect", icon: "✦" },
 ] as const;
 
 type GeneratorType = (typeof GENERATORS)[number]["type"];
@@ -26,7 +27,7 @@ function isVideo(asset: ProjectAsset) {
 }
 
 function isAudio(asset: ProjectAsset) {
-  return Boolean(asset.url && (asset.type.toLowerCase().includes("audio") || asset.name.toLowerCase().startsWith("voice") || asset.name.toLowerCase().startsWith("music")));
+  return Boolean(asset.url && (asset.type.toLowerCase().includes("audio") || asset.name.toLowerCase().startsWith("voice") || asset.name.toLowerCase().startsWith("music") || asset.name.toLowerCase().startsWith("sfx")));
 }
 
 export default function NewProject() {
