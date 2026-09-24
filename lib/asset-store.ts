@@ -116,6 +116,14 @@ export async function hydrateProjectAssets(project: Project): Promise<Project> {
 
 
 export async function deleteStoredAsset(storageKey: string): Promise<void> {
+  if (storageKey.startsWith("projects/")) {
+    const response = await fetch(`/api/assets?key=${encodeURIComponent(storageKey)}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Unable to delete the stored asset.");
+    }
+    return;
+  }
   const db = await openAssetDb();
   try {
     await new Promise<void>((resolve, reject) => {
