@@ -18,6 +18,9 @@ export type ProjectAssetEdits = {
   offsetY?: number;
 };
 export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio" };
+export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
+export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
+export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string };
 export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean; visible: boolean };
 export type GameToolType = "wheel" | "random-picker" | "countdown" | "poll" | "dice" | "trivia-board";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown> };
@@ -33,6 +36,7 @@ export type Project = {
   messages: { role: "user" | "assistant"; text: string }[];
   controls: ProjectEvent[];
   assets: ProjectAsset[];
+  compositions?: AssetComposition[];
   overlay: { title: string; subtitle: string; showChat: boolean; showAlerts: boolean; showCharacter: boolean };
   wheel: GameWheel;
   gameTools: GameTool[];
@@ -105,7 +109,7 @@ export function createProject(prompt: string): Project {
   const base = prompt.toLowerCase();
   const name = base.includes("space") ? "Space Battle" : base.includes("christmas") || base.includes("holiday") ? "Holiday Live" : base.includes("horror") || base.includes("spooky") ? "Haunted Gaming" : "New LIVE Experience";
   const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Math.random().toString(36).slice(2, 7)}`;
-  return { id, name, slug, description: "AI-generated interactive TikTok LIVE experience.", status: "Draft", theme: "cyan", updatedAt: "just now", prompt, messages: [{ role: "user", text: prompt }], controls: [{ id: "alert", label: "TEST ALERT", action: "alert.test", detail: "Trigger a project alert" }, { id: "effect", label: "TRIGGER EFFECT", action: "effect.trigger", detail: "Play the generated visual effect" }], assets: [], overlay: { title: name.toUpperCase(), subtitle: "YOUR LIVE EXPERIENCE", showChat: true, showAlerts: true, showCharacter: true }, wheel: { enabled: false, title: "Game Wheel", segments: ["Prize", "Challenge", "Bonus", "Mystery"], spinning: false, visible: false }, gameTools: [] };
+  return { id, name, slug, description: "AI-generated interactive TikTok LIVE experience.", status: "Draft", theme: "cyan", updatedAt: "just now", prompt, messages: [{ role: "user", text: prompt }], compositions: [], controls: [{ id: "alert", label: "TEST ALERT", action: "alert.test", detail: "Trigger a project alert" }, { id: "effect", label: "TRIGGER EFFECT", action: "effect.trigger", detail: "Play the generated visual effect" }], assets: [], overlay: { title: name.toUpperCase(), subtitle: "YOUR LIVE EXPERIENCE", showChat: true, showAlerts: true, showCharacter: true }, wheel: { enabled: false, title: "Game Wheel", segments: ["Prize", "Challenge", "Bonus", "Mystery"], spinning: false, visible: false }, gameTools: [] };
 }
 
 
