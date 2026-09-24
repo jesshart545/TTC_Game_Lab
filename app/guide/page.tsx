@@ -2,16 +2,31 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { loadProjects } from "../../lib/project";
 import "./guide.css";
 
-const steps = [
-  { title: "Welcome to TTCGameLab", label: "START HERE", icon: "✦", narration: "Welcome to TTCGameLab. You can build a TikTok Live experience by describing what you want. This walkthrough shows you how to create a project, add assets, edit controls, and publish your overlay.", hint: "Your idea becomes a project with a host dashboard and an audience overlay.", action: "/project/new", actionLabel: "Create a project" },
-  { title: "Describe your idea", label: "STEP 1 · CREATE", icon: "✎", narration: "From the home page, type your idea in everyday language and choose Build with AI. You can also select New Project. Give your project a name, describe the scene and interactions you want, then create it. You can come back to edit it later.", hint: "Try: Create a neon Finish the Lyrics game with a dramatic reveal and a button for the host.", action: "/project/new", actionLabel: "Open creator" },
-  { title: "Add your media", label: "STEP 2 · ASSETS", icon: "◈", narration: "In your project, choose Upload to add your own images, video, or audio. Choose Generate asset to describe an image, video, voice, or music you want. Check that each asset appears in the project before you publish. The Asset Library lets you find saved media.", hint: "You can start without uploads, then return to add media when you are ready.", action: "/assets", actionLabel: "Open Asset Library" },
-  { title: "Set up the live controls", label: "STEP 3 · EDIT", icon: "▣", narration: "Open your project from My Projects. Use the preview to switch between Audience Overlay and Host Dashboard. Dashboard buttons need an overlay result. Add a composition and assign it to a button, then test the trigger in the preview. A button without an assigned result may only show a placeholder action.", hint: "Test each dashboard button and watch the audience overlay preview before publishing.", action: "/projects", actionLabel: "Open My Projects" },
-  { title: "Publish and copy your links", label: "STEP 4 · PUBLISH", icon: "↗", narration: "When your scene and controls look right, choose Publish Experience in the project editor. Open the private Host Dashboard link to operate your stream. Copy the Overlay URL from the published dashboard and add it as a browser source in your TikTok Live broadcasting software. Keep the private dashboard link to yourself.", hint: "Dashboard: host controls. Overlay: the visual scene your audience sees.", action: "/projects", actionLabel: "Go to projects" },
-  { title: "Run your show", label: "STEP 5 · LIVE", icon: "●", narration: "Keep the host dashboard open while streaming. Press its buttons to send events to the overlay. If you make changes in the editor, choose Update Published Experience to publish the new version. You can always return to My Projects to reopen an earlier project or begin another one.", hint: "If a button shows only a prompt, return to the editor and assign its overlay result.", action: "/projects", actionLabel: "Open My Projects" },
-] as const;
+type Chapter = { title: string; area: string; route: string; location: string; map: [string, string, string]; focus: number; actions: string[]; outcome: string; narration: string; link: string; linkLabel: string };
+
+const chapters: Chapter[] = [
+  { title: "Find your way around", area: "HOME", route: "/", location: "Home page · left sidebar and center prompt", map: ["Sidebar: New Project, Home, My Projects, Asset Library", "Center: describe your idea, then Build with AI", "Help: ? in the top right, plus this guide card"], focus: 0, actions: ["Use New Project to open the creator.", "Use My Projects to reopen your actual saved work, or Asset Library to browse media.", "Use the question mark in the top right to return to this walkthrough."], outcome: "The home prompt passes your text into the new project creator. The illustrated project cards on Home are examples; use My Projects for your saved projects.", narration: "On the home page, the left sidebar holds New Project, Home, My Projects and Asset Library. The large center prompt sends your idea to the creator through Build with AI. The project cards displayed on Home are examples, so use My Projects for your actual saved work. The question mark in the top right opens this guide again. TTCGameLab creates the overlay and host controls; it does not broadcast your livestream.", link: "/", linkLabel: "Open Home" },
+  { title: "Create and name a project", area: "NEW PROJECT", route: "/project/new", location: "New Project · left AI Creative Director panel", map: ["Left: Project title, Save title, idea box, Build experience", "Middle: placeholder preview until you build", "Right: Project Assets and upload area"], focus: 0, actions: ["Click New Project on the home sidebar.", "Enter a Project title and choose Save title if you want to save it before building.", "Describe the experience in the left text box, then click Build experience →. A quick start prompt can fill the box for you."], outcome: "The app opens the project editor. Your title and draft are saved; publish is a separate step.", narration: "Choose New Project in the home sidebar. In the left AI Creative Director panel, enter a project title and use Save title if you want to save that draft early. Describe what viewers should see and what host controls you need. The quick start buttons can fill the idea box. Then choose Build experience. The middle preview is only a placeholder until you build.", link: "/project/new", linkLabel: "Open New Project" },
+  { title: "Understand the project editor", area: "PROJECT EDITOR", route: "/project/[id]", location: "A saved project · three-column editor", map: ["Left: AI conversation, Upload, Generate asset", "Middle: Audience Overlay / Host Dashboard previews and button editor", "Right: Details, Asset Composer, Game Tools, Wheel Settings, Assets"], focus: 1, actions: ["Open a project from My Projects to reach this editor.", "Use the left panel to ask for changes and add media.", "Use the middle panel to test the draft, and scroll the right panel for detailed settings."], outcome: "The editor is a draft workbench. Its preview is different from the published host dashboard.", narration: "The project editor has three areas. On the left is the AI conversation and its Upload and Generate asset controls. In the middle are the Audience Overlay and Host Dashboard draft previews, host controls and button editor. On the right, scroll through Details, Asset Composer, Game Tools, Wheel Settings and Assets. The top bar has Rename, Open Host Dashboard and Publish Experience.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Ask AI to change a project", area: "AI CREATIVE DIRECTOR", route: "/project/[id]", location: "Project editor · left conversation panel", map: ["Conversation: your requests and AI replies", "Composer: Tell me what to change… and Update experience →", "Quick Actions: example requests above the composer"], focus: 0, actions: ["Type a concrete change in Tell me what to change… at the bottom left.", "Click Update experience → and review the changed draft preview.", "When editing media or a composition, use Ask AI about this edit in the floating panel."], outcome: "These edits update the project draft. Use Update Published Experience to send a later change live.", narration: "To revise a saved project, type what to change in the left conversation box and choose Update experience. Quick Actions insert example requests, which you can edit before sending. The conversation shows the reply and updates the draft. If the Media Editor or Asset Composer is open, Ask AI about this edit opens the conversation beside that editor. Changes to a published project still need Update Published Experience.", link: "/projects", linkLabel: "Open My Projects" },
+  { title: "Upload or generate media", area: "MEDIA", route: "/project/new or /project/[id]", location: "Creator or editor · bottom of left panel; upload also at right", map: ["Left: ＋ Upload and ◈ Generate asset", "Generator: Image, Video, Voice, Music, Sound Effect", "Right: asset list and Edit / Crop buttons"], focus: 0, actions: ["Click ＋ Upload for your image, video or audio file. The plus button in the right Assets panel also opens upload.", "Click ◈ Generate asset, choose Image, Video, Voice, Music or Sound Effect, and describe it in the prompt.", "Wait for the status message and check the asset in the project list."], outcome: "Media appears in the project and Asset Library. Add it to the project preview or use it in a composition as needed.", narration: "At the bottom of the left creator or editor panel, choose Upload to select your own image, video or audio. The plus button in the right Assets panel also opens file selection. For generated media, choose Generate asset, select Image, Video, Voice, Music or Sound Effect, and enter a description. Generation may take time. Check the status message and the right asset list before continuing.", link: "/project/new", linkLabel: "Open Creator" },
+  { title: "Use the Asset Library", area: "ASSET LIBRARY", route: "/assets", location: "Home sidebar · Asset Library", map: ["Top: Search assets or projects…", "Card: Add to Project, Rename, Edit / AI Edit for images", "Card: Copy to another project…, Open project, Delete asset"], focus: 1, actions: ["Choose Asset Library in the home sidebar and search by asset or project.", "On an asset card, use Add to Project for its original project or Copy to another project… to reuse it elsewhere.", "Use Rename, Edit / AI Edit for an image, Open project, or Delete asset as needed."], outcome: "The library manages assets already associated with projects; new media is uploaded or generated in a project.", narration: "Choose Asset Library in the home sidebar. Search at the top, then use an asset card to add or remove it from its project, rename it, or copy it to another project. Images have Edit and AI Edit. Open project takes you back to the editor. Delete asset removes the saved asset, so check the project before using that control. New media is uploaded or generated from a project.", link: "/assets", linkLabel: "Open Asset Library" },
+  { title: "Edit images and videos", area: "MEDIA EDITOR", route: "/project/[id] or /assets", location: "Project Assets · Edit / Crop, or library image · Edit / AI Edit", map: ["Preview: image or video, crop and aspect controls", "Image: position, zoom, rotate, filters, size, AI Edit", "Video: trim start/end; bottom: Save Edit Settings or Save as New"], focus: 1, actions: ["Open Edit / Crop on an image or Edit / Crop / Trim on a video in the project Assets list.", "For an image, adjust crop, TikTok layout presets, placement and appearance; AI Edit creates a new image when available.", "For a video, set Start and End under TRIM VIDEO. Choose Save Edit Settings, or the new-asset option when shown."], outcome: "Edit settings apply to the selected asset. Save as New keeps a separate edited result.", narration: "In the project Assets list, use Edit and Crop on an image or Edit, Crop and Trim on a video. Image controls include crop, TikTok Fullscreen and Safe Layout presets, zoom, position, rotation, appearance and size. AI Edit accepts a text instruction and saves a new image. Video has trim Start and End. At the bottom choose Save Edit Settings, or Save as New Asset or Save Trimmed Video when offered.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Put assets in the preview", area: "PROJECT ASSETS", route: "/project/[id]", location: "Project editor · right Details panel · ASSETS", map: ["Right: each asset has a preview and Delete", "Each card: + Add to Project / ✓ Added to Project", "Middle: Audience Overlay displays selected visual assets"], focus: 2, actions: ["Scroll to ASSETS in the right Details panel.", "Choose + Add to Project for an asset you want in the scene; use the same button to remove it.", "Switch the middle preview to Audience Overlay and check how the visual asset appears."], outcome: "Images and video marked in the project can appear in the audience preview. Audio is used in compositions rather than shown as a visual layer.", narration: "Scroll to Assets on the right of your project editor. Each media card has a button labeled Add to Project or Added to Project. Use it to include or exclude that asset from the scene. Switch the middle panel to Audience Overlay to inspect the result. Audio does not appear as an image; it can be used in the Asset Composer for an action package.", link: "/projects", linkLabel: "Open My Projects" },
+  { title: "Build an action package", area: "ASSET COMPOSER", route: "/project/[id]", location: "Project editor · right Details panel · ASSET COMPOSER", map: ["Top: visual preview and project asset picker", "Timeline: Video, Visual, Voice, Music, SFX, Text, Effect", "Bottom: selected clip settings and Save Composition"], focus: 2, actions: ["Click ◫ Open Asset Composer under ASSET COMPOSER on the right.", "Click or drag a project asset into the timeline; use + Text or + Effect for those layers.", "Select a clip to adjust start, duration, trim, volume, fades, speed or loop when applicable; play the preview, name it, and Save Composition."], outcome: "A saved composition is reusable. It needs Add to Preview and Assign button before its host button can play it.", narration: "On the right under Asset Composer, choose Open Asset Composer. The top has a preview and a list of project assets. Click or drag an asset into the multi-track timeline. You can add Text or Effect layers. Select a clip to adjust its start and duration; audio and video clips also offer trim, volume, fades, speed and loop. Use Play to review, name the package, and choose Save Composition. Then add it to the preview and assign a button.", link: "/projects", linkLabel: "Open My Projects" },
+  { title: "Assign a dashboard button", area: "ACTION PACKAGE", route: "/project/[id]", location: "Project editor · right Asset Composer list and middle Dashboard buttons", map: ["Right: saved composition → + Add to Preview", "Right: Assign button → enter dashboard label", "Middle: Dashboard buttons → Edit Overlay Result / Test Trigger"], focus: 2, actions: ["In the saved composition row, click + Add to Preview, then Assign button.", "Enter the label the host will see on the dashboard.", "In the middle Dashboard buttons section, click that button’s Edit Overlay Result, then Test Trigger."], outcome: "The button is connected to a composition. A plain button without a composition can produce only an action prompt.", narration: "After saving a composition, find its row under Asset Composer on the right. Choose Add to Preview, then Assign button. Enter a clear dashboard button label. In the middle Dashboard buttons section, select Edit Overlay Result for that button and use Test Trigger to confirm the composition plays. A button with no assigned composition may show an action prompt instead of your intended media.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Position and test the result", area: "OVERLAY RESULT", route: "/project/[id]", location: "Project editor · middle Dashboard buttons and Audience Overlay", map: ["Preview switch: Audience Overlay / Host Dashboard", "Dashboard buttons: select Edit Overlay Result", "Overlay: drag and resize marker; settings: size, layer, entrance/exit"], focus: 1, actions: ["Select Audience Overlay in the middle preview and choose a button’s Edit Overlay Result.", "For a button with a composition, drag its dashed marker to move the result and its corner handle to resize it.", "Adjust the fields for position, dimensions, layer and entrance/exit; click Test Trigger and inspect the preview."], outcome: "The draft result is ready for publishing when it appears and animates where expected.", narration: "Use the middle preview switch to compare Audience Overlay and Host Dashboard. Under Dashboard buttons, choose Edit Overlay Result. For a button with a composition, a dashed marker appears on the Audience Overlay preview; drag it to move the result or drag its corner to resize. The settings below also control position, size, layer, entrance and exit. Use Test Trigger to verify what viewers will see.", link: "/projects", linkLabel: "Open My Projects" },
+  { title: "Add game tools", area: "GAME TOOLS", route: "/project/[id]", location: "Project editor · right Details panel · GAME TOOLS", map: ["Library: available game tools and ＋ Add", "Configured tools: Trigger", "Below: Trivia Board and Wheel Settings when enabled"], focus: 2, actions: ["Scroll to GAME TOOLS on the right and click ＋ Add beside the tool you want.", "Find the added tool in the configured list and use Trigger to test it.", "Use the dedicated Trivia Board or Wheel Settings sections below for their controls."], outcome: "Game tools can be triggered from the editor; publish the updated project for the audience version.", narration: "In the right Details panel, scroll to Game Tools. Each available tool has an Add button. Added tools appear below with a Trigger button for testing. Trivia Board and Game Wheel expose more specific settings further down the panel. Test a tool in the preview, then publish or update the published experience so your live version receives the change.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Run the Trivia Board", area: "TRIVIA BOARD", route: "/project/[id]", location: "Project editor · right GAME TOOLS · TRIVIA BOARD", map: ["Top: Regenerate sourced board / Refresh sources", "Topics: five category text fields and per-column ↻", "5×5 grid: value opens clue, Reveal shows answer, Close current clue"], focus: 2, actions: ["Add Trivia Board in GAME TOOLS, then use Regenerate sourced board to request five categories with five clues each.", "Change TOPICS or use a column’s ↻ to regenerate that category; Refresh sources requests new source material.", "In the editor, choose a value to show a clue, Reveal for the active answer, then Close current clue. Used cells become unavailable."], outcome: "These clue controls are in the project editor. The published host dashboard does not currently show the same 5×5 control grid, so test your live setup before relying on it.", narration: "Add Trivia Board from Game Tools. In its right-side section, Regenerate sourced board requests a five by five board. You can edit five topic fields, regenerate one category using its arrow, or request new sources. In the editor, click a clue value, then Reveal for its answer and Close current clue. A used cell becomes unavailable. Review the sources and questions before a live game. The published host dashboard does not currently have that same five by five grid.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Set up the Game Wheel", area: "WHEEL SETTINGS", route: "/project/[id]", location: "Project editor · right GAME TOOLS and WHEEL SETTINGS", map: ["GAME TOOLS: Game Wheel → ＋ Add", "WHEEL SETTINGS: title and comma-separated segments", "WHEEL SETTINGS: ↻ Trigger wheel"], focus: 2, actions: ["Add Game Wheel under GAME TOOLS.", "Scroll to WHEEL SETTINGS and set the wheel title and comma-separated segments; include at least two.", "Click Trigger wheel to test the spin. The wheel stays hidden until triggered."], outcome: "The configured wheel can be tested in the editor. Verify the published host controls and overlay before a live show.", narration: "To use a wheel, choose Add beside Game Wheel in Game Tools. Scroll to Wheel Settings, enter its title, and separate its segments with commas. Use at least two segments. Choose Trigger wheel to test the spin in the editor. The wheel stays hidden when idle and appears for the spin. Check the published host dashboard and overlay before relying on it live.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Try the other game tools", area: "GAME TOOLS", route: "/project/[id]", location: "Project editor · right Details panel · GAME TOOLS", map: ["Library: Random Picker, Countdown, Live Poll, Dice Roll", "Click ＋ Add beside a tool", "Configured list: Trigger to preview"], focus: 2, actions: ["Under GAME TOOLS, add Random Picker, Countdown, Live Poll or Dice Roll.", "Use Trigger on the added tool to preview its default behavior.", "These tools do not currently have dedicated settings editors in this panel; verify the result before publishing."], outcome: "The current interface exposes Add and Trigger for these tools, with default configurations. It does not expose full settings for each one.", narration: "The Game Tools library also lists Random Picker, Countdown, Live Poll and Dice Roll. Choose Add beside one, then Trigger in the configured list to preview the default behavior. Unlike Trivia Board and Game Wheel, this panel does not currently provide dedicated settings editors for these tools. Review the preview before deciding whether it suits your show.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Publish and open your links", area: "PUBLISH", route: "/project/[id]", location: "Project editor · top bar and right PROJECT URL", map: ["Top: Publish Experience ↗ / Update Published Experience ↗", "Top: Open Host Dashboard", "Right Details: PROJECT URL, Open project, Copy Dashboard Link for Phone"], focus: 1, actions: ["After testing the draft, click Publish Experience ↗ in the top bar. Later edits use Update Published Experience ↗.", "Open Host Dashboard in the top bar, or use Open project under PROJECT URL on the right.", "Use Copy Dashboard Link for Phone for your private host link; keep that link private."], outcome: "Publishing saves a snapshot. The host dashboard and audience overlay use the published version, not later draft edits.", narration: "After testing your draft, choose Publish Experience in the editor top bar. The button changes to Update Published Experience for later changes. Open Host Dashboard is beside it. The right Details panel also shows PROJECT URL, Open project and Copy Dashboard Link for Phone. Keep the private host link to yourself because it grants control. Publishing saves a snapshot; future draft edits only go live after you update that published experience.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Put the overlay on your stream", area: "LIVE LINKS", route: "Published dashboard · /published/[slug] or project domain", location: "Published Host Dashboard · Overlay URL section", map: ["Top: Open Overlay ↗", "Live controls: buttons that send events", "Overlay URL: copy into your streaming software browser source"], focus: 1, actions: ["Open the published Host Dashboard and copy the URL shown in its Overlay URL section.", "In TikTok Live broadcasting software, add a browser source and paste that overlay URL.", "Open the overlay separately and press a host control to confirm the viewer scene responds."], outcome: "The host dashboard is for you; the overlay URL is the browser source your audience sees. On a project subdomain the overlay path is /overlay.", narration: "The published Host Dashboard has an Open Overlay link at the top, live controls in the middle and an Overlay URL section below. Copy that exact overlay URL into a browser source in your TikTok Live broadcasting software. On a project subdomain it ends in slash overlay; on the main site it can use a published project path. Keep the dashboard open for host controls, and test a button against the overlay before going live.", link: "/projects", linkLabel: "Find a project" },
+  { title: "Manage projects and updates", area: "MY PROJECTS", route: "/projects", location: "Home sidebar · My Projects; project editor · top bar", map: ["My Projects: Open or Delete each saved project", "Editor top: Rename, Delete Project, publish update", "Right Details: NEW PROJECT → ＋ Start fresh"], focus: 0, actions: ["Choose My Projects on the home sidebar and Open a saved project to continue editing.", "Rename from the editor top bar. Use ＋ Start fresh under NEW PROJECT on the right for another project.", "After changing a published project, click Update Published Experience. Delete Project and Delete asset remove saved content, so use them deliberately."], outcome: "You can keep multiple projects and revisit them. Check the published result after every update.", narration: "From the home sidebar choose My Projects to reopen saved work. Open a card to continue editing. The editor top bar has Rename and Delete Project. Under New Project on the right, Start fresh makes another draft. After changing an existing published project, choose Update Published Experience to send those changes live. Deleting a project or asset removes saved content, so use those controls deliberately.", link: "/projects", linkLabel: "Open My Projects" },
+];
 
 export default function GuidePage() {
   const [index, setIndex] = useState(0);
@@ -19,83 +34,133 @@ export default function GuidePage() {
   const [muted, setMuted] = useState(false);
   const [speechAvailable, setSpeechAvailable] = useState(true);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(16);
-  const elapsed = useRef(0);
-  const started = useRef(0);
+  const [search, setSearch] = useState("");
+  const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [publishedPath, setPublishedPath] = useState<string | null>(null);
+  const [frameScale, setFrameScale] = useState(0.6);
+  const screenRef = useRef<HTMLDivElement | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const run = useRef(0);
+  const started = useRef(0);
+  const elapsed = useRef(0);
+  const duration = useRef(1);
+  const current = useRef(0);
+  const active = useRef(false);
+  const paused = useRef(false);
+  const mutedRef = useRef(false);
+  const indexRef = useRef(0);
 
   const stop = useCallback(() => {
-    run.current++;
+    active.current = false;
+    paused.current = false;
+    current.current++;
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
-
   useEffect(() => {
     setSpeechAvailable("speechSynthesis" in window);
-    return () => stop();
+    const projects = loadProjects();
+    const editable = projects.find(p => !["haunted-gaming", "space-battle", "christmas-giveaway"].includes(p.id)) || projects[0];
+    if (editable) setProjectPath(`/project/${editable.id}`);
+    const published = projects.find(p => p.publishedSnapshot);
+    if (published) setPublishedPath(`/published/${published.slug}`);
+    return stop;
   }, [stop]);
-
-  const goTo = (next: number) => {
-    stop();
-    setPlaying(false);
-    setIndex(Math.max(0, Math.min(steps.length - 1, next)));
-    elapsed.current = 0;
-    setProgress(0);
+  useEffect(() => {
+    if (!screenRef.current) return;
+    const observer = new ResizeObserver(entries => setFrameScale(Math.min(1, entries[0].contentRect.width / 1200)));
+    observer.observe(screenRef.current);
+    return () => observer.disconnect();
+  }, []);
+  const goTo = (next: number) => { stop(); setPlaying(false); indexRef.current = Math.max(0, Math.min(chapters.length - 1, next)); setIndex(indexRef.current); elapsed.current = 0; setProgress(0); };
+  const finish = (token: number) => {
+    if (token !== current.current || !active.current) return;
+    stop(); setPlaying(false); elapsed.current = 0;
+    if (indexRef.current < chapters.length - 1) { indexRef.current++; setIndex(indexRef.current); setProgress(0); }
+    else setProgress(1);
   };
-
-  const pause = () => {
-    elapsed.current = Math.min(duration, elapsed.current + (Date.now() - started.current) / 1000);
-    stop();
-    setPlaying(false);
-  };
-
   const play = () => {
-    if (playing) { pause(); return; }
-    const step = steps[index];
-    const seconds = Math.max(14, Math.ceil(step.narration.split(/\s+/).length / 2.5) + 3);
-    setDuration(seconds);
-    if (elapsed.current >= seconds) elapsed.current = 0;
-    const currentRun = ++run.current;
-    started.current = Date.now();
-    setPlaying(true);
-    if (!muted && "speechSynthesis" in window) {
-      // Restart narration from the beginning of the current chapter after a pause.
-      // Captions stay visible throughout and can be read with sound off.
-      const utterance = new SpeechSynthesisUtterance(step.narration);
-      utterance.rate = 0.95;
-      utterance.lang = "en-US";
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
+    if (playing) {
+      elapsed.current = Math.min(duration.current, elapsed.current + (Date.now() - started.current) / 1000);
+      active.current = false;
+      paused.current = true;
+      if (timer.current) clearInterval(timer.current);
+      timer.current = null;
+      if ("speechSynthesis" in window) window.speechSynthesis.pause();
+      setPlaying(false); return;
+    }
+    if (elapsed.current >= duration.current) elapsed.current = 0;
+    const resuming = paused.current;
+    paused.current = false;
+    const token = resuming ? current.current : ++current.current;
+    const text = chapters[indexRef.current].narration;
+    duration.current = Math.max(12, Math.ceil(text.split(/\s+/).length / 2.4));
+    active.current = true;
+    started.current = Date.now(); setPlaying(true);
+    if (!mutedRef.current && "speechSynthesis" in window) {
+      if (resuming) window.speechSynthesis.resume();
+      else {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-US"; utterance.rate = 0.95;
+        utterance.onend = () => finish(token);
+        window.speechSynthesis.speak(utterance);
+      }
     }
     timer.current = setInterval(() => {
-      if (currentRun !== run.current) return;
-      const next = Math.min(seconds, elapsed.current + (Date.now() - started.current) / 1000);
-      setProgress(next / seconds);
-      if (next >= seconds) {
-        stop();
-        elapsed.current = 0;
-        setPlaying(false);
-        if (index < steps.length - 1) { setIndex(index + 1); setProgress(0); }
-        else setProgress(1);
-      }
+      if (token !== current.current || !active.current) return;
+      const next = Math.min(duration.current, elapsed.current + (Date.now() - started.current) / 1000);
+      const spoken = !mutedRef.current && speechAvailable;
+      setProgress(spoken ? Math.min(0.98, next / duration.current) : next / duration.current);
+      if (next >= duration.current && !spoken) finish(token);
+      if (spoken && elapsed.current + (Date.now() - started.current) / 1000 > duration.current * 2) finish(token);
     }, 100);
   };
-
-  const step = steps[index];
+  const toggleSound = () => {
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    mutedRef.current = !mutedRef.current; setMuted(mutedRef.current);
+    if (playing || paused.current) goTo(indexRef.current);
+  };
+  const chapter = chapters[index];
+  const screenPath = chapter.route.startsWith("/project/[id]") ? projectPath : chapter.route.startsWith("Published dashboard") ? publishedPath : chapter.route.startsWith("/project/new or") ? "/project/new" : chapter.route.startsWith("/project/[id] or") ? projectPath : chapter.route;
+  const pageLink = chapter.route.startsWith("/project/[id]") ? projectPath : chapter.route.startsWith("Published dashboard") ? publishedPath : chapter.link;
+  const highlight = [".sidebar", "#new-project-title", ".preview-switch", ".chat-panel .composer", ".composer-bottom", ".asset-library-search", ".media-edit-btn", ".asset-project-btn", ".composer-open-btn", ".asset-composer-launch", ".dashboard-action-editor", ".tool-library", ".trivia-dashboard", ".tool-library", ".tool-library", ".publish-btn", ".published-controls", ".project-library-grid"][index];
+  const showControl = (frame: HTMLIFrameElement) => {
+    // The embedded page is same-origin. Its controls are displayed for orientation only.
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    let tries = 0;
+    const locate = () => {
+      if (index === 8 && doc.querySelector(".composer-open-btn") && !doc.querySelector(".asset-composer")) (doc.querySelector(".composer-open-btn") as HTMLElement).click();
+      if (index === 6 && doc.querySelector(".media-edit-btn") && !doc.querySelector(".media-editor-modal")) (doc.querySelector(".media-edit-btn") as HTMLElement).click();
+      const selector = index === 8 ? ".asset-composer" : index === 6 && doc.querySelector(".media-editor-modal") ? ".media-editor-modal" : highlight;
+      let target = doc.querySelector(selector) as HTMLElement | null;
+      if (!target && [12, 13].includes(index)) target = Array.from(doc.querySelectorAll(".detail-block")).find(element => element.textContent?.includes(index === 12 ? "GAME TOOLS" : "WHEEL SETTINGS")) as HTMLElement | undefined || null;
+      if (!target && index === 9) target = doc.querySelector(".asset-composer-launch") as HTMLElement | null;
+      if (!target && index === 6) target = doc.querySelector(".assets-panel") as HTMLElement | null;
+      if (!target && tries++ < 18) { window.setTimeout(locate, 350); return; }
+      if (!target) return;
+      target.style.outline = "4px solid #20e8ff";
+      target.style.outlineOffset = "4px";
+      target.style.boxShadow = "0 0 0 8px #20e8ff55";
+      target.scrollIntoView({ block: "center", inline: "nearest" });
+    };
+    window.setTimeout(locate, 350);
+  };
+  const filtered = chapters.map((item, i) => ({ item, i })).filter(({ item }) => (item.title + item.area + item.location + item.actions.join(" ")).toLowerCase().includes(search.toLowerCase()));
   return <main className="guide-page">
     <header className="guide-header"><Link href="/" className="back">← TTCGameLab Home</Link><span>HOW TO USE TTCGAMELAB</span><Link href="/projects">My Projects →</Link></header>
     <div className="guide-layout">
-      <div className="guide-intro"><span>✦ GUIDED TOUR</span><h1>Make your first <em>live experience.</em></h1><p>Follow along at your own pace. Play the narrated walkthrough, pause whenever you need to, or select a chapter below.</p></div>
+      <div className="guide-intro"><span>✦ COMPLETE SITE WALKTHROUGH</span><h1>See where everything is <em>and how it works.</em></h1><p>{chapters.length} narrated chapters cover the actual screens, from the home page through asset editing, game tools, publishing and your live host dashboard. Pause, replay or choose exactly the feature you need.</p></div>
       <div className="guide-player" aria-label="TTCGameLab narrated walkthrough">
-        <div className="guide-stage"><div className="guide-orbit orbit-one"/><div className="guide-orbit orbit-two"/><div className="guide-stage-content" key={index}><small>{step.label}</small><div className="guide-symbol" aria-hidden="true">{step.icon}</div><h2>{step.title}</h2><p>{step.hint}</p></div><div className="guide-counter">{String(index + 1).padStart(2, "0")} / {String(steps.length).padStart(2, "0")}</div></div>
-        <div className="guide-caption"><strong>ON SCREEN + SPOKEN INSTRUCTIONS</strong><p>{step.narration}</p></div>
+        <div className="guide-stage" key={index}><div className="guide-stage-head"><span>TTCGAMELAB · {chapter.area}</span><span>{chapter.route}</span></div><div className="guide-stage-title"><small>CHAPTER {String(index + 1).padStart(2, "0")}</small><h2>{chapter.title}</h2><p>{chapter.location}</p></div><div className="guide-screen-label"><strong>ACTUAL SITE SCREEN</strong><span>The cyan outline points to the location described in this chapter.</span></div>{screenPath && screenPath.startsWith("/") ? <div className="guide-real-screen" ref={screenRef} style={{height:760*frameScale}}><iframe key={screenPath+index} src={screenPath} title={`Site view: ${chapter.title}`} onLoad={event => showControl(event.currentTarget)} style={{transform:`scale(${frameScale})`}} tabIndex={-1}/></div> : <div className="guide-screen-unavailable">Open or publish a project to show this screen with your own content.</div>}<div className="guide-screen-map">{chapter.map.map((label, i) => <div key={i} className={chapter.focus === i ? "focused" : ""}><span>{i + 1}</span><p>{label}</p></div>)}</div><div className="guide-counter">{String(index + 1).padStart(2, "0")} / {String(chapters.length).padStart(2, "0")}</div></div>
+        <div className="guide-caption"><strong>VOICE + CAPTIONS</strong><p>{chapter.narration}</p></div>
         <div className="guide-track" role="progressbar" aria-label="Chapter progress" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress * 100}%` }}/></div>
-        <div className="guide-controls"><button type="button" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous chapter">⟵</button><button type="button" className="guide-play" onClick={play} aria-label={playing ? "Pause walkthrough" : "Play walkthrough"}>{playing ? "Ⅱ Pause" : "▶ Play"}</button><button type="button" onClick={() => goTo(index + 1)} disabled={index === steps.length - 1} aria-label="Next chapter">⟶</button><span className="guide-spacer"/><button type="button" onClick={() => { if (!muted && "speechSynthesis" in window) window.speechSynthesis.cancel(); setMuted(!muted); }} aria-label={muted ? "Turn narration on" : "Mute narration"} title={muted ? "Turn narration on" : "Mute narration"}>{muted ? "🔇" : "🔊"}</button><span className="guide-time">{index + 1} of {steps.length}</span></div>
-        {!speechAvailable && <p className="guide-audio-note">Spoken narration is unavailable in this browser. The full instructions are shown above.</p>}
+        <div className="guide-controls"><button type="button" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous chapter">⟵</button><button type="button" className="guide-play" onClick={play} aria-label={playing ? "Pause walkthrough" : "Play walkthrough"}>{playing ? "Ⅱ Pause" : "▶ Play"}</button><button type="button" onClick={() => goTo(index + 1)} disabled={index === chapters.length - 1} aria-label="Next chapter">⟶</button><span className="guide-spacer"/><button type="button" onClick={toggleSound} aria-label={muted ? "Turn narration on" : "Mute narration"}>{muted ? "🔇" : "🔊"}</button><span className="guide-time">{index + 1} of {chapters.length}</span></div>
+        {!speechAvailable && <p className="guide-audio-note">Spoken narration is unavailable in this browser. All instructions remain visible below.</p>}
+        <section className="guide-instructions"><div className="guide-location"><span>WHERE TO FIND IT</span><strong>{chapter.location}</strong><code>{chapter.route}</code></div><h3>Do this</h3><ol>{chapter.actions.map(action => <li key={action}>{action}</li>)}</ol><div className="guide-outcome"><b>What happens</b><p>{chapter.outcome}</p></div><Link href={pageLink || chapter.link} className="guide-cta">Open this screen →</Link></section>
       </div>
-      <nav className="guide-chapters" aria-label="Walkthrough chapters"><h2>Chapters</h2>{steps.map((chapter, i) => <button type="button" key={chapter.title} className={i === index ? "selected" : ""} onClick={() => goTo(i)} aria-current={i === index ? "step" : undefined}><span>{String(i + 1).padStart(2, "0")}</span><strong>{chapter.title}</strong><span>→</span></button>)}<Link href={step.action} className="guide-cta">{step.actionLabel} →</Link></nav>
+      <nav className="guide-chapters" aria-label="Walkthrough chapters"><h2>All {chapters.length} chapters</h2><label htmlFor="guide-search">Find a feature</label><input id="guide-search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search features…"/>{filtered.map(({ item, i }) => <button type="button" key={item.title} className={i === index ? "selected" : ""} onClick={() => goTo(i)} aria-current={i === index ? "step" : undefined}><span>{String(i + 1).padStart(2, "0")}</span><strong>{item.title}</strong><span>→</span></button>)}{filtered.length === 0 && <p className="guide-no-results">No matching chapter. Try a different term.</p>}</nav>
     </div>
   </main>;
 }
