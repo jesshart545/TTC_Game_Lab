@@ -6,6 +6,8 @@ export function proxy(request: NextRequest) {
   const domain = process.env.PROJECT_BASE_DOMAIN?.toLowerCase().replace(/^\./, "");
   if (!domain) return NextResponse.next();
   const host = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "").split(":")[0].toLowerCase();
+  // The public www host serves the main creator app, not a project subdomain.
+  if (host === `www.${domain}`) return NextResponse.next();
   if (!host.endsWith(`.${domain}`)) return NextResponse.next();
   const slug = host.slice(0, -domain.length - 1);
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return NextResponse.next();
