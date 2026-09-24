@@ -56,6 +56,7 @@ export default function ProjectWorkspace() {
   const [assetBusy, setAssetBusy] = useState(false);
   const [assetStatus, setAssetStatus] = useState("");
   const [triviaConfig, setTriviaConfig] = useState<any>(null);
+  const [activeTrivia, setActiveTrivia] = useState<string | null>(null);
   const [triviaBusy, setTriviaBusy] = useState(false);
   const [triviaTopics, setTriviaTopics] = useState<string[]>([]);
   const [editingAssetIndex, setEditingAssetIndex] = useState<number | null>(null);
@@ -113,6 +114,7 @@ export default function ProjectWorkspace() {
     const category = config.categories[categoryIndex];
     const question = category.questions[questionIndex];
     if (question.used) return;
+    setActiveTrivia(`${categoryIndex}:${questionIndex}`);
     const nextConfig = {
       ...config,
       categories: config.categories.map((c:any, ci:number) =>
@@ -151,6 +153,7 @@ export default function ProjectWorkspace() {
   function closeTriviaQuestion() {
     if (!project) return;
     const channel = new BroadcastChannel(`ttc-project-${project.id}`);
+    setActiveTrivia(null);
     channel.postMessage({ type:"TRIVIA_CLOSE" });
     channel.close();
     setEventLog(v => ["Trivia clue closed", ...v].slice(0,4));
@@ -638,7 +641,7 @@ export default function ProjectWorkspace() {
                         >
                           {q.used ? "USED" : `${q.value}`}
                         </button>
-                        {!q.used && (
+                        {activeTrivia === `${ci}:${qi}` && (
                           <button className="trivia-reveal-btn" onClick={() => revealTriviaAnswer(ci, qi)}>
                             Reveal
                           </button>
