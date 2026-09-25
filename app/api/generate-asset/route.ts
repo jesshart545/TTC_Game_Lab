@@ -97,41 +97,46 @@ export async function POST(request: Request) {
   }
 
   if (type === "voice") {
-    const key = readSecret("ELEVENLABS_API_KEY");
-    const voiceId = readSecret("ELEVENLABS_VOICE_ID");
-    if (!key) return jsonError("ELEVENLABS_API_KEY is not configured in Vercel.", 503);
-    if (!voiceId) return jsonError("ELEVENLABS_VOICE_ID is not configured in Vercel.", 503);
-    const modelId = readSecret("ELEVENLABS_MODEL_ID") || "eleven_v3";
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
+    const key = readSecret("FAL_KEY");
+    if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
+
+    const model = "fal-ai/elevenlabs/tts/eleven-v3";
+    const voice = typeof body?.voice === "string" && body.voice.trim() ? body.voice.trim() : "Aria";
+    const response = await fetch(`https://fal.run/${model}`, {
       method: "POST",
-      headers: { "xi-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({ text: prompt, model_id: modelId }),
+      headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: prompt,
+        voice,
+        stability: typeof body?.stability === "number" ? body.stability : 0.4,
+        language_code: "en",
+        apply_text_normalization: "auto",
+      }),
+      cache: "no-store",
     });
-    if (!response.ok) {
-      const message = await response.text().catch(() => "");
-      return jsonError(message || "ElevenLabs voice generation failed.", response.status);
-    }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const audioBase64 = Buffer.from(bytes).toString("base64");
-    return NextResponse.json({ type, url: `data:audio/mpeg;base64,${audioBase64}`, model: modelId });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return jsonError(payload?.detail || payload?.error || payload?.message || "Eleven v3 voice generation through fal failed.", response.status);
+    const url = payload?.audio?.url || "";
+    if (!url) return jsonError("Eleven v3 returned no audio output.", 502);
+    return NextResponse.json({ type, url, voice, model, provider: "fal-elevenlabs" });
   }
 
   if (type === "sfx") {
-    const key = readSecret("ELEVENLABS_API_KEY");
-    if (!key) return jsonError("ELEVENLABS_API_KEY is not configured in Vercel.", 503);
-    const response = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
+    const key = readSecret("FAL_KEY");
+    if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
+
+    const model = "fal-ai/elevenlabs/sound-effects/v2";
+    const response = await fetch(`https://fal.run/${model}`, {
       method: "POST",
-      headers: { "xi-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({ text: prompt, duration_seconds: 5, prompt_influence: 0.4 }),
+      headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ text: prompt, duration_seconds: 5, prompt_influence: 0.4, output_format: "mp3_44100_128" }),
       cache: "no-store",
     });
-    if (!response.ok) {
-      const message = await response.text().catch(() => "");
-      return jsonError(message || "ElevenLabs sound-effect generation failed.", response.status);
-    }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const audioBase64 = Buffer.from(bytes).toString("base64");
-    return NextResponse.json({ type: "sfx", url: `data:audio/mpeg;base64,${audioBase64}`, model: "elevenlabs-sound-generation", provider: "elevenlabs" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return jsonError(payload?.detail || payload?.error || payload?.message || "ElevenLabs sound-effect generation through fal failed.", response.status);
+    const url = payload?.audio?.url || "";
+    if (!url) return jsonError("ElevenLabs sound-effects returned no audio output.", 502);
+    return NextResponse.json({ type: "sfx", url, model, provider: "fal-elevenlabs" });
   }
 
   if (type === "music") {
