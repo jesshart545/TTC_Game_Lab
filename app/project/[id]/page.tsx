@@ -189,16 +189,44 @@ export default function ProjectWorkspace() {
     } finally { setTriviaBusy(false); }
   }
 
-  function addGameTool(type: GameToolType) {
-    if (!project) return;
+  async function addGameTool(type: GameToolType) {
+    if (!project || triviaBusy) return;
     const latest = loadProjects().find(p=>p.id===project.id) || project;
     const existing = latest.gameTools || [];
-    if (existing.some(t=>t.type===type && t.enabled)) { setAssetStatus("That game tool is already added."); return; }
+    if (existing.some(t=>t.type===type && t.enabled)) { setAssetStatus("That tool is already in this project's toolbox."); return; }
     const info = TOOL_LIBRARY.find(t=>t.type===type)!;
-    const tool: GameTool = { id: `${type}-${Date.now()}`, type, name: info.name, enabled:true, config: info.name==="Trivia Board" ? TRIVIA_CONFIG : type==="wheel" ? { title:"Game Wheel", segments:["Prize","Challenge","Bonus","Mystery"] } : type==="random-picker" ? { items:["Player 1","Player 2","Player 3"] } : type==="countdown" ? { seconds:10 } : type==="trivia-board" ? TRIVIA_CONFIG : type==="poll" ? { question:"Choose what happens next", options:["Option A","Option B"] } : { sides:6 } };
+    const config = type==="wheel" ? { title:"Game Wheel", segments:["Prize","Challenge","Bonus","Mystery"] } : type==="random-picker" ? { items:["Player 1","Player 2","Player 3"] } : type==="countdown" ? { seconds:10 } : type==="poll" ? { question:"Choose what happens next", options:["Option A","Option B"] } : type==="dice" ? { sides:6 } : TRIVIA_CONFIG;
+    const tool: GameTool = { id: `${type}-${Date.now()}`, type, name: info.name, enabled:true, config };
     const next = { ...latest, gameTools:[...existing,tool], updatedAt:"just now" };
-    if (type==="wheel") next.wheel = { ...(latest.wheel || { enabled:false,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false,visible:false }), enabled:true, visible:false };
-    persist(next); setAssetStatus(`${info.name} added to your game tools.`);
+    persist(next);
+
+    // Adding a tool means adding a customizable tool to the project toolbox.
+    // It does NOT wire that tool into the finished host dashboard.
+    if (type !== "trivia-board") {
+      setAssetStatus(`${info.name} added to this project's toolbox. Customize it here or with the AI Creative Director; add it to the finished dashboard only when you choose.`);
+      return;
+    }
+
+    // Trivia Board is the one workspace tool whose visual belongs on the audience overlay.
+    // Seed it with a real sourced board immediately so Add never creates an invisible empty board.
+    setTriviaConfig(TRIVIA_CONFIG);
+    setTriviaTopics([]);
+    setPreviewMode("overlay");
+    setTriviaBusy(true);
+    setAssetStatus("Trivia Board added. Building its default sourced 5×5 board for the audience overlay…");
+    try {
+      const response = await fetch("/api/trivia", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ mode:"generate" }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Trivia generation failed.");
+      const nextConfig = { categories: Array.isArray(data.categories) ? data.categories : [] };
+      const current = loadProjects().find(p=>p.id===project.id) || next;
+      persist({ ...current, gameTools:(current.gameTools || []).map(t=>t.id===tool.id ? { ...t, config:nextConfig } : t), updatedAt:"just now" });
+      setTriviaConfig(nextConfig);
+      setTriviaTopics(nextConfig.categories.map((category:any)=>String(category.name || "")));
+      setAssetStatus("Trivia Board added to the audience overlay workspace. Customize its categories, questions and look with the AI Creative Director. Dashboard controls are not wired until you choose them.");
+    } catch (error) {
+      setAssetStatus(error instanceof Error ? `Trivia Board was added to the overlay workspace, but its default sourced questions could not be generated: ${error.message}` : "Trivia Board was added, but its default questions could not be generated.");
+    } finally { setTriviaBusy(false); }
   }
   function triggerGameTool(tool: GameTool) {
     if (!project) return;
@@ -615,7 +643,7 @@ export default function ProjectWorkspace() {
                   <b>{tool.name}</b>
                   <small>{tool.description}</small>
                 </div>
-                <button className="outline-btn" onClick={() => addGameTool(tool.type)}>＋ Add</button>
+                <button className="outline-btn" disabled={triviaBusy && tool.type==="trivia-board"} onClick={() => void addGameTool(tool.type)}>＋ Add</button>
               </div>
             ))}
           </div>
@@ -626,7 +654,7 @@ export default function ProjectWorkspace() {
                   <b>{tool.name}</b>
                   <em>{tool.type}</em>
                 </div>
-                <button className="outline-btn" onClick={() => triggerGameTool(tool)}>Trigger</button>
+                <small>{tool.type==="trivia-board" ? "Audience overlay workspace" : "Customized project toolbox"}</small>
               </div>
             ))}
           </div>
