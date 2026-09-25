@@ -1,0 +1,32 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+
+const steps = [
+  { title:"Create your project", text:"Welcome to TTCGameLab. We’re building Neon Trivia Night together. Start a private project, name it, and describe the neon Halloween trivia experience you want to create." },
+  { title:"Generate real trivia", text:"Use the Trivia Board generator for five categories and five clues each. Real-world trivia should use factual questions and answers. We’ll use a real Halloween movie question in the finished demonstration." },
+  { title:"Create the show assets", text:"Now make the experience yours. Generate the neon board art, an original twenty-second theme song, applause, cheering, a wrong-answer sting, countdown tension, and a final celebration." },
+  { title:"Build the special question", text:"Our special Halloween question asks for the origin of the jack-o’-lantern. The generated video shows modern pumpkin lanterns in windows, but never reveals their historical origin or original material." },
+  { title:"Customize the Dashboard", text:"Arrange controls around the way you host. Rename actions in language you recognize instantly, then connect every button to the Overlay. One action can trigger a complete presentation sequence." },
+  { title:"Run Neon Trivia Night", text:"Select a clue, let the narration finish, start the thirty-second countdown, reveal the answer, and return to the board. Used clues stay marked so the host always knows where the game stands." }
+];
+
+export default function TutorialPage(){
+  const [step,setStep]=useState(0); const [playing,setPlaying]=useState(false); const [speechOK,setSpeechOK]=useState(true); const utterance=useRef<SpeechSynthesisUtterance|null>(null);
+  const stop=()=>{ if(typeof window!=="undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel(); setPlaying(false); };
+  const play=()=>{ if(typeof window==="undefined" || !("speechSynthesis" in window)){setSpeechOK(false);return;} window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(steps[step].text); u.rate=.96; u.pitch=1.03; u.onend=()=>setPlaying(false); u.onerror=()=>setPlaying(false); utterance.current=u; window.speechSynthesis.speak(u); setPlaying(true); };
+  useEffect(()=>()=>{ if(typeof window!=="undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel(); },[]);
+  const go=(n:number)=>{ stop(); setStep(Math.max(0,Math.min(steps.length-1,n))); };
+  const s=steps[step];
+  return <main style={{minHeight:"100vh",background:"radial-gradient(circle at 20% 10%,#24104a 0,#080812 42%,#030308 100%)",color:"white",fontFamily:"system-ui,sans-serif",padding:"clamp(20px,5vw,64px)"}}>
+    <div style={{maxWidth:1050,margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:20,alignItems:"center",flexWrap:"wrap"}}><div><div style={{color:"#53d8ff",fontWeight:800,letterSpacing:2}}>TTCGAMELAB TRAINER</div><h1 style={{fontSize:"clamp(36px,6vw,72px)",margin:"8px 0"}}>Neon Trivia Night</h1><p style={{color:"#bbb",maxWidth:700,fontSize:18}}>A playable guided walkthrough for building and running a complete TTCGameLab experience.</p></div><div style={{border:"1px solid #7b4cff",borderRadius:999,padding:"10px 16px",color:"#d7caff"}}>Step {step+1} of {steps.length}</div></div>
+      <section style={{marginTop:40,border:"1px solid #4d347c",borderRadius:28,padding:"clamp(22px,4vw,44px)",background:"rgba(12,9,28,.86)",boxShadow:"0 0 50px rgba(120,55,255,.18)"}}>
+        <div style={{fontSize:14,color:"#ff9b36",fontWeight:800,letterSpacing:1.5}}>TRAINER LESSON</div><h2 style={{fontSize:"clamp(28px,4vw,46px)",margin:"10px 0 16px"}}>{s.title}</h2><p style={{fontSize:"clamp(18px,2.2vw,23px)",lineHeight:1.65,color:"#eee",maxWidth:850}}>{s.text}</p>
+        {!speechOK&&<p style={{color:"#ffba78"}}>Audio narration is not supported by this browser, but the full lesson text remains available.</p>}
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:30}}><button onClick={playing?stop:play} style={btn("#7b38ff")}>{playing?"Pause narration":"▶ Play narration"}</button><button onClick={()=>go(step-1)} disabled={step===0} style={btn("#202033",step===0)} >Back</button><button onClick={()=>go(step+1)} disabled={step===steps.length-1} style={btn("#ff7a18",step===steps.length-1)}>{step===steps.length-1?"Tutorial complete":"Next lesson →"}</button></div>
+      </section>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:10,marginTop:20}}>{steps.map((x,i)=><button key={x.title} onClick={()=>go(i)} style={{textAlign:"left",padding:14,borderRadius:14,border:i===step?"1px solid #a77cff":"1px solid #29243b",background:i===step?"#211542":"#0d0c15",color:i===step?"white":"#aaa",cursor:"pointer"}}><strong style={{display:"block",color:i===step?"#c9b4ff":"#777"}}>{i+1}</strong>{x.title}</button>)}</div>
+    </div>
+  </main>;
+}
+function btn(background:string,disabled=false){return {border:0,borderRadius:14,padding:"14px 20px",background:disabled?"#24232b":background,color:disabled?"#666":"white",fontWeight:800,fontSize:16,cursor:disabled?"not-allowed":"pointer"} as const;}
