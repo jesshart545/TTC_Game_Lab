@@ -278,17 +278,37 @@ export default function ProjectWorkspace() {
 
   async function generateAsset(type: GeneratorType) {
     if (!project || assetBusy) return;
+    let promptImage = "";
+    if (type === "video") {
+      const images = project.assets.filter(asset => isImage(asset) && asset.url);
+      if (images.length) {
+        const choices = images.map((asset, index) => `${index + 1}. ${asset.name}`).join("\n");
+        const selected = window.prompt(
+          `Optional: choose an image to animate as the video's starting/reference frame.\n\n${choices}\n\nEnter its number, or leave blank for text-to-video.`,
+          "",
+        );
+        if (selected === null) return;
+        if (selected.trim()) {
+          const index = Number.parseInt(selected.trim(), 10) - 1;
+          if (!Number.isInteger(index) || index < 0 || index >= images.length) {
+            setAssetStatus("Choose a valid image number.");
+            return;
+          }
+          promptImage = images[index].url || "";
+        }
+      }
+    }
     const requested = window.prompt(`Describe the ${type} you want to generate`, project.prompt || `A neon futuristic ${type} for this TikTok LIVE experience`);
     if (!requested?.trim()) return;
     setShowGenerator(false);
     setAssetBusy(true);
-    setAssetStatus(`Generating ${type}…`);
+    setAssetStatus(type === "video" && promptImage ? "Generating video from reference image…" : `Generating ${type}…`);
 
     try {
       const response = await fetch("/api/generate-asset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requested.trim(), type }),
+        body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
