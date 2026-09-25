@@ -5,7 +5,9 @@ export type OverlayResult = {
   entranceSeconds: number; exitSeconds: number;
   layer: number;
 };
-export type ProjectEvent = { id: string; label: string; action: string; detail: string; compositionId?: string; overlayResult?: OverlayResult };
+export type ChainTiming = { mode: "immediate" | "delay"; seconds?: number };
+export type ChainStep = { id: string; kind: "tool" | "asset" | "composition" | "animation"; refId: string; label: string; timing: ChainTiming };
+export type ProjectEvent = { id: string; label: string; action: string; detail: string; compositionId?: string; overlayResult?: OverlayResult; buttonMode?: "single" | "chain"; toolIds?: string[]; chain?: ChainStep[] };
 export type ProjectAssetEdits = {
   crop?: "original" | "square" | "landscape" | "portrait";
   trimStart?: number;
@@ -30,7 +32,7 @@ export type CompositionClip = { id:string; track:CompositionTrackType; assetName
 export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string; inProject?:boolean };
 export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean; visible: boolean };
 export type GameToolType = "wheel" | "random-picker" | "countdown" | "poll" | "dice" | "trivia-board";
-export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown> };
+export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown>; inToolbox?: boolean; inOverlayBuild?: boolean };
 export type Project = {
   id: string;
   name: string;
