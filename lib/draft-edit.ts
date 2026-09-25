@@ -7,7 +7,7 @@ const number = (value: unknown, min: number, max: number) => typeof value === "n
 export function applyDraftChanges(project: Project, input: unknown) {
   const changes = object(input);
   let applied = 0;
-  const next: Project = { ...project, overlay: { ...project.overlay }, assets: project.assets.map(asset => ({ ...asset })), compositions: (project.compositions || []).map(c => ({ ...c, clips: c.clips.map(clip => ({ ...clip })) })), controls: project.controls.map(c => ({ ...c })) };
+  const next: Project = { ...project, overlay: { ...project.overlay }, assets: project.assets.map(asset => ({ ...asset })), compositions: (project.compositions || []).map(c => ({ ...c, clips: c.clips.map(clip => ({ ...clip })) })), controls: project.controls.map(c => ({ ...c })), gameTools: (project.gameTools || []).map(tool => ({ ...tool, config: { ...tool.config } })) };
   if (["cyan", "purple", "pink"].includes(String(changes.theme)) && next.theme !== changes.theme) { next.theme = changes.theme as Project["theme"]; applied++; }
   const overlay = object(changes.overlay);
   for (const key of ["title", "subtitle"] as const) { const value = text(overlay[key]); if (value !== undefined && value !== next.overlay[key]) { next.overlay[key] = value; applied++; } }
@@ -36,6 +36,15 @@ export function applyDraftChanges(project: Project, input: unknown) {
       for (const key of ["text", "effect"] as const) { const value = text(change[key], 500); if (value !== undefined && clip.track === key) { clip[key] = value; applied++; } }
     }
     composition.duration = Math.max(1, ...composition.clips.map(c => c.start + c.duration));
+  }
+  if (Array.isArray(changes.gameTools)) for (const raw of changes.gameTools) {
+    const edit = object(raw);
+    const tool = next.gameTools.find(t => t.id === edit.id);
+    if (!tool) continue;
+    const name = text(edit.name, 80);
+    if (name) { tool.name = name; applied++; }
+    const config = object(edit.config);
+    if (Object.keys(config).length) { tool.config = { ...tool.config, ...config }; applied++; }
   }
   if (Array.isArray(changes.controls)) for (const raw of changes.controls) {
     const edit = object(raw), control = next.controls.find(c => c.id === edit.id); if (!control) continue;
