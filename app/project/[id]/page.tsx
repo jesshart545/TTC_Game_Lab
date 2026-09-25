@@ -229,6 +229,28 @@ export default function ProjectWorkspace() {
       setAssetStatus(error instanceof Error ? `Trivia Board was added to the overlay workspace, but its default sourced questions could not be generated: ${error.message}` : "Trivia Board was added, but its default questions could not be generated.");
     } finally { setTriviaBusy(false); }
   }
+  function pushWorkspaceCreation(tool: GameTool) {
+    if (!project) return;
+    const isBoard = tool.type === "trivia-board";
+    persist({ ...project, gameTools:(project.gameTools||[]).map(t=>t.id===tool.id ? { ...t, inToolbox:!isBoard || t.inToolbox, inOverlayBuild:isBoard || t.inOverlayBuild } : t), updatedAt:"just now" });
+    setAssetStatus(isBoard ? `${tool.name} added to the Overlay Build.` : `${tool.name} added to the Dashboard Toolbox.`);
+  }
+  function addBlankDashboardButton() {
+    if (!project) return;
+    const id=`dashboard-button-${Date.now()}`;
+    persist({ ...project, controls:[...project.controls,{ id, label:"NEW BUTTON", action:"", detail:"Unassigned dashboard button", buttonMode:"single", toolIds:[], chain:[] }], updatedAt:"just now" });
+    setSelectedControlId(id); setPreviewMode("dashboard");
+  }
+  function assignToolToButton(controlId:string, tool:GameTool) {
+    if (!project) return; const control=project.controls.find(c=>c.id===controlId); if(!control)return;
+    const current=control.toolIds||[]; if(current.includes(tool.id))return;
+    if(current.length>=2){setAssetStatus("A dashboard button can hold a maximum of 2 tools.");return;}
+    updateControl(controlId,{toolIds:[...current,tool.id],action:current.length===0?`tool.${tool.id}`:control.action});
+  }
+  function addChainStep(controlId:string, kind:"asset"|"composition"|"animation", refId:string, label:string) {
+    if (!project) return; const control=project.controls.find(c=>c.id===controlId); if(!control)return;
+    updateControl(controlId,{chain:[...(control.chain||[]),{id:`chain-${Date.now()}`,kind,refId,label,timing:{mode:"immediate"}}]});
+  }
   function addToolToDashboard(tool: GameTool) {
     if (!project) return;
     const action = `tool.${tool.id}`;
