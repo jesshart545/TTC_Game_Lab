@@ -66,7 +66,11 @@ export async function POST(request: Request) {
     if (!runwayKey) return jsonError("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
 
     const model = "gen4.5";
-    const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
+    const promptImage = typeof body?.promptImage === "string" ? body.promptImage.trim() : "";
+    if (promptImage && !/^https:\/\//i.test(promptImage) && !/^data:image\//i.test(promptImage)) {
+      return jsonError("Video reference image must be an HTTPS URL or image data URI.", 400);
+    }
+    const response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${runwayKey}`,
@@ -76,6 +80,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model,
         promptText: prompt,
+        ...(promptImage ? { promptImage } : {}),
         ratio: "1280:720",
         duration: 5,
       }),
