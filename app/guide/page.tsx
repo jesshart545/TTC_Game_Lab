@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadProjects } from "../../lib/project";
 import "./guide.css";
+import { demoChapters } from "./demo";
 
 type Chapter = { title: string; area: string; route: string; location: string; map: [string, string, string]; focus: number; actions: string[]; outcome: string; narration: string; link: string; linkLabel: string };
 
@@ -29,6 +30,8 @@ const chapters: Chapter[] = [
 ];
 
 export default function GuidePage() {
+  const [mode, setMode] = useState<"demo" | "site">("demo");
+  const [demoIndex, setDemoIndex] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -148,6 +151,10 @@ export default function GuidePage() {
     window.setTimeout(locate, 350);
   };
   const filtered = chapters.map((item, i) => ({ item, i })).filter(({ item }) => (item.title + item.area + item.location + item.actions.join(" ")).toLowerCase().includes(search.toLowerCase()));
+  if (mode === "demo") {
+    const demo = demoChapters[demoIndex];
+    return <main className="guide-page"><header className="guide-header"><Link href="/" className="back">← TTCGameLab Home</Link><span>LEARN BEFORE YOU SIGN UP</span><button className="guide-mode-link" onClick={() => setMode("site")}>Current site reference →</button></header><div className="guide-layout"><div className="guide-intro"><span>✦ NO ACCOUNT REQUIRED</span><h1>Learn TTCGameLab <em>before you build.</em></h1><p>This fictional walkthrough demonstrates the complete creator journey without touching a real account or project. Use it before joining the private alpha, then return whenever you need a refresher.</p><div className="guide-demo-notice">DEMO MODE · Fictional creator and project · No real data is changed</div></div><div className="guide-player"><div className="guide-stage"><div className="guide-stage-head"><span>DEMO CREATOR · NOVA</span><span>{demo.area}</span></div><div className="guide-stage-title"><small>CHAPTER {String(demoIndex + 1).padStart(2, "0")}</small><h2>{demo.title}</h2><p>{demo.narration}</p></div><div className="guide-screen-map">{demo.steps.map((step, i) => <div key={step} className={i === 1 ? "focused" : ""}><span>{i + 1}</span><p>{step}</p></div>)}</div><div className="guide-counter">{String(demoIndex + 1).padStart(2, "0")} / {String(demoChapters.length).padStart(2, "0")}</div></div><div className="guide-caption"><strong>DEMO NARRATION</strong><p>{demo.narration}</p></div><div className="guide-controls"><button onClick={() => setDemoIndex(Math.max(0,demoIndex-1))} disabled={demoIndex===0}>⟵</button><button className="guide-play" onClick={() => { if ("speechSynthesis" in window) { window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(demo.narration); u.lang="en-US"; u.rate=.95; window.speechSynthesis.speak(u); }}}>▶ Play narration</button><button onClick={() => setDemoIndex(Math.min(demoChapters.length-1,demoIndex+1))} disabled={demoIndex===demoChapters.length-1}>⟶</button><span className="guide-spacer"/><span className="guide-time">{demoIndex+1} of {demoChapters.length}</span></div><section className="guide-instructions"><h3>What this demonstrates</h3><ol>{demo.steps.map(step => <li key={step}>{step}</li>)}</ol><div className="guide-outcome"><b>EXPECTED RESULT</b><p>{demo.result}</p></div>{demoIndex===demoChapters.length-1 && <Link href="/project/new" className="guide-cta">Start building →</Link>}</section></div><nav className="guide-chapters"><h2>Demo walkthrough</h2>{demoChapters.map((item,i)=><button key={item.title} className={i===demoIndex?"selected":""} onClick={()=>setDemoIndex(i)}><span>{String(i+1).padStart(2,"0")}</span><strong>{item.title}</strong><span>→</span></button>)}</nav></div></main>;
+  }
   return <main className="guide-page">
     <header className="guide-header"><Link href="/" className="back">← TTCGameLab Home</Link><span>HOW TO USE TTCGAMELAB</span><Link href="/projects">My Projects →</Link></header>
     <div className="guide-layout">
