@@ -361,12 +361,15 @@ export default function ProjectWorkspace() {
     if (!project || assetBusy) return;
     let promptImage = "";
     if (type === "video") {
-      const images = project.assets.filter(asset => isImage(asset) && asset.url);
+      const imageAssets = project.assets.filter(asset => isImage(asset) || asset.type?.toLowerCase().includes("image"));
+      const images = (await Promise.all(imageAssets.map(async asset => {
+        try { return await hydrateAsset(asset); } catch { return asset; }
+      }))).filter(asset => Boolean(asset.url));
       if (images.length) {
         const choices = images.map((asset, index) => `${index + 1}. ${asset.name}`).join("\n");
         const selected = window.prompt(
-          `Optional: choose an image to animate as the video's starting/reference frame.\n\n${choices}\n\nEnter its number, or leave blank for text-to-video.`,
-          "",
+          `Choose an image to use as the video's starting/reference frame.\n\n${choices}\n\nEnter its number, or leave blank for text-to-video.`,
+          images.length === 1 ? "1" : "",
         );
         if (selected === null) return;
         if (selected.trim()) {
@@ -377,6 +380,9 @@ export default function ProjectWorkspace() {
           }
           promptImage = images[index].url || "";
         }
+      } else if (imageAssets.length) {
+        setAssetStatus("The project image could not be loaded for video generation. Refresh the project and try again.");
+        return;
       }
     }
     const requested = window.prompt(`Describe the ${type} you want to generate`, project.prompt || `A neon futuristic ${type} for this TikTok LIVE experience`);
