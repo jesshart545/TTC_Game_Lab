@@ -37,6 +37,14 @@ export async function getAssetUrl(key: string, expiresIn = 60 * 60 * 24 * 7) {
 }
 
 
+export async function deleteAsset(key: string) {
+  const storage = getAssetStorage();
+  await storage.send(new DeleteObjectsCommand({
+    Bucket: ASSET_BUCKET,
+    Delete: { Objects: [{ Key: key }], Quiet: true },
+  }));
+}
+
 export async function deleteAssetsByPrefix(prefix: string) {
   const storage = getAssetStorage();
   let continuationToken: string | undefined;
