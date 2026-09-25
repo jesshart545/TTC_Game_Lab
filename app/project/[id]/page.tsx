@@ -22,7 +22,14 @@ const GENERATORS = [
 type GeneratorType = (typeof GENERATORS)[number]["type"];
 
 function isImage(asset: ProjectAsset) {
-  return Boolean(asset.url && (asset.type.toLowerCase().includes("image") || asset.name.toLowerCase().startsWith("image")));
+  if (!asset.url) return false;
+  const type = (asset.type || "").toLowerCase();
+  const name = (asset.name || "").toLowerCase();
+  const url = asset.url.toLowerCase().split("?")[0];
+  return type.includes("image")
+    || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(name)
+    || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(url)
+    || name.startsWith("image");
 }
 
 function isVideo(asset: ProjectAsset) {
