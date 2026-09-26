@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useRef, useState } from "react";
-import { createProject, loadProjects, Project, ProjectAsset, saveProjects, saveProjectToServer } from "../../../lib/project";
+import { createProject, Project, ProjectAsset, saveProjectToServer } from "../../../lib/project";
 import { hydrateAsset, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
@@ -149,9 +149,8 @@ export default function NewProject() {
     const draft = ensureDraftProject();
     const next: Project = { ...draft, name, updatedAt: "just now" };
     draftProjectRef.current = next;
-    saveProjects([next, ...loadProjects().filter(p => p.id !== next.id)]);
     try { await saveProjectToServer(next); setTitleSaved(true); setAssetStatus("Project title saved."); }
-    catch { setTitleSaved(true); setAssetStatus("Project title saved locally. It will sync when the server is available."); }
+    catch (error) { setTitleSaved(false); setAssetStatus(error instanceof Error ? error.message : "Project title could not be saved."); }
   }
 
   async function build() {
@@ -164,9 +163,13 @@ export default function NewProject() {
       ? { ...generated, id: existing.id, slug: existing.slug, name: chosenName || generated.name, assets }
       : { ...generated, name: chosenName || generated.name, assets };
     draftProjectRef.current = project;
-    saveProjects([project, ...loadProjects().filter(p => p.id !== project.id)]);
-    try { await saveProjectToServer(project); } catch {}
-    router.push(`/project/${project.id}`);
+    try {
+      await saveProjectToServer(project);
+      router.push(`/project/${project.id}`);
+    } catch (error) {
+      setAssetStatus(error instanceof Error ? error.message : "Project could not be saved.");
+      setBuilding(false);
+    }
   }
 
   function renderAsset(asset: ProjectAsset, index: number) {
@@ -179,7 +182,7 @@ export default function NewProject() {
 
   return (
     <main className="workspace-page">
-      <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">New Project <span>Draft</span></div><div className="save-state">● Saved locally</div></header>
+      <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">New Project <span>Draft</span></div><div className="save-state">● Saved to project storage</div></header>
       <div className="workspace-grid">
         <section className="chat-panel">
           <div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h1>Let&apos;s build your LIVE.</h1></div><div className="ai-orb">✦</div></div>
