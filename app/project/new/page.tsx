@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useRef, useState } from "react";
 import { createProject, loadProjects, Project, ProjectAsset, saveProjects, saveProjectToServer } from "../../../lib/project";
-import { storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
+import { hydrateAsset, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
 
@@ -64,13 +64,42 @@ export default function NewProject() {
   }
 
   async function generateAsset(type: GeneratorType) {
+    if (assetBusy) return;
+    let promptImage = "";
+    if (type === "video") {
+      const imageAssets = assets.filter(asset => {
+        const typeName = (asset.type || "").toLowerCase();
+        const name = (asset.name || "").toLowerCase();
+        const url = (asset.url || "").toLowerCase().split("?")[0];
+        return typeName.includes("image") || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(name) || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(url) || name.startsWith("image");
+      });
+      const images = (await Promise.all(imageAssets.map(async asset => {
+        try { return await hydrateAsset(asset); } catch { return asset; }
+      }))).filter(asset => Boolean(asset.url));
+      if (images.length) {
+        const choices = images.map((asset, index) => `${index + 1}. ${asset.name}`).join("\n");
+        const selected = window.prompt(
+          `Choose an image to use as the video's starting/reference frame.\n\n${choices}\n\nEnter its number, or leave blank for text-to-video.`,
+          images.length === 1 ? "1" : "",
+        );
+        if (selected === null) return;
+        if (selected.trim()) {
+          const index = Number.parseInt(selected.trim(), 10) - 1;
+          if (!Number.isInteger(index) || index < 0 || index >= images.length) {
+            setAssetStatus("Choose a valid image number.");
+            return;
+          }
+          promptImage = images[index].url || "";
+        }
+      }
+    }
     const requested = window.prompt(`Describe the ${type} you want to generate`, prompt.trim() || `A neon futuristic ${type} for a TikTok LIVE experience`);
-    if (!requested?.trim() || assetBusy) return;
+    if (!requested?.trim()) return;
     setShowGenerator(false);
     setAssetBusy(true);
-    setAssetStatus(`Generating ${type}…`);
+    setAssetStatus(type === "video" && promptImage ? "Generating video from reference image…" : `Generating ${type}…`);
     try {
-      const response = await fetch("/api/generate-asset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: requested.trim(), type }) });
+      const response = await fetch("/api/generate-asset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}) }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
 
@@ -104,10 +133,8 @@ export default function NewProject() {
       let asset: ProjectAsset = generatedAsset;
       try {
         asset = await storeGeneratedAsset(ensureDraftProject().id, generatedAsset);
-      } catch {
-        // Keep the direct URL as a fallback if browser storage cannot cache the generated result.
-      }
-      setAssets((current) => [...current, asset]);
+      } catch {}
+      setAssets(current => [...current, asset]);
       setAssetStatus(`${name} generated`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : `${type} generation failed.`);
