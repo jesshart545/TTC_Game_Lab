@@ -19,8 +19,8 @@ export default function PublishedProject() {
     let cancelled = false;
     let timer: number | undefined;
     (async () => {
-      let draft =().find(x => x.slug === slug);
-      try { draft = (await loadProjectFromServer(slug)) || draft; } catch {}
+      let draft: Project | null = null;
+      try { draft = await loadProjectFromServer(slug); } catch {}
       const published = draft?.publishedSnapshot || (draft?.status === "Published" ? draft : null);
       if (cancelled) return;
       setProject(published || null);
