@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { deleteStoredAsset, hydrateProjectAssets, storeUploadedAsset } from "../../lib/asset-store";
 import MediaEditor from "../../components/MediaEditor";
-import { loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjectToServer, saveProjects } from "../../lib/project";
+import { Project, ProjectAsset, saveProjectToServer } from "../../lib/project";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string; assetIndex: number };
 type Filter = "all" | "image" | "video" | "audio";
@@ -26,38 +26,40 @@ export default function AssetLibraryPage() {
   const [editing,setEditing]=useState<LibraryAsset|null>(null);
 
   async function refreshAssets() {
-    const raw=loadProjects();
+    const response=await fetch("/api/projects",{cache:"no-store"});
+    if(!response.ok) throw new Error("Could not load project assets.");
+    const data=await response.json();
+    const raw:Project[]=Array.isArray(data.projects)?data.projects.map((row:any)=>row.data as Project).filter(Boolean):[];
     const hydrated=await Promise.all(raw.map(project=>hydrateProjectAssets(project).catch(()=>project)));
     setProjects(hydrated);
     setAssets(hydrated.flatMap(project=>(project.assets||[]).map((asset,assetIndex)=>({...asset,projectName:project.name,projectId:project.id,assetIndex}))));
   }
-  useEffect(()=>{void refreshAssets()},[]);
+  useEffect(()=>{void refreshAssets().catch(error=>setStatus(error instanceof Error?error.message:"Could not load assets."))},[]);
 
   async function persistProject(next:Project) {
-    const all=loadProjects();
-    saveProjects(all.map(p=>p.id===next.id?next:p));
+    await saveProjectToServer(next);
     setProjects(v=>v.map(p=>p.id===next.id?next:p));
-    await saveProjectToServer(next).catch(()=>{});
     await refreshAssets();
   }
 
   async function handleDelete(asset:LibraryAsset) {
     if(!window.confirm(`Delete "${asset.name}" from ${asset.projectName}?`)) return;
+    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
+    const next={...project,assets:project.assets.filter((_,i)=>i!==asset.assetIndex),updatedAt:"just now"};
+    await saveProjectToServer(next);
     if(asset.storageKey) try{await deleteStoredAsset(asset.storageKey)}catch{}
-    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
-    replaceProjectAssets(project.id,project.assets.filter((_,i)=>i!==asset.assetIndex));
     await refreshAssets(); setStatus("Asset deleted.");
   }
 
   async function rename(asset:LibraryAsset) {
     const value=window.prompt("Rename asset",asset.name)?.trim(); if(!value||value===asset.name)return;
-    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
+    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
     const next={...project,assets:project.assets.map((a,i)=>i===asset.assetIndex?{...a,name:value}:a),updatedAt:"just now"};
     await persistProject(next); setStatus("Asset renamed.");
   }
 
   async function toggleInProject(asset:LibraryAsset) {
-    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
+    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
     const current=project.assets[asset.assetIndex]; const adding=!current.inProject;
     let role=current.role;
     if(adding&&!role){const k=kind(current);role=k==="image"?(project.assets.some(a=>a.inProject&&a.role==="background")?"layer":"background"):k==="video"?"video":"audio"}
@@ -66,7 +68,7 @@ export default function AssetLibraryPage() {
   }
 
   async function saveEdits(asset:LibraryAsset,nextAsset:ProjectAsset) {
-    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
+    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
     await persistProject({...project,assets:project.assets.map((a,i)=>i===asset.assetIndex?nextAsset:a),updatedAt:"just now"});
     setStatus("Asset edit settings saved.");
   }
@@ -79,14 +81,14 @@ export default function AssetLibraryPage() {
     const blob=await response.blob();
     const file=new File([blob],nextAsset.name||"ai-edited-image.png",{type:blob.type||"image/png"});
     const stored=await storeUploadedAsset(asset.projectId,file);
-    const project=loadProjects().find(p=>p.id===asset.projectId); if(!project)return;
+    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
     await persistProject({...project,assets:[...project.assets,{...stored,name:file.name}],updatedAt:"just now"});
     setStatus("Edited image saved as a new permanent asset.");
   }
 
   async function copyToProject(asset:LibraryAsset,targetId:string) {
     if(!targetId||targetId===asset.projectId)return;
-    const target=loadProjects().find(p=>p.id===targetId); if(!target)return;
+    const target=projects.find(p=>p.id===targetId); if(!target)return;
     const copy:ProjectAsset={name:asset.name,type:asset.type,url:asset.url,storageKey:asset.storageKey,edits:asset.edits,inProject:false,role:asset.role};
     await persistProject({...target,assets:[...target.assets,copy],updatedAt:"just now"});
     setStatus(`${asset.name} added to ${target.name} library.`);
