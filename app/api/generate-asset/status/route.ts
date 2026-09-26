@@ -18,9 +18,6 @@ function extractVideoUrl(payload: any) {
 }
 
 export async function GET(request: Request) {
-  const token = readSecret("AGNES_API_KEY");
-  if (!token) return NextResponse.json({ error: "AGNES_API_KEY is not configured in Vercel." }, { status: 503 });
-
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   const model = url.searchParams.get("model") || "agnes-video-2.5-flash";
@@ -54,6 +51,9 @@ export async function GET(request: Request) {
       provider: "runway",
     });
   }
+
+  const token = readSecret("AGNES_API_KEY");
+  if (!token) return NextResponse.json({ error: "AGNES_API_KEY is not configured in Vercel." }, { status: 503 });
 
   const response = await fetch(`https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(id)}&model_name=${encodeURIComponent(model)}`, {
     headers: { Authorization: `Bearer ${token}` },
