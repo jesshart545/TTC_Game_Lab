@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AssetComposition, createProject, deleteProject, Project, ProjectAsset, replaceProjectAssets, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
-import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
+import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
+import { deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
 import AssetComposer from "../../../components/AssetComposer";
@@ -292,28 +292,34 @@ export default function ProjectWorkspace() {
 
   async function handleDeleteProject() {
     if (!project) return;
-    const confirmed = window.confirm(`Delete "${project.name}"? This will permanently remove the project and its saved assets from this browser.`);
+    const confirmed = window.confirm(`Delete "${project.name}"? This permanently removes the project and its stored assets.`);
     if (!confirmed) return;
-    try { await deleteProjectStoredAssets(project.id); } catch {}
-    deleteProject(project.id);
-    window.location.href = "/projects";
+    try {
+      await deleteProjectFromServer(project.id);
+      window.location.href = "/projects";
+    } catch (error) {
+      setAssetStatus(error instanceof Error ? error.message : "Project deletion failed.");
+    }
   }
 
   async function handleDeleteAsset(asset: ProjectAsset) {
     if (!project) return;
     const confirmed = window.confirm(`Delete "${asset.name}" from this project?`);
     if (!confirmed) return;
-    if (asset.storageKey) {
-      try { await deleteStoredAsset(asset.storageKey); } catch {}
-    }
     const current = project;
     const index = current.assets.findIndex(item =>
       asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
     );
     if (index < 0) return;
-    const nextAssets = current.assets.filter((_, i) => i !== index);
-    replaceProjectAssets(project.id, nextAssets);
-    setProject(await hydrateProjectAssets({ ...current, assets: nextAssets }));
+    const next = { ...current, assets: current.assets.filter((_, i) => i !== index), updatedAt: "just now" };
+    try {
+      await saveProjectToServer(next);
+      if (asset.storageKey) await deleteStoredAsset(asset.storageKey);
+      setProject(await hydrateProjectAssets(next));
+      setAssetStatus("Asset deleted.");
+    } catch (error) {
+      setAssetStatus(error instanceof Error ? error.message : "Asset deletion failed.");
+    }
   }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
