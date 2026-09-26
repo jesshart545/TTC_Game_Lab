@@ -17,14 +17,28 @@ function errorResponse(message: string, status = 502) {
 }
 
 export async function GET(request: Request) {
-  const token = process.env.AGNES_API_KEY;
-  if (!token) return errorResponse("AGNES_API_KEY is not configured in Vercel.", 503);
-
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
-  const model = url.searchParams.get("model") || "agnes-video-2.5-flash";
+  const model = url.searchParams.get("model") || "gen4.5";
+  const provider = url.searchParams.get("provider") || (model === "gen4.5" ? "runway" : "agnes");
   if (!id) return errorResponse("A video id is required.", 400);
 
+  if (provider === "runway") {
+    const token = process.env.RUNWAYML_API_SECRET;
+    if (!token) return errorResponse("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
+    const response = await fetch(`https://api.dev.runwayml.com/v1/tasks/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${token}`, "X-Runway-Version": "2024-11-06" }, cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return errorResponse(payload?.error?.message || payload?.message || "Unable to retrieve Runway video.", response.status);
+    if (String(payload?.status || "").toUpperCase() !== "SUCCEEDED") return errorResponse("Runway video is not finished yet.", 202);
+    const outputUrl = Array.isArray(payload?.output) ? payload.output[0] : payload?.output;
+    if (!outputUrl) return errorResponse("Runway finished but returned no video URL.", 502);
+    const media = await fetch(String(outputUrl), { cache: "no-store" });
+    if (!media.ok || !media.body) return errorResponse("Runway finished the video, but the file could not be retrieved.", 502);
+    return new Response(media.body, { status: 200, headers: { "Content-Type": media.headers.get("content-type") || "video/mp4", "Cache-Control": "no-store, max-age=0" } });
+  }
+
+  const token = process.env.AGNES_API_KEY;
+  if (!token) return errorResponse("AGNES_API_KEY is not configured in Vercel.", 503);
   for (let attempt = 0; attempt < 45; attempt += 1) {
     const response = await fetch(
       `https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(id)}&model_name=${encodeURIComponent(model)}`,
