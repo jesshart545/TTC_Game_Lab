@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AssetComposition, createProject, deleteProject, loadProjects, Project, ProjectAsset, replaceProjectAssets, saveProjects, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
+import { AssetComposition, createProject, deleteProject, Project, ProjectAsset, replaceProjectAssets, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
 import { deleteProjectStoredAssets, deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import MediaEditor from "../../../components/MediaEditor";
@@ -134,7 +134,7 @@ export default function ProjectWorkspace() {
       )
     };
     setTriviaConfig(nextConfig);
-    const latest = loadProjects().find(p => p.id === project.id) || project;
+    const latest = project;
     const trivia = (latest.gameTools || []).find(t => t.name === "Trivia Board");
     if (trivia) {
       persist({
@@ -183,7 +183,7 @@ export default function ProjectWorkspace() {
       const nextConfig = categoryName
         ? { ...current, categories: current.categories.map((c:any)=> data.categories?.[0]?.name===c.name ? data.categories[0] : c) }
         : { categories: data.categories || current.categories };
-      const latest = loadProjects().find(p=>p.id===project.id) || project;
+      const latest = project;
       const tools = latest.gameTools || [];
       const trivia = tools.find(t=>t.name==="Trivia Board");
       if(trivia) {
@@ -199,7 +199,7 @@ export default function ProjectWorkspace() {
 
   async function addGameTool(type: GameToolType) {
     if (!project || triviaBusy) return;
-    const latest = loadProjects().find(p=>p.id===project.id) || project;
+    const latest = project;
     const existing = latest.gameTools || [];
     if (existing.some(t=>t.type===type && t.enabled)) { setAssetStatus("That template is already being customized in this project."); return; }
     const info = [...BOARD_LIBRARY, ...TOOL_LIBRARY].find(t=>t.type===type)!;
@@ -226,7 +226,7 @@ export default function ProjectWorkspace() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trivia generation failed.");
       const nextConfig = { categories: Array.isArray(data.categories) ? data.categories : [] };
-      const current = loadProjects().find(p=>p.id===project.id) || next;
+      const current = project || next;
       persist({ ...current, gameTools:(current.gameTools || []).map(t=>t.id===tool.id ? { ...t, config:nextConfig } : t), updatedAt:"just now" });
       setTriviaConfig(nextConfig);
       setTriviaTopics(nextConfig.categories.map((category:any)=>String(category.name || "")));
@@ -288,7 +288,7 @@ export default function ProjectWorkspace() {
 
   function updateWheelField(field: "title" | "segments", value: string) { if (!project) return; const wheel = project.wheel || { enabled:true,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false,visible:false }; persist({ ...project, wheel: { ...wheel, [field]: field === "segments" ? value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,12) : value }, updatedAt:"just now" }); }
 
-  function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = loadProjects().find(p=>p.id===project.id) || project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); const channel = new BroadcastChannel(`ttc-project-${project.id}`); channel.postMessage({ type:"WHEEL_SPIN", at:Date.now() }); channel.close(); setTimeout(()=>{ const current=loadProjects().find(p=>p.id===project.id); if(current) persist({ ...current, wheel:{...current.wheel, spinning:false, visible:false}, updatedAt:"just now" }); }, 3200); }
+  function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); const channel = new BroadcastChannel(`ttc-project-${project.id}`); channel.postMessage({ type:"WHEEL_SPIN", at:Date.now() }); channel.close(); setTimeout(()=>{ const current=project; if(current) persist({ ...current, wheel:{...current.wheel, spinning:false, visible:false}, updatedAt:"just now" }); }, 3200); }
 
   function persist(next: Project) {
     const storedNext: Project = {
@@ -326,7 +326,7 @@ export default function ProjectWorkspace() {
     if (asset.storageKey) {
       try { await deleteStoredAsset(asset.storageKey); } catch {}
     }
-    const current = loadProjects().find(item => item.id === project.id) || project;
+    const current = project;
     const index = current.assets.findIndex(item =>
       asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
     );
@@ -344,7 +344,7 @@ export default function ProjectWorkspace() {
     try {
       const uploaded = await Promise.all(files.map(file => storeUploadedAsset(project.id, file)));
       const hydratedUploaded = await Promise.all(uploaded.map(asset => hydrateAsset(asset)));
-      const latest = loadProjects().find(p => p.id === project.id) || project;
+      const latest = project;
       persist({ ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" });
       setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} added` : `${uploaded.length} files added`);
     } catch (error) {
@@ -426,7 +426,7 @@ export default function ProjectWorkspace() {
       }
       if (!url) throw new Error(`${type} generation returned no asset output.`);
 
-      const latest = loadProjects().find(p => p.id === project.id) || project;
+      const latest = project;
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url };
 
@@ -492,7 +492,7 @@ export default function ProjectWorkspace() {
       recorder.stop(); const blob=await finished; stream.getTracks().forEach(track=>track.stop());
       const file=new File([blob],(nextAsset.name.replace(/\.[^.]+$/,"")||"trimmed-video")+"-trimmed.webm",{type:blob.type||"video/webm"});
       const stored=await storeUploadedAsset(project.id,file);
-      const latest=loadProjects().find(p=>p.id===project.id)||project;
+      const latest=project;
       persist({...latest,assets:[...latest.assets,{...stored,name:file.name,edits:undefined}],updatedAt:"just now"});
       setAssetStatus(file.name+" saved as a new permanent video asset.");
       return;
@@ -520,7 +520,7 @@ export default function ProjectWorkspace() {
     const blob = await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not render edited image.")),"image/png",.95));
     const file = new File([blob], (nextAsset.name.replace(/\.[^.]+$/,"") || "edited-image") + "-edited.png", { type:"image/png" });
     const stored = await storeUploadedAsset(project.id,file);
-    const latest = loadProjects().find(p=>p.id===project.id) || project;
+    const latest = project;
     persist({ ...latest, assets:[...latest.assets,{...stored,name:file.name}], updatedAt:"just now" });
     setAssetStatus(file.name + " saved as a new permanent asset.");
   }
@@ -545,7 +545,7 @@ export default function ProjectWorkspace() {
     const wheelRequest = /game wheel|spin(ning)? wheel|wheel.*overlay|custom(ize|izable).*wheel/i.test(text);
     const triviaRequest = /jeopardy|jeapordy|trivia board|trivia game|trivia categories/i.test(text);
     if (triviaRequest) {
-      const latest = loadProjects().find(p => p.id === project.id) || project;
+      const latest = project;
       const existing = latest.gameTools || [];
       const trivia = existing.find(t => t.name === "Trivia Board");
       const tool: GameTool = trivia || { id:`trivia-${Date.now()}`, type:"trivia-board", name:"Trivia Board", enabled:true, config:TRIVIA_CONFIG };
@@ -554,7 +554,7 @@ export default function ProjectWorkspace() {
       return;
     }
     if (wheelRequest) {
-      const latest = loadProjects().find(p => p.id === project.id) || project;
+      const latest = project;
       const wheel = latest.wheel || { enabled:false,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false,visible:false };
       const wheelProject: Project = { ...latest, updatedAt:"just now", wheel:{ ...wheel, enabled:true }, messages:[...latest.messages,{role:"user",text},{role:"assistant",text:"Added a customizable Game Wheel to the dashboard and live overlay. You can edit its title and segments in the dashboard, then spin it for viewers."}] };
       persist(wheelProject); setBuilding(false); return;
@@ -609,7 +609,7 @@ export default function ProjectWorkspace() {
   }
   function saveComposition(composition: AssetComposition) {
     if (!project) return;
-    const latest = loadProjects().find(p => p.id === project.id) || project;
+    const latest = project;
     persist({ ...latest, compositions: [...(latest.compositions || []).filter(c => c.id !== composition.id), composition], updatedAt: "just now" });
     setShowAssetComposer(false);
     setEditingComposition(undefined);
