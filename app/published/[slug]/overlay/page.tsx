@@ -26,7 +26,7 @@ export default function PublishedProject() {
       setProject(published || null);
       if (!published) return;
       void hydrateProjectAssets(published).then(value => { if (!cancelled) setProject(value); }).catch(() => {});
-      setTriviaTool((published.gameTools || []).find(tool => tool.type === "trivia-board" && tool.enabled) || null);
+      setTriviaTool((published.gameTools || []).find(tool => tool.type === "trivia-board" && tool.enabled && tool.inOverlayBuild) || null);
       let cursor = 0;
       let initialized = false;
       const poll = async () => {
