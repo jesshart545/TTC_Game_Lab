@@ -600,7 +600,6 @@ export default function ProjectWorkspace() {
       if (!saved.hostKey) throw new Error("The server did not return host access.");
       window.localStorage.setItem(`ttc-host-key-${next.id}`, saved.hostKey);
       setHostKey(saved.hostKey);
-      saveProjects(loadProjects().map(p => p.id === next.id ? next : p));
       setProject(next);
       setAssetStatus("Approved preview published to the host dashboard and audience overlay.");
     } catch (error) {
