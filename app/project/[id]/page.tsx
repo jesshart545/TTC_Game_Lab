@@ -410,12 +410,7 @@ export default function ProjectWorkspace() {
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url };
 
-      let asset: ProjectAsset = generatedAsset;
-      try {
-        asset = await storeGeneratedAsset(project.id, generatedAsset);
-      } catch {
-        // Keep the direct URL as a fallback if browser storage cannot cache the generated result.
-      }
+      const asset: ProjectAsset = await storeGeneratedAsset(project.id, generatedAsset);
 
       persist({
         ...latest,
