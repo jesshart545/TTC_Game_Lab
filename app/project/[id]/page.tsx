@@ -683,7 +683,7 @@ export default function ProjectWorkspace() {
                   <b>{tool.name}</b>
                   <em>{tool.type}</em>
                 </div>
-                <small>{tool.type==="trivia-board" ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small><button className="build-btn" disabled={tool.type==="trivia-board"?tool.inOverlayBuild:tool.inToolbox} onClick={()=>pushWorkspaceCreation(tool)}>{tool.type==="trivia-board"?(tool.inOverlayBuild?"✓ Added to Overlay Build":"Add to Overlay Build"):(tool.inToolbox?"✓ Added to Toolbox":"Add to Toolbox")}</button>
+                <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small><button className="build-btn" disabled={(tool.type==="trivia-board" || tool.type==="blank-board")?tool.inOverlayBuild:tool.inToolbox} onClick={()=>pushWorkspaceCreation(tool)}>{(tool.type==="trivia-board" || tool.type==="blank-board")?(tool.inOverlayBuild?"✓ Added to Overlay Build":"Add to Overlay Build"):(tool.inToolbox?"✓ Added to Toolbox":"Add to Toolbox")}</button>
               </div>
             ))}
           </div>
