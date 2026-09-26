@@ -70,27 +70,14 @@ async function uploadBlob(projectId: string, name: string, blob: Blob): Promise<
 }
 
 export async function storeUploadedAsset(projectId: string, file: File): Promise<ProjectAsset> {
-  try {
-    return await uploadBlob(projectId, file.name, file);
-  } catch {
-    const storageKey = makeStorageKey("upload");
-    await putStoredAsset({ id: storageKey, projectId, name: file.name, type: file.type || "application/octet-stream", blob: file });
-    return { name: file.name, type: file.type || "File", storageKey };
-  }
+  return uploadBlob(projectId, file.name, file);
 }
 
 export async function storeGeneratedAsset(projectId: string, asset: { name: string; type: string; url: string }): Promise<ProjectAsset> {
   const response = await fetch(asset.url);
   if (!response.ok) throw new Error("Unable to download generated asset.");
   const blob = await response.blob();
-  try {
-    return await uploadBlob(projectId, asset.name, blob);
-  } catch {
-    const storageKey = makeStorageKey("generated");
-    const type = blob.type || asset.type || "application/octet-stream";
-    await putStoredAsset({ id: storageKey, projectId, name: asset.name, type, blob });
-    return { name: asset.name, type, storageKey, url: asset.url };
-  }
+  return uploadBlob(projectId, asset.name, blob);
 }
 
 export async function hydrateAsset(asset: ProjectAsset): Promise<ProjectAsset> {
@@ -116,6 +103,11 @@ export async function hydrateProjectAssets(project: Project): Promise<Project> {
 
 
 export async function deleteStoredAsset(storageKey: string): Promise<void> {
+  if (storageKey.startsWith("projects/")) {
+    const response = await fetch(`/api/assets?key=${encodeURIComponent(storageKey)}`, { method: "DELETE" });
+    if (!response.ok) throw new Error("Unable to delete the stored asset.");
+    return;
+  }
   const db = await openAssetDb();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -123,11 +115,8 @@ export async function deleteStoredAsset(storageKey: string): Promise<void> {
       tx.objectStore(STORE_NAME).delete(storageKey);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error || new Error("Unable to delete the asset."));
-      tx.onabort = () => reject(tx.error || new Error("Unable to delete the asset."));
     });
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
 export async function deleteProjectStoredAssets(projectId: string): Promise<void> {
