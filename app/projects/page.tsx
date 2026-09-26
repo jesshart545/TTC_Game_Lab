@@ -1,14 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { loadProjects, deleteProject, deleteProjectFromServer, Project } from "../../lib/project";
+import { loadProjects, saveProjects, deleteProject, deleteProjectFromServer, Project } from "../../lib/project";
 import { deleteProjectStoredAssets } from "../../lib/asset-store";
 import { useEffect, useState } from "react";
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
 
-  useEffect(() => setProjects(loadProjects()), []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const local = loadProjects();
+      try {
+        const response = await fetch("/api/projects", { cache: "no-store" });
+        const data = await response.json();
+        const serverProjects: Project[] = response.ok && Array.isArray(data.projects)
+          ? data.projects.map((row: any) => row.data as Project).filter(Boolean)
+          : [];
+        if (cancelled) return;
+        if (serverProjects.length) {
+          const serverIds = new Set(serverProjects.map(project => project.id));
+          const merged = [...serverProjects, ...local.filter(project => !serverIds.has(project.id))];
+          saveProjects(merged);
+          setProjects(merged);
+        } else {
+          setProjects(local);
+        }
+      } catch {
+        if (!cancelled) setProjects(local);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleDelete(project: Project) {
     const confirmed = window.confirm(`Delete "${project.name}"? This will remove the project and its saved assets from this browser.`);
