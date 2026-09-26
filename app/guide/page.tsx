@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadProjects } from "../../lib/project";
+import type { Project } from "../../lib/project";
 import "./guide.css";
 import { demoChapters } from "./demo";
 
@@ -62,12 +62,18 @@ export default function GuidePage() {
   }, []);
   useEffect(() => {
     setSpeechAvailable("speechSynthesis" in window);
-    const projects = loadProjects();
-    const editable = projects.find(p => !["haunted-gaming", "space-battle", "christmas-giveaway"].includes(p.id)) || projects[0];
-    if (editable) setProjectPath(`/project/${editable.id}`);
-    const published = projects.find(p => p.publishedSnapshot);
-    if (published) setPublishedPath(`/published/${published.slug}`);
-    return stop;
+    let cancelled = false;
+    void fetch("/api/projects", { cache: "no-store" }).then(async response => {
+      if (!response.ok) return;
+      const data = await response.json();
+      const projects: Project[] = Array.isArray(data.projects) ? data.projects.map((row: any) => row.data as Project).filter(Boolean) : [];
+      if (cancelled) return;
+      const editable = projects[0];
+      if (editable) setProjectPath(`/project/${editable.id}`);
+      const published = projects.find(p => p.publishedSnapshot || p.status === "Published");
+      if (published) setPublishedPath(`/published/${published.slug}`);
+    }).catch(() => {});
+    return () => { cancelled = true; stop(); };
   }, [stop]);
   useEffect(() => {
     if (!screenRef.current) return;
