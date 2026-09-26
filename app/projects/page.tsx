@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { loadProjects, saveProjects, deleteProject, deleteProjectFromServer, Project } from "../../lib/project";
+import { loadProjects, deleteProject, deleteProjectFromServer, Project } from "../../lib/project";
 import { deleteProjectStoredAssets } from "../../lib/asset-store";
 import { useEffect, useState } from "react";
 
@@ -19,14 +19,9 @@ export default function ProjectsPage() {
           ? data.projects.map((row: any) => row.data as Project).filter(Boolean)
           : [];
         if (cancelled) return;
-        if (serverProjects.length) {
-          const serverIds = new Set(serverProjects.map(project => project.id));
-          const merged = [...serverProjects, ...local.filter(project => !serverIds.has(project.id))];
-          saveProjects(merged);
-          setProjects(merged);
-        } else {
-          setProjects(local);
-        }
+        // Neon is the source of truth. Browser data is only an offline fallback,
+        // never merged back into the authoritative project library.
+        setProjects(serverProjects);
       } catch {
         if (!cancelled) setProjects(local);
       }
