@@ -130,10 +130,7 @@ export default function NewProject() {
 
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url };
-      let asset: ProjectAsset = generatedAsset;
-      try {
-        asset = await storeGeneratedAsset(ensureDraftProject().id, generatedAsset);
-      } catch {}
+      const asset: ProjectAsset = await storeGeneratedAsset(ensureDraftProject().id, generatedAsset);
       setAssets(current => [...current, asset]);
       setAssetStatus(`${name} generated`);
     } catch (error) {
