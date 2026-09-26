@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { deleteProjectFromServer, Project } from "../../lib/project";
-import { deleteProjectStoredAssets } from "../../lib/asset-store";
 import { useEffect, useState } from "react";
 
 export default function ProjectsPage() {
@@ -32,7 +31,6 @@ export default function ProjectsPage() {
     if (!confirmed) return;
     try {
       await deleteProjectFromServer(project.id);
-      await deleteProjectStoredAssets(project.id).catch(() => {});
       setProjects(current => current.filter(item => item.id !== project.id));
     } catch (error) {
       console.error("Project deletion failed:", error);
