@@ -20,9 +20,8 @@ export default function PublishedDashboard() {
     }
     setHostKey(window.localStorage.getItem(`ttc-live-host-${slug}`) || "");
     (async () => {
-      const local =().find(p => p.slug === slug);
-      let draft = local;
-      try { draft = (await loadProjectFromServer(slug)) || local; } catch {}
+      let draft: Project | null = null;
+      try { draft = await loadProjectFromServer(slug); } catch {}
       if (!cancelled) setProject(draft?.publishedSnapshot || (draft?.status === "Published" ? draft : null) || null);
     })();
     return () => { cancelled = true; };
