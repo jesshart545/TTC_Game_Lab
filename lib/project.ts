@@ -72,19 +72,11 @@ export const demoProjects: Project[] = [
 const KEY = "ttc-gamelab-projects-v1";
 
 export function loadProjects(): Project[] {
-  if (typeof window === "undefined") return demoProjects;
-  try {
-    const saved = window.localStorage.getItem(KEY);
-    if (!saved) {
-      window.localStorage.setItem(KEY, JSON.stringify(demoProjects));
-      return demoProjects;
-    }
-    return JSON.parse(saved) as Project[];
-  } catch { return demoProjects; }
+  return [];
 }
 
-export function saveProjects(projects: Project[]) {
-  if (typeof window !== "undefined") window.localStorage.setItem(KEY, JSON.stringify(projects));
+export function saveProjects(_projects: Project[]) {
+  // Project persistence is server-authoritative. Kept only for legacy callers during migration.
 }
 
 export function deleteProject(projectId: string): boolean {
