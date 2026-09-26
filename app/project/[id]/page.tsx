@@ -79,9 +79,8 @@ export default function ProjectWorkspace() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const all = loadProjects();
-      let found = all.find(p => p.id === params.id) || all[0];
-      try { found = (await loadProjectFromServer(params.id)) || found; } catch {}
+      let found: Project | null = null;
+      try { found = await loadProjectFromServer(params.id); } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Could not load project."); }
       if (!found) return;
       let hydrated = found;
       try {
@@ -296,10 +295,8 @@ export default function ProjectWorkspace() {
       ...next,
       assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset),
     };
-    const all = loadProjects();
-    saveProjects(all.some(p => p.id === storedNext.id) ? all.map(p => p.id === storedNext.id ? storedNext : p) : [storedNext, ...all]);
     setProject(next);
-    void saveProjectToServer(storedNext).catch(() => {});
+    void saveProjectToServer(storedNext).catch(error => setAssetStatus(error instanceof Error ? error.message : "Project save failed."));
   }
 
   function saveProjectTitle(event: FormEvent<HTMLFormElement>) {
@@ -660,7 +657,7 @@ export default function ProjectWorkspace() {
     const control = project.controls.find(c => c.id === drag.id);
     if (control) updateControl(control.id, { overlayResult: { ...(control.overlayResult || defaultOverlayResult), x: Math.max(0, Math.min(95, drag.x)), y: Math.max(0, Math.min(95, drag.y)), width: Math.min(100, drag.width), height: Math.min(100, drag.height) } });
   }
-  function beginBlank() { const p = createProject("Create a new interactive TikTok LIVE experience"); saveProjects([p, ...loadProjects().filter(x => x.id !== p.id)]); window.location.href = `/project/${p.id}`; }
+  async function beginBlank() { const p = createProject("Create a new interactive TikTok LIVE experience"); try { await saveProjectToServer(p); window.location.href = `/project/${p.id}`; } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Project could not be created."); } }
 
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   return <main className="workspace-page">
