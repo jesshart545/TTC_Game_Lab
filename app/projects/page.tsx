@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { loadProjects, deleteProject, deleteProjectFromServer, Project } from "../../lib/project";
+import { deleteProjectFromServer, Project } from "../../lib/project";
 import { deleteProjectStoredAssets } from "../../lib/asset-store";
 import { useEffect, useState } from "react";
 
@@ -11,40 +11,33 @@ export default function ProjectsPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const local = loadProjects();
       try {
         const response = await fetch("/api/projects", { cache: "no-store" });
+        if (!response.ok) throw new Error("Could not load projects.");
         const data = await response.json();
-        const serverProjects: Project[] = response.ok && Array.isArray(data.projects)
+        const serverProjects: Project[] = Array.isArray(data.projects)
           ? data.projects.map((row: any) => row.data as Project).filter(Boolean)
           : [];
-        if (cancelled) return;
-        // Neon is the source of truth. Browser data is only an offline fallback,
-        // never merged back into the authoritative project library.
-        setProjects(serverProjects);
-      } catch {
-        if (!cancelled) setProjects(local);
+        if (!cancelled) setProjects(serverProjects);
+      } catch (error) {
+        console.error("Project library load failed:", error);
+        if (!cancelled) setProjects([]);
       }
     })();
     return () => { cancelled = true; };
   }, []);
 
   async function handleDelete(project: Project) {
-    const confirmed = window.confirm(`Delete "${project.name}"? This will remove the project and its saved assets from this browser.`);
+    const confirmed = window.confirm(`Delete "${project.name}"? This permanently removes the saved project and its stored assets.`);
     if (!confirmed) return;
     try {
-      await deleteProjectStoredAssets(project.id);
-    } catch {
-      // Continue removing the project record even if a browser-storage cleanup fails.
-    }
-    try {
       await deleteProjectFromServer(project.id);
+      await deleteProjectStoredAssets(project.id).catch(() => {});
+      setProjects(current => current.filter(item => item.id !== project.id));
     } catch (error) {
-      // A seeded/demo project may not have a Neon row. Still allow its local copy to be removed.
-      console.warn("Server project cleanup was unavailable:", error);
+      console.error("Project deletion failed:", error);
+      window.alert("The project could not be deleted. Nothing was removed from the project library.");
     }
-    deleteProject(project.id);
-    setProjects(current => current.filter(item => item.id !== project.id));
   }
 
   return (
