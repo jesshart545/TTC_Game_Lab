@@ -29,7 +29,8 @@ export async function POST(request: Request) {
     if (response.ok) break;
     const providerMessage = String(payload?.error?.message || payload?.message || "");
     const unavailableModel = /no available channel|model.*not.*available|unsupported model/i.test(providerMessage);
-    if (!unavailableModel) break;
+    const retryable = unavailableModel || response.status === 429 || response.status >= 500;
+    if (!retryable) break;
   }
 
   if (!response?.ok) {
@@ -38,8 +39,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       configured: true,
       error: unavailableModel
-        ? `The configured Agnes model (${lastModel}) is unavailable. Update AGNES_MODEL in Vercel to an Agnes model enabled for this API key.`
-        : providerMessage,
+        ? `The configured Agnes model (${lastModel}) is unavailable.`
+        : `Creative Director request failed: ${providerMessage}`,
       details: payload,
     }, { status: response?.status || 502 });
   }
