@@ -57,7 +57,7 @@ export default function PublishedProject() {
             }
             const control = published.controls.find(item => item.id === event.controlId);
             if (!control) continue;
-            const tools = (control.toolIds || []).map(id => (published.gameTools || []).find(tool => tool.id === id && tool.inToolbox)).filter(Boolean);
+            const tools = (control.toolIds || []).flatMap(id => { const tool = (published.gameTools || []).find(item => item.id === id && item.inToolbox); return tool ? [tool] : []; });
             if (tools.length) {
               setActiveTools(tools);
               for (const tool of tools) {
