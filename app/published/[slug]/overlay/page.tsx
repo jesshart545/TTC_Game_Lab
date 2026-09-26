@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { hydrateProjectAssets } from "../../../../lib/asset-store";
 import CompositionPlayer from "../../../../components/CompositionPlayer";
-import { loadProjectFromServer, loadProjects, Project, ProjectAsset, ProjectEvent } from "../../../../lib/project";
+import { loadProjectFromServer, Project, ProjectAsset, ProjectEvent } from "../../../../lib/project";
 
 function assetEditStyle(asset: ProjectAsset) {
   const e=asset.edits||{};
@@ -19,7 +19,7 @@ export default function PublishedProject() {
     let cancelled = false;
     let timer: number | undefined;
     (async () => {
-      let draft = loadProjects().find(x => x.slug === slug);
+      let draft =().find(x => x.slug === slug);
       try { draft = (await loadProjectFromServer(slug)) || draft; } catch {}
       const published = draft?.publishedSnapshot || (draft?.status === "Published" ? draft : null);
       if (cancelled) return;
