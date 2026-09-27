@@ -77,7 +77,8 @@ export default function ProjectWorkspace() {
   const [selectedControlId, setSelectedControlId] = useState<string | null>(null);
   const [previewAction, setPreviewAction] = useState<{ composition: AssetComposition; control: Project["controls"][number]; at: number } | null>(null);
   const [dragPlacement, setDragPlacement] = useState<{ id: string; x: number; y: number; width: number; height: number } | null>(null);
-  const placementPointer = useRef<{ id: string; clientX: number; clientY: number; x: number; y: number; width: number; height: number; resize: boolean; stageWidth: number; stageHeight: number } | null>(null);\n  const saveQueue = useRef(Promise.resolve());
+  const placementPointer = useRef<{ id: string; clientX: number; clientY: number; x: number; y: number; width: number; height: number; resize: boolean; stageWidth: number; stageHeight: number } | null>(null);
+  const saveQueue = useRef(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
