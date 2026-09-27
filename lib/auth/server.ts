@@ -22,6 +22,9 @@ export async function requireCreator() {
   return { id: String(user.id), email: String(user.email || ""), role: String(user.role || "user") };
 }
 
-export function isAdmin(user: { role?: string } | null) {
-  return user?.role === "admin";
+export function isAdmin(user: { role?: string; email?: string } | null) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const admins = (process.env.TTC_ADMIN_EMAILS || "").split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
+  return !!user.email && admins.includes(user.email.toLowerCase());
 }
