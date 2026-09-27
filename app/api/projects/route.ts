@@ -46,7 +46,9 @@ export async function POST(request: Request) {
   } else {
     await db`INSERT INTO projects (id, slug, name, description, status, theme, prompt, data, owner_id, updated_at) VALUES (${id}, ${slug}, ${name}, ${description}, ${status}, ${theme}, ${prompt}, ${data}::jsonb, ${user.id}, NOW())`;
   }
-  await db`CREATE TABLE IF NOT EXISTS project_asset_owners (project_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL)`;\n  if (!existing.length) await db`INSERT INTO project_asset_owners (project_id, owner_id) VALUES (${id}, ${user.id}) ON CONFLICT (project_id) DO NOTHING`;\n  if (incoming.publish === true && body.publishedSnapshot) {
+  await db`CREATE TABLE IF NOT EXISTS project_asset_owners (project_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL)`;
+  if (!existing.length) await db`INSERT INTO project_asset_owners (project_id, owner_id) VALUES (${id}, ${user.id}) ON CONFLICT (project_id) DO NOTHING`;
+  if (incoming.publish === true && body.publishedSnapshot) {
     await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
     const existingHost = await db`SELECT token_hash FROM live_hosts WHERE project_id = ${id}`;
     const suppliedKey = typeof incoming.hostKey === "string" && /^[a-f0-9]{64}$/.test(incoming.hostKey) ? incoming.hostKey : "";
