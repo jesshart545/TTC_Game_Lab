@@ -77,7 +77,7 @@ export default function ProjectWorkspace() {
   const [selectedControlId, setSelectedControlId] = useState<string | null>(null);
   const [previewAction, setPreviewAction] = useState<{ composition: AssetComposition; control: Project["controls"][number]; at: number } | null>(null);
   const [dragPlacement, setDragPlacement] = useState<{ id: string; x: number; y: number; width: number; height: number } | null>(null);
-  const placementPointer = useRef<{ id: string; clientX: number; clientY: number; x: number; y: number; width: number; height: number; resize: boolean; stageWidth: number; stageHeight: number } | null>(null);
+  const placementPointer = useRef<{ id: string; clientX: number; clientY: number; x: number; y: number; width: number; height: number; resize: boolean; stageWidth: number; stageHeight: number } | null>(null);\n  const saveQueue = useRef(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
@@ -286,7 +286,7 @@ export default function ProjectWorkspace() {
       assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset),
     };
     setProject(next);
-    void saveProjectToServer(storedNext).catch(error => setAssetStatus(error instanceof Error ? error.message : "Project save failed."));
+    saveQueue.current = saveQueue.current.then(() => saveProjectToServer(storedNext)).then(() => undefined).catch(error => { setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
   }
 
   function saveProjectTitle(event: FormEvent<HTMLFormElement>) {
@@ -341,8 +341,10 @@ export default function ProjectWorkspace() {
       const uploaded = await Promise.all(files.map(file => storeUploadedAsset(project.id, file)));
       const hydratedUploaded = await Promise.all(uploaded.map(asset => hydrateAsset(asset)));
       const latest = project;
-      persist({ ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" });
-      setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} added` : `${uploaded.length} files added`);
+      const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" };
+      setProject(savedProject);
+      await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
+      setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} uploaded and saved` : `${uploaded.length} files uploaded and saved`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "The file could not be added.");
     } finally {
