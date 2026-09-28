@@ -7,17 +7,10 @@ CREATE TABLE IF NOT EXISTS projects (
   theme TEXT NOT NULL DEFAULT 'cyan',
   prompt TEXT NOT NULL DEFAULT '',
   data JSONB NOT NULL DEFAULT '{}'::jsonb,
-  owner_id TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS projects_updated_at_idx ON projects (updated_at DESC);
-CREATE INDEX IF NOT EXISTS projects_owner_updated_idx ON projects (owner_id, updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS project_asset_owners (
-  project_id TEXT PRIMARY KEY,
-  owner_id TEXT NOT NULL
-);
 
 CREATE TABLE IF NOT EXISTS live_hosts (
   project_id TEXT PRIMARY KEY,
