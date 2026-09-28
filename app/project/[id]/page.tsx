@@ -446,14 +446,22 @@ export default function ProjectWorkspace() {
     if (!asset || !isImage(asset)) return;
     const blankBoard = (project.gameTools || []).find(tool => tool.type === "blank-board" && tool.enabled);
     if (!blankBoard) { setAssetStatus("Add a Blank Board first, then choose its background image."); return; }
-    const nextAssets = project.assets.map((item, i) => {
-      if (i === index) return { ...item, inProject: true, role: "background" as const };
-      return item.role === "background" ? { ...item, role: "layer" as const } : item;
-    });
+    const assetKey = asset.storageKey || asset.name;
+    const nextAssets = project.assets.map((item, i) => i === index ? { ...item, inProject: true, role: "background" as const } : item);
+    const currentKeys = Array.isArray(blankBoard.config?.backgroundAssetKeys) ? blankBoard.config.backgroundAssetKeys.map(String) : [];
+    const backgroundAssetKeys = Array.from(new Set([...currentKeys, assetKey]));
     const nextTools = (project.gameTools || []).map(tool => tool.id === blankBoard.id
-      ? { ...tool, config: { ...(tool.config || {}), backgroundAssetKey: asset.storageKey || asset.name } }
+      ? { ...tool, config: { ...(tool.config || {}), backgroundAssetKey: assetKey, backgroundAssetKeys } }
       : tool);
-    persist({ ...project, assets: nextAssets, gameTools: nextTools, updatedAt: "just now" });
+    const existingBackgroundControl = project.controls.find(control => control.action === `background.show.${assetKey}`);
+    const nextControls = existingBackgroundControl ? project.controls : [...project.controls, {
+      id: crypto.randomUUID(),
+      label: `BACKGROUND ${backgroundAssetKeys.length}`,
+      action: `background.show.${assetKey}`,
+      detail: `Switch overlay background to ${asset.name}`,
+      overlayResult: { ...defaultOverlayResult }
+    }];
+    persist({ ...project, assets: nextAssets, gameTools: nextTools, controls: nextControls, updatedAt: "just now" });
     setPreviewMode("overlay");
     setAssetStatus(`${asset.name} is now the Blank Board background.`);
   }
