@@ -454,13 +454,19 @@ export default function ProjectWorkspace() {
       ? { ...tool, config: { ...(tool.config || {}), backgroundAssetKey: assetKey, backgroundAssetKeys } }
       : tool);
     const existingBackgroundControl = project.controls.find(control => control.action === `background.show.${assetKey}`);
-    const nextControls = existingBackgroundControl ? project.controls : [...project.controls, {
-      id: crypto.randomUUID(),
-      label: `BACKGROUND ${backgroundAssetKeys.length}`,
-      action: `background.show.${assetKey}`,
-      detail: `Switch overlay background to ${asset.name}`,
-      overlayResult: { ...defaultOverlayResult }
-    }];
+    let nextControls = project.controls;
+    if (!existingBackgroundControl) {
+      const suggested = asset.name.replace(/\\.[^.]+$/, "").trim() || `Background ${backgroundAssetKeys.length}`;
+      const label = window.prompt("Name this host dashboard button", suggested)?.trim();
+      if (!label) { setAssetStatus("Background was not added because the dashboard button needs a name."); return; }
+      nextControls = [...project.controls, {
+        id: crypto.randomUUID(),
+        label,
+        action: `background.show.${assetKey}`,
+        detail: `Switch overlay background to ${asset.name}`,
+        overlayResult: { ...defaultOverlayResult }
+      }];
+    }
     persist({ ...project, assets: nextAssets, gameTools: nextTools, controls: nextControls, updatedAt: "just now" });
     setPreviewMode("overlay");
     setAssetStatus(`${asset.name} is now the Blank Board background.`);
