@@ -440,6 +440,24 @@ export default function ProjectWorkspace() {
     setAssetStatus(adding ? asset.name + " added to the live project." : asset.name + " removed from the live project.");
   }
 
+  function useImageAsBlankBoardBackground(index: number) {
+    if (!project) return;
+    const asset = project.assets[index];
+    if (!asset || !isImage(asset)) return;
+    const blankBoard = (project.gameTools || []).find(tool => tool.type === "blank-board" && tool.enabled);
+    if (!blankBoard) { setAssetStatus("Add a Blank Board first, then choose its background image."); return; }
+    const nextAssets = project.assets.map((item, i) => {
+      if (i === index) return { ...item, inProject: true, role: "background" as const };
+      return item.role === "background" ? { ...item, role: "layer" as const } : item;
+    });
+    const nextTools = (project.gameTools || []).map(tool => tool.id === blankBoard.id
+      ? { ...tool, config: { ...(tool.config || {}), backgroundAssetKey: asset.storageKey || asset.name } }
+      : tool);
+    persist({ ...project, assets: nextAssets, gameTools: nextTools, updatedAt: "just now" });
+    setPreviewMode("overlay");
+    setAssetStatus(`${asset.name} is now the Blank Board background.`);
+  }
+
   function saveAssetEdits(index: number, nextAsset: ProjectAsset) {
     if (!project) return;
     const nextAssets = project.assets.map((asset, assetIndex) => assetIndex === index ? nextAsset : asset);
@@ -752,7 +770,7 @@ export default function ProjectWorkspace() {
                 <button type="button" className="danger-btn asset-delete-btn" onClick={() => handleDeleteAsset(a)}>Delete</button>
               </div>
               {renderAsset(a, index)}
-              <button type="button" className={a.inProject ? "outline-btn asset-project-btn active" : "outline-btn asset-project-btn"} onClick={() => toggleAssetInProject(index)}>{a.inProject ? "✓ Added to Project" : "+ Add to Project"}</button>
+              <button type="button" className={a.inProject ? "outline-btn asset-project-btn active" : "outline-btn asset-project-btn"} onClick={() => toggleAssetInProject(index)}>{a.inProject ? "✓ Added to Project" : "+ Add to Project"}</button>{isImage(a) && (project.gameTools || []).some(tool => tool.type === "blank-board" && tool.enabled) && <button type="button" className="outline-btn asset-project-btn" onClick={() => useImageAsBlankBoardBackground(index)}>▣ Use as Board Background</button>}
             </div>
           ))}
           {project.assets.length === 0 && (
