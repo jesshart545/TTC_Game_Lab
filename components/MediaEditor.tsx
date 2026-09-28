@@ -18,23 +18,23 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
 
-  async function editImage() {
+  async function editMedia() {
     if (!asset.url || !prompt.trim() || working) return;
     setWorking(true);
     setError("");
     try {
-      const response = await fetch("/api/edit-image", {
+      const response = await fetch(video ? "/api/edit-video" : "/api/edit-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), imageUrl: asset.url }),
+        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: prompt.trim(), imageUrl: asset.url }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
       if (!data.url) throw new Error("The image editor returned no image.");
       const next: ProjectAsset = {
         ...asset,
-        name: (asset.name.replace(/\.[^.]+$/, "") || "image") + "-edited.png",
-        type: "image/png",
+        name: (asset.name.replace(/\.[^.]+$/, "") || (video ? "video" : "image")) + (video ? "-edited.mp4" : "-edited.png"),
+        type: video ? "video/mp4" : "image/png",
         url: data.url,
         storageKey: undefined,
         edits: undefined,
@@ -66,13 +66,12 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
           <div>
             <input autoFocus value={prompt} onChange={e=>setPrompt(e.target.value)}
               placeholder={video ? "Example: cut off the first 3 seconds" : "Example: make it darker, remove the text, and add pink neon around the edges"}
-              onKeyDown={e=>{ if(e.key==="Enter" && !video) void editImage(); }} />
-            <button type="button" disabled={!prompt.trim() || working || video} onClick={()=>void editImage()}>
+              onKeyDown={e=>{ if(e.key==="Enter") void editMedia(); }} />
+            <button type="button" disabled={!prompt.trim() || working} onClick={()=>void editMedia()}>
               {working ? "Making your edit…" : "Make this change"}
             </button>
           </div>
-          {!video && <small>Describe the change naturally. The edited result is saved as a new asset so your original stays safe.</small>}
-          {video && <small>Conversational video editing is being connected next. No manual sliders or technical trim controls are shown.</small>}
+          <small>Describe the change naturally. The edited result is saved as a new asset so your original stays safe.</small>
           {error && <small className="media-editor-error">{error}</small>}
         </div>
       </div>
