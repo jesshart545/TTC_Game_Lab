@@ -10,7 +10,6 @@ export const auth = createNeonAuth({
   cookies: {
     secret: cookieSecret,
     sessionDataTtl: 300,
-    domain: process.env.NODE_ENV === "production" ? ".ttcgamelab.com" : undefined,
   },
 });
 
