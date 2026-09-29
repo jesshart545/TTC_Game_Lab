@@ -12,18 +12,20 @@ function extractJson(text: string) {
   return JSON.parse(raw.slice(a,b+1));
 }
 async function sourcesFor(category:string) {
-  const searchUrl="https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch="+encodeURIComponent(category)+"&srlimit=8&format=json&origin=*";
-  const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"TTCGameLab/1.0 trivia sourcing"}}).catch(()=>null);
-  if(!search?.ok) return [];
-  const payload=await search.json().catch(()=>({})); const hits=Array.isArray(payload?.query?.search)?payload.query.search:[];
-  const out:any[]=[];
-  for(const hit of hits.slice(0,6)){
-    const title=String(hit.title||"").trim(); if(!title) continue;
-    const pageUrl="https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exintro=0&redirects=1&titles="+encodeURIComponent(title)+"&format=json&origin=*";
-    const page=await fetch(pageUrl,{cache:"no-store",headers:{"User-Agent":"TTCGameLab/1.0 trivia sourcing"}}).catch(()=>null); if(!page?.ok) continue;
-    const data=await page.json().catch(()=>({})); const pages=data?.query?.pages||{}; const record=Object.values(pages)[0] as any;
-    const text=String(record?.extract||"").replace(/\s+/g," ").trim().slice(0,14000); if(text.length<300) continue;
-    out.push({source:"Wikipedia — "+title,sourceUrl:"https://en.wikipedia.org/wiki/"+encodeURIComponent(title.replace(/ /g,"_")),text}); if(out.length>=5) break;
+  const trustedDomains=["si.edu","loc.gov","archives.gov","nasa.gov","nih.gov","noaa.gov","usgs.gov","nps.gov","britannica.com","history.com","grammy.com","oscars.org","olympics.com","nintendo.com","playstation.com","xbox.com"];
+  const out:any[]=[]; const seen=new Set<string>();
+  for(const domain of trustedDomains){
+    const searchUrl="https://www.google.com/search?q="+encodeURIComponent("site:"+domain+" "+category)+"&num=5";
+    const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"}}).catch(()=>null);
+    if(!search?.ok) continue; const html=await search.text();
+    const urls=[...html.matchAll(/https?:\\/\\/[^"'&<> ]+/g)].map(m=>m[0].replace(/\\u003d/g,"=").replace(/\\u0026/g,"&"));
+    for(const raw of urls){
+      let url=raw; try { const parsed=new URL(url); if(!parsed.hostname.endsWith(domain)||seen.has(url)) continue; } catch { continue; }
+      seen.add(url); const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"},signal:AbortSignal.timeout(8000)}).catch(()=>null);
+      if(!page?.ok || !(page.headers.get("content-type")||"").includes("text/html")) continue;
+      const text=cleanHtml(await page.text()).slice(0,14000); if(text.length<400) continue;
+      out.push({source:new URL(url).hostname.replace(/^www\\./,""),sourceUrl:url,text}); if(out.length>=5) return out;
+    }
   }
   return out;
 }
