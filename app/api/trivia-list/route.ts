@@ -29,18 +29,20 @@ function domainsFor(category:string){
 }
 async function sourcesFor(category:string) {
   const allowed=domainsFor(category); const out:any[]=[]; const seen=new Set<string>();
-  for(const domain of allowed){
-    const searchUrl="https://www.bing.com/search?format=rss&q="+encodeURIComponent("site:"+domain+" "+category);
-    const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"TTCGameLab/1.0"}}).catch(()=>null);
-    if(!search?.ok) continue; const xml=await search.text();
-    const links=Array.from(xml.matchAll(/<link>(https?:[^<]+)<\/link>/gi)).map(m=>m[1].replace(/&amp;/g,"&"));
-    for(const url of links){
-      try { const host=new URL(url).hostname.replace(/^www\./,""); if(!(host===domain||host.endsWith("."+domain))||seen.has(url)) continue; } catch { continue; }
-      seen.add(url);
-      const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"},signal:AbortSignal.timeout(10000)}).catch(()=>null);
-      if(!page?.ok) continue; const type=page.headers.get("content-type")||""; if(!type.includes("text/html")) continue;
-      const text=cleanHtml(await page.text()).slice(0,18000); if(text.length<500) continue;
-      out.push({source:new URL(url).hostname.replace(/^www\./,""),sourceUrl:url,text}); if(out.length>=5) return out;
+  const queries=allowed.slice(0,8).map(domain=>({domain,url:"https://www.google.com/search?q="+encodeURIComponent("site:"+domain+" "+category)+"&num=10"}));
+  for(const q of queries){
+    const search=await fetch(q.url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0","Accept-Language":"en-US,en;q=0.9"}}).catch(()=>null);
+    if(!search?.ok) continue; const html=await search.text();
+    const urls=new Set<string>();
+    for(const m of html.matchAll(/\/url\?q=([^&"]+)/g)){ try{urls.add(decodeURIComponent(m[1]));}catch{} }
+    for(const m of html.matchAll(/https?:\/\/[^"'<>\\s&]+/g)){ urls.add(m[0].replace(/\\u003d/g,"=").replace(/\\u0026/g,"&")); }
+    for(const url of urls){
+      let host=""; try{host=new URL(url).hostname.replace(/^www\./,"");}catch{continue;}
+      if(!(host===q.domain||host.endsWith("."+q.domain))||seen.has(url)) continue; seen.add(url);
+      const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0","Accept-Language":"en-US,en;q=0.9"},signal:AbortSignal.timeout(10000)}).catch(()=>null);
+      if(!page?.ok) continue; const htmlPage=await page.text(); const text=cleanHtml(htmlPage).slice(0,18000); if(text.length<400) continue;
+      const title=(htmlPage.match(/<title[^>]*>([\\s\\S]*?)<\/title>/i)?.[1]||"").replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").trim();
+      out.push({source:title?host+" — "+title:host,sourceUrl:url,text}); if(out.length>=5) return out;
     }
   }
   return out;
