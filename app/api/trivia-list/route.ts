@@ -28,22 +28,25 @@ function domainsFor(category:string){
   return [...new Set([...matched,...FALLBACK_DOMAINS])].slice(0,12);
 }
 async function sourcesFor(category:string) {
-  const allowed=domainsFor(category); const out:any[]=[]; const seen=new Set<string>();
-  const queries=allowed.slice(0,8).map(domain=>({domain,url:"https://www.google.com/search?q="+encodeURIComponent("site:"+domain+" "+category)+"&num=10"}));
-  for(const q of queries){
-    const search=await fetch(q.url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0","Accept-Language":"en-US,en;q=0.9"}}).catch(()=>null);
-    if(!search?.ok) continue; const html=await search.text();
-    const urls=new Set<string>();
-    for(const m of html.matchAll(/\/url\?q=([^&"]+)/g)){ try{urls.add(decodeURIComponent(m[1]));}catch{} }
-    for(const m of html.matchAll(/https?:\/\/[^"'<>\\s&]+/g)){ urls.add(m[0].replace(/\\u003d/g,"=").replace(/\\u0026/g,"&")); }
-    for(const url of urls){
-      let host=""; try{host=new URL(url).hostname.replace(/^www\./,"");}catch{continue;}
-      if(!(host===q.domain||host.endsWith("."+q.domain))||seen.has(url)) continue; seen.add(url);
-      const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0","Accept-Language":"en-US,en;q=0.9"},signal:AbortSignal.timeout(10000)}).catch(()=>null);
-      if(!page?.ok) continue; const htmlPage=await page.text(); const text=cleanHtml(htmlPage).slice(0,18000); if(text.length<400) continue;
-      const title=(htmlPage.match(/<title[^>]*>([\\s\\S]*?)<\/title>/i)?.[1]||"").replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").trim();
-      out.push({source:title?host+" — "+title:host,sourceUrl:url,text}); if(out.length>=5) return out;
-    }
+  const out:any[]=[]; const seen=new Set<string>();
+  const searchUrl="https://www.google.com/search?q="+encodeURIComponent(category+" facts trivia")+"&num=20&filter=0";
+  const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36","Accept-Language":"en-US,en;q=0.9"}}).catch(()=>null);
+  if(!search?.ok) return out;
+  const html=await search.text();
+  const candidates:string[]=[];
+  for(const m of html.matchAll(/href="\/url\?q=([^&"]+)/g)){try{candidates.push(decodeURIComponent(m[1]));}catch{}}
+  for(const m of html.matchAll(/href="(https?:\/\/[^"]+)"/g)){candidates.push(m[1].replace(/&amp;/g,"&"))}
+  for(const url of candidates){
+    if(seen.has(url)) continue; seen.add(url);
+    let u:URL; try{u=new URL(url)}catch{continue}
+    const host=u.hostname.replace(/^www\./,"");
+    if(/(^|\.)google\./i.test(host)||/youtube\.com|accounts\.google/i.test(host)) continue;
+    const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)","Accept-Language":"en-US,en;q=0.9"},redirect:"follow",signal:AbortSignal.timeout(10000)}).catch(()=>null);
+    if(!page?.ok) continue;
+    const type=page.headers.get("content-type")||""; if(!type.includes("text/html")) continue;
+    const htmlPage=await page.text(); const text=cleanHtml(htmlPage).slice(0,24000); if(text.length<300) continue;
+    const title=cleanHtml(htmlPage.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]||"").trim();
+    out.push({source:title?host+" — "+title:host,sourceUrl:url,text}); if(out.length>=6) break;
   }
   return out;
 }
