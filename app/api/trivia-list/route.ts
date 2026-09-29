@@ -11,42 +11,45 @@ function extractJson(text: string) {
   const a=raw.indexOf("["); const b=raw.lastIndexOf("]"); if(a<0||b<a) throw new Error("AI returned invalid trivia JSON.");
   return JSON.parse(raw.slice(a,b+1));
 }
-const SOURCE_POLICIES = [
-  { test:/science|space|astronomy|physics|biology|medicine|health|environment|weather|geology/i, domains:["nasa.gov","nih.gov","noaa.gov","usgs.gov","si.edu","nature.com","science.org"] },
-  { test:/history|president|war|government|politic|law/i, domains:["loc.gov","archives.gov","nps.gov","si.edu","congress.gov"] },
-  { test:/music|song|artist|album|hip.?hop|rap|country|rock|pop/i, domains:["billboard.com","grammy.com","rollingstone.com","pitchfork.com","officialcharts.com"] },
-  { test:/movie|film|tv|television|actor|actress|celebrity|reality/i, domains:["oscars.org","variety.com","hollywoodreporter.com","deadline.com","ew.com"] },
-  { test:/sport|football|basketball|baseball|soccer|olympic|tennis|golf/i, domains:["espn.com","olympics.com","nba.com","nfl.com","mlb.com","fifa.com","atptour.com","wtatennis.com"] },
-  { test:/game|gaming|video game|playstation|xbox|nintendo/i, domains:["ign.com","gamespot.com","polygon.com","nintendo.com","playstation.com","xbox.com"] },
-  { test:/fashion|style|beauty/i, domains:["vogue.com","elle.com","wwd.com","businessoffashion.com"] },
-  { test:/internet|viral|social media|tiktok|youtube|trend|meme|culture/i, domains:["apnews.com","reuters.com","nytimes.com","washingtonpost.com","theguardian.com","time.com","wired.com","theverge.com"] },
-];
-const FALLBACK_DOMAINS=["apnews.com","reuters.com","britannica.com","si.edu","time.com","bbc.com","theguardian.com"];
+const TRUSTED_HOST_HINTS=["britannica.com","history.com","smithsonianmag.com","nasa.gov","nih.gov","noaa.gov","usgs.gov","loc.gov","archives.gov","billboard.com","grammy.com","rollingstone.com","officialcharts.com","oscars.org","variety.com","espn.com","olympics.com","nba.com","nfl.com","mlb.com","fifa.com","ign.com","gamespot.com","vogue.com","apnews.com","reuters.com","bbc.com","theguardian.com","time.com","wired.com","theverge.com"];
 
-function domainsFor(category:string){
-  const matched=SOURCE_POLICIES.filter(p=>p.test.test(category)).flatMap(p=>p.domains);
-  return [...new Set([...matched,...FALLBACK_DOMAINS])].slice(0,12);
+function decodeXml(v:string){return v.replace(/<!\[CDATA\[|\]\]>/g,"").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").trim()}
+async function fetchSourcePage(url:string){
+  try{
+    const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)","Accept-Language":"en-US,en;q=0.9"},redirect:"follow",signal:AbortSignal.timeout(10000)});
+    if(!page.ok) return null; const type=page.headers.get("content-type")||""; if(!type.includes("text/html")) return null;
+    const html=await page.text(); const text=cleanHtml(html).slice(0,24000); if(text.length<300) return null;
+    const finalUrl=page.url||url; const host=new URL(finalUrl).hostname.replace(/^www\./,"");
+    const title=cleanHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]||"").trim();
+    return {source:title?host+" — "+title:host,sourceUrl:finalUrl,text};
+  }catch{return null}
 }
 async function sourcesFor(category:string) {
   const out:any[]=[]; const seen=new Set<string>();
-  const searchUrl="https://www.google.com/search?q="+encodeURIComponent(category+" facts trivia")+"&num=20&filter=0";
-  const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36","Accept-Language":"en-US,en;q=0.9"}}).catch(()=>null);
-  if(!search?.ok) return out;
-  const html=await search.text();
-  const candidates:string[]=[];
-  for(const m of html.matchAll(/href="\/url\?q=([^&"]+)/g)){try{candidates.push(decodeURIComponent(m[1]));}catch{}}
-  for(const m of html.matchAll(/href="(https?:\/\/[^"]+)"/g)){candidates.push(m[1].replace(/&amp;/g,"&"))}
-  for(const url of candidates){
-    if(seen.has(url)) continue; seen.add(url);
-    let u:URL; try{u=new URL(url)}catch{continue}
-    const host=u.hostname.replace(/^www\./,"");
-    if(/(^|\.)google\./i.test(host)||/youtube\.com|accounts\.google/i.test(host)) continue;
-    const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)","Accept-Language":"en-US,en;q=0.9"},redirect:"follow",signal:AbortSignal.timeout(10000)}).catch(()=>null);
-    if(!page?.ok) continue;
-    const type=page.headers.get("content-type")||""; if(!type.includes("text/html")) continue;
-    const htmlPage=await page.text(); const text=cleanHtml(htmlPage).slice(0,24000); if(text.length<300) continue;
-    const title=cleanHtml(htmlPage.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]||"").trim();
-    out.push({source:title?host+" — "+title:host,sourceUrl:url,text}); if(out.length>=6) break;
+  const queries=[category+" trivia facts",category+" questions answers",category+" facts",category+" history"];
+  for(const query of queries){
+    const rss="https://www.bing.com/search?format=rss&q="+encodeURIComponent(query);
+    const res=await fetch(rss,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0","Accept-Language":"en-US,en;q=0.9"}}).catch(()=>null);
+    if(!res?.ok) continue; const xml=await res.text();
+    const items=Array.from(xml.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>[\s\S]*?<description>([\s\S]*?)<\/description>[\s\S]*?<\/item>/gi));
+    for(const m of items){
+      const url=decodeXml(m[2]); if(seen.has(url)) continue; seen.add(url);
+      let host=""; try{host=new URL(url).hostname.replace(/^www\./,"")}catch{continue}
+      if(/bing\.com|microsoft\.com/i.test(host)) continue;
+      const page=await fetchSourcePage(url);
+      if(page){out.push(page); if(out.length>=6) return out}
+    }
+  }
+  if(!out.length){
+    for(const domain of TRUSTED_HOST_HINTS.slice(0,12)){
+      const rss="https://www.bing.com/search?format=rss&q="+encodeURIComponent("site:"+domain+" "+category);
+      const res=await fetch(rss,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0"}}).catch(()=>null); if(!res?.ok) continue;
+      const xml=await res.text();
+      for(const m of xml.matchAll(/<link>(https?:[^<]+)<\/link>/gi)){
+        const url=decodeXml(m[1]); if(seen.has(url)) continue; seen.add(url);
+        const page=await fetchSourcePage(url); if(page){out.push(page); if(out.length>=4) return out}
+      }
+    }
   }
   return out;
 }
