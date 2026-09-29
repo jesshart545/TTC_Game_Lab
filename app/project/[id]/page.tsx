@@ -62,7 +62,9 @@ export default function ProjectWorkspace() {
   const [showGenerator, setShowGenerator] = useState(false);
   const [showTriviaListGenerator, setShowTriviaListGenerator] = useState(false);
   const [triviaListCategories, setTriviaListCategories] = useState("");
-  const [triviaListCount, setTriviaListCount] = useState(25);\n  const [triviaListQuestions, setTriviaListQuestions] = useState<any[]>([]);\n  const [triviaListBusy, setTriviaListBusy] = useState(false);
+  const [triviaListCount, setTriviaListCount] = useState(25);
+  const [triviaListQuestions, setTriviaListQuestions] = useState<any[]>([]);
+  const [triviaListBusy, setTriviaListBusy] = useState(false);
   const [showBoardTemplates, setShowBoardTemplates] = useState(false);
   const [showToolTemplates, setShowToolTemplates] = useState(false);
   const [generatorType, setGeneratorType] = useState<GeneratorType>("image");
