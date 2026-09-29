@@ -33,7 +33,7 @@ async function sourcesFor(category:string) {
     const searchUrl="https://www.google.com/search?q="+encodeURIComponent("site:"+domain+" "+category)+"&num=5";
     const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"}}).catch(()=>null);
     if(!search?.ok) continue; const html=await search.text();
-    const candidates=[...html.matchAll(/https?:\\/\\/[^"'&<> ]+/g)].map(m=>m[0].replace(/\\u003d/g,"=").replace(/\\u0026/g,"&"));
+    const candidates = Array.from(html.matchAll(new RegExp("https?://[^\\\"&<> ]+", "g"))).map(m => m[0]);
     for(const raw of candidates){
       let url=raw; try { const parsed=new URL(url); if(!parsed.hostname.endsWith(domain)||seen.has(url)) continue; } catch { continue; }
       seen.add(url); const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"},signal:AbortSignal.timeout(8000)}).catch(()=>null);
