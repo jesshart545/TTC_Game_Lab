@@ -28,18 +28,19 @@ function domainsFor(category:string){
   return [...new Set([...matched,...FALLBACK_DOMAINS])].slice(0,12);
 }
 async function sourcesFor(category:string) {
-  const out:any[]=[]; const seen=new Set<string>();
-  for(const domain of domainsFor(category)){
-    const searchUrl="https://www.google.com/search?q="+encodeURIComponent("site:"+domain+" "+category)+"&num=5";
-    const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"}}).catch(()=>null);
-    if(!search?.ok) continue; const html=await search.text();
-    const candidates = Array.from(html.matchAll(new RegExp("https?://[^\\\"&<> ]+", "g"))).map(m => m[0]);
-    for(const raw of candidates){
-      let url=raw; try { const parsed=new URL(url); if(!parsed.hostname.endsWith(domain)||seen.has(url)) continue; } catch { continue; }
-      seen.add(url); const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"},signal:AbortSignal.timeout(8000)}).catch(()=>null);
-      if(!page?.ok || !(page.headers.get("content-type")||"").includes("text/html")) continue;
-      const text=cleanHtml(await page.text()).slice(0,14000); if(text.length<400) continue;
-      out.push({source:new URL(url).hostname.replace(/^www\\./,""),sourceUrl:url,text}); if(out.length>=5) return out;
+  const allowed=domainsFor(category); const out:any[]=[]; const seen=new Set<string>();
+  for(const domain of allowed){
+    const searchUrl="https://www.bing.com/search?format=rss&q="+encodeURIComponent("site:"+domain+" "+category);
+    const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"TTCGameLab/1.0"}}).catch(()=>null);
+    if(!search?.ok) continue; const xml=await search.text();
+    const links=Array.from(xml.matchAll(/<link>(https?:[^<]+)<\/link>/gi)).map(m=>m[1].replace(/&amp;/g,"&"));
+    for(const url of links){
+      try { const host=new URL(url).hostname.replace(/^www\./,""); if(!(host===domain||host.endsWith("."+domain))||seen.has(url)) continue; } catch { continue; }
+      seen.add(url);
+      const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"},signal:AbortSignal.timeout(10000)}).catch(()=>null);
+      if(!page?.ok) continue; const type=page.headers.get("content-type")||""; if(!type.includes("text/html")) continue;
+      const text=cleanHtml(await page.text()).slice(0,18000); if(text.length<500) continue;
+      out.push({source:new URL(url).hostname.replace(/^www\./,""),sourceUrl:url,text}); if(out.length>=5) return out;
     }
   }
   return out;
