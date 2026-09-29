@@ -581,11 +581,7 @@ export default function ProjectWorkspace() {
       if (!response.ok) throw new Error(data.error || "AI editing is unavailable right now.");
       const result = applyDraftChanges(updated, data.changes);
       const steps = Array.isArray(data.manualSteps) ? data.manualSteps.filter((step: unknown) => typeof step === "string") : [];
-      const reply = [data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), steps.length ? `How to do it manually:
-${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("
-")}` : ""].filter(Boolean).join("
-
-");
+      const reply = [data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
       persist({ ...result.project, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: reply }] });
     } catch (error) {
       persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: error instanceof Error ? `${error.message} Your request is in this chat; no draft edit was applied.` : "AI editing is unavailable. No draft edit was applied." }] });
