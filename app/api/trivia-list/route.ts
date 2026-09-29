@@ -11,15 +11,30 @@ function extractJson(text: string) {
   const a=raw.indexOf("["); const b=raw.lastIndexOf("]"); if(a<0||b<a) throw new Error("AI returned invalid trivia JSON.");
   return JSON.parse(raw.slice(a,b+1));
 }
+const SOURCE_POLICIES = [
+  { test:/science|space|astronomy|physics|biology|medicine|health|environment|weather|geology/i, domains:["nasa.gov","nih.gov","noaa.gov","usgs.gov","si.edu","nature.com","science.org"] },
+  { test:/history|president|war|government|politic|law/i, domains:["loc.gov","archives.gov","nps.gov","si.edu","congress.gov"] },
+  { test:/music|song|artist|album|hip.?hop|rap|country|rock|pop/i, domains:["billboard.com","grammy.com","rollingstone.com","pitchfork.com","officialcharts.com"] },
+  { test:/movie|film|tv|television|actor|actress|celebrity|reality/i, domains:["oscars.org","variety.com","hollywoodreporter.com","deadline.com","ew.com"] },
+  { test:/sport|football|basketball|baseball|soccer|olympic|tennis|golf/i, domains:["espn.com","olympics.com","nba.com","nfl.com","mlb.com","fifa.com","atptour.com","wtatennis.com"] },
+  { test:/game|gaming|video game|playstation|xbox|nintendo/i, domains:["ign.com","gamespot.com","polygon.com","nintendo.com","playstation.com","xbox.com"] },
+  { test:/fashion|style|beauty/i, domains:["vogue.com","elle.com","wwd.com","businessoffashion.com"] },
+  { test:/internet|viral|social media|tiktok|youtube|trend|meme|culture/i, domains:["apnews.com","reuters.com","nytimes.com","washingtonpost.com","theguardian.com","time.com","wired.com","theverge.com"] },
+];
+const FALLBACK_DOMAINS=["apnews.com","reuters.com","britannica.com","si.edu","time.com","bbc.com","theguardian.com"];
+
+function domainsFor(category:string){
+  const matched=SOURCE_POLICIES.filter(p=>p.test.test(category)).flatMap(p=>p.domains);
+  return [...new Set([...matched,...FALLBACK_DOMAINS])].slice(0,12);
+}
 async function sourcesFor(category:string) {
-  const trustedDomains=["si.edu","loc.gov","archives.gov","nasa.gov","nih.gov","noaa.gov","usgs.gov","nps.gov","britannica.com","history.com","grammy.com","oscars.org","olympics.com","nintendo.com","playstation.com","xbox.com"];
   const out:any[]=[]; const seen=new Set<string>();
-  for(const domain of trustedDomains){
+  for(const domain of domainsFor(category)){
     const searchUrl="https://www.google.com/search?q="+encodeURIComponent("site:"+domain+" "+category)+"&num=5";
     const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"}}).catch(()=>null);
     if(!search?.ok) continue; const html=await search.text();
-    const urls=[...html.matchAll(/https?:\\/\\/[^"'&<> ]+/g)].map(m=>m[0].replace(/\\u003d/g,"=").replace(/\\u0026/g,"&"));
-    for(const raw of urls){
+    const candidates=[...html.matchAll(/https?:\\/\\/[^"'&<> ]+/g)].map(m=>m[0].replace(/\\u003d/g,"=").replace(/\\u0026/g,"&"));
+    for(const raw of candidates){
       let url=raw; try { const parsed=new URL(url); if(!parsed.hostname.endsWith(domain)||seen.has(url)) continue; } catch { continue; }
       seen.add(url); const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)"},signal:AbortSignal.timeout(8000)}).catch(()=>null);
       if(!page?.ok || !(page.headers.get("content-type")||"").includes("text/html")) continue;
