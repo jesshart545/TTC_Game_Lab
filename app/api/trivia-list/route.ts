@@ -12,17 +12,20 @@ function extractJson(text: string) {
   return JSON.parse(raw.slice(a,b+1));
 }
 async function sourcesFor(category:string) {
-  const q=encodeURIComponent(category+" facts trivia");
-  const res=await fetch("https://www.google.com/search?q="+q+"&num=10",{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 Chrome/128 Safari/537.36"}}).catch(()=>null);
-  if(!res?.ok) return [];
-  const html=await res.text(); const links=[...html.matchAll(/<a href="\/url\?q=([^"&]+)[^>]*>([\s\S]*?)<\/a>/g)];
-  const seen=new Set<string>(); const out:any[]=[];
-  for(const m of links){ const url=decodeURIComponent(m[1]); if(!/^https?:/.test(url)||seen.has(url)||/google\./i.test(url)) continue; seen.add(url);
-    const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 Chrome/128 Safari/537.36"},signal:AbortSignal.timeout(8000)}).catch(()=>null);
-    if(!page?.ok) continue; const type=page.headers.get("content-type")||""; if(!type.includes("text/html")) continue;
-    const text=cleanHtml(await page.text()).slice(0,9000); if(text.length<300) continue;
-    out.push({source:new URL(url).hostname.replace(/^www\./,""),sourceUrl:url,text}); if(out.length>=5) break;
-  } return out;
+  const searchUrl="https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch="+encodeURIComponent(category)+"&srlimit=8&format=json&origin=*";
+  const search=await fetch(searchUrl,{cache:"no-store",headers:{"User-Agent":"TTCGameLab/1.0 trivia sourcing"}}).catch(()=>null);
+  if(!search?.ok) return [];
+  const payload=await search.json().catch(()=>({})); const hits=Array.isArray(payload?.query?.search)?payload.query.search:[];
+  const out:any[]=[];
+  for(const hit of hits.slice(0,6)){
+    const title=String(hit.title||"").trim(); if(!title) continue;
+    const pageUrl="https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exintro=0&redirects=1&titles="+encodeURIComponent(title)+"&format=json&origin=*";
+    const page=await fetch(pageUrl,{cache:"no-store",headers:{"User-Agent":"TTCGameLab/1.0 trivia sourcing"}}).catch(()=>null); if(!page?.ok) continue;
+    const data=await page.json().catch(()=>({})); const pages=data?.query?.pages||{}; const record=Object.values(pages)[0] as any;
+    const text=String(record?.extract||"").replace(/\s+/g," ").trim().slice(0,14000); if(text.length<300) continue;
+    out.push({source:"Wikipedia — "+title,sourceUrl:"https://en.wikipedia.org/wiki/"+encodeURIComponent(title.replace(/ /g,"_")),text}); if(out.length>=5) break;
+  }
+  return out;
 }
 export async function POST(request:Request){
   const body=await request.json().catch(()=>({})); const count=Math.max(1,Math.min(10,Number(body.count)||10));
