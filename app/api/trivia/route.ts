@@ -129,7 +129,7 @@ ${JSON.stringify(context)}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env.AGNES_MODEL || "agnes-2.5-flash",
+          model: "agnes-2.5-flash",
           messages: [
             {
               role: "system",
