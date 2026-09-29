@@ -14,39 +14,39 @@ export async function GET() {
     const response = await fetch(url, {
       cache: "no-store",
       headers: {
-        "X-Api-Key": key,
+        Authorization: `Bearer ${key}`,
         Accept: "application/json",
       },
       signal: AbortSignal.timeout(15000),
     });
 
     const text = await response.text();
-    let data: unknown;
-    try { data = JSON.parse(text); } catch { data = text.slice(0, 500); }
+    let payload: any;
+    try { payload = JSON.parse(text); } catch { payload = text.slice(0, 500); }
 
     if (!response.ok) {
       return NextResponse.json({
         ok: false,
         upstreamStatus: response.status,
         error: "QuizAPI request failed.",
-        response: data,
+        response: payload,
       }, { status: 502 });
     }
 
-    const questions = Array.isArray(data) ? data : [];
+    const questions = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
     return NextResponse.json({
       ok: true,
       count: questions.length,
       questions: questions.map((q: any) => ({
         id: q.id,
-        question: q.question,
-        description: q.description,
+        question: q.text ?? q.question,
+        type: q.type,
         answers: q.answers,
-        multipleCorrectAnswers: q.multiple_correct_answers,
-        correctAnswers: q.correct_answers,
         category: q.category,
         difficulty: q.difficulty,
         tags: q.tags,
+        quizTitle: q.quizTitle,
+        explanation: q.explanation,
       })),
     });
   } catch (error) {
