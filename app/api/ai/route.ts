@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const draftEdit = body.mode === "draft-edit";
   const configuredModel = (process.env.AGNES_MODEL || "").trim();
-  const models = Array.from(new Set([configuredModel, "agnes-2.5-flash"].filter(Boolean)));
+  const models = Array.from(new Set(["agnes-2.5-flash", configuredModel].filter(model => model && !model.startsWith("cpk-"))));
   let response: Response | null = null;
   let payload: any = null;
   let lastModel = models[0];
