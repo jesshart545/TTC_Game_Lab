@@ -283,7 +283,7 @@ export default function ProjectWorkspace() {
     finally{setTriviaListBusy(false)}
   }
   async function downloadTriviaPdf() {
-    if(!triviaListQuestions.length)return; const response=await fetch("/api/trivia-pdf",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({questions:triviaListQuestions})});
+    if(!triviaListQuestions.length)return; const response=await fetch("/api/trivia-pdf",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({questions:triviaListQuestions.map(q=>({...q,question:q.question+(q.verificationStatus==="needs-review"?" * NEEDS MANUAL VERIFICATION":"")}))})});
     if(!response.ok){setAssetStatus("PDF download could not be created.");return;} const blob=await response.blob(); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url;a.download="ttcgamelab-trivia.pdf";a.click();URL.revokeObjectURL(url);
   }
   function addTriviaListToToolbox() {
