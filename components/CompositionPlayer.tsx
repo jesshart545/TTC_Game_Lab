@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AssetComposition, CompositionClip, OverlayResult, ProjectAsset } from "../lib/project";
 
+import CompositionEffect from "./CompositionEffect";
+
 export const defaultOverlayResult: OverlayResult = {
   x: 0, y: 0, width: 100, height: 100,
   entrance: "fade", exit: "fade", entranceSeconds: .3, exitSeconds: .3, layer: 10,
@@ -52,7 +54,7 @@ export default function CompositionPlayer({ composition, assets, startedAt, plac
       if (!active) return null;
       if (clip.track === "visual") return url ? <img key={clip.id} src={url} alt={clip.assetName} /> : null;
       if (clip.track === "text") return <strong key={clip.id}>{clip.text}</strong>;
-      if (clip.track === "effect") return <div key={clip.id} className="composition-effect">✦ {clip.effect}</div>;
+      if (clip.track === "effect") return <CompositionEffect key={clip.id} name={clip.effect || "Confetti"} time={time-clip.start} opacity={Math.max(0,Math.min(1,clip.fadeIn?(time-clip.start)/clip.fadeIn:1,clip.fadeOut?(clip.start+clip.duration-time)/clip.fadeOut:1))}/>;
       return null;
     })}
   </div>;
