@@ -52,6 +52,8 @@ export default function ProjectWorkspace() {
   const params = useParams<{ id: string }>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const projectRef = useRef<Project | null>(null);
+  projectRef.current = project;
   const [draft, setDraft] = useState("");
   const [workflowStep, setWorkflowStep] = useState(0);
   const [workshopStep, setWorkshopStep] = useState(0);
@@ -277,7 +279,7 @@ export default function ProjectWorkspace() {
       if(!questions.length)throw new Error(lastError||"No source-backed questions could be found. Try another category.");
       setTriviaListQuestions(questions);
       const tool:any={id:`trivia-list-${Date.now()}`,type:"trivia-list",name:`Trivia Question List (${questions.length})`,enabled:true,inToolbox:true,config:{title:"Trivia Question List",requestedCount:target,suggestedCategories:categories,questions,verifiedCount:all.length,reviewCount:review.length}};
-      const base = options?.baseProject || project;
+      const base = projectRef.current || options?.baseProject || project;
       const saved = {...base,gameTools:[...(base.gameTools||[]),tool],updatedAt:"just now"};
       persist(saved);
       const summary = `${all.length} verified; ${review.length} * need manual verification; ${target-questions.length} still missing. Review starred questions against their linked sources before use.`;
@@ -330,7 +332,7 @@ export default function ProjectWorkspace() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trivia generation failed.");
       const nextConfig = { categories: Array.isArray(data.categories) ? data.categories : [] };
-      const current = next;
+      const current = projectRef.current || next;
       persist({ ...current, gameTools:(current.gameTools || []).map(t=>t.id===tool.id ? { ...t, config:nextConfig } : t), updatedAt:"just now" });
       setTriviaConfig(nextConfig);
       setTriviaTopics(nextConfig.categories.map((category:any)=>String(category.name || "")));
@@ -506,7 +508,7 @@ export default function ProjectWorkspace() {
       }
       if (!url) throw new Error(`${type} generation returned no asset output.`);
 
-      const latest = options?.baseProject || project;
+      const latest = projectRef.current || options?.baseProject || project;
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url };
 
