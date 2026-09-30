@@ -1,0 +1,7 @@
+export const EFFECT_NAMES = ["Confetti", "Sparkles", "Glow", "Particles"] as const;
+export function drawCompositionEffect(ctx: CanvasRenderingContext2D, name: string, time: number, width: number, height: number) {
+  const effect=name.toLowerCase();ctx.save();
+  if(effect==="glow"){const pulse=.25+.2*Math.sin(time*3);const gradient=ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,Math.max(width,height)*.65);gradient.addColorStop(0,"rgba(0,255,240,"+pulse+")");gradient.addColorStop(.7,"rgba(140,70,255,"+pulse*.5+")");gradient.addColorStop(1,"rgba(0,0,0,0)");ctx.fillStyle=gradient;ctx.fillRect(0,0,width,height);}
+  else for(let i=0;i<80;i++){const seed=(i*7919%997)/997;const phase=(time*(effect==="confetti"?.18:.1)+seed)%1;const x=((i*37.13)%100)/100*width+Math.sin(time*2+i)*width*.015;const y=effect==="confetti"?phase*height:(1-phase)*height;const size=3+(i%5);ctx.globalAlpha=effect==="confetti"?.9:Math.sin(phase*Math.PI);ctx.fillStyle=["#00fff0","#ff65ce","#ffe267","#9e78ff","#ffffff"][i%5];ctx.translate(x,y);ctx.rotate(time+i);if(effect==="sparkles"){ctx.beginPath();ctx.moveTo(0,-size*2);ctx.lineTo(size*.5,-size*.5);ctx.lineTo(size*2,0);ctx.lineTo(size*.5,size*.5);ctx.lineTo(0,size*2);ctx.lineTo(-size*.5,size*.5);ctx.lineTo(-size*2,0);ctx.lineTo(-size*.5,-size*.5);ctx.closePath();ctx.fill();}else if(effect==="particles"){ctx.beginPath();ctx.arc(0,0,size,0,Math.PI*2);ctx.fill();}else if(effect==="confetti")ctx.fillRect(-size/2,-size,size,size*2);ctx.setTransform(1,0,0,1,0,0);}
+  ctx.restore();
+}
