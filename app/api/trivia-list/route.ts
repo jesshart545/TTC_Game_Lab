@@ -36,7 +36,7 @@ async function verifyCandidate(candidate:any){
   const question=String(candidate?.text??candidate?.question??"").trim();
   const answer=directAnswer(candidate);
   if(!acceptable(candidate)) return null;
-  const query=`"${question}" "${answer}"`;
+  const keywords=question.replace(/^(who|what|when|where|which|how)\s+/i,"").replace(/[?!.]/g," ").trim();\n  const query=`${keywords} "${answer}"`;
   const rss="https://www.bing.com/search?format=rss&q="+encodeURIComponent(query);
   const r=await fetch(rss,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0","Accept-Language":"en-US,en;q=0.9"},signal:AbortSignal.timeout(10000)}).catch(()=>null);
   if(!r?.ok) return null;
