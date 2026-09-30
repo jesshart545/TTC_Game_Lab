@@ -46,6 +46,13 @@ export default function ProjectsPage() {
         <Link href="/project/new" className="build-btn">＋ New Project</Link>
       </header>
       <div className="project-library-grid">
+        <article className="library-card project-library-card">
+          <Link href="/reference" className="project-library-link">
+            <div className="library-preview purple"><span>SHARED · READ ONLY</span><strong>Verification Project</strong><em>A working reference for everyone</em></div>
+            <div className="library-info"><div><h2>Verification Project</h2><p>Explore the tools, settings, and dashboard controls. Practice without changing the original.</p></div><span>Shared reference</span></div>
+          </Link>
+          <div className="project-card-actions"><Link href="/reference" className="outline-btn">Open reference</Link></div>
+        </article>
         {projects.map(project => (
           <article key={project.id} className="library-card project-library-card">
             <Link href={`/project/${project.id}`} className="project-library-link">

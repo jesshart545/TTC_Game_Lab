@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { loadPublishedProjectFromServer, type Project, type ProjectEvent } from "../../lib/project";
+import { type Project, type ProjectEvent } from "../../lib/project";
 import RuntimeActionLayers, { useRuntimeActions } from "../../components/RuntimeActionLayers";
 import "./reference.css";
 
@@ -33,7 +33,10 @@ export default function ReferenceProject() {
   const [version,setVersion]=useState(0);
   useEffect(()=>{
     let cancelled=false;
-    void loadPublishedProjectFromServer("new-live-experience-b554b").then(value=>{
+    void fetch("/api/reference", { cache: "no-store" }).then(async response => {
+      if (!response.ok) throw new Error("Could not load the reference project.");
+      return (await response.json()).project as Project;
+    }).then(value=>{
       if(cancelled)return;
       if(!value)setError("The reference project is temporarily unavailable.");else setProject(value);
     }).catch(()=>{if(!cancelled)setError("Could not load the reference project. Please reload to try again.");});
@@ -41,7 +44,7 @@ export default function ReferenceProject() {
   },[]);
   return <main className="reference-page">
     <header><Link href="/">← TTCGameLab Home</Link><Link href="/guide">How to use TTCGameLab</Link></header>
-    <div className="reference-intro"><small>SHARED REFERENCE · AVAILABLE TO EVERYONE</small><h1>Verification project</h1><p>Explore a working example of game tools, dashboard assignments and an audience overlay. Use it as a reference while creating your own project.</p><p className="reference-notice">Interactive practice · these controls affect your preview only.</p></div>
+    <div className="reference-intro"><small>SHARED · READ ONLY · AVAILABLE TO EVERYONE</small><h1>Verification project</h1><p>Explore a working example of game tools, dashboard assignments and an audience overlay. Use it as a reference while creating your own project.</p><p className="reference-notice">Interactive practice · these controls affect your preview only.</p></div>
     {!project ? <p role="status">{error || "Loading reference project…"}</p> : <>
       <div className="reference-section-head"><h2>Try the project</h2><button onClick={()=>setVersion(v=>v+1)}>Reset practice preview</button></div>
       <PracticePreview key={version} project={project}/>
