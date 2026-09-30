@@ -598,25 +598,33 @@ export default function ProjectWorkspace() {
 
   async function saveAssetAsNew(nextAsset: ProjectAsset) {
     if (!project || !nextAsset.url) return;
+    if (!nextAsset.edits) {
+      const stored=await storeGeneratedAsset(project.id,{name:nextAsset.name,type:nextAsset.type,url:nextAsset.url});
+      const latest=projectRef.current || project;
+      persist({...latest,assets:[...latest.assets,stored],updatedAt:"just now"});
+      setAssetStatus(nextAsset.name+" saved as a new asset.");
+      return;
+    }
+    const renderUrl=nextAsset.storageKey?.startsWith("projects/") ? `/api/assets/content?key=${encodeURIComponent(nextAsset.storageKey)}` : nextAsset.url;
     if (isVideo(nextAsset)) {
       const start=Math.max(0,nextAsset.edits?.trimStart||0);
       const source=document.createElement("video");
-      source.crossOrigin="anonymous"; source.preload="auto"; source.src=nextAsset.url;
+      source.crossOrigin="anonymous"; source.preload="auto"; source.src=renderUrl;
       setAssetStatus("Preparing trimmed video…");
       await new Promise<void>((resolve,reject)=>{source.onloadedmetadata=()=>resolve();source.onerror=()=>reject(new Error("Could not load video for trimming."));});
       const end=Math.min(nextAsset.edits?.trimEnd||source.duration,source.duration);
       if(!Number.isFinite(end)||end<=start+.05) throw new Error("Choose a valid video trim range.");
       const capture=(source as HTMLVideoElement & {captureStream?:()=>MediaStream}).captureStream;
       if(!capture||typeof MediaRecorder==="undefined") throw new Error("Video trimming requires a browser with MediaRecorder support.");
-      source.currentTime=start;
-      await new Promise<void>(resolve=>{if(Math.abs(source.currentTime-start)<.05)return resolve();source.onseeked=()=>resolve();});
+      await new Promise<void>(resolve=>{if(Math.abs(source.currentTime-start)<.05)return resolve();source.onseeked=()=>resolve();source.currentTime=start;});
+      await source.play();
       const stream=capture.call(source);
       const preferred=["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"].find(t=>MediaRecorder.isTypeSupported(t))||"";
       const recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);
       const chunks:BlobPart[]=[];
       recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
       const finished=new Promise<Blob>((resolve,reject)=>{recorder.onerror=()=>reject(new Error("Video trim recording failed."));recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType||"video/webm"}));});
-      recorder.start(250); await source.play();
+      recorder.start(250);
       setAssetStatus(`Trimming video from ${start.toFixed(1)}s to ${end.toFixed(1)}s…`);
       await new Promise<void>(resolve=>{const watch=()=>{if(source.currentTime>=end||source.ended){source.pause();resolve();return}requestAnimationFrame(watch)};watch()});
       recorder.stop(); const blob=await finished; stream.getTracks().forEach(track=>track.stop());
@@ -630,7 +638,7 @@ export default function ProjectWorkspace() {
     setAssetStatus("Rendering edited image…");
     const image = new Image();
     image.crossOrigin = "anonymous";
-    image.src = nextAsset.url;
+    image.src = renderUrl;
     await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Could not load image for editing.")); });
     const e = nextAsset.edits || {};
     const ratio = e.crop === "square" ? 1 : e.crop === "portrait" ? 9/16 : e.crop === "landscape" ? 16/9 : image.naturalWidth/image.naturalHeight;

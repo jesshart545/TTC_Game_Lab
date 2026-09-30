@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ProjectAsset } from "../lib/project";
+import { ProjectAsset, ProjectAssetEdits } from "../lib/project";
 
 function isVideo(asset: ProjectAsset) {
   return asset.type.toLowerCase().includes("video") || /\.(mp4|webm|mov|m4v)$/i.test(asset.name);
@@ -14,6 +14,9 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   onClose: () => void;
 }) {
   const video = isVideo(asset);
+  const [edits, setEdits] = useState<ProjectAssetEdits>(asset.edits || {});
+  const [duration,setDuration] = useState(0);
+  const update=(patch:Partial<ProjectAssetEdits>)=>setEdits(value=>({...value,...patch}));
   const [prompt, setPrompt] = useState("");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
@@ -49,18 +52,43 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
     }
   }
 
+  async function saveCopy() {
+    if(working || !onSaveAsNew)return;
+    setWorking(true);setError("");
+    try {await onSaveAsNew({...asset,edits});onClose();}catch(e){setError(e instanceof Error?e.message:"Could not save the edited copy.");}finally{setWorking(false);}
+  }
+  const style={transform:`translate(${edits.offsetX || 0}px,${edits.offsetY || 0}px) scale(${edits.zoom || 1}) rotate(${edits.rotation || 0}deg) scaleX(${edits.flipX?-1:1}) scaleY(${edits.flipY?-1:1})`,opacity:edits.opacity??1,filter:`brightness(${edits.brightness??100}%) contrast(${edits.contrast??100}%) saturate(${edits.saturation??100}%)`};
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true">
     <div className="media-editor-modal">
       <div className="media-editor-head">
-        <div><small>EDIT ASSET WITH AI</small><h2>Tell me what you want changed.</h2></div>
+        <div><small>EDIT ASSET</small><h2>Crop, adjust or request an AI edit.</h2></div>
         <button className="media-editor-close" onClick={onClose}>×</button>
       </div>
       <div className="media-editor-preview-wrap">
-        <div className="media-editor-preview">
-          {video ? <video src={asset.url} controls /> : <img src={asset.url} alt={asset.name} />}
+        <div className="media-editor-preview" style={{overflow:"hidden",aspectRatio:edits.crop==="square"?"1":edits.crop==="portrait"?"9/16":edits.crop==="landscape"?"16/9":undefined}}>
+          {video ? <video src={asset.url} controls style={style} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : <img src={asset.url} alt={asset.name} style={style}/>}
         </div>
       </div>
       <div className="media-editor-fields">
+        <fieldset disabled={working} style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,padding:16}}>
+          <legend>Direct edits · save as a new copy</legend>
+          {video ? <>
+            <label>Trim start (seconds)<input type="number" min="0" max={duration || undefined} step=".1" value={edits.trimStart || 0} onChange={e=>update({trimStart:Math.max(0,Number(e.target.value))})}/></label>
+            <label>Trim end (seconds)<input type="number" min=".1" max={duration || undefined} step=".1" value={edits.trimEnd || duration || ""} onChange={e=>update({trimEnd:Number(e.target.value)})}/></label>
+          </> : <>
+            <label>Crop shape<select value={edits.crop || "original"} onChange={e=>update({crop:e.target.value as ProjectAssetEdits["crop"]})}><option value="original">Original</option><option value="square">Square</option><option value="landscape">Landscape · 16:9</option><option value="portrait">Portrait · 9:16</option></select></label>
+            <label>Zoom<input type="number" min=".1" max="4" step=".1" value={edits.zoom || 1} onChange={e=>update({zoom:Math.max(.1,Math.min(4,Number(e.target.value)))})}/></label>
+            <label>Rotation<input type="number" min="-360" max="360" value={edits.rotation || 0} onChange={e=>update({rotation:Number(e.target.value)})}/></label>
+            <label>Brightness (%)<input type="number" min="0" max="200" value={edits.brightness ?? 100} onChange={e=>update({brightness:Number(e.target.value)})}/></label>
+            <label>Contrast (%)<input type="number" min="0" max="200" value={edits.contrast ?? 100} onChange={e=>update({contrast:Number(e.target.value)})}/></label>
+            <label>Color saturation (%)<input type="number" min="0" max="200" value={edits.saturation ?? 100} onChange={e=>update({saturation:Number(e.target.value)})}/></label>
+            <label>Horizontal position<input type="number" value={edits.offsetX || 0} onChange={e=>update({offsetX:Number(e.target.value)})}/></label>
+            <label>Vertical position<input type="number" value={edits.offsetY || 0} onChange={e=>update({offsetY:Number(e.target.value)})}/></label>
+            <label><input type="checkbox" checked={Boolean(edits.flipX)} onChange={e=>update({flipX:e.target.checked})}/>Flip horizontally</label>
+            <label><input type="checkbox" checked={Boolean(edits.flipY)} onChange={e=>update({flipY:e.target.checked})}/>Flip vertically</label>
+          </>}
+          <button type="button" disabled={working} onClick={()=>void saveCopy()}>{working?"Saving edit…":"Save edited copy"}</button>
+        </fieldset>
         <div className="media-editor-ai">
           <span>WHAT SHOULD I CHANGE?</span>
           <div>
