@@ -21,7 +21,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
-  if (path.startsWith("/published/") || (path.startsWith("/api/live/") || path.startsWith("/api/published/")) || path.startsWith("/api/auth/") || path.startsWith("/auth/")) return NextResponse.next();
+  if (path === "/reference" || path.startsWith("/published/") || (path.startsWith("/api/live/") || path.startsWith("/api/published/")) || path.startsWith("/api/auth/") || path.startsWith("/auth/")) return NextResponse.next();
   return protectCreator(request);
 }
 export const config = { matcher: ["/((?!_next/static|_next/image).*)"] };
