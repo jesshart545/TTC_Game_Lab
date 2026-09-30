@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { loadProjectFromServer, Project, ProjectEvent } from "../../../lib/project";
+import { loadPublishedProjectFromServer, Project, ProjectEvent } from "../../../lib/project";
 
 export default function PublishedDashboard() {
   const { slug } = useParams<{ slug: string }>();
@@ -21,8 +21,8 @@ export default function PublishedDashboard() {
     setHostKey(window.localStorage.getItem(`ttc-live-host-${slug}`) || "");
     (async () => {
       let draft: Project | null = null;
-      try { draft = await loadProjectFromServer(slug); } catch {}
-      if (!cancelled) setProject(draft?.publishedSnapshot || (draft?.status === "Published" ? draft : null) || null);
+      try { draft = await loadPublishedProjectFromServer(slug); } catch {}
+      if (!cancelled) setProject(draft);
     })();
     return () => { cancelled = true; };
   }, [slug]);

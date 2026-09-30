@@ -359,7 +359,7 @@ export default function ProjectWorkspace() {
     if (!project) return; const control=project.controls.find(c=>c.id===controlId); if(!control)return;
     const current=control.toolIds||[]; if(current.includes(tool.id))return;
     if(current.length>=2){setAssetStatus("A dashboard button can hold a maximum of 2 tools.");return;}
-    updateControl(controlId,{toolIds:[...current,tool.id],action:current.length===0?`tool.${tool.id}`:control.action});
+    updateControl(controlId,{toolIds:[...current,tool.id],detail:[...current,tool.id].map(id=>project.gameTools?.find(t=>t.id===id)?.name).filter(Boolean).join(" + "),action:current.length===0?`tool.${tool.id}`:control.action});
   }
   function addChainStep(controlId:string, kind:"asset"|"composition"|"animation", refId:string, label:string) {
     if (!project) return; const control=project.controls.find(c=>c.id===controlId); if(!control)return;

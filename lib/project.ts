@@ -140,3 +140,10 @@ export async function loadProjectFromServer(idOrSlug: string): Promise<Project |
   const data = await response.json();
   return data.project as Project;
 }
+
+export async function loadPublishedProjectFromServer(slug: string): Promise<Project | null> {
+  const response = await fetch(`/api/published/${encodeURIComponent(slug)}`, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("Could not load the published experience.");
+  return (await response.json()).project as Project;
+}

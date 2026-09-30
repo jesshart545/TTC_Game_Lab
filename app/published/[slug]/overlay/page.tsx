@@ -5,7 +5,7 @@ import { hydrateProjectAssets } from "../../../../lib/asset-store";
 import { toolStyle, ToolArtwork } from "../../../../components/GameToolEditor";
 import CompositionPlayer from "../../../../components/CompositionPlayer";
 import RuntimeActionLayers, { useRuntimeActions } from "../../../../components/RuntimeActionLayers";
-import { loadProjectFromServer, Project, ProjectAsset, ProjectEvent } from "../../../../lib/project";
+import { loadPublishedProjectFromServer, Project, ProjectAsset, ProjectEvent } from "../../../../lib/project";
 
 function assetEditStyle(asset: ProjectAsset) {
   const e=asset.edits||{};
@@ -24,12 +24,12 @@ export default function PublishedProject() {
     let timer: number | undefined;
     (async () => {
       let draft: Project | null = null;
-      try { draft = await loadProjectFromServer(slug); } catch {}
-      const published = draft?.publishedSnapshot || (draft?.status === "Published" ? draft : null);
+      try { draft = await loadPublishedProjectFromServer(slug); } catch {}
+      const published = draft;
       if (cancelled) return;
       setProject(published || null);
       if (!published) return;
-      void hydrateProjectAssets(published).then(value => { if (!cancelled) setProject(value); }).catch(() => {});
+      
       setTriviaTool((published.gameTools || []).find(tool => tool.type === "trivia-board" && tool.enabled && tool.inOverlayBuild) || null);
       let cursor = 0;
       let initialized = false;

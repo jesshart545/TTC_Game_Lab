@@ -10,7 +10,7 @@ export function toolStyle(tool: GameTool): CSSProperties {
 }
 export function ToolArtwork({tool, assets}: {tool:GameTool;assets:ProjectAsset[]}) {
   const a=(tool.config.appearance || {}) as Record<string,unknown>;
-  const asset=assets.find(x=>(x.storageKey || x.name)===a.imageKey);
+  const asset=assets.find(x=>(x.storageKey || x.name)===(a.imageKey || tool.config.backgroundAssetKey));
   return asset?.url ? <img src={asset.url} alt={asset.name} style={{width:"100%",maxHeight:140,objectFit:"contain"}}/> : null;
 }
 export default function GameToolEditor({tool,assets,onSave}: {tool:GameTool;assets:ProjectAsset[];onSave:(next:GameTool)=>void}) {
