@@ -785,14 +785,14 @@ export default function ProjectWorkspace() {
         </div>
       </div>
       {workflowStep === 0 && workshopStep === 0 && <section className="game-plan" id="game-plan" aria-label="Game plan"><h3>Your game plan</h3><div className="game-plan-fields">{[
-        ["theme","Theme","Example: neon Finish the Lyrics gameshow"],
+        ["theme","Game theme & style","Example: a futuristic neon music gameshow; a spooky haunted-hotel mystery; or a colorful tropical trivia night."],
         ["purpose","Purpose and goal","What should players or the audience accomplish?"],
         ["rules","Rules and play-through","Describe what happens from the start to the end of a game."],
         ["rounds","Rounds","How many rounds, and what happens in each?"],
         ["turns","Turns and players","Who plays, and how do turns move between players?"],
         ["scoring","Points and scoring","How are points awarded or taken away?"],
         ["winning","Winning and ties","How does the game end? How are ties resolved?"]
-      ].map(([key,label,placeholder]) => <label key={key} htmlFor={"game-"+key}>{label}<textarea id={"game-"+key} value={project.gamePlan?.[key] || ""} placeholder={placeholder} onChange={event => persist({...project,gamePlan:{...project.gamePlan,[key]:event.target.value},updatedAt:"just now"})}/></label>)}</div><button type="button" className="outline-btn" onClick={() => {setDraft("Help develop the framework and play-through for this game plan: " + JSON.stringify(project.gamePlan || {}));promptRef.current?.focus();}}>Discuss this game plan with AI</button></section>}
+      ].map(([key,label,placeholder]) => <label key={key} htmlFor={"game-"+key}>{label}{key === "theme" && <span id="game-theme-help">Describe the world, mood and visual style of your game. What is it about, and how should it look and feel? For example: a futuristic neon music gameshow, a spooky haunted-hotel mystery, or a colorful tropical trivia night.</span>}<textarea aria-describedby={key === "theme" ? "game-theme-help" : undefined} id={"game-"+key} value={project.gamePlan?.[key] || ""} placeholder={placeholder} onChange={event => persist({...project,gamePlan:{...project.gamePlan,[key]:event.target.value},updatedAt:"just now"})}/></label>)}</div><button type="button" className="outline-btn" onClick={() => {setDraft("Help develop the framework and play-through for this game plan: " + JSON.stringify(project.gamePlan || {}));promptRef.current?.focus();}}>Discuss this game plan with AI</button></section>}
       {workflowStep === 0 && <div className="workshop-tools" role="group" aria-label="Workshop creation tools"><strong>CREATE IN WORKSHOP</strong>
         <button type="button" onClick={() => openWorkshopTool("media",true)}>Generate background image</button>
         <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload background image</button>
