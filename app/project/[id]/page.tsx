@@ -101,6 +101,8 @@ export default function ProjectWorkspace() {
   const [triviaListQuestions, setTriviaListQuestions] = useState<any[]>([]);
   const [triviaListBusy, setTriviaListBusy] = useState(false);
   const [showBoardTemplates, setShowBoardTemplates] = useState(false);
+  const [showBoardGuide, setShowBoardGuide] = useState(false);
+  const [guideBoardId, setGuideBoardId] = useState("");
   const [showToolTemplates, setShowToolTemplates] = useState(false);
   const [generatorType, setGeneratorType] = useState<GeneratorType>("image");
   const [generatorPrompt, setGeneratorPrompt] = useState("");
@@ -794,15 +796,27 @@ export default function ProjectWorkspace() {
         ["winning","Winning and ties","How does the game end? How are ties resolved?"]
       ].map(([key,label,placeholder]) => <label key={key} htmlFor={"game-"+key}>{label}{key === "theme" && <span id="game-theme-help">Describe the world, mood and visual style of your game. What is it about, and how should it look and feel? For example: a futuristic neon music gameshow, a spooky haunted-hotel mystery, or a colorful tropical trivia night.</span>}<textarea aria-describedby={key === "theme" ? "game-theme-help" : undefined} id={"game-"+key} value={project.gamePlan?.[key] || ""} placeholder={placeholder} onChange={event => persist({...project,gamePlan:{...project.gamePlan,[key]:event.target.value},updatedAt:"just now"})}/></label>)}</div><button type="button" className="outline-btn" onClick={() => {setDraft("Help develop the framework and play-through for this game plan: " + JSON.stringify({title:project.name,...project.gamePlan}));promptRef.current?.focus();}}>Discuss this game plan with AI</button></details>}
       {workflowStep === 0 && <div className="workshop-tools" role="group" aria-label="Workshop creation tools"><strong>CREATE IN WORKSHOP</strong>
-        <button type="button" onClick={() => openWorkshopTool("media",true)}>Generate background image</button>
+        <button type="button" onClick={() => openWorkshopTool("media",true)}>Create background artwork</button>
         <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload background image</button>
         <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload other assets</button>
         <button type="button" onClick={() => openWorkshopTool("media")}>Generate media</button>
         <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
-        <button type="button" onClick={() => openWorkshopTool("boards")}>Board templates</button>
+        <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>
         <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button>
         <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
       </div>}
+      {workflowStep === 0 && <section className="workshop-help" aria-label="Artwork and interactive board guide">
+        <button type="button" className="outline-btn" aria-expanded={showBoardGuide} onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(!showBoardGuide);}}>Combine artwork with an interactive board</button>
+        {showBoardGuide && <div className="workshop-help-grid">
+          <article><h3>1. Choose how your board works</h3><p>Artwork gives your board its look. The interactive board supplies selectable areas and reveal behavior. Both are saved in this project.</p><button type="button" className="outline-btn" onClick={() => openWorkshopTool("boards")}>Choose a board template</button><button type="button" className="outline-btn" onClick={() => void addGameTool("blank-board")}>Create a custom board</button></article>
+          <article><h3>2. Create or upload the artwork</h3><p>Generate a new image, upload your own, or use an image already saved below.</p><button type="button" className="outline-btn" onClick={() => openWorkshopTool("media",true)}>Generate board artwork</button><button type="button" className="outline-btn" onClick={() => {setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload board artwork</button></article>
+          <article><h3>3. Connect artwork to your custom board</h3><p>Choose the custom board, then an image. This saves the image as that board’s background; your other images remain available.</p><label htmlFor="guide-board">Custom board<select id="guide-board" value={guideBoardId} onChange={event => setGuideBoardId(event.target.value)}><option value="">Choose a custom board</option>{(project.gameTools || []).filter(tool => tool.type === "blank-board").map(tool => <option key={tool.id} value={tool.id}>{tool.name}</option>)}</select></label>
+          {!(project.gameTools || []).some(tool => tool.type === "blank-board") && <p>Create a custom board in step 1 to connect your artwork.</p>}
+          {project.assets.filter(isImage).length === 0 && <p>Create or upload an image in step 2 to continue.</p>}
+          {project.assets.filter(isImage).map((asset,index) => <button key={(asset.storageKey || asset.name)+index} type="button" className="outline-btn" disabled={!guideBoardId} onClick={() => {const assetKey=asset.storageKey || asset.name;persist({...project,gameTools:(project.gameTools || []).map(tool => tool.id === guideBoardId ? {...tool,config:{...tool.config,backgroundAssetKey:assetKey,backgroundAssetKeys:Array.from(new Set([...(Array.isArray(tool.config?.backgroundAssetKeys) ? tool.config.backgroundAssetKeys : []),assetKey]))}} : tool),updatedAt:"just now"});setAssetStatus("Board artwork connected and saved. Use Build Space to position the board and wire its controls.");}}>Use {asset.name} as board artwork{(project.gameTools || []).find(tool => tool.id === guideBoardId)?.config?.backgroundAssetKey === (asset.storageKey || asset.name) ? " ✓" : ""}</button>)}</article>
+          <article><h3>4. Assemble and test</h3><p>In Build Space, add the board to the overlay, position its interactive areas, and connect host controls. Preview the artwork and behavior together before publishing.</p><button type="button" className="build-btn" onClick={() => chooseWorkflowStep(1)}>Continue to Build Space</button></article>
+        </div>}
+      </section>}
       <details className="workshop-help"><summary>Guide: backgrounds, layers, tools, scenes and buttons</summary><div className="workshop-help-grid">
         <article><h3>Create a background</h3><p>In Workshop, generate or upload your background image. Use Edit / Crop to crop it and change its size, position or appearance. Ask AI about the edit for requested changes. Save it before assembly.</p></article>
         <article><h3>Add backgrounds and image layers</h3><p>In Build Space, choose Use as Background on a finished image. Choose Add as Image Layer for images over that background. Edit / Crop adjusts their position and zoom. Replacing a background keeps the old image saved.</p></article>
