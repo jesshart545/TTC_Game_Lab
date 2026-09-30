@@ -64,7 +64,7 @@ async function uploadBlob(projectId: string, name: string, blob: Blob): Promise<
   form.append("projectId", projectId);
   form.append("file", blob, name);
   const response = await fetch("/api/assets", { method: "POST", body: form });
-  const data = await response.json();
+  const data = await response.json().catch(() => ({ error: response.status === 413 ? "The upload exceeds the server limit." : "Unable to store asset. Please try again." }));
   if (!response.ok) throw new Error(data.error || "Unable to store asset.");
   return { name: data.name || name, type: data.type || blob.type || "application/octet-stream", storageKey: data.storageKey, url: data.url };
 }
@@ -74,6 +74,16 @@ export async function storeUploadedAsset(projectId: string, file: File): Promise
 }
 
 export async function storeGeneratedAsset(projectId: string, asset: { name: string; type: string; url: string }): Promise<ProjectAsset> {
+  const source = new URL(asset.url);
+  if (source.protocol === "https:" && (source.hostname === "fal.media" || source.hostname.endsWith(".fal.media"))) {
+    const response = await fetch("/api/assets", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, name: asset.name, sourceUrl: asset.url }),
+    });
+    const data = await response.json().catch(() => ({ error: "Unable to save generated media. Please try again." }));
+    if (!response.ok) throw new Error(data.error || "Unable to save generated media.");
+    return { name: data.name || asset.name, type: data.type || asset.type, storageKey: data.storageKey, url: data.url };
+  }
   const response = await fetch(asset.url);
   if (!response.ok) throw new Error("Unable to download generated asset.");
   const blob = await response.blob();
