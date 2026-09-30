@@ -50,12 +50,15 @@ export async function POST(request: Request) {
       details: payload,
     }, { status: response?.status || 502 });
   }
-  const message = payload?.choices?.[0]?.message?.content || "";
+  let message = payload?.choices?.[0]?.message?.content || "";
   if (draftEdit) {
+    for (let attempt=0; attempt<2; attempt++) {
     try {
-      const clean = message.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+      const stripped = String(message).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+      const first = stripped.indexOf("{"), last = stripped.lastIndexOf("}");
+      const clean = first >= 0 && last > first ? stripped.slice(first,last+1) : stripped;
       const parsed = JSON.parse(clean);
-      if (!parsed || typeof parsed.reply !== "string" || !parsed.reply.trim()) throw new Error();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
       if (!parsed.changes || typeof parsed.changes !== "object") parsed.changes = {};
       const raw = parsed.action;
       const action = raw?.type === "trivia" && Number.isInteger(raw.count) && raw.count >= 1 && raw.count <= 500
@@ -64,8 +67,27 @@ export async function POST(request: Request) {
           ? { type:"tool", toolType:raw.toolType, name:typeof raw.name === "string" ? raw.name.slice(0,80) : "", config:raw.config && typeof raw.config === "object" && !Array.isArray(raw.config) ? raw.config : {} }
           : raw && ["image","video","voice","music","sfx"].includes(raw.type) && typeof raw.prompt === "string"
             ? { type:raw.type, prompt:raw.prompt.slice(0,12000), sourceKey:typeof raw.sourceKey === "string" ? raw.sourceKey : null, voice:["Aria","Roger"].includes(raw.voice) ? raw.voice : null } : null;
-      return NextResponse.json({ configured: true, action, reply: parsed.reply, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
-    } catch { return NextResponse.json({ error: "I could not interpret that edit. Please try describing it another way." }, { status: 502 }); }
+      const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+      if (!reply && !action && !Object.keys(parsed.changes).length) throw new Error();
+      return NextResponse.json({ configured: true, action, reply, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
+    } catch {
+      if (attempt === 0) {
+        try {
+          const retry = await fetch("https://apihub.agnes-ai.com/v1/chat/completions", {
+            method:"POST", headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},
+            body:JSON.stringify({model:lastModel,response_format:{type:"json_object"},temperature:0,messages:[
+              {role:"system",content:DRAFT_SYSTEM},
+              {role:"user",content:JSON.stringify({request:body.request,recentConversation:body.history,project:body.project,selectedImageKey:body.selectedImageKey})},
+              {role:"user",content:'Return one complete JSON object with reply, changes, manualSteps, action. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object.'}
+            ]}),signal:AbortSignal.timeout(60000)
+          });
+          const data=await retry.json();
+          if(retry.ok){message=data?.choices?.[0]?.message?.content || "";continue;}
+        } catch {}
+      }
+      return NextResponse.json({error:"I could not understand the response for that request. No changes were made."},{status:502});
+    }
+    }
   }
   return NextResponse.json({ configured: true, message });
 }
