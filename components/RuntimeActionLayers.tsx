@@ -71,12 +71,12 @@ export function useRuntimeActions(project: Project | null) {
   return { runs, backgroundKey, flash, fire, remove };
 }
 
-function ToolRun({ run, assets }: { run: Run; assets: ProjectAsset[] }) {
+function ToolRun({ run, assets, index, count }: { run: Run; assets: ProjectAsset[]; index: number; count: number }) {
   const tool = run.tool!; const [now, setNow] = useState(run.at);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 100); return () => clearInterval(timer); }, []);
   const config = tool.config; const remaining = Math.max(0, Math.ceil((Number(config.seconds) || 10) - (now - run.at) / 1000));
   const revealResult = now - run.at >= 1800;
-  return <section aria-label={tool.name} style={{ position:"absolute", left:"20%", top:"20%", width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool) }}>
+  return <section aria-label={tool.name} style={{ position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto" }}>
     <ToolArtwork tool={tool} assets={assets}/><h3>{String(config.title || tool.name)}</h3>
     {(tool.type === "wheel" || tool.type === "random-picker") && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
@@ -100,9 +100,10 @@ function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
 }
 
 export default function RuntimeActionLayers({ runtime, project }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project }) {
-  return <>{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
+  const toolRuns=runtime.runs.filter(run=>run.tool);
+  return <>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
     {project.gameTools.filter(t => t.enabled && t.inOverlayBuild && t.type === "blank-board").map(tool => <section key={tool.id} aria-label={tool.name} style={{position:"absolute",inset:"15%",zIndex:5,padding:"1rem",...toolStyle(tool)}}><ToolArtwork tool={tool} assets={project.assets}/><h3>{String(tool.config.title || tool.name)}</h3></section>)}
-    {runtime.runs.map(run => run.tool ? <ToolRun key={run.id} run={run} assets={project.assets}/> : run.compositionId ? (() => {
+    {runtime.runs.map(run => run.tool ? null : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
       return composition ? <CompositionPlayer key={run.id} composition={composition} assets={project.assets} placement={run.control.overlayResult || defaultOverlayResult} startedAt={run.at} onEnd={() => runtime.remove(run.id)}/> : null;
     })() : run.asset ? <div key={run.id} style={{position:"absolute",inset:0,zIndex:20}}>{run.asset.type.includes("video") || run.asset.type.includes("audio") ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
