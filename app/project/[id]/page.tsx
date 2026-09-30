@@ -164,7 +164,8 @@ export default function ProjectWorkspace() {
   }
 
   const BOARD_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
-    { type:"trivia-list", name:"Trivia Question Cards", description:"Choose your question count and categories. Show one question and answer at a time, without a points grid." },\n    { type:"trivia-board", name:"Jeopardy-style Board · 5×5", description:"Choose this format only for a five-category, five-question points grid." },
+    { type:"trivia-list", name:"Trivia Question Cards", description:"Choose your question count and categories. Show one question and answer at a time, without a points grid." },
+    { type:"trivia-board", name:"Jeopardy-style Board · 5×5", description:"Choose this format only for a five-category, five-question points grid." },
     { type:"blank-board", name:"Blank Board", description:"Start a custom audience board and build its background and interactive areas with chat and project assets." },
   ];
   const TOOL_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
