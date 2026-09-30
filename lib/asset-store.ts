@@ -59,7 +59,43 @@ async function getStoredAsset(id: string): Promise<StoredAsset | null> {
   } finally { db.close(); }
 }
 
+async function uploadLargeBlob(projectId:string,name:string,blob:Blob):Promise<ProjectAsset> {
+  async function send(body:BodyInit,headers?:HeadersInit) {
+    let lastError="Unable to save media.";
+    for(let attempt=0;attempt<3;attempt++) {
+      try {
+        const response=await fetch("/api/assets/upload",{method:"POST",body,headers});
+        const data=await response.json().catch(()=>({error:"The media transfer could not complete."}));
+        if(response.ok) return data;
+        lastError=data.error || lastError;
+        if(response.status<500 && response.status!==429) throw new Error(lastError);
+      } catch(error) {
+        lastError=error instanceof Error?error.message:lastError;
+        if(attempt===2) throw new Error(lastError);
+      }
+      await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));
+    }
+    throw new Error(lastError);
+  }
+  const json={"Content-Type":"application/json"};
+  const upload=await send(JSON.stringify({action:"start",projectId,name,type:blob.type,size:blob.size}),json);
+  try {
+    for(let offset=0,index=0;offset<blob.size;offset+=upload.chunkBytes,index++) {
+      const form=new FormData();
+      form.append("token",upload.token);form.append("index",String(index));
+      form.append("file",blob.slice(offset,Math.min(offset+upload.chunkBytes,blob.size)),"part");
+      await send(form);
+    }
+    const data=await send(JSON.stringify({action:"complete",token:upload.token}),json);
+    return {name:data.name || name,type:data.type || blob.type,storageKey:data.storageKey,url:data.url};
+  } catch(error) {
+    void fetch("/api/assets/upload",{method:"POST",headers:json,body:JSON.stringify({action:"cancel",token:upload.token})}).catch(()=>{});
+    throw error;
+  }
+}
+
 async function uploadBlob(projectId: string, name: string, blob: Blob): Promise<ProjectAsset> {
+  if (blob.size > 2 * 1024 * 1024) return uploadLargeBlob(projectId,name,blob);
   const form = new FormData();
   form.append("projectId", projectId);
   form.append("file", blob, name);

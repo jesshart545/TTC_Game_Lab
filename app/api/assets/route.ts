@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { deleteAssetsByPrefix, getAssetUrl, putAsset } from "../../../lib/object-storage";
 
+import { MAX_ASSET_BYTES } from "../../../lib/asset-upload";
+
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
@@ -19,10 +21,10 @@ export async function POST(request: Request) {
       }
       const response = await fetch(source, { redirect: "error", signal: AbortSignal.timeout(120000) });
       if (!response.ok) throw new Error("Unable to download generated media.");
-      const maximum = 64 * 1024 * 1024;
-      if (Number(response.headers.get("content-length") || 0) > maximum) throw new Error("Generated media exceeds the 64 MB limit.");
+      const maximum = MAX_ASSET_BYTES;
+      if (Number(response.headers.get("content-length") || 0) > maximum) throw new Error("Generated media exceeds the 256 MB storage limit.");
       const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.length > maximum) throw new Error("Generated media exceeds the 64 MB limit.");
+      if (bytes.length > maximum) throw new Error("Generated media exceeds the 256 MB storage limit.");
       const name = String(body.name || "Generated media");
       const type = response.headers.get("content-type") || "application/octet-stream";
       const key = `projects/${safeName(String(body.projectId || "unassigned"))}/${crypto.randomUUID()}-${safeName(name)}`;
