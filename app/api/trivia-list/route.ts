@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const DEFAULT_CATEGORIES=["General Knowledge","Science","History","Music","Geography","Technology"];
+const DEFAULT_CATEGORIES=["General Knowledge","Science","History","Music","Geography","Movies","Sports","Arts & Culture"];\nconst PROGRAMMING_TERMS=/\\b(programming|coding|software development|developer|devops|docker|kubernetes|javascript|typescript|python|java|c\\+\\+|c#|php|ruby|golang|rust|sql|html|css|react|next\\.?js|node\\.?js|git|github|api|database|linux|command line|algorithm|data structure)\\b/i;
 
 function normalize(v:string){return v.toLowerCase().replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/[^a-z0-9]+/g," ").trim()}
 function directAnswer(q:any){
@@ -13,7 +13,7 @@ function directAnswer(q:any){
 function acceptable(q:any){
   const question=String(q?.text??q?.question??"").trim();
   const answer=directAnswer(q);
-  if(!question||!answer||question.length<12||answer.length<1) return false;
+  if(!question||!answer||question.length<12||answer.length<1) return false;\n  if(PROGRAMMING_TERMS.test(question+" "+answer+" "+String(q?.category||"")+" "+JSON.stringify(q?.tags||[]))) return false;
   if(/^(a|an|the)?\s*(person|man|woman|team|player|staffer|artist|country|city|thing|someone|something)$/i.test(answer)) return false;
   if(/according to|extra attention|controversial|best|greatest|most important|primary cause/i.test(question)) return false;
   if(/what score|final score|defeat(ed)? .* \d|week \d+/i.test(question) && !/super bowl|world series|nba finals|stanley cup|olympic|championship|final\b/i.test(question)) return false;
@@ -67,7 +67,7 @@ export async function POST(request:Request){
   const body=await request.json().catch(()=>({}));
   const count=Math.max(1,Math.min(10,Number(body.count)||10));
   const requested=Array.isArray(body.categories)?body.categories.map(String).map((x:string)=>x.trim()).filter(Boolean):[];
-  const category=requested.length?requested[Math.floor(Math.random()*requested.length)]:DEFAULT_CATEGORIES[Math.floor(Math.random()*DEFAULT_CATEGORIES.length)];
+  const safeRequested=requested.filter((x:string)=>!PROGRAMMING_TERMS.test(x));\n  const category=safeRequested.length?safeRequested[Math.floor(Math.random()*safeRequested.length)]:DEFAULT_CATEGORIES[Math.floor(Math.random()*DEFAULT_CATEGORIES.length)];
   const accepted:any[]=[];
   const seen=new Set<string>();
   async function process(candidates:any[]){
