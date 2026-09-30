@@ -153,6 +153,7 @@ export async function POST(request: Request) {
 
     const model = "fal-ai/minimax-music/v2.6";
     const stylePrompt = prompt.length >= 10 ? prompt.slice(0, 2000) : `${prompt} cinematic music`;
+    const instrumental = /instrumental|no vocals?|without vocals?|no singing|no voice/i.test(prompt);
 
     const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
       method: "POST",
@@ -163,8 +164,8 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         prompt: stylePrompt,
         lyrics: "",
-        lyrics_optimizer: true,
-        is_instrumental: false,
+        lyrics_optimizer: !instrumental,
+        is_instrumental: instrumental,
         audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
       }),
       cache: "no-store",
