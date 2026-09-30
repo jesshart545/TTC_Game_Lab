@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       model,
       messages: draftEdit ? [{ role: "system", content: DRAFT_SYSTEM }, { role: "user", content: JSON.stringify({ request: body.request, recentConversation: body.history, project: body.project, selectedImageKey: body.selectedImageKey }) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
+      ...(draftEdit ? { response_format: { type: "json_object" } } : {}),
       temperature: draftEdit ? .2 : .7,
     }),
     });
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   const message = payload?.choices?.[0]?.message?.content || "";
   if (draftEdit) {
     try {
-      const parsed = JSON.parse(message.replace(/^```(?:json)?\s*|\s*```$/g, ""));
+      const parsed = JSON.parse(message.trim().replace(/^```(?:json)?\s*|\s*```$/g, ""));
       if (!parsed || typeof parsed.reply !== "string" || !parsed.changes || typeof parsed.changes !== "object") throw new Error();
       const action = parsed.action && ["image","video","voice","music","sfx"].includes(parsed.action.type) && typeof parsed.action.prompt === "string" ? { type: parsed.action.type, prompt: parsed.action.prompt.slice(0,12000), sourceKey: typeof parsed.action.sourceKey === "string" ? parsed.action.sourceKey : null, voice: ["Aria","Roger"].includes(parsed.action.voice) ? parsed.action.voice : null } : null;
       return NextResponse.json({ configured: true, action, reply: parsed.reply, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
