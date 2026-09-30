@@ -445,11 +445,12 @@ export default function ProjectWorkspace() {
     }
   }
 
-  async function generateAsset(type: GeneratorType, explicitPrompt?: string) {
+  async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: { sourceKey?: string | null; voice?: string | null; baseProject?: Project }) {
     if (!project || assetBusy) return;
     let promptImage = "";
-    if (type === "video" && videoReferenceKey) {
-      const selectedAsset = project.assets.find(asset => (asset.storageKey || asset.name) === videoReferenceKey);
+    const referenceKey = options ? options.sourceKey : type === "video" ? videoReferenceKey : "";
+    if ((type === "video" || type === "image") && referenceKey) {
+      const selectedAsset = project.assets.find(asset => (asset.storageKey || asset.name) === referenceKey);
       if (!selectedAsset) { setAssetStatus("The selected video reference image is no longer available."); return; }
       try {
         const hydrated = await hydrateAsset(selectedAsset);
@@ -467,7 +468,7 @@ export default function ProjectWorkspace() {
       const response = await fetch("/api/generate-asset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}) }),
+        body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(options?.voice ? { voice: options.voice } : {}) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
@@ -501,12 +502,12 @@ export default function ProjectWorkspace() {
       }
       if (!url) throw new Error(`${type} generation returned no asset output.`);
 
-      const latest = project;
+      const latest = options?.baseProject || project;
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url };
 
       const storedAsset = await storeGeneratedAsset(project.id, generatedAsset);
-      const asset: ProjectAsset = backgroundIntent && type === "image" ? { ...storedAsset, role: "background", inProject: false } : storedAsset;
+      const asset: ProjectAsset = !options && backgroundIntent && type === "image" ? { ...storedAsset, role: "background", inProject: false } : storedAsset;
 
       const savedProject = { ...latest, assets: [...latest.assets, asset], updatedAt: "just now" };
       setProject(savedProject);
@@ -516,8 +517,11 @@ export default function ProjectWorkspace() {
       setGeneratorPrompt("");
       setShowGenerator(false);
       setAssetStatus(`${name} generated and saved`);
+      return { project: savedProject, name };
     } catch (error) {
-      setAssetStatus(error instanceof Error ? error.message : `${type} generation failed.`);
+      const message = error instanceof Error ? error.message : `${type} generation failed.`;
+      setAssetStatus(message);
+      if (options) throw new Error(message);
     } finally {
       setAssetBusy(false);
     }
@@ -660,32 +664,31 @@ export default function ProjectWorkspace() {
     const text = draft.trim();
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
     setDraft(""); setBuilding(true);
-    const wheelRequest = /game wheel|spin(ning)? wheel|wheel.*overlay|custom(ize|izable).*wheel/i.test(text);
-    const triviaRequest = /jeopardy|jeapordy|trivia board|trivia game|trivia categories/i.test(text);
-    if (triviaRequest) {
-      const latest = project;
-      const existing = latest.gameTools || [];
-      const trivia = existing.find(t => t.name === "Trivia Board");
-      const tool: GameTool = trivia || { id:`trivia-${Date.now()}`, type:"trivia-board", name:"Trivia Board", enabled:true, config:TRIVIA_CONFIG };
-      persist({ ...latest, gameTools:[...existing.filter(t=>t.name !== "Trivia Board"), tool], messages:[...latest.messages, {role:"user",text}, {role:"assistant",text:"Added a Jeopardy-style Trivia Board with five categories and five increasing-value questions per category. Pick any question from the dashboard to take over the live overlay."}], updatedAt:"just now" });
-      setBuilding(false);
-      return;
-    }
-    if (wheelRequest) {
-      const latest = project;
-      const wheel = latest.wheel || { enabled:false,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false,visible:false };
-      const wheelProject: Project = { ...latest, updatedAt:"just now", wheel:{ ...wheel, enabled:true }, messages:[...latest.messages,{role:"user",text},{role:"assistant",text:"Added a customizable Game Wheel to the dashboard and live overlay. You can edit its title and segments in the dashboard, then spin it for viewers."}] };
-      persist(wheelProject); setBuilding(false); return;
-    }
     try {
       const context = { ...updated, assets: updated.assets.map(({ url, ...asset }) => asset), publishedSnapshot: undefined };
-      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, history: updated.messages.slice(-8), project: context }) });
+      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, history: updated.messages.slice(-30), project: context, selectedImageKey: videoReferenceKey || null }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI editing is unavailable right now.");
       const result = applyDraftChanges(updated, data.changes);
       const steps = Array.isArray(data.manualSteps) ? data.manualSteps.filter((step: unknown) => typeof step === "string") : [];
       const reply = [data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
-      persist({ ...result.project, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: reply }] });
+      if (data.action) {
+        const action = data.action;
+        if (!["image","video","voice","music","sfx"].includes(action.type) || !action.prompt?.trim()) throw new Error("That generation request could not be understood.");
+        if (action.sourceKey && !updated.assets.some(asset => asset.storageKey === action.sourceKey && isImage(asset))) throw new Error("Please identify an existing image for that request.");
+        if (action.type === "voice" && !action.voice) {
+          persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: "What kind of voice would you like—female or male?" }] });
+          return;
+        }
+        const working = { ...result.project, messages: [...updated.messages, { role: "assistant" as const, text: "Generating your requested " + action.type + "…" }] };
+        persist(working);
+        await saveQueue.current;
+        const generated = await generateAsset(action.type as GeneratorType, action.prompt, { sourceKey: action.sourceKey, voice: action.voice, baseProject: working });
+        if (!generated) throw new Error("Generation could not start. Check whether another generation is already running.");
+        persist({ ...generated.project, messages: [...updated.messages, { role: "assistant", text: generated.name + " is generated and saved in your assets for review." }] });
+      } else {
+        persist({ ...result.project, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: reply }] });
+      }
     } catch (error) {
       persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: error instanceof Error ? `${error.message} Your request is in this chat; no draft edit was applied.` : "AI editing is unavailable. No draft edit was applied." }] });
     } finally { setBuilding(false); }
