@@ -77,9 +77,16 @@ export async function POST(request:Request){
     for(const candidate of candidates){
       if(accepted.length>=count) break;
       const key=normalize(String(candidate?.text??candidate?.question??""));
-      if(!key||seen.has(key)) continue; seen.add(key);
+      const answerKey=normalize(directAnswer(candidate));
+      const fingerprint=key+"|"+answerKey;
+      if(!key||seen.has(key)||seen.has(fingerprint)) continue;
       const verified=await verifyCandidate(candidate);
-      if(verified) accepted.push(verified);
+      if(verified) {
+        const verifiedKey=normalize(verified.question);
+        if(seen.has(verifiedKey)) continue;
+        seen.add(key); seen.add(fingerprint); seen.add(verifiedKey);
+        accepted.push(verified);
+      }
     }
   }
   await process(await quizApi(category,count));
