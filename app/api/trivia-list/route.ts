@@ -55,7 +55,7 @@ async function verifyCandidate(candidate:any){
     const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)","Accept-Language":"en-US,en;q=0.9"},redirect:"follow",signal:AbortSignal.timeout(10000)}).catch(()=>null);
     if(!page?.ok) continue;
     const html=await page.text();
-    const pageText=normalize(html.replace(/<script[\\s\\S]*?<\\/script>/gi," ").replace(/<style[\\s\\S]*?<\\/style>/gi," ").replace(/<[^>]+>/g," "));
+    const pageText=normalize(html.replace(new RegExp("<script[^>]*>[\\\\s\\\\S]*?</script>","gi")," ").replace(new RegExp("<style[^>]*>[\\\\s\\\\S]*?</style>","gi")," ").replace(/<[^>]+>/g," "));
     if(!pageText.includes(answerNorm)) continue;
     const finalUrl=page.url||url;
     let finalHost=host; try{finalHost=new URL(finalUrl).hostname.replace(/^www\\./,"")}catch{}
