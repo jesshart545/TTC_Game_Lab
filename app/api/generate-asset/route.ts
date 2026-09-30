@@ -40,12 +40,15 @@ export async function POST(request: Request) {
   if (type === "image") {
     const key = readSecret("FAL_KEY");
     if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
-    const model = "fal-ai/nano-banana-2";
+    const referenceImage = typeof body?.promptImage === "string" ? body.promptImage.trim() : "";
+    if (referenceImage && !/^https:\/\//i.test(referenceImage) && !/^data:image\//i.test(referenceImage)) return jsonError("Image reference must be an HTTPS URL or image data URI.",400);
+    const model = referenceImage ? "fal-ai/nano-banana-2/edit" : "fal-ai/nano-banana-2";
     const response = await fetch(`https://fal.run/${model}`, {
       method: "POST",
       headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt,
+        ...(referenceImage ? { image_urls: [referenceImage] } : {}),
         num_images: 1,
         aspect_ratio: body?.aspectRatio || "auto",
         output_format: "png",
