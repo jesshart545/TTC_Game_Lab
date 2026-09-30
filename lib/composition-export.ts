@@ -13,7 +13,8 @@ export async function exportCompositionVideo(clips: CompositionClip[], assets: P
   try {
     report("Loading video, images and audio…"); await audio.resume();
     for (const clip of clips) {
-      const url = assets.find(a => a.storageKey && a.storageKey === clip.storageKey)?.url || clip.url;
+      const asset = assets.find(a => a.storageKey && a.storageKey === clip.storageKey);
+      const url = asset?.storageKey?.startsWith("projects/") ? `/api/assets/content?key=${encodeURIComponent(asset.storageKey)}` : asset?.url || clip.url;
       if (["video","voice","music","sfx"].includes(clip.track)) {
         if (!url) throw new Error("Missing media: " + clip.assetName);
         const element = document.createElement(clip.track === "video" ? "video" : "audio") as HTMLMediaElement;
