@@ -1,5 +1,7 @@
 import { CompositionClip, ProjectAsset } from "./project";
 
+import { drawCompositionEffect } from "./composition-effects";
+
 export async function exportCompositionVideo(clips: CompositionClip[], assets: ProjectAsset[], duration: number, name: string, report: (message: string) => void) {
   if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) throw new Error("Video export is not supported in this browser.");
   const audio = new AudioContext();
@@ -69,7 +71,7 @@ export async function exportCompositionVideo(clips: CompositionClip[], assets: P
             const visual=image || (media instanceof HTMLVideoElement?media:undefined);
             if(visual){const w=image?image.naturalWidth:(media as HTMLVideoElement).videoWidth;const h=image?image.naturalHeight:(media as HTMLVideoElement).videoHeight;const scale=Math.min(canvas.width/w,canvas.height/h);ctx.drawImage(visual,(canvas.width-w*scale)/2,(canvas.height-h*scale)/2,w*scale,h*scale);}
             if(clip.track==="text"){ctx.fillStyle="#fff";ctx.font="bold 48px sans-serif";ctx.textAlign="center";ctx.fillText(clip.text||"",640,620,1160);}
-            if(clip.track==="effect") throw new Error("Remove effect clips before video export. Rendered effect export is not available yet.");
+            if(clip.track==="effect") drawCompositionEffect(ctx,clip.effect || "Confetti",time-clip.start,canvas.width,canvas.height);
             ctx.restore();
           }
           report("Rendering video: "+Math.round(time/duration*100)+"% (keep this tab open)");
