@@ -86,12 +86,25 @@ function ToolRun({ run, assets }: { run: Run; assets: ProjectAsset[] }) {
   </section>;
 }
 
+
+function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
+  const media=useRef<HTMLMediaElement|null>(null);
+  const [blocked,setBlocked]=useState(false);
+  const [failed,setFailed]=useState(false);
+  useEffect(()=>{const element=media.current;if(element)void element.play().catch(()=>setBlocked(true));},[]);
+  const start=()=>{void media.current?.play().then(()=>setBlocked(false)).catch(()=>setFailed(true));};
+  return <>{asset.type.includes("video") ? <video ref={media as import("react").Ref<HTMLVideoElement>} aria-label={asset.name} src={asset.url} autoPlay playsInline style={{width:"100%",height:"100%",objectFit:"contain"}} onEnded={onEnd} onError={()=>setFailed(true)}/> : <audio ref={media as import("react").Ref<HTMLAudioElement>} aria-label={asset.name} src={asset.url} autoPlay onEnded={onEnd} onError={()=>setFailed(true)}/>}
+    {blocked && !failed && <button onClick={start} style={{position:"absolute",left:"30%",top:"80%",zIndex:60}}>Enable audio</button>}
+    {failed && <p role="alert">Unable to play {asset.name}. Reload the overlay to refresh its media.</p>}
+  </>;
+}
+
 export default function RuntimeActionLayers({ runtime, project }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project }) {
   return <>{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
     {project.gameTools.filter(t => t.enabled && t.inOverlayBuild && t.type === "blank-board").map(tool => <section key={tool.id} aria-label={tool.name} style={{position:"absolute",inset:"15%",zIndex:5,padding:"1rem",...toolStyle(tool)}}><ToolArtwork tool={tool} assets={project.assets}/><h3>{String(tool.config.title || tool.name)}</h3></section>)}
     {runtime.runs.map(run => run.tool ? <ToolRun key={run.id} run={run} assets={project.assets}/> : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
       return composition ? <CompositionPlayer key={run.id} composition={composition} assets={project.assets} placement={run.control.overlayResult || defaultOverlayResult} startedAt={run.at} onEnd={() => runtime.remove(run.id)}/> : null;
-    })() : run.asset ? <div key={run.id} style={{position:"absolute",inset:0,zIndex:20}}>{run.asset.type.includes("video") ? <video aria-label={run.asset.name} src={run.asset.url} autoPlay playsInline style={{width:"100%",height:"100%",objectFit:"contain"}} onEnded={() => runtime.remove(run.id)}/> : run.asset.type.includes("audio") ? <audio aria-label={run.asset.name} src={run.asset.url} autoPlay onEnded={() => runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
+    })() : run.asset ? <div key={run.id} style={{position:"absolute",inset:0,zIndex:20}}>{run.asset.type.includes("video") || run.asset.type.includes("audio") ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
   </>;
 }
