@@ -27,7 +27,7 @@ async function quizApi(category:string,count:number){
   const url=new URL("https://quizapi.io/api/v1/questions");
   url.searchParams.set("limit",String(Math.min(20,Math.max(count*2,10))));
   url.searchParams.set("category",category);
-  const r=await fetch(url,{cache:"no-store",headers:{Authorization:`Bearer ${key}`,Accept:"application/json"},signal:AbortSignal.timeout(15000) ,signal:AbortSignal.timeout(20000)}).catch(()=>null);
+  const r=await fetch(url,{cache:"no-store",headers:{Authorization:`Bearer ${key}`,Accept:"application/json"},signal:AbortSignal.timeout(15000)}).catch(()=>null);
   if(!r?.ok) return [];
   const payload=await r.json().catch(()=>[]);
   return Array.isArray(payload)?payload:Array.isArray(payload?.data)?payload.data:[];
