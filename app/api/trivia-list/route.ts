@@ -36,7 +36,8 @@ async function verifyCandidate(candidate:any){
   const question=String(candidate?.text??candidate?.question??"").trim();
   const answer=directAnswer(candidate);
   if(!acceptable(candidate)) return null;
-  const keywords=question.replace(/^(who|what|when|where|which|how)\s+/i,"").replace(/[?!.]/g," ").trim();\n  const query=`${keywords} "${answer}"`;
+  const keywords=question.replace(/^(who|what|when|where|which|how)\s+/i,"").replace(/[?!.]/g," ").trim();
+  const query=`${keywords} "${answer}"`;
   const rss="https://www.bing.com/search?format=rss&q="+encodeURIComponent(query);
   const r=await fetch(rss,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0","Accept-Language":"en-US,en;q=0.9"},signal:AbortSignal.timeout(10000)}).catch(()=>null);
   if(!r?.ok) return null;
@@ -49,8 +50,16 @@ async function verifyCandidate(candidate:any){
     let host=""; try{host=new URL(url).hostname.replace(/^www\./,"")}catch{continue}
     if(/bing\.com|microsoft\.com|wikipedia\.org/i.test(host)) continue;
     const hay=normalize(title+" "+desc);
-    if(!hay.includes(normalize(answer))) continue;
-    return {question,answer,category:String(candidate.category||"Trivia"),source:`${host} — ${title}`,sourceUrl:url,evidence:desc};
+    const answerNorm=normalize(answer);
+    if(!answerNorm || !hay.includes(answerNorm)) continue;
+    const page=await fetch(url,{cache:"no-store",headers:{"User-Agent":"Mozilla/5.0 (compatible; TTCGameLab/1.0)","Accept-Language":"en-US,en;q=0.9"},redirect:"follow",signal:AbortSignal.timeout(10000)}).catch(()=>null);
+    if(!page?.ok) continue;
+    const html=await page.text();
+    const pageText=normalize(html.replace(/<script[\\s\\S]*?<\\/script>/gi," ").replace(/<style[\\s\\S]*?<\\/style>/gi," ").replace(/<[^>]+>/g," "));
+    if(!pageText.includes(answerNorm)) continue;
+    const finalUrl=page.url||url;
+    let finalHost=host; try{finalHost=new URL(finalUrl).hostname.replace(/^www\\./,"")}catch{}
+    return {question,answer,category:String(candidate.category||"Trivia"),source:`${finalHost} — ${title}`,sourceUrl:finalUrl,evidence:desc};
   }
   return null;
 }
