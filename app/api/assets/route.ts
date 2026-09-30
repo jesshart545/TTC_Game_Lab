@@ -1,12 +1,34 @@
 import { NextResponse } from "next/server";
 import { deleteAssetsByPrefix, getAssetUrl, putAsset } from "../../../lib/object-storage";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 function safeName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "asset";
 }
 
 export async function POST(request: Request) {
   try {
+    if ((request.headers.get("content-type") || "").includes("application/json")) {
+      const body = await request.json();
+      const source = new URL(String(body.sourceUrl || ""));
+      if (source.protocol !== "https:" || source.username || source.password ||
+          !(source.hostname === "fal.media" || source.hostname.endsWith(".fal.media"))) {
+        return NextResponse.json({ error: "Unsupported generated media source." }, { status: 400 });
+      }
+      const response = await fetch(source, { redirect: "error", signal: AbortSignal.timeout(120000) });
+      if (!response.ok) throw new Error("Unable to download generated media.");
+      const maximum = 64 * 1024 * 1024;
+      if (Number(response.headers.get("content-length") || 0) > maximum) throw new Error("Generated media exceeds the 64 MB limit.");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length > maximum) throw new Error("Generated media exceeds the 64 MB limit.");
+      const name = String(body.name || "Generated media");
+      const type = response.headers.get("content-type") || "application/octet-stream";
+      const key = `projects/${safeName(String(body.projectId || "unassigned"))}/${crypto.randomUUID()}-${safeName(name)}`;
+      await putAsset(key, bytes, type);
+      return NextResponse.json({ name, type, storageKey: key, url: await getAssetUrl(key) });
+    }
     const form = await request.formData();
     const file = form.get("file");
     const projectId = String(form.get("projectId") || "unassigned");
