@@ -52,8 +52,10 @@ export async function POST(request: Request) {
   const message = payload?.choices?.[0]?.message?.content || "";
   if (draftEdit) {
     try {
-      const parsed = JSON.parse(message.trim().replace(/^```(?:json)?\s*|\s*```$/g, ""));
-      if (!parsed || typeof parsed.reply !== "string" || !parsed.changes || typeof parsed.changes !== "object") throw new Error();
+      const clean = message.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+      const parsed = JSON.parse(clean);
+      if (!parsed || typeof parsed.reply !== "string") throw new Error();
+      if (!parsed.changes || typeof parsed.changes !== "object") parsed.changes = {};
       const action = parsed.action && ["image","video","voice","music","sfx"].includes(parsed.action.type) && typeof parsed.action.prompt === "string" ? { type: parsed.action.type, prompt: parsed.action.prompt.slice(0,12000), sourceKey: typeof parsed.action.sourceKey === "string" ? parsed.action.sourceKey : null, voice: ["Aria","Roger"].includes(parsed.action.voice) ? parsed.action.voice : null } : null;
       return NextResponse.json({ configured: true, action, reply: parsed.reply, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
     } catch { return NextResponse.json({ error: "I could not interpret that edit. Please try describing it another way." }, { status: 502 }); }
