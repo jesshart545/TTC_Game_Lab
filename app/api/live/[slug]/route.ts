@@ -34,7 +34,15 @@ export async function GET(request: Request, context: Context) {
       const payload = row.payload as { categoryIndex?: number; questionIndex?: number } | null;
       return Number.isInteger(payload?.categoryIndex) && Number.isInteger(payload?.questionIndex) ? `${payload!.categoryIndex}:${payload!.questionIndex}` : null;
     }).filter(Boolean);
-    return NextResponse.json({ cursor: Number(rows[0].cursor), events: [], usedTrivia }, { headers: { "Cache-Control": "no-store" } });
+    const pollControls=live.project.controls.filter(control=>control.toolIds?.some(id=>live.project.gameTools.some(tool=>tool.id===id && tool.enabled && tool.inToolbox && tool.type==="poll")));
+    const activePolls=(await Promise.all(pollControls.map(async control=>{
+      const latest=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${control.id} AND event_type='control' AND created_at > NOW() - INTERVAL '1 hour' ORDER BY id DESC LIMIT 1`;
+      return latest[0];
+    }))).filter(Boolean);
+    const latestTrivia=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='trivia' ORDER BY id DESC LIMIT 1`;
+    const activeTrivia=latestTrivia[0]?.payload?.action !== "close" ? latestTrivia.filter(Boolean) : [];
+    const events=[...activePolls,...activeTrivia].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
+    return NextResponse.json({ cursor: Number(rows[0].cursor), events, usedTrivia }, { headers: { "Cache-Control": "no-store" } });
   }
   const rows = await live.db`SELECT id, control_id, event_type, payload FROM live_events WHERE project_id = ${live.project.id} AND id > ${since} ORDER BY id ASC LIMIT 100`;
   return NextResponse.json({ cursor: rows.length ? Number(rows[rows.length - 1].id) : since, events: rows.map(row => ({ id: Number(row.id), controlId: row.control_id, type: row.event_type, payload: row.payload })) }, { headers: { "Cache-Control": "no-store" } });

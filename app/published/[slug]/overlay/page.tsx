@@ -15,6 +15,8 @@ function assetEditStyle(asset: ProjectAsset) {
 export default function PublishedProject() {
   const { slug } = useParams<{ slug: string }>();
   const [project, setProject] = useState<Project | null>(null);
+  const [loading,setLoading]=useState(true);
+  const [loadError,setLoadError]=useState("");
   const runtime = useRuntimeActions(project);
   const fireRef = useRef(runtime.fire); fireRef.current = runtime.fire;
   const [activePackage, setActivePackage] = useState<{ control: ProjectEvent; at: number } | null>(null);
@@ -24,7 +26,7 @@ export default function PublishedProject() {
     let timer: number | undefined;
     (async () => {
       let draft: Project | null = null;
-      try { draft = await loadPublishedProjectFromServer(slug); } catch {}
+      try { draft = await loadPublishedProjectFromServer(slug); } catch(error) { if(!cancelled)setLoadError(error instanceof Error?error.message:"Could not load the published experience."); } finally { if(!cancelled)setLoading(false); }
       const published = draft;
       if (cancelled) return;
       setProject(published || null);
@@ -69,7 +71,7 @@ export default function PublishedProject() {
     })();
     return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, [slug]);
-  if (!project) return <div className="runtime-page">Project not found.</div>;
+  if (!project) return <div className="runtime-page" role="status">{loading ? "Loading published experience…" : loadError || "Project not published."}</div>;
   const placedAssets = (project.assets || []).filter(asset => asset.inProject && asset.url);
   const backgroundAsset = runtime.backgroundKey ? placedAssets.find(asset => (asset.storageKey || asset.name) === runtime.backgroundKey) || placedAssets.find(asset => asset.role === "background") : placedAssets.find(asset => asset.role === "background");
   const layerAssets = placedAssets.filter(asset => asset.role !== "background");

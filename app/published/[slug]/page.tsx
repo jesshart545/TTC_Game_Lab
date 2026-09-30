@@ -7,6 +7,8 @@ import { loadPublishedProjectFromServer, Project, ProjectEvent } from "../../../
 export default function PublishedDashboard() {
   const { slug } = useParams<{ slug: string }>();
   const [project, setProject] = useState<Project | null>(null);
+  const [loading,setLoading]=useState(true);
+  const [loadError,setLoadError]=useState("");
   const [status, setStatus] = useState("");
   const [hostKey, setHostKey] = useState("");
   const [activeTrivia, setActiveTrivia] = useState<{categoryIndex:number;questionIndex:number} | null>(null);
@@ -21,7 +23,7 @@ export default function PublishedDashboard() {
     setHostKey(window.localStorage.getItem(`ttc-live-host-${slug}`) || "");
     (async () => {
       let draft: Project | null = null;
-      try { draft = await loadPublishedProjectFromServer(slug); } catch {}
+      try { draft = await loadPublishedProjectFromServer(slug); } catch(error) { if(!cancelled)setLoadError(error instanceof Error?error.message:"Could not load the published experience."); } finally { if(!cancelled)setLoading(false); }
       if (!cancelled) setProject(draft);
     })();
     return () => { cancelled = true; };
@@ -49,7 +51,7 @@ export default function PublishedDashboard() {
       else { setActiveTrivia(null); setStatus("Returned to the trivia board."); }
     } catch (error) { setStatus(error instanceof Error ? error.message : "Could not reach the live server."); }
   }
-  if (!project) return <main className="published-dashboard"><h1>Project not published.</h1></main>;
+  if (!project) return <main className="published-dashboard"><h1>{loading ? "Loading published experience…" : loadError || "Project not published."}</h1></main>;
   const projectHost = typeof window !== "undefined" && window.location.hostname === `${project.slug}.${process.env.NEXT_PUBLIC_PROJECT_BASE_DOMAIN}`;
   const overlayPath = projectHost ? "/overlay" : `/published/${project.slug}/overlay`;
   const trivia = (project.gameTools || []).find(tool => tool.type === "trivia-board" && tool.enabled && tool.inOverlayBuild);
