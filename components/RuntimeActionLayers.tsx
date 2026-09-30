@@ -36,7 +36,7 @@ export function useRuntimeActions(project: Project | null) {
         const question = questions[Math.floor(turn / 2) % Math.max(1, questions.length)];
         add({ tool, question, reveal: turn % 2 === 1 }, 60); return;
       }
-      add({ tool, result }, tool.type === "countdown" ? Math.max(1, Number(config.seconds) || 10) + 3 : 12);
+      add({ tool, result }, tool.type === "countdown" ? Math.max(1, Number(config.seconds) || 10) + 3 : tool.type === "poll" ? 3600 : 12);
     };
     if (control.action.startsWith("background.show.")) { setBackgroundKey(control.action.slice("background.show.".length)); return; }
     if (control.action.startsWith("alert.") && p.overlay.showAlerts) add({ message: control.label }, 5);
@@ -71,7 +71,34 @@ export function useRuntimeActions(project: Project | null) {
   return { runs, backgroundKey, flash, fire, remove };
 }
 
-function ToolRun({ run, assets, index, count }: { run: Run; assets: ProjectAsset[]; index: number; count: number }) {
+
+function PollRun({tool,controlId,slug,live}:{tool:GameTool;controlId:string;slug:string;live:boolean}) {
+ const options=Array.isArray(tool.config.options)?tool.config.options.map(String):[];
+ const [counts,setCounts]=useState<number[]>(options.map(()=>0));
+ const [voted,setVoted]=useState<number|null>(null);
+ const [eventId,setEventId]=useState<number|null>(null);
+ const [error,setError]=useState("");
+ const [busy,setBusy]=useState(false);
+ const endpoint=`/api/live/${encodeURIComponent(slug)}/poll/${encodeURIComponent(tool.id)}?control=${encodeURIComponent(controlId)}`;
+ const apply=useCallback((data:{eventId:number;counts:{option:number;votes:number}[];voted:number|null})=>{
+   setCounts(options.map((_,i)=>data.counts.find(row=>row.option===i)?.votes || 0));setVoted(data.voted);setEventId(data.eventId);setError("");
+ },[options.length]);
+ useEffect(()=>{
+   if(!live)return;
+   let cancelled=false;let timer:ReturnType<typeof setTimeout>;
+   const refresh=async()=>{try{const response=await fetch(endpoint,{cache:"no-store"});const data=await response.json();if(!response.ok)throw new Error(data.error || "Unable to load votes.");if(!cancelled)apply(data);}catch(e){if(!cancelled)setError(e instanceof Error?e.message:"Unable to load votes.");}finally{if(!cancelled)timer=setTimeout(refresh,1000);}};
+   void refresh();return()=>{cancelled=true;clearTimeout(timer);};
+ },[live,endpoint,apply]);
+ async function vote(option:number) {
+   if(voted!==null || busy)return;
+   if(!live){setCounts(values=>values.map((n,i)=>i===option?n+1:n));setVoted(option);return;}
+   setBusy(true);
+   try{const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({option,eventId})});const data=await response.json();if(!response.ok)throw new Error(data.error || "Vote failed.");apply(data);}catch(e){setError(e instanceof Error?e.message:"Vote failed.");}finally{setBusy(false);}
+ }
+ return <><strong>{String(tool.config.question || tool.name)}</strong><div>{options.map((option,i)=><button key={i} disabled={busy || voted!==null || (live && eventId===null)} onClick={()=>void vote(i)} style={{display:"block",width:"100%",marginTop:8,padding:8,color:"inherit",background:"transparent",border:"1px solid currentColor"}}>{option} · {counts[i]} votes{voted===i?" ✓":""}</button>)}</div>{voted!==null && <p role="status">Vote recorded</p>}{error && <p role="alert">{error}</p>}</>;
+}
+
+function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: ProjectAsset[]; index: number; count: number; live: boolean; slug: string }) {
   const tool = run.tool!; const [now, setNow] = useState(run.at);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 100); return () => clearInterval(timer); }, []);
   const config = tool.config; const remaining = Math.max(0, Math.ceil((Number(config.seconds) || 10) - (now - run.at) / 1000));
@@ -81,7 +108,7 @@ function ToolRun({ run, assets, index, count }: { run: Run; assets: ProjectAsset
     {(tool.type === "wheel" || tool.type === "random-picker") && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
     {tool.type === "dice" && <strong role="status">{run.result}</strong>}
-    {tool.type === "poll" && <><strong>{String(config.question || "Live poll")}</strong><ol>{(Array.isArray(config.options) ? config.options : []).map((x, i) => <li key={i}>{String(x)}</li>)}</ol></>}
+    {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
     {tool.type === "trivia-list" && <><p>{String(run.question?.question || run.question?.prompt || "No questions saved")}</p>{run.reveal && <strong>Answer: {String(run.question?.answer || "")}</strong>}</>}
   </section>;
 }
@@ -99,9 +126,9 @@ function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
   </>;
 }
 
-export default function RuntimeActionLayers({ runtime, project }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project }) {
+export default function RuntimeActionLayers({ runtime, project, live = false }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project; live?: boolean }) {
   const toolRuns=runtime.runs.filter(run=>run.tool);
-  return <>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
+  return <>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length} live={live} slug={project.slug}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
     {project.gameTools.filter(t => t.enabled && t.inOverlayBuild && t.type === "blank-board").map(tool => <section key={tool.id} aria-label={tool.name} style={{position:"absolute",inset:"15%",zIndex:5,padding:"1rem",...toolStyle(tool)}}><ToolArtwork tool={tool} assets={project.assets}/><h3>{String(tool.config.title || tool.name)}</h3></section>)}
     {runtime.runs.map(run => run.tool ? null : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
