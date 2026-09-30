@@ -49,6 +49,8 @@ export type Project = {
   overlay: { title: string; subtitle: string; showChat: boolean; showAlerts: boolean; showCharacter: boolean };
   wheel: GameWheel;
   gameTools: GameTool[];
+  gamePlan?: Record<string, string>;
+  workflow?: { stage: number; workshopStep: number; promptDraft: string; generatorPrompt?: string };
   publishedSnapshot?: Omit<Project, "publishedSnapshot">;
 };
 

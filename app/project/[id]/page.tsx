@@ -10,6 +10,7 @@ import MediaEditor from "../../../components/MediaEditor";
 import AssetComposer from "../../../components/AssetComposer";
 import CompositionPlayer, { defaultOverlayResult } from "../../../components/CompositionPlayer";
 import { applyDraftChanges } from "../../../lib/draft-edit";
+import "./workflow.css";
 
 const GENERATORS = [
   { type: "image", label: "Image · Nano Banana 2", icon: "▣" },
@@ -51,6 +52,40 @@ export default function ProjectWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [draft, setDraft] = useState("");
+  const [workflowStep, setWorkflowStep] = useState(0);
+  const [workshopStep, setWorkshopStep] = useState(0);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
+  const [backgroundIntent, setBackgroundIntent] = useState(false);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const workflowRef = useRef<HTMLElement>(null);
+  function chooseWorkflowStep(step: number, substep = workshopStep) {
+    setWorkflowStep(step);
+    setWorkshopStep(substep);
+    if (step === 1) setPreviewMode("overlay");
+    if (project) persist({ ...project, workflow: { stage: step, workshopStep: substep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" });
+  }
+  function openWorkshopTool(tool: "media" | "trivia" | "boards" | "tools", background = false) {
+    chooseWorkflowStep(0, 1);
+    setBackgroundIntent(background);
+    if (background) setGeneratorType("image");
+    setShowGenerator(tool === "media");
+    setShowTriviaListGenerator(tool === "trivia");
+    setShowBoardTemplates(tool === "boards");
+    setShowToolTemplates(tool === "tools");
+    requestAnimationFrame(() => promptRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }
+  async function saveProgress() {
+    if (!project || saveBusy) return;
+    setSaveBusy(true); setSaveStatus("Saving your progress…");
+    const next = { ...project, workflow: { stage: workflowStep, workshopStep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" };
+    try {
+      await saveQueue.current;
+      await saveProjectToServer({ ...next, assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
+      setProject(next); setSaveStatus("Saved. Reopen this project to continue from this step.");
+    } catch(error) { setSaveStatus(error instanceof Error ? error.message : "Could not save. Please try again."); }
+    finally { setSaveBusy(false); }
+  }
   const [renamingProject, setRenamingProject] = useState(false);
   const [projectTitleDraft, setProjectTitleDraft] = useState("");
   const [building, setBuilding] = useState(false);
@@ -100,7 +135,11 @@ export default function ProjectWorkspace() {
         hydrated = found;
       }
       if (cancelled) return;
-      setProject(hydrated);
+      setProject({ ...hydrated, gameTools: (hydrated.gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) });
+      setWorkflowStep(Math.max(0, Math.min(2, found.workflow?.stage ?? 0)));
+      setWorkshopStep(Math.max(0, Math.min(2, found.workflow?.workshopStep ?? 0)));
+      setDraft(found.workflow?.promptDraft || "");
+      setGeneratorPrompt(found.workflow?.generatorPrompt || "");
       setHostKey(window.localStorage.getItem(`ttc-host-key-${found.id}`) || "");
       const tool = (found.gameTools || []).find(t => t.name === "Trivia Board");
       setTriviaConfig(tool?.config || null);
@@ -222,7 +261,7 @@ export default function ProjectWorkspace() {
         setTriviaListQuestions([...all]); setAssetStatus(`Verified ${all.length} of ${target} questions…`);
       }
       if(!all.length) throw new Error("No questions passed source verification.");
-      const tool:any={id:`trivia-list-${Date.now()}`,type:"trivia-list",name:`Trivia Question List (${all.length})`,enabled:true,inToolbox:false,config:{title:"Trivia Question List",requestedCount:target,suggestedCategories:categories,questions:all}};
+      const tool:any={id:`trivia-list-${Date.now()}`,type:"trivia-list",name:`Trivia Question List (${all.length})`,enabled:true,inToolbox:true,config:{title:"Trivia Question List",requestedCount:target,suggestedCategories:categories,questions:all}};
       persist({...project,gameTools:[...(project.gameTools||[]),tool],updatedAt:"just now"});
       setAssetStatus(all.length===target?`${all.length} verified trivia questions are ready.`:`${all.length} verified questions are ready; ${target-all.length} could not be verified and were not included.`);
     } catch(error){setAssetStatus(error instanceof Error?error.message:"Trivia generation failed.");} finally {setTriviaListBusy(false);}
@@ -243,13 +282,13 @@ export default function ProjectWorkspace() {
     if (existing.some(t=>t.type===type && t.enabled)) { setAssetStatus("That template is already being customized in this project."); return; }
     const info = [...BOARD_LIBRARY, ...TOOL_LIBRARY].find(t=>t.type===type)!;
     const config = type==="wheel" ? { title:"Game Wheel", segments:["Prize","Challenge","Bonus","Mystery"] } : type==="random-picker" ? { items:["Player 1","Player 2","Player 3"] } : type==="countdown" ? { seconds:10 } : type==="poll" ? { question:"Choose what happens next", options:["Option A","Option B"] } : type==="dice" ? { sides:6 } : type==="blank-board" ? { title:"Custom Board", areas:[] } : TRIVIA_CONFIG;
-    const tool: GameTool = { id: `${type}-${Date.now()}`, type, name: info.name, enabled:true, config };
+    const tool: GameTool = { id: `${type}-${Date.now()}`, type, name: info.name, enabled:true, inToolbox: type !== "trivia-board" && type !== "blank-board", config };
     const next = { ...latest, gameTools:[...existing,tool], updatedAt:"just now" };
     persist(next);
 
     // Selecting a template starts a workspace creation. It is not in the dashboard toolbox yet.
     if (type !== "trivia-board" && type !== "blank-board") {
-      setAssetStatus(`${info.name} is ready in the workspace. Customize it with the AI Creative Director, then push the finished tool to your dashboard toolbox.`);
+      setAssetStatus(`${info.name} is ready in the workspace. Customize it with the AI Creative Director, It is saved in your toolbox automatically. In Build Space, connect it to a dashboard button when you want to use it.`);
       return;
     }
 
@@ -316,12 +355,13 @@ export default function ProjectWorkspace() {
   function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); setTimeout(()=>{ setProject(current => { if (!current?.wheel) return current; const next={ ...current, wheel:{...current.wheel, spinning:false, visible:false}, updatedAt:"just now" }; const storedNext={...next,assets:next.assets.map(asset=>asset.storageKey?.startsWith("projects/")?asset:asset.storageKey?{...asset,url:undefined}:asset)}; saveQueue.current=saveQueue.current.then(()=>saveProjectToServer(storedNext)).then(()=>undefined).catch(error=>{setAssetStatus(error instanceof Error?error.message:"Project save failed.");}); return next; }); }, 3200); }
 
   function persist(next: Project) {
+    setSaveStatus("Saving changes…");
     const storedNext: Project = {
       ...next,
       assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset),
     };
     setProject(next);
-    saveQueue.current = saveQueue.current.then(() => saveProjectToServer(storedNext)).then(() => undefined).catch(error => { setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
+    saveQueue.current = saveQueue.current.then(() => saveProjectToServer(storedNext)).then(() => { setSaveStatus("Changes saved."); }).catch(error => { setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
   }
 
   function saveProjectTitle(event: FormEvent<HTMLFormElement>) {
@@ -374,11 +414,13 @@ export default function ProjectWorkspace() {
     setAssetStatus(files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} files…`);
     try {
       const uploaded = await Promise.all(files.map(file => storeUploadedAsset(project.id, file)));
-      const hydratedUploaded = await Promise.all(uploaded.map(asset => hydrateAsset(asset)));
+      const hydratedUploaded = (await Promise.all(uploaded.map(asset => hydrateAsset(asset)))).map(asset => backgroundIntent && isImage(asset) ? { ...asset, role: "background" as const, inProject: false } : asset);
       const latest = project;
       const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" };
       setProject(savedProject);
       await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
+      if (backgroundIntent && hydratedUploaded.length === 1 && isImage(hydratedUploaded[0])) setEditingAssetIndex(latest.assets.length);
+      setBackgroundIntent(false);
       setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} uploaded and saved` : `${uploaded.length} files uploaded and saved`);
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "The file could not be added.");
@@ -447,11 +489,14 @@ export default function ProjectWorkspace() {
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url };
 
-      const asset: ProjectAsset = await storeGeneratedAsset(project.id, generatedAsset);
+      const storedAsset = await storeGeneratedAsset(project.id, generatedAsset);
+      const asset: ProjectAsset = backgroundIntent && type === "image" ? { ...storedAsset, role: "background", inProject: false } : storedAsset;
 
       const savedProject = { ...latest, assets: [...latest.assets, asset], updatedAt: "just now" };
       setProject(savedProject);
       await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
+      if (backgroundIntent && type === "image") setEditingAssetIndex(latest.assets.length);
+      setBackgroundIntent(false);
       setGeneratorPrompt("");
       setShowGenerator(false);
       setAssetStatus(`${name} generated and saved`);
@@ -460,6 +505,19 @@ export default function ProjectWorkspace() {
     } finally {
       setAssetBusy(false);
     }
+  }
+
+  function placeSceneImage(index: number, role: "background" | "layer") {
+    if (!project || !isImage(project.assets[index])) return;
+    const asset = project.assets[index];
+    const assets = project.assets.map((item, i) => i === index
+      ? { ...item, inProject: true, role }
+      : role === "background" && item.inProject && item.role === "background"
+        ? { ...item, inProject: false }
+        : item);
+    persist({ ...project, assets, updatedAt: "just now" });
+    setPreviewMode("overlay");
+    setAssetStatus(role === "background" ? asset.name + " is the draft background. The previous background remains in your asset library." : asset.name + " is an image layer over your draft background. Use Edit / Crop to adjust its position, size and appearance.");
   }
 
   function toggleAssetInProject(index: number) {
@@ -704,15 +762,66 @@ export default function ProjectWorkspace() {
 
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   return <main className="workspace-page">
-    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span></div><div className="workspace-actions"><Link href={privateDashboardUrl} className="preview-link">Open Host Dashboard</Link><button onClick={publish} disabled={publishing} className="publish-btn">{publishing ? "Publishing…" : project.publishedSnapshot ? "Update Published Experience ↗" : "Publish Experience ↗"}</button><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
-    <div className="workspace-grid">
-      <section className="chat-panel"><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h1>Keep building it.</h1></div><div className="ai-orb">✦</div></div><div className="messages">{project.messages.map((m,i)=><div key={i} className={`message ${m.role}`}><div className="message-icon">{m.role === "assistant" ? "✦" : "YOU"}</div><div><strong>{m.role === "assistant" ? "TTCGameLab AI" : "You"}</strong><p>{m.text}</p></div></div>)}{building&&<div className="build-activity"><span>✦</span><div><strong>Building your change...</strong><small>Sending project context to the AI engine</small></div></div>}<div className="idea-card"><span>QUICK ACTIONS</span><button onClick={()=>setDraft("Make the main character bigger and move it slightly left.")}>Make character bigger <b>→</b></button><button onClick={()=>setDraft("Add a follower alert with a dramatic entrance animation.")}>Add follower alert <b>→</b></button><button onClick={()=>setDraft("Give the whole experience a stronger neon glow.")}>Increase neon <b>→</b></button></div></div><form className="composer" onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Tell me what to change..."/><div className="composer-bottom"><input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/><button type="button" onClick={() => { setShowBoardTemplates(v => !v); setShowToolTemplates(false); setShowGenerator(false); }}>▦ Board Templates</button><button type="button" onClick={() => { setShowToolTemplates(v => !v); setShowBoardTemplates(false); setShowGenerator(false); }}>✦ Tool Templates</button><button type="button" onClick={() => fileInputRef.current?.click()}>＋ Upload Asset</button><button type="button" onClick={() => { setShowGenerator(v => !v); setShowBoardTemplates(false); setShowToolTemplates(false); }} aria-expanded={showGenerator}>{assetBusy ? "Generating…" : "◈ Generate Asset"}</button><button type="button" onClick={() => { setShowTriviaListGenerator(v=>!v); setShowGenerator(false); setShowBoardTemplates(false); setShowToolTemplates(false); }}>? Generate Trivia List</button><button className="send" type="submit">{building ? "Building…" : "Update experience →"}</button></div>{showBoardTemplates&&<div className="idea-card"><span>BOARD TEMPLATES</span>{BOARD_LIBRARY.map(item=><button key={item.type} type="button" disabled={triviaBusy} onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{showToolTemplates&&<div className="idea-card"><span>TOOL TEMPLATES</span>{TOOL_LIBRARY.map(item=><button key={item.type} type="button" onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{showTriviaListGenerator&&<div className="idea-card generator-panel"><span>GENERATE VERIFIED TRIVIA LIST</span><small>Choose how many questions you want. Categories are optional — type one or several separated by commas, or leave them blank and TTCGameLab will choose them.</small><label>NUMBER OF QUESTIONS<input type="number" min="1" max="500" value={triviaListCount} onChange={e=>setTriviaListCount(Math.max(1,Math.min(500,Number(e.target.value)||1)))}/></label><label>CATEGORIES (OPTIONAL)<textarea value={triviaListCategories} onChange={e=>setTriviaListCategories(e.target.value)} placeholder="Example: 90s music, science, horror movies, world history"/></label><button className="build-btn" type="button" disabled={triviaListBusy} onClick={()=>void generateTriviaList()}>{triviaListBusy ? "Generating & verifying…" : `Generate ${triviaListCount} Verified Questions →`}</button>{triviaListQuestions.length>0&&<><small>{triviaListQuestions.length} verified questions ready.</small><div style={{maxHeight:320,overflow:"auto"}}>{triviaListQuestions.map((q:any,i:number)=><div key={`${q.question}-${i}`} style={{padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.12)"}}><strong>{i+1}. {q.question}</strong><div>Answer: {q.answer}</div><small>{q.category} · <a href={q.sourceUrl} target="_blank" rel="noreferrer">{q.source}</a></small></div>)}</div><button type="button" onClick={()=>void downloadTriviaPdf()}>Download PDF</button><button type="button" onClick={addTriviaListToToolbox}>Add to Toolbox</button></>}</div>}{showGenerator&&<div className="idea-card generator-panel"><span>GENERATE ASSET</span><small>Choose a media type, describe it here, then generate it directly.</small><div className="generator-types">{GENERATORS.map(item=><button key={item.type} type="button" className={generatorType===item.type?"active":""} disabled={assetBusy} onClick={()=>setGeneratorType(item.type)}>{item.icon} {item.label}</button>)}</div><textarea value={generatorPrompt} disabled={assetBusy} onChange={e=>setGeneratorPrompt(e.target.value)} placeholder={`Describe the ${generatorType} you want to generate…`}/>{generatorType==="video"&&<label>Reference image (optional)<select value={videoReferenceKey} disabled={assetBusy} onChange={e=>setVideoReferenceKey(e.target.value)}><option value="">Text-to-video</option>{project.assets.filter(isImage).map((asset,i)=><option key={(asset.storageKey||asset.name)+i} value={asset.storageKey||asset.name}>{asset.name}</option>)}</select></label>}<button className="build-btn" type="button" disabled={assetBusy || !generatorPrompt.trim()} onClick={()=>void generateAsset(generatorType, generatorPrompt)}>{assetBusy ? `Generating ${generatorType}…` : `Generate ${generatorType} →`}</button></div>}{assetStatus&&<div className="asset-empty">{assetStatus}</div>}</form></section>
+    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span></div><div className="workspace-actions"><button type="button" className="outline-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>Save progress</button><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
+    <section className="workshop-flow" ref={workflowRef} aria-label="Project workflow">
+      <div className="workshop-flow-heading"><div><small>YOUR PROJECT</small><h1>Workshop · Build Space · Publish</h1></div><div className="workshop-save"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : "Save progress"}</button><Link href="/guide" target="_blank" rel="noreferrer" className="outline-btn">How to use TTCGameLab</Link><small role="status">{saveStatus}</small></div></div>
+      <nav className="workshop-steps" aria-label="Project stages">
+        {["Workshop", "Build Space", "Publish"].map((label, index) => <button key={label} type="button" aria-current={workflowStep === index ? "step" : undefined} className={workflowStep === index ? "active" : ""} onClick={() => chooseWorkflowStep(index)}><span>{index + 1}</span>{label}</button>)}
+      </nav>
+      {workflowStep === 0 && <nav className="workshop-substeps" aria-label="Workshop steps">{["Describe your game", "Create assets & tools", "Scenes, effects & interactions"].map((label, index) => <button type="button" key={label} aria-current={workshopStep === index ? "step" : undefined} className={workshopStep === index ? "active" : ""} onClick={() => chooseWorkflowStep(0,index)}>{index + 1}. {label}</button>)}</nav>}
+      <div className="workshop-next"><div><small>{workflowStep === 0 ? "WORKSHOP · STEP " + (workshopStep + 1) + " OF 3" : workflowStep === 1 ? "BUILD SPACE" : "PUBLISH"}</small>
+        <h2>{workflowStep === 0 ? ["Describe your game and how it is played", "Create the pieces for your game", "Create scenes, effects and interactions"][workshopStep] : workflowStep === 1 ? "Assemble your overlay and dashboard" : "Approve your preview, then publish"}</h2>
+        <p>{workflowStep === 0 ? [
+          "Start with the theme, purpose and rules. Describe rounds, turns, scoring and how someone wins. Save your game plan below, then use chat to develop the framework and play-through.",
+          "Generate or upload your overlay background, then crop, edit or request AI changes. Create other assets, boards and customized tools. Tools are stored in the toolbox automatically; dashboard wiring happens in Build Space.",
+          "Create optional cutscenes, sparkles, sound, animations and interactive features. Use Asset Composer to combine and preview them, then save the finished pieces for your project."
+        ][workshopStep] : workflowStep === 1 ? "Add your finished background and assets to the overlay. Select saved tools from the toolbox and wire them to dashboard buttons as single actions or ordered, timed chains. Set background switches and cutscenes, then test the preview. Return to Workshop whenever you need another asset or tool." : "Publish only when you are satisfied with the overlay and dashboard preview. Your published project has two URLs: the audience overlay for your streaming software and the private dashboard that controls it. Saving a draft does not update the published experience."}</p></div>
+        <div className="workshop-step-actions">
+          {workflowStep === 0 && workshopStep === 0 && <button className="build-btn" type="button" onClick={() => {document.getElementById("game-plan")?.scrollIntoView({behavior:"smooth",block:"center"});document.getElementById("game-theme")?.focus({preventScroll:true});}}>Start my game plan</button>}
+          {workflowStep === 0 && workshopStep === 1 && <button className="build-btn" type="button" onClick={() => openWorkshopTool("media",true)}>Create overlay background</button>}
+          {workflowStep === 0 && workshopStep === 2 && <button className="build-btn" type="button" onClick={() => {setEditingComposition(undefined);setShowAssetComposer(true);}}>Create a scene or effect</button>}
+          {workflowStep === 1 && <><button className="build-btn" type="button" onClick={addBlankDashboardButton}>Add dashboard button</button><button className="outline-btn" type="button" onClick={() => chooseWorkflowStep(0,1)}>Create more assets or tools</button></>}
+          {workflowStep === 2 && <button className="build-btn" type="button" onClick={publish} disabled={publishing || assetBusy || building}>{publishing ? "Publishing…" : project.publishedSnapshot ? "Publish latest changes" : "Publish experience"}</button>}
+        </div>
+      </div>
+      {workflowStep === 0 && workshopStep === 0 && <section className="game-plan" id="game-plan" aria-label="Game plan"><h3>Your game plan</h3><div className="game-plan-fields">{[
+        ["theme","Theme","Example: neon Finish the Lyrics gameshow"],
+        ["purpose","Purpose and goal","What should players or the audience accomplish?"],
+        ["rules","Rules and play-through","Describe what happens from the start to the end of a game."],
+        ["rounds","Rounds","How many rounds, and what happens in each?"],
+        ["turns","Turns and players","Who plays, and how do turns move between players?"],
+        ["scoring","Points and scoring","How are points awarded or taken away?"],
+        ["winning","Winning and ties","How does the game end? How are ties resolved?"]
+      ].map(([key,label,placeholder]) => <label key={key} htmlFor={"game-"+key}>{label}<textarea id={"game-"+key} value={project.gamePlan?.[key] || ""} placeholder={placeholder} onChange={event => persist({...project,gamePlan:{...project.gamePlan,[key]:event.target.value},updatedAt:"just now"})}/></label>)}</div><button type="button" className="outline-btn" onClick={() => {setDraft("Help develop the framework and play-through for this game plan: " + JSON.stringify(project.gamePlan || {}));promptRef.current?.focus();}}>Discuss this game plan with AI</button></section>}
+      {workflowStep === 0 && <div className="workshop-tools" role="group" aria-label="Workshop creation tools"><strong>CREATE IN WORKSHOP</strong>
+        <button type="button" onClick={() => openWorkshopTool("media",true)}>Generate background image</button>
+        <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload background image</button>
+        <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload other assets</button>
+        <button type="button" onClick={() => openWorkshopTool("media")}>Generate media</button>
+        <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
+        <button type="button" onClick={() => openWorkshopTool("boards")}>Board templates</button>
+        <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button>
+        <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
+      </div>}
+      <details className="workshop-help"><summary>Guide: backgrounds, layers, tools, scenes and buttons</summary><div className="workshop-help-grid">
+        <article><h3>Create a background</h3><p>In Workshop, generate or upload your background image. Use Edit / Crop to crop it and change its size, position or appearance. Ask AI about the edit for requested changes. Save it before assembly.</p></article>
+        <article><h3>Add backgrounds and image layers</h3><p>In Build Space, choose Use as Background on a finished image. Choose Add as Image Layer for images over that background. Edit / Crop adjusts their position and zoom. Replacing a background keeps the old image saved.</p></article>
+        <article><h3>Store customized tools</h3><p>Create and customize tools in Workshop. They are stored in the toolbox automatically. In Build Space, choose which tools to connect to dashboard buttons. Unused tools stay in the toolbox.</p></article>
+        <article><h3>Create scenes and effects</h3><p>In Workshop, combine video, visual layers, voice, music, sound effects, text and effects in Asset Composer. Preview and save the composition. In Build Space, add the finished composition to the preview and assign a dashboard button.</p></article>
+        <article><h3>Wire dashboard actions</h3><p>In Build Space, add and select a dashboard button. Assign a toolbox tool or composition. Choose Single Action or Multi-Link Chain Command. For chains, add supporting actions and choose their order and delays.</p></article>
+        <article><h3>Test, save and publish</h3><p>Switch between Audience Overlay and Host Dashboard to test your build. Save progress whenever you stop. Return to Workshop for more creations at any time. Publish your approved preview, then check the two published pages together before going live.</p></article>
+      </div></details>
+      {workflowStep === 2 && <div className="workshop-publish-links">{project.publishedSnapshot ? <><h3>Your published experience</h3><p>The dashboard controls your overlay. Keep its host link private.</p><div><button type="button" className="outline-btn" onClick={copyDashboardLink}>Copy private dashboard URL</button><Link className="outline-btn" href={privateDashboardUrl} target="_blank" rel="noreferrer">Open dashboard</Link><Link className="outline-btn" href={projectUrl + "/overlay"} target="_blank" rel="noreferrer">Open overlay</Link><button type="button" className="outline-btn" onClick={async () => {try {await navigator.clipboard.writeText(new URL(projectUrl + "/overlay",window.location.origin).toString());setDashboardLinkStatus("Overlay URL copied. Add it as a browser source in your streaming software.");} catch {setDashboardLinkStatus("Open the overlay and copy its address.");}}}>Copy overlay URL</button></div></> : <p>Your two URLs will be available after publishing.</p>}{dashboardLinkStatus && <p role="status">{dashboardLinkStatus}</p>}</div>}
+      <div className="workshop-progress"><button type="button" className="outline-btn" disabled={workflowStep === 0 && workshopStep === 0} onClick={() => workflowStep === 0 ? chooseWorkflowStep(0,workshopStep-1) : chooseWorkflowStep(workflowStep-1)}>Back</button><span>All stages remain accessible. Save a draft without changing your published project.</span><button type="button" className="build-btn" disabled={workflowStep === 2} onClick={() => workflowStep === 0 && workshopStep < 2 ? chooseWorkflowStep(0,workshopStep+1) : chooseWorkflowStep(workflowStep+1)}>{workflowStep === 0 ? ["Next: Assets & tools","Next: Scenes & effects","Continue to Build Space"][workshopStep] : workflowStep === 1 ? "Continue to Publish" : "Final stage"}</button></div>
+    </section>
+    <div className={"workspace-grid workflow-layout workflow-stage-" + workflowStep}>
+      <section className="chat-panel"><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h2>{workflowStep === 0 ? "Workshop AI" : "Build Space AI"}</h2></div><div className="ai-orb">✦</div></div><div className="messages">{project.messages.map((m,i)=><div key={i} className={`message ${m.role}`}><div className="message-icon">{m.role === "assistant" ? "✦" : "YOU"}</div><div><strong>{m.role === "assistant" ? "TTCGameLab AI" : "You"}</strong><p>{m.text}</p></div></div>)}{building&&<div className="build-activity"><span>✦</span><div><strong>Building your change...</strong><small>Sending project context to the AI engine</small></div></div>}<div className="idea-card"><span>QUICK ACTIONS</span><button onClick={()=>setDraft("Make the main character bigger and move it slightly left.")}>Make character bigger <b>→</b></button><button onClick={()=>setDraft("Add a follower alert with a dramatic entrance animation.")}>Add follower alert <b>→</b></button><button onClick={()=>setDraft("Give the whole experience a stronger neon glow.")}>Increase neon <b>→</b></button></div></div><form className="composer" onSubmit={sendMessage}><label className="workshop-prompt-label" htmlFor="workshop-prompt">What would you like to create or change?</label><textarea id="workshop-prompt" ref={promptRef} value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Example: Create a neon music gameshow with a lyrics board and buttons to reveal answers."/><div className="composer-bottom"><input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/><button className="send" type="submit">{building ? "Building…" : "Apply my request"}</button></div>{showBoardTemplates&&<div className="idea-card"><span>BOARD TEMPLATES</span>{BOARD_LIBRARY.map(item=><button key={item.type} type="button" disabled={triviaBusy} onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{showToolTemplates&&<div className="idea-card"><span>TOOL TEMPLATES</span>{TOOL_LIBRARY.map(item=><button key={item.type} type="button" onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{showTriviaListGenerator&&<div className="idea-card generator-panel"><span>GENERATE VERIFIED TRIVIA LIST</span><small>Choose how many questions you want. Categories are optional — type one or several separated by commas, or leave them blank and TTCGameLab will choose them.</small><label>NUMBER OF QUESTIONS<input type="number" min="1" max="500" value={triviaListCount} onChange={e=>setTriviaListCount(Math.max(1,Math.min(500,Number(e.target.value)||1)))}/></label><label>CATEGORIES (OPTIONAL)<textarea value={triviaListCategories} onChange={e=>setTriviaListCategories(e.target.value)} placeholder="Example: 90s music, science, horror movies, world history"/></label><button className="build-btn" type="button" disabled={triviaListBusy} onClick={()=>void generateTriviaList()}>{triviaListBusy ? "Generating & verifying…" : `Generate ${triviaListCount} Verified Questions →`}</button>{triviaListQuestions.length>0&&<><small>{triviaListQuestions.length} verified questions ready.</small><div style={{maxHeight:320,overflow:"auto"}}>{triviaListQuestions.map((q:any,i:number)=><div key={`${q.question}-${i}`} style={{padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.12)"}}><strong>{i+1}. {q.question}</strong><div>Answer: {q.answer}</div><small>{q.category} · <a href={q.sourceUrl} target="_blank" rel="noreferrer">{q.source}</a></small></div>)}</div><button type="button" onClick={()=>void downloadTriviaPdf()}>Download PDF</button><small>Saved in your toolbox. Connect it to a dashboard button in Build Space when needed.</small></>}</div>}{showGenerator&&<div className="idea-card generator-panel"><span>{backgroundIntent ? "CREATE OVERLAY BACKGROUND" : "GENERATE ASSET"}</span><small>Choose a media type, describe it here, then generate it directly.</small><div className="generator-types">{GENERATORS.map(item=><button key={item.type} type="button" className={generatorType===item.type?"active":""} disabled={assetBusy} onClick={()=>setGeneratorType(item.type)}>{item.icon} {item.label}</button>)}</div><textarea value={generatorPrompt} disabled={assetBusy} onChange={e=>setGeneratorPrompt(e.target.value)} placeholder={`Describe the ${generatorType} you want to generate…`}/>{generatorType==="video"&&<label>Reference image (optional)<select value={videoReferenceKey} disabled={assetBusy} onChange={e=>setVideoReferenceKey(e.target.value)}><option value="">Text-to-video</option>{project.assets.filter(isImage).map((asset,i)=><option key={(asset.storageKey||asset.name)+i} value={asset.storageKey||asset.name}>{asset.name}</option>)}</select></label>}<button className="build-btn" type="button" disabled={assetBusy || !generatorPrompt.trim()} onClick={()=>void generateAsset(generatorType, generatorPrompt)}>{assetBusy ? `Generating ${generatorType}…` : `Generate ${generatorType} →`}</button></div>}{assetStatus&&<div className="asset-empty">{assetStatus}</div>}</form></section>
       <section className="preview-panel"><div className="preview-head"><div><small>FULL LIVESTREAM PREVIEW</small><h2>{project.name}</h2></div><div className="preview-switch"><button className={previewMode==="overlay"?"active":""} onClick={()=>setPreviewMode("overlay")}>Audience Overlay</button><button className={previewMode==="dashboard"?"active":""} onClick={()=>setPreviewMode("dashboard")}>Host Dashboard</button><span className="preview-mode-badge">DRAFT PREVIEW</span></div></div>{previewMode==="overlay"?<div className="stage">{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <><div className="stage-scan"/>{bg && <img src={bg.url} alt={bg.name} className="builder-preview-background" style={assetEditStyle(bg)}/>}<div className="builder-preview-layers">{layers.map((a,i) => isVideo(a) ? <video key={(a.storageKey || a.name)+i} src={a.url} className="builder-preview-media" style={assetEditStyle(a)} autoPlay loop muted playsInline/> : isAudio(a) ? null : <img key={(a.storageKey || a.name)+i} src={a.url} alt={a.name} className="builder-preview-media" style={assetEditStyle(a)}/>)}</div><div className="overlay-demo"><div className="overlay-live">● PREVIEW</div><div className="overlay-headline">{project.overlay.title}</div><div className="overlay-sub">{project.overlay.subtitle}</div>{project.overlay.showCharacter&&<div className="demo-character">◉</div>}<div className="demo-alert">FOLLOW ALERT</div></div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia"><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">${q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } return <div className="runtime-jeopardy"><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}<div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></>; })()}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId&&c.compositionId);if(!control)return null;const r=dragPlacement?.id===control.id?dragPlacement:control.overlayResult||defaultOverlayResult;return <div className="overlay-placement-marker" style={{left:`${r.x}%`,top:`${r.y}%`,width:`${r.width}%`,height:`${r.height}%`}} onPointerDown={e=>startPlacement(e,control,e.target instanceof HTMLElement&&e.target.dataset.resize==="true")} onPointerMove={movePlacement} onPointerUp={endPlacement}><span>{control.label} · drag to position</span><i data-resize="true" title="Drag to resize"/></div>})()}{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</div>:<div className="dashboard-preview"><h3>{project.name} · Host Dashboard</h3><p>Build the dashboard with blank trigger buttons. Customized tools are pushed to the toolbox first; board and overlay actions can then be wired to buttons individually or as ordered/timed command sequences.</p><div className="dashboard-toolbox"><small>CUSTOMIZED TOOLBOX</small>{(project.gameTools||[]).filter(tool=>tool.enabled && tool.type!=="trivia-board" && tool.inToolbox).map(tool=>{const selected=project.controls.find(control=>control.id===selectedControlId);const assigned=Boolean(selected?.toolIds?.includes(tool.id));return <div className="tool-library-row" key={tool.id}><div><b>{tool.name}</b><small>Customized workspace tool</small></div><button className="outline-btn" disabled={!selected||assigned} onClick={()=>selected&&assignToolToButton(selected.id,tool)}>{assigned?"✓ Assigned":selected?"+ Assign to selected button":"Select a dashboard button"}</button></div>})}</div><div className="dashboard-preview-buttons">{project.controls.map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div></div>}<div className="preview-foot"><span>Dashboard <b>/</b> Overlay <b>/</b> Events</span><span>{project.status} · {project.updatedAt}</span></div><div className="control-strip"><div><small>HOST CONTROLS</small><strong>Trigger your generated experience</strong></div><div className="control-buttons">{project.controls.map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div>{eventLog.length>0&&<div className="event-log">{eventLog.map((x,i)=><span key={i}>✓ {x}</span>)}</div>}</div><div className="dashboard-action-editor"><h3>Dashboard buttons</h3>{project.controls.map(control=><div className="dashboard-action-row" key={control.id}><button className="outline-btn" onClick={()=>{setSelectedControlId(control.id);setPreviewMode("overlay")}}>{control.label} · Edit Overlay Result</button>{control.compositionId&&<small>{project.compositions?.find(c=>c.id===control.compositionId)?.name||"Missing composition"}</small>}</div>)}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId);if(!control)return null;const result=control.overlayResult||defaultOverlayResult;return <div className="overlay-result-editor"><h4>Configure Dashboard Button · {control.label}</h4><label>Button label<input value={control.label} onChange={e=>updateControl(control.id,{label:e.target.value})}/></label><label>Button type<select value={control.buttonMode||"single"} onChange={e=>updateControl(control.id,{buttonMode:e.target.value as "single"|"chain"})}><option value="single">Single Action</option><option value="chain">Multi-Link Chain Command</option></select></label><div className="tool-config-list"><small>PRIMARY TOOLS · {(control.toolIds||[]).length}/2</small>{(control.toolIds||[]).map(id=>{const tool=(project.gameTools||[]).find(t=>t.id===id);return tool?<div className="tool-config" key={id}><b>{tool.name}</b><button className="danger-btn" onClick={()=>updateControl(control.id,{toolIds:(control.toolIds||[]).filter(x=>x!==id)})}>Remove</button></div>:null})}</div>{control.buttonMode==="chain"&&<div className="tool-config-list"><strong>CHAIN SUPPORTING ACTIONS</strong><small>Add media/effects to this button. Each step can fire immediately or after its own timed delay.</small><div className="trivia-actions">{project.assets.filter(a=>a.inProject).map((asset,i)=><button className="outline-btn" key={(asset.storageKey||asset.name)+i} onClick={()=>addChainStep(control.id,"asset",asset.storageKey||asset.name,asset.name)}>＋ {asset.name}</button>)}{(project.compositions||[]).filter(x=>x.inProject).map(comp=><button className="outline-btn" key={comp.id} onClick={()=>addChainStep(control.id,"composition",comp.id,comp.name)}>＋ {comp.name}</button>)}</div>{(control.chain||[]).map((step,index)=><div className="tool-config" key={step.id}><b>{index+1}. {step.label}</b><label>Timing<select value={step.timing.mode} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{...s.timing,mode:e.target.value as "immediate"|"delay"}}:s)})}><option value="immediate">Immediately</option><option value="delay">Timed delay</option></select></label>{step.timing.mode==="delay"&&<label>Seconds<input type="number" min="0" step=".1" value={step.timing.seconds||0} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{mode:"delay",seconds:Math.max(0,+e.target.value||0)}}:s)})}/></label>}<button className="danger-btn" onClick={()=>updateControl(control.id,{chain:(control.chain||[]).filter(s=>s.id!==step.id)})}>Remove</button></div>)}</div>}{control.compositionId&&<><label>Composition<select value={control.compositionId} onChange={e=>updateControl(control.id,{compositionId:e.target.value})}>{(project.compositions||[]).filter(c=>c.inProject).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>{(["x","y","width","height","layer","entranceSeconds","exitSeconds"] as const).map(key=><label key={key}>{key}<input type="number" value={result[key]} min={key==="width"||key==="height"?1:0} max={key==="layer"?100:100} step={key.endsWith("Seconds")?.1:1} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:+e.target.value}})}/></label>)}{(["entrance","exit"] as const).map(key=><label key={key}>{key}<select value={result[key]} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:e.target.value as typeof result[typeof key]}})}>{["none","fade","slide","zoom"].map(option=><option key={option}>{option}</option>)}</select></label>)}<button className="build-btn" onClick={()=>trigger(control)}>Test Trigger</button></>}<button className="danger-btn" onClick={()=>{persist({...project,controls:project.controls.filter(c=>c.id!==control.id)});setSelectedControlId(null)}}>Remove button</button></div>})()}</div></section>
       <aside className="assets-panel">
         <div className="assets-head">
           <div>
             <small>PROJECT</small>
-            <h2>Details</h2>
+            <h2>Your assets & tools</h2>
           </div>
           <button type="button" onClick={() => fileInputRef.current?.click()}>＋</button>
         </div>
@@ -727,11 +836,11 @@ export default function ProjectWorkspace() {
           <span>ASSET COMPOSER</span>
           <p className="empty-note">Combine video, voice, music, SFX, text and effects on a synchronized multi-track timeline.</p>
           <button className="build-btn composer-open-btn" onClick={() => {setEditingComposition(undefined);setShowAssetComposer(true)}}>◫ Open Asset Composer</button>
-          {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="outline-btn" onClick={()=>toggleComposition(comp.id)}>{comp.inProject?"✓ In Preview":"+ Add to Preview"}</button><button className="outline-btn" onClick={()=>{setEditingComposition(comp);setShowAssetComposer(true)}}>Edit</button><button className="build-btn" disabled={!comp.inProject} onClick={()=>addCompositionControl(comp)}>Assign button</button><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
+          {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="outline-btn build-only" onClick={()=>toggleComposition(comp.id)}>{comp.inProject?"✓ In Preview":"+ Add to Preview"}</button><button className="outline-btn" onClick={()=>{setEditingComposition(comp);setShowAssetComposer(true)}}>Edit</button><button className="build-btn build-only" disabled={!comp.inProject} onClick={()=>addCompositionControl(comp)}>Assign button</button><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
         </div>
         <div className="detail-block">
           <span>WORKSPACE CREATIONS</span>
-          <p className="empty-note">Choose board and tool templates below the chat. Customize them with the AI before deciding where they belong.</p>
+          <p className="empty-note">Choose templates from Creation Tools above. Customize them in chat, then add finished boards to the overlay and finished tools to the dashboard toolbox.</p>
           <div className="tool-config-list">
             {(project.gameTools || []).map(tool => (
               <div className="tool-config" key={tool.id}>
@@ -739,7 +848,7 @@ export default function ProjectWorkspace() {
                   <b>{tool.name}</b>
                   <em>{tool.type}</em>
                 </div>
-                <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small><button className="build-btn" disabled={(tool.type==="trivia-board" || tool.type==="blank-board")?tool.inOverlayBuild:tool.inToolbox} onClick={()=>pushWorkspaceCreation(tool)}>{(tool.type==="trivia-board" || tool.type==="blank-board")?(tool.inOverlayBuild?"✓ Added to Overlay Build":"Add to Overlay Build"):(tool.inToolbox?"✓ Added to Toolbox":"Add to Toolbox")}</button>
+                <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small>{(tool.type === "trivia-board" || tool.type === "blank-board") ? <button className="build-btn build-only" disabled={tool.inOverlayBuild} onClick={()=>pushWorkspaceCreation(tool)}>{tool.inOverlayBuild ? "Added to Overlay Build" : "Add to Overlay Build"}</button> : <small>Saved in Toolbox · connect to a button in Build Space when needed</small>}
               </div>
             ))}
           </div>
@@ -806,6 +915,7 @@ export default function ProjectWorkspace() {
         </div>
         <div className="detail-block">
           <span>ASSETS</span>
+          <p className="empty-note">Choose where each asset belongs. Backgrounds fill the scene; image layers sit over them. Edits stay in the draft until you publish.</p>
           {project.assets.map((a, index) => (
             <div className="asset-card" key={(a.storageKey || a.name) + index}>
               <div className="asset-card-title">
@@ -816,11 +926,12 @@ export default function ProjectWorkspace() {
                 <button type="button" className="danger-btn asset-delete-btn" onClick={() => handleDeleteAsset(a)}>Delete</button>
               </div>
               {renderAsset(a, index)}
-              <button type="button" className={a.inProject ? "outline-btn asset-project-btn active" : "outline-btn asset-project-btn"} onClick={() => toggleAssetInProject(index)}>{a.inProject ? "✓ Added to Project" : "+ Add to Project"}</button>{isImage(a) && (project.gameTools || []).some(tool => tool.type === "blank-board" && tool.enabled) && <button type="button" className="outline-btn asset-project-btn" onClick={() => useImageAsBlankBoardBackground(index)}>▣ Use as Board Background</button>}
+              {isImage(a) && <div className="asset-placement-actions"><button type="button" className="outline-btn" onClick={() => placeSceneImage(index, "background")}>{a.inProject && a.role === "background" ? "Current Background" : "Use as Background"}</button><button type="button" className="outline-btn" onClick={() => placeSceneImage(index, "layer")}>{a.inProject && a.role === "layer" ? "Image Layer Added" : "Add as Image Layer"}</button><small>Use Edit / Crop to position and resize this image.</small></div>}
+              <button type="button" className={a.inProject ? "outline-btn asset-project-btn build-only active" : "outline-btn asset-project-btn build-only"} onClick={() => toggleAssetInProject(index)}>{a.inProject ? "✓ Added to Project" : "+ Add to Project"}</button>{isImage(a) && (project.gameTools || []).some(tool => tool.type === "blank-board" && tool.enabled) && <button type="button" className="outline-btn asset-project-btn build-only" onClick={() => useImageAsBlankBoardBackground(index)}>▣ Use as Board Background</button>}
             </div>
           ))}
           {project.assets.length === 0 && (
-            <p className="empty-note">No assets yet. Upload or generate them from the conversation.</p>
+            <p className="empty-note">No assets yet. Use the visible Workshop creation tools to generate or upload your first background or other media.</p>
           )}
         </div>
         <div className="detail-block">
