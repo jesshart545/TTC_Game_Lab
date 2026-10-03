@@ -174,9 +174,21 @@ export async function POST(request: Request) {
     const key = readSecret("FAL_KEY");
     if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
 
-    const model = "fal-ai/minimax-music/v2.6";
+    const lyrics = typeof body?.lyrics === "string" ? body.lyrics.trim() : "";
+    if (lyrics.length > 3500) return jsonError("Lyrics must be 3,500 characters or fewer.", 400);
+    const durationMatch = prompt.match(/\b(\d{1,3})(?:\s*(?:to|[-–])\s*(\d{1,3}))?\s*[- ]?\s*(?:seconds?|secs?|s)\b/i);
+    const duration = body?.durationSeconds === 0 ? null
+      : body?.durationSeconds != null ? Number(body.durationSeconds)
+      : durationMatch ? Number(durationMatch[2] || durationMatch[1]) : null;
+    if (duration !== null && (!Number.isInteger(duration) || duration < 3 || duration > 120)) {
+      return jsonError("Choose a short music length from 3 to 120 seconds, or choose Full song.", 400);
+    }
+    if (lyrics.split(/\r?\n/).some(line => line.length > 200)) return jsonError("Keep each lyric line to 200 characters or fewer.", 400);
+    const model = duration !== null ? "minimax/music-3" : "fal-ai/minimax-music/v2.6";
     const stylePrompt = prompt.length >= 10 ? prompt.slice(0, 2000) : `${prompt} cinematic music`;
     const instrumental = /instrumental|no vocals?|without vocals?|no singing|no voice/i.test(prompt);
+
+    if (duration !== null && !instrumental && !lyrics) return jsonError("Paste the lyrics for your short song into the Lyrics field, or request instrumental music.", 400);
 
     const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
       method: "POST",
@@ -185,11 +197,15 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        prompt: stylePrompt,
-        lyrics: "",
-        lyrics_optimizer: !instrumental,
-        is_instrumental: instrumental,
-        audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
+        ...(duration !== null ? {
+          prompt: `${stylePrompt}. Create a complete short intro of no more than ${duration} seconds, with a concise ending.`,
+          lyrics: instrumental ? "[instrumental]" : lyrics,
+          duration,
+        } : {
+          prompt: stylePrompt, lyrics,
+          lyrics_optimizer: !lyrics && !instrumental, is_instrumental: instrumental,
+          audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
+        }),
       }),
       cache: "no-store",
     });
