@@ -109,7 +109,7 @@ export default function ProjectWorkspace() {
   const [showBoardGuide, setShowBoardGuide] = useState(false);
   const [guideBoardId, setGuideBoardId] = useState("");
   const [showToolTemplates, setShowToolTemplates] = useState(false);
-  const [musicLengthMode, setMusicLengthMode] = useState("auto");
+  const [musicLengthMode, setMusicLengthMode] = useState("short");
   const [musicDuration, setMusicDuration] = useState(25);
   const [musicLyrics, setMusicLyrics] = useState("");
   const [generatorType, setGeneratorType] = useState<GeneratorType>("image");
@@ -515,7 +515,7 @@ export default function ProjectWorkspace() {
 
       const latest = projectRef.current || options?.baseProject || project;
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
-      const generatedAsset = { name, type: data.model || type, url };
+      const generatedAsset = { name, type: data.model || type, url, ...(type === "music" ? { durationSeconds: data.durationSeconds } : {}) };
 
       const storedAsset = await storeGeneratedAsset(project.id, generatedAsset);
       const asset: ProjectAsset = !options && backgroundIntent && type === "image" ? { ...storedAsset, role: "background", inProject: false } : storedAsset;
@@ -717,7 +717,7 @@ export default function ProjectWorkspace() {
         const working = { ...result.project, messages: [...updated.messages, { role: "assistant" as const, text: "Generating your requested " + action.type + "…" }] };
         persist(working);
         await saveQueue.current;
-        const generated = await generateAsset(action.type as GeneratorType, action.prompt, { sourceKey: action.sourceKey, voice: action.voice, baseProject: working });
+        const generated = await generateAsset(action.type as GeneratorType, action.prompt, { sourceKey: action.sourceKey, voice: action.voice, baseProject: working, durationSeconds: action.durationSeconds, lyrics: action.lyrics });
         if (!generated) throw new Error("Generation could not start. Check whether another generation is already running.");
         persist({ ...generated.project, messages: [...updated.messages, { role: "assistant", text: generated.name + " is generated and saved in your assets for review." }] });
       } else {

@@ -1,3 +1,4 @@
+import { capMusicWav } from "../../../lib/music-wav";
 import { NextResponse } from "next/server";
 import { deleteAssetsByPrefix, getAssetUrl, putAsset } from "../../../lib/object-storage";
 
@@ -21,8 +22,9 @@ export async function POST(request: Request) {
       if (!response.ok) throw new Error("Unable to download generated media.");
       const maximum = 64 * 1024 * 1024;
       if (Number(response.headers.get("content-length") || 0) > maximum) throw new Error("Generated media exceeds the 64 MB limit.");
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      let bytes: Uint8Array = new Uint8Array(await response.arrayBuffer());
       if (bytes.length > maximum) throw new Error("Generated media exceeds the 64 MB limit.");
+      if (body.durationSeconds != null) bytes = capMusicWav(bytes, Number(body.durationSeconds));
       const name = String(body.name || "Generated media");
       const type = response.headers.get("content-type") || "application/octet-stream";
       const key = `projects/${safeName(String(body.projectId || "unassigned"))}/${crypto.randomUUID()}-${safeName(name)}`;

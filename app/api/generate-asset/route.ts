@@ -1,3 +1,4 @@
+import { musicDuration } from "../../../lib/music-duration";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -176,10 +177,7 @@ export async function POST(request: Request) {
 
     const lyrics: string = typeof body?.lyrics === "string" ? body.lyrics.trim() : "";
     if (lyrics.length > 3500) return jsonError("Lyrics must be 3,500 characters or fewer.", 400);
-    const durationMatch = prompt.match(/\b(\d{1,3})(?:\s*(?:to|[-–])\s*(\d{1,3}))?\s*[- ]?\s*(?:seconds?|secs?|s)\b/i);
-    const duration = body?.durationSeconds === 0 ? null
-      : body?.durationSeconds != null ? Number(body.durationSeconds)
-      : durationMatch ? Number(durationMatch[2] || durationMatch[1]) : null;
+    const duration = musicDuration(prompt, body?.durationSeconds);
     if (duration !== null && (!Number.isInteger(duration) || duration < 3 || duration > 120)) {
       return jsonError("Choose a short music length from 3 to 120 seconds, or choose Full song.", 400);
     }
@@ -236,6 +234,7 @@ export async function POST(request: Request) {
       responseUrl: submitPayload.response_url || "",
       model,
       provider: "fal",
+      durationSeconds: duration,
     });
   }
 

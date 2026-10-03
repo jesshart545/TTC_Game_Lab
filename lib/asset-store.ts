@@ -73,12 +73,12 @@ export async function storeUploadedAsset(projectId: string, file: File): Promise
   return uploadBlob(projectId, file.name, file);
 }
 
-export async function storeGeneratedAsset(projectId: string, asset: { name: string; type: string; url: string }): Promise<ProjectAsset> {
+export async function storeGeneratedAsset(projectId: string, asset: { name: string; type: string; url: string; durationSeconds?: number | null }): Promise<ProjectAsset> {
   const source = new URL(asset.url);
   if (source.protocol === "https:" && (source.hostname === "fal.media" || source.hostname.endsWith(".fal.media"))) {
     const response = await fetch("/api/assets", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, name: asset.name, sourceUrl: asset.url }),
+      body: JSON.stringify({ projectId, name: asset.name, sourceUrl: asset.url, durationSeconds: asset.durationSeconds }),
     });
     const data = await response.json().catch(() => ({ error: "Unable to save generated media. Please try again." }));
     if (!response.ok) throw new Error(data.error || "Unable to save generated media.");
