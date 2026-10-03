@@ -174,7 +174,7 @@ export async function POST(request: Request) {
     const key = readSecret("FAL_KEY");
     if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
 
-    const lyrics = typeof body?.lyrics === "string" ? body.lyrics.trim() : "";
+    const lyrics: string = typeof body?.lyrics === "string" ? body.lyrics.trim() : "";
     if (lyrics.length > 3500) return jsonError("Lyrics must be 3,500 characters or fewer.", 400);
     const durationMatch = prompt.match(/\b(\d{1,3})(?:\s*(?:to|[-–])\s*(\d{1,3}))?\s*[- ]?\s*(?:seconds?|secs?|s)\b/i);
     const duration = body?.durationSeconds === 0 ? null
