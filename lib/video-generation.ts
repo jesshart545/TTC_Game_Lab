@@ -2,10 +2,10 @@ export async function waitForGeneratedVideo(
   videoId: string,
   model: string,
   onProgress?: (progress: number) => void,
-  maxAttempts = 90,
+  maxAttempts = 300,
 ): Promise<string> {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const response = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(videoId)}&model=${encodeURIComponent(model)}&provider=${encodeURIComponent(model === "gen4.5" ? "runway" : "agnes")}`, { cache: "no-store" });
+    const response = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(videoId)}&model=${encodeURIComponent(model)}&provider=${encodeURIComponent(model.startsWith("fal-ai/wan/") ? "fal" : model === "gen4.5" ? "runway" : "agnes")}`, { cache: "no-store" });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload?.error || "Unable to check video generation status.");
 

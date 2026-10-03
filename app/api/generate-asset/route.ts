@@ -65,14 +65,37 @@ export async function POST(request: Request) {
   }
 
   if (type === "video") {
-    const runwayKey = readSecret("RUNWAYML_API_SECRET");
-    if (!runwayKey) return jsonError("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
-
-    const model = "gen4.5";
     const promptImage = typeof body?.promptImage === "string" ? body.promptImage.trim() : "";
     if (promptImage && !/^https:\/\//i.test(promptImage) && !/^data:image\//i.test(promptImage)) {
       return jsonError("Video reference image must be an HTTPS URL or image data URI.", 400);
     }
+    if (promptImage) {
+      const key = readSecret("FAL_KEY");
+      if (!key) return jsonError("Image animation is unavailable because fal.ai is not configured.", 503);
+      const model = "fal-ai/wan/v2.2-a14b/image-to-video/turbo";
+      const response = await fetch(`https://queue.fal.run/${model}`, {
+        method: "POST",
+        headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_url: promptImage, prompt, resolution: "720p", aspect_ratio: "auto",
+          enable_safety_checker: true, enable_output_safety_checker: true,
+          enable_prompt_expansion: false,
+        }),
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return jsonError(response.status === 402
+        ? "fal.ai has insufficient credits for image animation. The site administrator needs to add fal.ai credits."
+        : payload?.detail || payload?.error || payload?.message || "Image animation failed.", response.status);
+      if (!payload?.request_id || !payload?.status_url || !payload?.response_url) return jsonError("The animation provider returned an incomplete task.", 502);
+      const videoId = Buffer.from(JSON.stringify({
+        id: payload.request_id, status: payload.status_url, result: payload.response_url,
+      })).toString("base64url");
+      return NextResponse.json({ type, status: "processing", videoId, model, provider: "fal" });
+    }
+    const runwayKey = readSecret("RUNWAYML_API_SECRET");
+    if (!runwayKey) return jsonError("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
+    const model = "gen4.5";
     const response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
       method: "POST",
       headers: {

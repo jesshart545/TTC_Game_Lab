@@ -24,6 +24,35 @@ export async function GET(request: Request) {
   const provider = url.searchParams.get("provider") || "agnes";
   if (!id) return NextResponse.json({ error: "A video id is required." }, { status: 400 });
 
+  if (provider === "fal") {
+    const key = readSecret("FAL_KEY");
+    if (!key) return NextResponse.json({ error: "fal.ai is not configured." }, { status: 503 });
+    let task: { id: string; status: string; result: string };
+    try {
+      if (id.length > 4000) throw new Error();
+      task = JSON.parse(Buffer.from(id, "base64url").toString("utf8"));
+      if (!/^[a-zA-Z0-9-]+$/.test(task.id)) throw new Error();
+      for (const value of [task.status, task.result]) {
+        const endpoint = new URL(value);
+        if (endpoint.origin !== "https://queue.fal.run" || endpoint.username || endpoint.password
+          || !endpoint.pathname.startsWith("/fal-ai/wan/")
+          || !endpoint.pathname.includes(`/requests/${task.id}`)) throw new Error();
+      }
+    } catch { return NextResponse.json({ error: "Invalid animation task." }, { status: 400 }); }
+    const headers = { Authorization: `Key ${key}` };
+    const response = await fetch(task.status, { headers, cache: "no-store", redirect: "error" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return NextResponse.json({ error: payload?.detail || payload?.error || "Unable to check animation progress." }, { status: response.status });
+    if (payload?.error || ["FAILED", "CANCELED", "CANCELLED"].includes(payload?.status)) {
+      return NextResponse.json({ status: "failed", error: payload.error || "Image animation failed." });
+    }
+    if (payload?.status !== "COMPLETED") return NextResponse.json({ status: "processing", progress: payload?.status === "IN_PROGRESS" ? 50 : 0 });
+    const result = await fetch(task.result, { headers, cache: "no-store", redirect: "error" });
+    const output = await result.json().catch(() => ({}));
+    if (!result.ok || !output?.video?.url) return NextResponse.json({ status: "failed", error: output?.detail || output?.error || "Animation finished without a video." });
+    return NextResponse.json({ status: "completed", progress: 100, url: output.video.url, model, provider: "fal" });
+  }
+
   if (provider === "runway") {
     const runwayKey = readSecret("RUNWAYML_API_SECRET");
     if (!runwayKey) return NextResponse.json({ error: "RUNWAYML_API_SECRET is not configured in Vercel." }, { status: 503 });
