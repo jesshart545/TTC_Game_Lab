@@ -174,7 +174,17 @@ export async function POST(request: Request) {
     const key = readSecret("FAL_KEY");
     if (!key) return jsonError("FAL_KEY is not configured in Vercel.", 503);
 
-    const model = "fal-ai/minimax-music/v2.6";
+    const lyrics = typeof body?.lyrics === "string" ? body.lyrics.trim() : "";
+    if (lyrics.length > 6000) return jsonError("Lyrics must be 6,000 characters or fewer.", 400);
+    const durationMatch = prompt.match(/\b(\d{1,3})(?:\s*(?:to|[-–])\s*(\d{1,3}))?\s*[- ]?\s*(?:seconds?|secs?|s)\b/i);
+    const duration = body?.durationSeconds === 0 ? null
+      : body?.durationSeconds != null ? Number(body.durationSeconds)
+      : durationMatch ? Number(durationMatch[2] || durationMatch[1]) : null;
+    if (duration !== null && (!Number.isInteger(duration) || duration < 3 || duration > 120)) {
+      return jsonError("Choose a short music length from 3 to 120 seconds, or choose Full song.", 400);
+    }
+    if (lyrics.split(/\r?\n/).some(line => line.length > 200)) return jsonError("Keep each lyric line to 200 characters or fewer.", 400);
+    const model = duration !== null ? "fal-ai/elevenlabs/music" : "fal-ai/minimax-music/v2.6";
     const stylePrompt = prompt.length >= 10 ? prompt.slice(0, 2000) : `${prompt} cinematic music`;
     const instrumental = /instrumental|no vocals?|without vocals?|no singing|no voice/i.test(prompt);
 
@@ -185,11 +195,26 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        prompt: stylePrompt,
-        lyrics: "",
-        lyrics_optimizer: !instrumental,
-        is_instrumental: instrumental,
-        audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
+        ...(duration !== null ? (lyrics && !instrumental ? {
+          composition_plan: {
+            positive_global_styles: [stylePrompt],
+            negative_global_styles: ["extended instrumental intro", "extra verses"],
+            sections: [{
+              section_name: "Intro theme", positive_local_styles: ["complete ending"],
+              negative_local_styles: [], duration_ms: duration * 1000,
+              lines: lyrics.split(/\r?\n/).filter(line => line.trim()),
+            }],
+          },
+          respect_sections_durations: true,
+        } : {
+          prompt: stylePrompt,
+          music_length_ms: duration * 1000,
+          force_instrumental: instrumental,
+        }) : {
+          prompt: stylePrompt, lyrics,
+          lyrics_optimizer: !lyrics && !instrumental, is_instrumental: instrumental,
+          audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
+        }),
       }),
       cache: "no-store",
     });
