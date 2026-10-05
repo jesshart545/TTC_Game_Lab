@@ -41,7 +41,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = 
     setReady(false); setHidden(false); setError(""); loadedId.current = ""; failed.current=false; autoplayBlocked.current=false;
     const waitingSince=Date.now();
     const readinessTimer=window.setInterval(()=>{
-      if (Date.now()-waitingSince>=20000) {clearInterval(readinessTimer);if (!cancelled) {failed.current=true;setHidden(true);report("timeout");player.current?.destroy();player.current=null;}}
+      if (Date.now()-waitingSince>=20000) {clearInterval(readinessTimer);if (!cancelled) report("stalled");}
     },1000);
     const element = document.createElement("div"); root.current.replaceChildren(element);
     void loadPlayerApi().then(() => {
@@ -61,10 +61,10 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = 
             if (event.data === 0) { if (!monitor) setHidden(true); report("ended"); }
           },
           onAutoplayBlocked: () => { if (!cancelled && !failed.current) { autoplayBlocked.current=true; report("blocked"); } },
-          onError: (event: {data:number}) => { clearInterval(readinessTimer);if (!cancelled) { failed.current=true; setHidden(true); setError([100,101,150].includes(event.data) ? "YouTube does not allow this video to play here. Choose another video in the host dashboard." : "The YouTube player could not play this video. Check the browser playback settings or choose another video."); report("error",event.data); } },
+          onError: (event: {data:number}) => { clearInterval(readinessTimer);if (!cancelled) { failed.current=true; setHidden(!monitor); setError([100,101,150].includes(event.data) ? "YouTube does not allow this video to play here. Choose another video in the host dashboard." : "The YouTube player could not play this video. Check the browser playback settings or choose another video."); report("error",event.data); } },
         },
       });
-    }).catch(() => { clearInterval(readinessTimer);if (!cancelled && !failed.current) { failed.current=true; setHidden(true); setError("YouTube player could not load."); report("error"); } });
+    }).catch(() => { clearInterval(readinessTimer);if (!cancelled && !failed.current) { failed.current=true; setHidden(!monitor); setError("YouTube player could not load."); report("error"); } });
     return () => { cancelled = true; clearInterval(readinessTimer);player.current?.destroy(); player.current = null; };
   }, [playbackId]);
   const loadedId = useRef("");
