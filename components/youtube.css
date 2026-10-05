@@ -2,10 +2,10 @@
 .youtube-host-panel h3 {color:#20e8ff;margin:0 0 10px;}
 .youtube-host-panel p,.youtube-host-panel small {line-height:1.5;}
 .youtube-host-panel label {display:grid;gap:6px;font-size:14px;}
-.youtube-host-panel input {box-sizing:border-box;min-width:0;background:#080e19;color:#fff;border:1px solid #50627e;border-radius:8px;padding:10px;width:100%;}
+.youtube-host-panel input,.youtube-host-panel select {box-sizing:border-box;min-width:0;background:#080e19;color:#fff;border:1px solid #50627e;border-radius:8px;padding:10px;width:100%;}
 .youtube-host-panel button {cursor:pointer;color:white;background:#263754;border:1px solid #20e8ff66;border-radius:8px;padding:10px 14px;font-size:14px;}
 .youtube-host-panel button:disabled {opacity:.45;cursor:default;}
-.youtube-host-panel button:focus-visible,.youtube-host-panel input:focus-visible {outline:2px solid #20e8ff;outline-offset:2px;}
+.youtube-host-panel button:focus-visible,.youtube-host-panel input:focus-visible,.youtube-host-panel select:focus-visible {outline:2px solid #20e8ff;outline-offset:2px;}
 .youtube-search {margin:12px 0;}
 .youtube-search>div {display:flex;gap:8px;margin-top:6px;}
 .youtube-results {display:grid;gap:8px;max-height:340px;overflow:auto;}
