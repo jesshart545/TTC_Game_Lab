@@ -184,7 +184,8 @@ export default function ProjectWorkspace() {
       const response = await fetch("/api/youtube?" + new URLSearchParams({video:String(command.videoId),region:String(command.region || "US")}), {cache:"no-store"});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Video is not embeddable.");
-      next = {action,videoId:data.video.id,title:data.video.title,start:Number(command.start),end:command.end == null ? null : Number(command.end),position:Number(command.start),at:Date.now(),volume:Number(command.volume),placement:safeYoutubePlacement(command.placement),playbackId:crypto.randomUUID()};
+      if (data.video.durationSeconds && (Number(command.start) >= data.video.durationSeconds || command.end != null && Number(command.end) > data.video.durationSeconds + 1)) throw new Error("Choose clip times within the video's length.");
+      next = {action,videoId:data.video.id,title:data.video.title,durationSeconds:data.video.durationSeconds,start:Number(command.start),end:command.end == null ? null : Number(command.end),position:Number(command.start),at:Date.now(),volume:Number(command.volume),placement:safeYoutubePlacement(command.placement),playbackId:crypto.randomUUID()};
     } else {
       if (!youtubePreview || youtubePreview.action === "stop") throw new Error("No preview clip is active.");
       next = {...youtubePreview,action,position:youtubeActualPosition.current ?? youtubePosition(youtubePreview),at:Date.now()};

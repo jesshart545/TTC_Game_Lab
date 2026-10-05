@@ -85,7 +85,8 @@ export async function POST(request: Request, context: Context) {
         if (!id || !Number.isFinite(start) || start < 0 || start > 86400 || end !== null && (!Number.isFinite(end) || end <= start || end > 86400) || !Number.isFinite(volume) || volume < 0 || volume > 100) return NextResponse.json({ error: "Choose a valid video, clip range and volume." }, { status: 400 });
         const region = /^[A-Z]{2}$/.test(body.youtube.region || "") ? body.youtube.region : "US";
         const verified = await verifyYoutube(id, region);
-        state = { action, videoId: id, title: verified.title, start, end, position: start, at: Date.now(), volume, placement: safeYoutubePlacement(body.youtube.placement), playbackId: randomUUID() };
+        if (verified.durationSeconds && (start >= verified.durationSeconds || end !== null && end > verified.durationSeconds + 1)) return NextResponse.json({error:"Choose clip times within the video's length."},{status:400});
+        state = { action, videoId: id, title: verified.title, durationSeconds: verified.durationSeconds, start, end, position: start, at: Date.now(), volume, placement: safeYoutubePlacement(body.youtube.placement), playbackId: randomUUID() };
       } else {
         if (!previous || previous.action === "stop") return NextResponse.json({ error: "No YouTube clip is active on the overlay." }, { status: 400 });
         const reports = await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube-feedback' AND payload->>'playbackId'=${previous.playbackId} ORDER BY id DESC LIMIT 1`;

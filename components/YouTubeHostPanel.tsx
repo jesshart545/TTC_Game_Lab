@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
-import { clipTime, safeYoutubePlacement, youtubeId, youtubePlacement } from "../lib/youtube";
+import { clipTime, formatYoutubeDuration, safeYoutubePlacement, youtubeId, youtubePlacement } from "../lib/youtube";
 import type { YouTubeState, YouTubeVideo, YouTubePlacement } from "../lib/youtube";
 import "./youtube.css";
 const countryNames = new Intl.DisplayNames(["en"], {type:"region"});
@@ -55,6 +55,7 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     try {
       const begin = clipTime(start), finish = end.trim() ? clipTime(end) : null;
       if (action === "play" && (!selected || begin === null || end.trim() && finish === null || finish !== null && begin !== null && finish <= begin)) throw new Error("Choose a video and a valid start/end range.");
+      if (action === "play" && selected?.durationSeconds && (begin! >= selected.durationSeconds || finish !== null && finish > selected.durationSeconds + 1)) throw new Error("Choose clip times within the video's length ("+formatYoutubeDuration(selected.durationSeconds)+").");
       const body = { action, ...(action === "play" ? { videoId:selected!.id,region,start:begin,end:finish,volume,placement } : {}) };
       let next: YouTubeState;
       if (onCommand) next = await onCommand(body);
@@ -87,8 +88,8 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     <label htmlFor={id+"-country"}>Playback country<select id={id+"-country"} value={region} onChange={e=>{setRegion(e.target.value);setResults([]);setSelected(null);rejected.current.clear();setMessage("Search again to check videos for this country.");}}>{playbackCountries.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select></label>
     <form onSubmit={e=>void lookup(e)} className="youtube-search"><label htmlFor={id+"-search"}>Search YouTube</label><div><input id={id+"-search"} value={query} maxLength={200} onChange={e=>setQuery(e.target.value)} placeholder="Song, artist, video or topic"/><button disabled={busy || !query.trim() || configured === false}>Search</button></div></form>
     <form onSubmit={e=>void lookup(e,true)} className="youtube-search"><label htmlFor={id+"-link"}>Or paste a YouTube link</label><div><input id={id+"-link"} value={link} onChange={e=>setLink(e.target.value)} placeholder="https://www.youtube.com/watch?v=…"/><button disabled={busy || !link.trim()}>Check link</button></div></form>
-    <div className="youtube-results">{results.map(item=><button key={item.id} type="button" aria-pressed={selected?.id===item.id} disabled={busy} onClick={()=>{setSelected(item);setError("");setMessage("Video selected privately. Press Play on overlay when ready.");}}>{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<span><strong>{item.title}</strong><small>{item.channel}</small></span></button>)}</div>
-    {selected && <p><strong>Selected privately:</strong> {selected.title}</p>}
+    <div className="youtube-results">{results.map(item=><button key={item.id} type="button" aria-pressed={selected?.id===item.id} disabled={busy} onClick={()=>{setSelected(item);setError("");setMessage("Video selected privately. Press Play on overlay when ready.");}}>{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<span><strong>{item.title}</strong><small>{item.channel} · {item.live ? "Live" : formatYoutubeDuration(item.durationSeconds)}</small></span></button>)}</div>
+    {selected && <p><strong>Selected privately:</strong> {selected.title} · {selected.live ? "Live" : formatYoutubeDuration(selected.durationSeconds)}</p>}
     <div className="youtube-clip-settings"><label>Start (seconds or m:ss)<input value={start} onChange={e=>setStart(e.target.value)}/></label><label>End (optional)<input value={end} onChange={e=>setEnd(e.target.value)} placeholder="Leave blank to play to the end"/></label><label>Volume<input type="range" min={0} max={100} value={volume} onChange={e=>setVolume(Number(e.target.value))}/>{volume}%</label></div>
     <details><summary>Overlay screen size & position</summary><div className="youtube-clip-settings">{(["x","y","width","height"] as const).map(key=><label key={key}>{key === "x" ? "Left %" : key === "y" ? "Top %" : key === "width" ? "Width %" : "Height %"}<input type="number" min={key==="width" || key==="height" ? 20 : 0} max={100} value={placement[key]} onChange={e=>setPlacement(safeYoutubePlacement({...placement,[key]:Number(e.target.value)}))}/></label>)}</div><small>Position and volume apply when you press Play on overlay.</small></details>
     <div className="youtube-player-controls"><button type="button" disabled={busy || !selected || (!hostKey && !onCommand)} onClick={()=>void command("play")}>Play on overlay</button><button type="button" disabled={busy || !active} onClick={()=>void command("pause")}>Pause</button><button type="button" disabled={busy || !active} onClick={()=>void command("resume")}>Resume</button><button type="button" disabled={busy || !active} onClick={()=>void command("stop")}>Stop & hide</button></div>

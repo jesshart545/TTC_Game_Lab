@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { getDb } from "./db";
 import type { YouTubeVideo } from "./youtube";
+import { youtubeDuration } from "./youtube";
 
 export async function validLiveHost(db: NonNullable<ReturnType<typeof getDb>>, projectId: string, key: string) {
   if (!/^[a-f0-9]{64}$/.test(key)) return false;
@@ -35,7 +36,8 @@ function usable(item: any, region: string) {
 }
 function video(item: any): YouTubeVideo {
   return { id: String(item.id), title: String(item.snippet?.title || "YouTube video"), channel: String(item.snippet?.channelTitle || ""),
-    thumbnail: String(item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "") };
+    thumbnail: String(item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || ""),
+    durationSeconds: item.snippet?.liveBroadcastContent === "live" ? null : youtubeDuration(item.contentDetails?.duration), live: item.snippet?.liveBroadcastContent === "live" };
 }
 export async function searchYoutube(query: string, region: string): Promise<YouTubeVideo[]> {
   const search = await youtubeApi("search", { part: "snippet", type: "video", q: query, maxResults: "12", videoEmbeddable: "true", videoSyndicated: "true", regionCode: region, safeSearch: "moderate" });

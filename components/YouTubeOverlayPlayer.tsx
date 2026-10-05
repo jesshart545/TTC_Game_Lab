@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { youtubePosition } from "../lib/youtube";
+import { formatYoutubeDuration, youtubePosition } from "../lib/youtube";
 import type { YouTubeState } from "../lib/youtube";
 
 type Player = { destroy(): void; playVideo(): void; pauseVideo(): void; stopVideo(): void; setVolume(n: number): void; getCurrentTime(): number; getPlayerState(): number; seekTo(n: number, allow: boolean): void; loadVideoById(options: Record<string, unknown>): void; cueVideoById(options: Record<string, unknown>): void };
@@ -81,6 +81,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
   }, [ready, state, active]);
   if (!active || !state) return null;
   return <section aria-label="YouTube overlay player" style={{ position: "absolute", left: state.placement.x+"%", top: state.placement.y+"%", width: state.placement.width+"%", height: state.placement.height+"%", minWidth: 200, minHeight: 200, zIndex: 80, background: "#000", display: hidden ? "none" : "block" }}>
+    {state.durationSeconds != null && <span style={{position:"absolute",top:-24,right:0,color:"white",background:"#101827",padding:"2px 6px",fontSize:12}}>Video length: {formatYoutubeDuration(state.durationSeconds)}</span>}
     <div ref={root} style={{ width: "100%", height: "100%" }}/>
     {error && <p role="alert" style={{ position:"absolute",inset:0,padding:24,background:"#101827",color:"white" }}>{error}</p>}
     {blocked && !error && <button type="button" onClick={() => { player.current?.playVideo(); }} style={{ position:"absolute",left:"25%",bottom:12,zIndex:81 }}>Enable YouTube playback</button>}

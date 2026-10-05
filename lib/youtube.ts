@@ -1,10 +1,22 @@
 export type YouTubePlacement = { x: number; y: number; width: number; height: number };
-export type YouTubeVideo = { id: string; title: string; channel: string; thumbnail: string };
+export type YouTubeVideo = { id: string; title: string; channel: string; thumbnail: string; durationSeconds?: number | null; live?: boolean };
 export type YouTubeState = {
   action: "play" | "pause" | "resume" | "stop"; videoId: string; title: string;
   start: number; end: number | null; position: number; at: number; volume: number;
-  placement: YouTubePlacement; playbackId: string;
+  placement: YouTubePlacement; playbackId: string; durationSeconds?: number | null;
 };
+export function youtubeDuration(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const match = /^P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/.exec(value);
+  if (!match || !match.slice(1).some(Boolean)) return null;
+  const seconds = Number(match[1] || 0)*86400 + Number(match[2] || 0)*3600 + Number(match[3] || 0)*60 + Number(match[4] || 0);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+export function formatYoutubeDuration(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return "Length unavailable";
+  const total = Math.floor(value), hours = Math.floor(total / 3600), minutes = Math.floor(total % 3600 / 60), seconds = total % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}` : `${minutes}:${String(seconds).padStart(2,"0")}`;
+}
 export const youtubePlacement: YouTubePlacement = { x: 10, y: 20, width: 80, height: 60 };
 export function youtubeId(value: unknown): string | null {
   if (typeof value !== "string") return null;
