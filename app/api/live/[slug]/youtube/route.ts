@@ -48,7 +48,7 @@ export async function POST(request: Request, context: Context) {
     const latest = await db`SELECT payload FROM live_events WHERE project_id=${project.id} AND event_type='youtube-feedback' ORDER BY id DESC LIMIT 1`;
     if (latest[0]?.payload?.playbackId === body.playbackId && latest[0]?.payload?.status === body.status) return NextResponse.json({ ok: true });
     const position = Number(body.position);
-    const payload = JSON.stringify({ playbackId: body.playbackId, status: body.status, at: Date.now(), ...(Number.isFinite(position) && position >= 0 && position <= 86400 ? {position} : {}) });
+    const payload = JSON.stringify({ playbackId: body.playbackId, status: body.status, at: Date.now(), ...([2,5,100,101,150,153].includes(body.errorCode) ? {errorCode:body.errorCode} : {}), ...(Number.isFinite(position) && position >= 0 && position <= 86400 ? {position} : {}) });
     await db`INSERT INTO live_events (project_id,control_id,event_type,payload) VALUES (${project.id},'youtube','youtube-feedback',${payload}::jsonb)`;
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: "Player feedback unavailable." }, { status: 502 }); }

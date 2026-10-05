@@ -19,20 +19,20 @@ function loadPlayerApi() {
   });
   return apiPromise;
 }
-export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state: YouTubeState | null; slug?: string; onStatus?: (feedback: {playbackId:string;status:string;position:number}) => void }) {
+export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state: YouTubeState | null; slug?: string; onStatus?: (feedback: {playbackId:string;status:string;position:number;errorCode?:number}) => void }) {
   const root = useRef<HTMLDivElement>(null), player = useRef<Player | null>(null);
   const latest = useRef(state); latest.current = state;
   const statusCallback = useRef(onStatus); statusCallback.current = onStatus;
   const [ready, setReady] = useState(false), [hidden, setHidden] = useState(false), [blocked, setBlocked] = useState(false), [error, setError] = useState("");
   const active = Boolean(state && state.action !== "stop" && (state.end === null || state.position < state.end));
   const playbackId = active ? state?.playbackId : undefined;
-  const report = (status: string) => {
+  const report = (status: string, errorCode?: number) => {
     const current = latest.current;
     if (!current) return;
     const position = Math.max(current.start, player.current?.getCurrentTime() ?? current.position);
-    statusCallback.current?.({playbackId:current.playbackId,status,position});
+    statusCallback.current?.({playbackId:current.playbackId,status,position,errorCode});
     if (!slug) return;
-    void fetch("/api/live/" + encodeURIComponent(slug) + "/youtube", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playbackId: current.playbackId, status, position }) }).catch(() => {});
+    void fetch("/api/live/" + encodeURIComponent(slug) + "/youtube", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playbackId: current.playbackId, status, position, errorCode }) }).catch(() => {});
   };
   useEffect(() => {
     if (!playbackId || !root.current) { player.current?.destroy(); player.current = null; setReady(false); return; }
@@ -54,7 +54,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
             if (event.data === 0) { setHidden(true); report("ended"); }
           },
           onAutoplayBlocked: () => { if (!cancelled) { setBlocked(true); report("blocked"); } },
-          onError: () => { if (!cancelled) { setError("This YouTube video cannot play here. Choose another video in the host dashboard."); report("error"); } },
+          onError: (event: {data:number}) => { if (!cancelled) { setError([100,101,150].includes(event.data) ? "YouTube does not allow this video to play here. Choose another video in the host dashboard." : "The YouTube player could not play this video. Check the browser playback settings or choose another video."); report("error",event.data); } },
         },
       });
     }).catch(() => { if (!cancelled) { setError("YouTube player could not load."); report("error"); } });

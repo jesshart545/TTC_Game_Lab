@@ -1,20 +1,24 @@
 "use client";
-import { FormEvent, useEffect, useId, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { clipTime, safeYoutubePlacement, youtubeId, youtubePlacement } from "../lib/youtube";
 import type { YouTubeState, YouTubeVideo, YouTubePlacement } from "../lib/youtube";
 import "./youtube.css";
+const countryNames = new Intl.DisplayNames(["en"], {type:"region"});
+const playbackCountries = "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(" ").map(code=>({code,name:countryNames.of(code)||code})).sort((a,b)=>a.name.localeCompare(b.name,"en"));
 
 export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlacement, onCommand, previewState, previewFeedback }: {
   slug?: string; hostKey?: string; placement?: YouTubePlacement;
-  previewState?: YouTubeState | null; previewFeedback?: {playbackId:string;status:string}|null;
+  previewState?: YouTubeState | null; previewFeedback?: {playbackId:string;status:string;errorCode?:number}|null;
   onCommand?: (command: Record<string, unknown>) => Promise<YouTubeState>;
 }) {
   const id = useId();
+  const [region,setRegion] = useState("US");
+  const rejected = useRef(new Set<string>());
   const [query,setQuery] = useState(""), [link,setLink] = useState(""), [results,setResults] = useState<YouTubeVideo[]>([]);
   const [selected,setSelected] = useState<YouTubeVideo|null>(null), [start,setStart] = useState("0"), [end,setEnd] = useState("");
   const [volume,setVolume] = useState(80), [placement,setPlacement] = useState(safeYoutubePlacement(initialPlacement || youtubePlacement));
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(""), [error,setError] = useState(""), [state,setState] = useState<YouTubeState|null>(null);
-  const [feedback,setFeedback] = useState<{playbackId:string;status:string}|null>(null), [configured,setConfigured] = useState<boolean|null>(null);
+  const [feedback,setFeedback] = useState<{playbackId:string;status:string;errorCode?:number}|null>(null), [configured,setConfigured] = useState<boolean|null>(null);
   const endpoint = slug ? "/api/live/"+encodeURIComponent(slug)+"/youtube" : "/api/youtube";
   const headers: Record<string,string> = hostKey ? { "x-host-key":hostKey } : {};
   useEffect(() => {
@@ -37,12 +41,12 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     try {
       const value = fromLink ? youtubeId(link) : query.trim();
       if (!value) throw new Error(fromLink ? "Enter a valid YouTube link." : "Enter something to search for.");
-      const params: Record<string,string> = fromLink ? {video:value} : {q:value};
+      const params: Record<string,string> = fromLink ? {video:value,region} : {q:value,region};
       const response = await fetch(endpoint+"?"+new URLSearchParams(params), { headers,cache:"no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "YouTube request failed.");
-      if (fromLink) { setSelected(data.video); setMessage("Video selected privately. Press Play on overlay when ready."); }
-      else { setResults(data.videos || []); setMessage(data.videos?.length ? "Choose a video. Nothing will appear on the overlay yet." : "No playable videos found. Try another search."); }
+      if (fromLink) { if(rejected.current.has(data.video.id)) throw new Error("YouTube rejected this video during playback. Choose another video."); setSelected(data.video); setMessage("Video selected privately. Press Play on overlay when ready."); }
+      else { const videos=(data.videos || []).filter((video:YouTubeVideo)=>!rejected.current.has(video.id)); setResults(videos); setMessage(videos.length ? "Choose a video. Nothing will appear on the overlay yet." : "No playable videos found. Try another search."); }
     } catch(e) { setError(e instanceof Error ? e.message : "YouTube request failed."); }
     finally { setBusy(false); }
   }
@@ -51,7 +55,7 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     try {
       const begin = clipTime(start), finish = end.trim() ? clipTime(end) : null;
       if (action === "play" && (!selected || begin === null || end.trim() && finish === null || finish !== null && begin !== null && finish <= begin)) throw new Error("Choose a video and a valid start/end range.");
-      const body = { action, ...(action === "play" ? { videoId:selected!.id,start:begin,end:finish,volume,placement } : {}) };
+      const body = { action, ...(action === "play" ? { videoId:selected!.id,region,start:begin,end:finish,volume,placement } : {}) };
       let next: YouTubeState;
       if (onCommand) next = await onCommand(body);
       else {
@@ -67,12 +71,20 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
   }
   const currentState = onCommand ? previewState ?? state : state;
   const currentFeedback = onCommand ? previewFeedback : feedback;
+  useEffect(()=>{
+    if (!currentState || !currentFeedback || currentFeedback.playbackId !== currentState.playbackId || ![100,101,150].includes(currentFeedback.errorCode || 0)) return;
+    const videoId=currentState.videoId;
+    rejected.current.add(videoId);
+    setResults(previous=>previous.filter(video=>video.id!==videoId));
+    setSelected(previous=>previous?.id===videoId ? null : previous);
+  },[currentState?.playbackId,currentState?.videoId,currentFeedback?.playbackId,currentFeedback?.errorCode]);
   const active = currentState && currentState.action !== "stop";
   const playerStatus = currentFeedback && currentState && currentFeedback.playbackId === currentState.playbackId && active ? currentFeedback.status : "";
   const statusText: Record<string,string> = {loading:"YouTube is loading the video…",playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The overlay browser blocked playback. Enable playback in the browser source, then press Resume.",error:"This video cannot play on the overlay. Choose another video."};
   return <section className="youtube-host-panel" aria-label="YouTube host controls">
     <h3>YouTube · Live clips</h3><p>Search and selection stay on this dashboard. The audience sees a video only after you press Play on overlay.</p>
     {configured === false && <p role="status">YouTube search needs the site's Google API connection. Checking and playing a YouTube link is available.</p>}
+    <label htmlFor={id+"-country"}>Playback country<select id={id+"-country"} value={region} onChange={e=>{setRegion(e.target.value);setResults([]);setSelected(null);rejected.current.clear();setMessage("Search again to check videos for this country.");}}>{playbackCountries.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select></label>
     <form onSubmit={e=>void lookup(e)} className="youtube-search"><label htmlFor={id+"-search"}>Search YouTube</label><div><input id={id+"-search"} value={query} maxLength={200} onChange={e=>setQuery(e.target.value)} placeholder="Song, artist, video or topic"/><button disabled={busy || !query.trim() || configured === false}>Search</button></div></form>
     <form onSubmit={e=>void lookup(e,true)} className="youtube-search"><label htmlFor={id+"-link"}>Or paste a YouTube link</label><div><input id={id+"-link"} value={link} onChange={e=>setLink(e.target.value)} placeholder="https://www.youtube.com/watch?v=…"/><button disabled={busy || !link.trim()}>Check link</button></div></form>
     <div className="youtube-results">{results.map(item=><button key={item.id} type="button" aria-pressed={selected?.id===item.id} disabled={busy} onClick={()=>{setSelected(item);setError("");setMessage("Video selected privately. Press Play on overlay when ready.");}}>{item.thumbnail&&<img src={item.thumbnail} alt=""/>}<span><strong>{item.title}</strong><small>{item.channel}</small></span></button>)}</div>
