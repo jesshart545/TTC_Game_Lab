@@ -19,10 +19,10 @@ export function FittedCard({project,tool,text,answer=false,phase='question',show
    const measure=(size:number,wide:number)=>{p.style.fontSize=size+'px';p.style.width=Math.max(1,wide-pad*2)+'px';return {height:p.scrollHeight+pad*2,width:p.scrollWidth+pad*2};};
    let needed=measure(font,width);
    // Grow only as much as this text requires; preserve whole words.
-   if(needed.width>width){width=Math.min(maxW,needed.width);needed=measure(font,width);}
+   if(needed.width>width+1){width=Math.min(maxW,needed.width);needed=measure(font,width);}
    while(needed.height>maxH&&width<maxW){width=Math.min(maxW,width+Math.max(1,w*.02));needed=measure(font,width);}
    height=Math.min(maxH,Math.max(height,needed.height));
-   if(needed.height>maxH||needed.width>maxW){let lo=.05,hi=font;for(let n=0;n<24;n++){const mid=(lo+hi)/2,m=measure(mid,width);if(m.height<=height&&m.width<=width)lo=mid;else hi=mid;}font=lo;}
+   if(needed.height>maxH||needed.width>maxW+1){let lo=.05,hi=font;for(let n=0;n<24;n++){const mid=(lo+hi)/2,m=measure(mid,width);if(m.height<=height+1&&m.width<=width+1)lo=mid;else hi=mid;}font=lo;}
    const x=Math.max(left,Math.min(w-right-width,bounded(cfg.x,17.5,0,100)*w/100)),y=Math.max(top,Math.min(h-bottom-height,bounded(cfg.y,30,0,100)*h/100));
    setBox({x,y,width,height,font,padding:pad});
   };fit();const resize=new ResizeObserver(fit);resize.observe(host);let cancelled=false;void document.fonts.ready.then(()=>{if(!cancelled)fit();});return()=>{cancelled=true;resize.disconnect();};
