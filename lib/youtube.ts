@@ -3,7 +3,7 @@ export type YouTubeVideo = { id: string; title: string; channel: string; thumbna
 export type YouTubeState = {
   action: "play" | "pause" | "resume" | "stop"; videoId: string; title: string;
   start: number; end: number | null; position: number; at: number; volume: number;
-  placement: YouTubePlacement; playbackId: string; durationSeconds?: number | null;
+  placement: YouTubePlacement; playbackId: string; durationSeconds?: number | null; startMuted?: boolean;
 };
 export function youtubeDuration(value: unknown): number | null {
   if (typeof value !== "string") return null;

@@ -18,3 +18,6 @@
 .youtube-player-controls>button:first-child {background:linear-gradient(110deg,#007f99,#7242c5);}
 .youtube-host-panel [role=alert] {color:#ffb4b4;}
 .youtube-host-panel summary {cursor:pointer;color:#20e8ff;}
+
+.youtube-host-panel .youtube-muted-start {display:flex;align-items:center;gap:8px;margin:12px 0;}
+.youtube-host-panel .youtube-muted-start input {width:auto;}

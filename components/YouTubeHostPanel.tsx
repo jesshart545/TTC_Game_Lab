@@ -6,13 +6,14 @@ import "./youtube.css";
 const countryNames = new Intl.DisplayNames(["en"], {type:"region"});
 const playbackCountries = "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(" ").map(code=>({code,name:countryNames.of(code)||code})).sort((a,b)=>a.name.localeCompare(b.name,"en"));
 
-export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlacement, onCommand, previewState, previewFeedback }: {
-  slug?: string; hostKey?: string; placement?: YouTubePlacement;
+export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlacement, onCommand, previewState, previewFeedback, initialStartMuted, onStartMutedChange }: {
+  slug?: string; hostKey?: string; placement?: YouTubePlacement; initialStartMuted?: boolean; onStartMutedChange?: (muted:boolean)=>void;
   previewState?: YouTubeState | null; previewFeedback?: {playbackId:string;status:string;errorCode?:number}|null;
   onCommand?: (command: Record<string, unknown>) => Promise<YouTubeState>;
 }) {
   const id = useId();
   const [region,setRegion] = useState("US");
+  const [startMuted,setStartMuted] = useState(initialStartMuted !== false);
   const rejected = useRef(new Set<string>());
   const [query,setQuery] = useState(""), [link,setLink] = useState(""), [results,setResults] = useState<YouTubeVideo[]>([]);
   const [selected,setSelected] = useState<YouTubeVideo|null>(null), [start,setStart] = useState("0"), [end,setEnd] = useState("");
@@ -56,7 +57,7 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
       const begin = clipTime(start), finish = end.trim() ? clipTime(end) : null;
       if (action === "play" && (!selected || begin === null || end.trim() && finish === null || finish !== null && begin !== null && finish <= begin)) throw new Error("Choose a video and a valid start/end range.");
       if (action === "play" && selected?.durationSeconds && (begin! >= selected.durationSeconds || finish !== null && finish > selected.durationSeconds + 1)) throw new Error("Choose clip times within the video's length ("+formatYoutubeDuration(selected.durationSeconds)+").");
-      const body = { action, ...(action === "play" ? { videoId:selected!.id,region,start:begin,end:finish,volume,placement } : {}) };
+      const body = { action, ...(action === "play" ? { videoId:selected!.id,region,startMuted,start:begin,end:finish,volume,placement } : {}) };
       let next: YouTubeState;
       if (onCommand) next = await onCommand(body);
       else {
@@ -79,9 +80,9 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     setResults(previous=>previous.filter(video=>video.id!==videoId));
     setSelected(previous=>previous?.id===videoId ? null : previous);
   },[currentState?.playbackId,currentState?.videoId,currentFeedback?.playbackId,currentFeedback?.errorCode]);
-  const active = currentState && currentState.action !== "stop";
+  const active = currentState && currentState.action !== "stop" && !["error","timeout","ended"].includes(currentFeedback?.playbackId===currentState.playbackId ? currentFeedback.status : "");
   const playerStatus = currentFeedback && currentState && currentFeedback.playbackId === currentState.playbackId && active ? currentFeedback.status : "";
-  const statusText: Record<string,string> = {loading:"YouTube is loading the video…",playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The overlay browser blocked playback. Enable playback in the browser source, then press Resume.",error:"This video cannot play on the overlay. Choose another video."};
+  const statusText: Record<string,string> = {loading:"YouTube is loading the video…",buffering:"YouTube is buffering the video…",timeout:"The video did not start or stopped buffering. It has been hidden; retry or choose another video.","playing-muted":"Playing muted. Enable video sound in the overlay browser if needed.",playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The overlay browser blocked playback. Enable playback in the browser source, then press Resume.",error:"This video cannot play on the overlay. Choose another video."};
   return <section className="youtube-host-panel" aria-label="YouTube host controls">
     <h3>YouTube · Live clips</h3><p>Search and selection stay on this dashboard. The audience sees a video only after you press Play on overlay.</p>
     {configured === false && <p role="status">YouTube search needs the site's Google API connection. Checking and playing a YouTube link is available.</p>}
@@ -92,6 +93,7 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     {selected && <p><strong>Selected privately:</strong> {selected.title} · {selected.live ? "Live" : formatYoutubeDuration(selected.durationSeconds)}</p>}
     <div className="youtube-clip-settings"><label>Start (seconds or m:ss)<input value={start} onChange={e=>setStart(e.target.value)}/></label><label>End (optional)<input value={end} onChange={e=>setEnd(e.target.value)} placeholder="Leave blank to play to the end"/></label><label>Volume<input type="range" min={0} max={100} value={volume} onChange={e=>setVolume(Number(e.target.value))}/>{volume}%</label></div>
     <details><summary>Overlay screen size & position</summary><div className="youtube-clip-settings">{(["x","y","width","height"] as const).map(key=><label key={key}>{key === "x" ? "Left %" : key === "y" ? "Top %" : key === "width" ? "Width %" : "Height %"}<input type="number" min={key==="width" || key==="height" ? 20 : 0} max={100} value={placement[key]} onChange={e=>setPlacement(safeYoutubePlacement({...placement,[key]:Number(e.target.value)}))}/></label>)}</div><small>Position and volume apply when you press Play on overlay.</small></details>
+    <label className="youtube-muted-start"><input type="checkbox" checked={startMuted} onChange={e=>{setStartMuted(e.target.checked);onStartMutedChange?.(e.target.checked);}}/>Start muted for reliable browser-source playback</label><small>For clips with sound, enable sound once in the overlay browser. Turn off Start muted if your browser source allows sound automatically.</small>
     <div className="youtube-player-controls"><button type="button" disabled={busy || !selected || (!hostKey && !onCommand)} onClick={()=>void command("play")}>Play on overlay</button><button type="button" disabled={busy || !active} onClick={()=>void command("pause")}>Pause</button><button type="button" disabled={busy || !active} onClick={()=>void command("resume")}>Resume</button><button type="button" disabled={busy || !active} onClick={()=>void command("stop")}>Stop & hide</button></div>
     {busy && <p role="status">Working…</p>}{error && <p role="alert">{error}</p>}{!error && <p role="status">{statusText[playerStatus] || message}</p>}
   </section>;

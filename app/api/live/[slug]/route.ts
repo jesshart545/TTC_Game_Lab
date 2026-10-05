@@ -46,6 +46,19 @@ export async function GET(request: Request, context: Context) {
     const latestTrivia=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='trivia' ORDER BY id DESC LIMIT 1`;
     const activeTrivia=latestTrivia[0]?.payload?.action !== "close" ? latestTrivia.filter(Boolean) : [];
     const youtube = await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube' AND created_at > NOW() - INTERVAL '4 hours' ORDER BY id DESC LIMIT 1`;
+    if (youtube[0]?.payload) {
+      const state=youtube[0].payload as YouTubeState;
+      const reports=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube-feedback' AND payload->>'playbackId'=${state.playbackId} ORDER BY id DESC LIMIT 1`;
+      const report=reports[0]?.payload;
+      if (state.action === "stop" || report?.playbackId===state.playbackId && ["ended","error","timeout"].includes(report.status)) youtube.splice(0);
+      else {
+        const reported=report?.playbackId===state.playbackId && Number.isFinite(report.position) && report.at>=state.at;
+        const position=reported ? Math.max(state.start,report.position + (["playing","playing-muted"].includes(report.status) ? Math.max(0,Date.now()-report.at)/1000 : 0)) : youtubePosition(state);
+        const end=state.end ?? state.durationSeconds;
+        if (end != null && position>=end) youtube.splice(0);
+        else youtube[0].payload={...state,position,at:Date.now(),action:reported && report.status==="paused" ? "pause" : state.action};
+      }
+    }
     const events=[...activePolls,...activeTrivia,...youtube].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
     return NextResponse.json({ cursor: Number(rows[0].cursor), events, usedTrivia }, { headers: { "Cache-Control": "no-store" } });
   }
@@ -86,13 +99,13 @@ export async function POST(request: Request, context: Context) {
         const region = /^[A-Z]{2}$/.test(body.youtube.region || "") ? body.youtube.region : "US";
         const verified = await verifyYoutube(id, region);
         if (verified.durationSeconds && (start >= verified.durationSeconds || end !== null && end > verified.durationSeconds + 1)) return NextResponse.json({error:"Choose clip times within the video's length."},{status:400});
-        state = { action, videoId: id, title: verified.title, durationSeconds: verified.durationSeconds, start, end, position: start, at: Date.now(), volume, placement: safeYoutubePlacement(body.youtube.placement), playbackId: randomUUID() };
+        state = { action, videoId: id, title: verified.title, durationSeconds: verified.durationSeconds, startMuted: body.youtube.startMuted !== false, start, end, position: start, at: Date.now(), volume, placement: safeYoutubePlacement(body.youtube.placement), playbackId: randomUUID() };
       } else {
         if (!previous || previous.action === "stop") return NextResponse.json({ error: "No YouTube clip is active on the overlay." }, { status: 400 });
         const reports = await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube-feedback' AND payload->>'playbackId'=${previous.playbackId} ORDER BY id DESC LIMIT 1`;
         const report = reports[0]?.payload;
         const position = report && Number.isFinite(report.position) && report.at >= previous.at
-          ? Math.max(previous.start, Math.min(previous.end ?? 86400, report.position + (report.status === "playing" ? Math.max(0, Date.now()-report.at)/1000 : 0)))
+          ? Math.max(previous.start, Math.min(previous.end ?? 86400, report.position + ((report.status === "playing" || report.status === "playing-muted") ? Math.max(0, Date.now()-report.at)/1000 : 0)))
           : youtubePosition(previous);
         if (action === "resume" && previous.end !== null && position >= previous.end) return NextResponse.json({ error: "This clip has finished. Press Play on overlay to restart it." }, { status: 400 });
         state = { ...previous, action, position, at: Date.now() };
