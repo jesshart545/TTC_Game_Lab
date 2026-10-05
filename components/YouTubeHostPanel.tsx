@@ -65,7 +65,7 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     finally { setBusy(false); }
   }
   const active = state && state.action !== "stop";
-  const playerStatus = feedback?.playbackId === state?.playbackId && active ? feedback.status : "";
+  const playerStatus = feedback && state && feedback.playbackId === state.playbackId && active ? feedback.status : "";
   const statusText: Record<string,string> = {playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The overlay browser blocked playback. Enable playback in the browser source, then press Resume.",error:"This video cannot play on the overlay. Choose another video."};
   return <section className="youtube-host-panel" aria-label="YouTube host controls">
     <h3>YouTube · Live clips</h3><p>Search and selection stay on this dashboard. The audience sees a video only after you press Play on overlay.</p>
