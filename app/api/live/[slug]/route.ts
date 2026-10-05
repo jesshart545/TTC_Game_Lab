@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import type { Project } from "../../../../lib/project";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { verifyYoutube } from "../../../../lib/youtube-server";
+import { youtubeId, youtubePosition, safeYoutubePlacement } from "../../../../lib/youtube";
+import type { YouTubeState } from "../../../../lib/youtube";
 
 type Context = { params: Promise<{ slug: string }> };
 
@@ -41,7 +45,8 @@ export async function GET(request: Request, context: Context) {
     }))).filter(Boolean);
     const latestTrivia=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='trivia' ORDER BY id DESC LIMIT 1`;
     const activeTrivia=latestTrivia[0]?.payload?.action !== "close" ? latestTrivia.filter(Boolean) : [];
-    const events=[...activePolls,...activeTrivia].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
+    const youtube = await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube' AND created_at > NOW() - INTERVAL '4 hours' ORDER BY id DESC LIMIT 1`;
+    const events=[...activePolls,...activeTrivia,...youtube].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
     return NextResponse.json({ cursor: Number(rows[0].cursor), events, usedTrivia }, { headers: { "Cache-Control": "no-store" } });
   }
   const rows = await live.db`SELECT id, control_id, event_type, payload FROM live_events WHERE project_id = ${live.project.id} AND id > ${since} ORDER BY id ASC LIMIT 100`;
@@ -64,6 +69,38 @@ export async function POST(request: Request, context: Context) {
   }
 
   await ensureLiveEvents(live.db);
+
+  if (body.youtube) {
+    try {
+      const action = body.youtube.action;
+      if (!["play","pause","resume","stop"].includes(action)) return NextResponse.json({ error: "Invalid YouTube action." }, { status: 400 });
+      const latest = await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube' AND created_at > NOW() - INTERVAL '4 hours' ORDER BY id DESC LIMIT 1`;
+      const previous = latest[0]?.payload as YouTubeState | undefined;
+      let state: YouTubeState;
+      if (action === "play") {
+        const id = youtubeId(body.youtube.videoId);
+        const start = Number(body.youtube.start ?? 0);
+        const end = body.youtube.end == null ? null : Number(body.youtube.end);
+        const volume = Number(body.youtube.volume ?? 80);
+        if (!id || !Number.isFinite(start) || start < 0 || start > 86400 || end !== null && (!Number.isFinite(end) || end <= start || end > 86400) || !Number.isFinite(volume) || volume < 0 || volume > 100) return NextResponse.json({ error: "Choose a valid video, clip range and volume." }, { status: 400 });
+        const region = /^[A-Z]{2}$/.test(body.youtube.region || "") ? body.youtube.region : "US";
+        const verified = await verifyYoutube(id, region);
+        state = { action, videoId: id, title: verified.title, start, end, position: start, at: Date.now(), volume, placement: safeYoutubePlacement(body.youtube.placement), playbackId: randomUUID() };
+      } else {
+        if (!previous || previous.action === "stop") return NextResponse.json({ error: "No YouTube clip is active on the overlay." }, { status: 400 });
+        const reports = await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube-feedback' AND payload->>'playbackId'=${previous.playbackId} ORDER BY id DESC LIMIT 1`;
+        const report = reports[0]?.payload;
+        const position = report && Number.isFinite(report.position) && report.at >= previous.at
+          ? Math.max(previous.start, Math.min(previous.end ?? 86400, report.position + (report.status === "playing" ? Math.max(0, Date.now()-report.at)/1000 : 0)))
+          : youtubePosition(previous);
+        if (action === "resume" && previous.end !== null && position >= previous.end) return NextResponse.json({ error: "This clip has finished. Press Play on overlay to restart it." }, { status: 400 });
+        state = { ...previous, action, position, at: Date.now() };
+      }
+      const payload = JSON.stringify(state);
+      const rows = await live.db`INSERT INTO live_events (project_id,control_id,event_type,payload) VALUES (${live.project.id},'youtube','youtube',${payload}::jsonb) RETURNING id`;
+      return NextResponse.json({ ok: true, id: Number(rows[0].id), state });
+    } catch(error) { return NextResponse.json({ error: error instanceof Error ? error.message : "YouTube playback could not be started." }, { status: 502 }); }
+  }
 
   if (body.trivia) {
     const triviaTool = (live.project.gameTools || []).find(tool => tool.type === "trivia-board" && tool.enabled);
