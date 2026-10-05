@@ -39,7 +39,7 @@ export async function POST(request: Request, context: Context) {
     const { slug } = await context.params, db = getDb();
     if (!db) return NextResponse.json({ error: "Live service unavailable." }, { status: 503 });
     const body = await request.json().catch(() => ({}));
-    if (!["playing","playing-muted","paused","ended","blocked","error","buffering","timeout"].includes(body.status) || !/^[\w-]{36}$/.test(body.playbackId || "")) return NextResponse.json({ error: "Invalid player feedback." }, { status: 400 });
+    if (!["playing","playing-muted","paused","ended","blocked","error","buffering","stalled","timeout"].includes(body.status) || !/^[\w-]{36}$/.test(body.playbackId || "")) return NextResponse.json({ error: "Invalid player feedback." }, { status: 400 });
     const rows = await db`SELECT data FROM projects WHERE slug=${slug} LIMIT 1`;
     const project = (rows[0]?.data as Project | undefined)?.publishedSnapshot;
     if (!project) return NextResponse.json({ error: "Published project unavailable." }, { status: 404 });

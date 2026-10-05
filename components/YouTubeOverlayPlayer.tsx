@@ -19,7 +19,7 @@ function loadPlayerApi() {
   });
   return apiPromise;
 }
-export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = false }: { state: YouTubeState | null; slug?: string; monitor?: boolean; onStatus?: (feedback: {playbackId:string;status:string;position:number;errorCode?:number}) => void }) {
+export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = false, interactive = false }: { state: YouTubeState | null; slug?: string; monitor?: boolean; interactive?: boolean; onStatus?: (feedback: {playbackId:string;status:string;position:number;errorCode?:number}) => void }) {
   const root = useRef<HTMLDivElement>(null), player = useRef<Player | null>(null);
   const latest = useRef(state); latest.current = state;
   const statusCallback = useRef(onStatus); statusCallback.current = onStatus;
@@ -49,7 +49,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = 
       const api = (window as PlayerWindow).YT!;
       player.current = new api.Player(element, {
         width: "100%", height: "100%", videoId: latest.current?.videoId,
-        playerVars: { autoplay: 0, mute: latest.current?.startMuted === true ? 1 : 0, start: latest.current?.position ?? 0, ...(latest.current?.end != null ? {end:latest.current.end} : {}), playsinline: 1, controls: 0, rel: 0, origin: window.location.origin },
+        playerVars: { autoplay: 0, mute: latest.current?.startMuted === true ? 1 : 0, start: latest.current?.position ?? 0, ...(latest.current?.end != null ? {end:latest.current.end} : {}), playsinline: 1, controls: monitor || interactive ? 1 : 0, rel: 0, origin: window.location.origin },
         events: {
           onReady: () => { clearInterval(readinessTimer);if (!cancelled && !failed.current) setReady(true); },
           onStateChange: (event: { data: number }) => {
@@ -58,7 +58,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = 
             if (event.data === 1) { autoplayBlocked.current=false; soundMuted.current=player.current?.isMuted() ?? true;  report(soundMuted.current ? "playing-muted" : "playing"); }
             if (event.data === 3) report("buffering");
             if (event.data === 2) report("paused");
-            if (event.data === 0) { setHidden(true); report("ended"); }
+            if (event.data === 0) { if (!monitor) setHidden(true); report("ended"); }
           },
           onAutoplayBlocked: () => { if (!cancelled && !failed.current) { autoplayBlocked.current=true; report("blocked"); } },
           onError: (event: {data:number}) => { clearInterval(readinessTimer);if (!cancelled) { failed.current=true; setHidden(true); setError([100,101,150].includes(event.data) ? "YouTube does not allow this video to play here. Choose another video in the host dashboard." : "The YouTube player could not play this video. Check the browser playback settings or choose another video."); report("error",event.data); } },
@@ -80,21 +80,22 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = 
       if (state.action === "pause") p.pauseVideo(); else p.playVideo();
     } else if (state.action === "pause") p.pauseVideo();
     else if (state.action === "resume" || state.action === "play") { p.seekTo(youtubePosition(state), true); p.playVideo(); }
-    let lastPosition=p.getCurrentTime(), lastProgress=Date.now();
+    let lastPosition=p.getCurrentTime(), lastProgress=Date.now(), stalled=false;
     const timer = window.setInterval(() => {
       if (failed.current) { clearInterval(timer); return; }
       if (p.getPlayerState() === 0) { clearInterval(timer); return; }
       const position=p.getCurrentTime(), playerState=p.getPlayerState();
-      if (position !== lastPosition || playerState === 2 || state.action === "pause" || autoplayBlocked.current) {lastPosition=position;lastProgress=Date.now();}
-      if (Date.now()-lastProgress >= 15000 && state.action !== "pause" && !autoplayBlocked.current) { failed.current=true; clearInterval(timer); report("timeout"); p.stopVideo(); setHidden(true); return; }
+      if (position !== lastPosition || playerState === 2 || state.action === "pause" || autoplayBlocked.current) {lastPosition=position;lastProgress=Date.now();stalled=false;}
+      if (Date.now()-lastProgress >= 15000 && state.action !== "pause" && !autoplayBlocked.current && !stalled) { stalled=true; report("stalled"); }
       if (playerState === 1 && soundMuted.current !== p.isMuted()) {soundMuted.current=p.isMuted();report(soundMuted.current ? "playing-muted" : "playing");}
       if (latest.current && (playerState === 1 || playerState === 2)) statusCallback.current?.({playbackId:latest.current.playbackId,status:playerState === 1 ? p.isMuted() ? "playing-muted" : "playing" : "paused",position:Math.max(latest.current.start,position)});
       if (state.end !== null && p.getCurrentTime() >= state.end) { clearInterval(timer); p.stopVideo(); setHidden(true); report("ended"); }
     }, 200);
     return () => clearInterval(timer);
-  }, [ready, state, active]);
+  }, [ready, state?.playbackId, state?.action, state?.at, active]);
+  useEffect(()=>{if (ready && player.current && state) {player.current.setVolume(state.volume);if(state.startMuted === true)player.current.mute();else player.current.unMute();}},[ready,state?.volume,state?.startMuted]);
   if (!active || !state) return null;
-  return <section aria-label={monitor ? "YouTube dashboard monitor" : "YouTube overlay player"} style={{ position: "absolute", left: state.placement.x+"%", top: state.placement.y+"%", width: state.placement.width+"%", height: state.placement.height+"%", minWidth: 200, minHeight: 200, zIndex: 80, background: "#000", display: hidden ? "none" : "block" }}>
+  return <section aria-label={monitor ? "YouTube dashboard monitor" : "YouTube overlay player"} style={{ position: "absolute", left: state.placement.x+"%", top: state.placement.y+"%", width: state.placement.width+"%", height: state.placement.height+"%",  zIndex: 80, background: "#000", display: hidden ? "none" : "block" }}>
     {state.durationSeconds != null && <span style={{position:"absolute",top:-24,right:0,color:"white",background:"#101827",padding:"2px 6px",fontSize:12}}>Video length: {formatYoutubeDuration(state.durationSeconds)}</span>}
     <div ref={root} style={{ width: "100%", height: "100%" }}/>
     {error && <p role="alert" style={{ position:"absolute",inset:0,padding:24,background:"#101827",color:"white" }}>{error}</p>}

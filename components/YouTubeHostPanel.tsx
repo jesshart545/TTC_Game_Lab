@@ -20,6 +20,7 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
   const [volume,setVolume] = useState(80), [placement,setPlacement] = useState(safeYoutubePlacement(initialPlacement || youtubePlacement));
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(""), [error,setError] = useState(""), [state,setState] = useState<YouTubeState|null>(null);
   const [feedback,setFeedback] = useState<{playbackId:string;status:string;errorCode?:number}|null>(null), [configured,setConfigured] = useState<boolean|null>(null);
+  useEffect(()=>{setPlacement(safeYoutubePlacement(initialPlacement || youtubePlacement));},[initialPlacement?.x,initialPlacement?.y,initialPlacement?.width,initialPlacement?.height]);
   const endpoint = slug ? "/api/live/"+encodeURIComponent(slug)+"/youtube" : "/api/youtube";
   const headers: Record<string,string> = hostKey ? { "x-host-key":hostKey } : {};
   useEffect(() => {
@@ -81,13 +82,13 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     setSelected(previous=>previous?.id===videoId ? null : previous);
   },[currentState?.playbackId,currentState?.videoId,currentFeedback?.playbackId,currentFeedback?.errorCode]);
   const active = currentState && currentState.action !== "stop" && !["error","timeout","ended"].includes(currentFeedback?.playbackId===currentState.playbackId ? currentFeedback.status : "");
-  const playerStatus = currentFeedback && currentState && currentFeedback.playbackId === currentState.playbackId && active ? currentFeedback.status : "";
-  const statusText: Record<string,string> = {loading:"YouTube is loading the video…",buffering:"YouTube is buffering the video…",timeout:"The video did not start or stopped buffering. It has been hidden; retry or choose another video.","playing-muted":"The browser source reports muted playback. Press Play on overlay again to restart with the selected volume.",playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The streaming browser source blocked playback. Audio is enabled by the site. Check the browser source playback permission, then retry from this dashboard.",error:"This video cannot play on the overlay. Choose another video."};
+  const playerStatus = currentFeedback && currentState && currentFeedback.playbackId === currentState.playbackId ? currentFeedback.status : "";
+  const statusText: Record<string,string> = {loading:"YouTube is loading the video…",stalled:"YouTube has not made playback progress. The player remains available; retry or choose another video when ready.",buffering:"YouTube is buffering the video…",timeout:"The video did not start or stopped buffering. It has been hidden; retry or choose another video.","playing-muted":"The browser source reports muted playback. Press Play on overlay again to restart with the selected volume.",playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The streaming browser source blocked playback. Audio is enabled by the site. Check the browser source playback permission, then retry from this dashboard.",error:"This video cannot play on the overlay. Choose another video."};
+  // The private player never consumes broadcast state or sends overlay commands.
   const monitorState = useMemo<YouTubeState|null>(()=>{
-    if (currentState && active) return {...currentState,startMuted:true,placement:{x:0,y:0,width:100,height:100}};
     if (!selected) return null;
-    return {action:"pause",videoId:selected.id,title:selected.title,start:0,end:null,position:0,at:0,volume:0,startMuted:true,durationSeconds:selected.durationSeconds,placement:{x:0,y:0,width:100,height:100},playbackId:"dashboard-selected-"+selected.id};
-  },[currentState?.playbackId,currentState?.action,currentState?.at,currentState?.position,currentState?.videoId,currentState?.volume,active,selected?.id,selected?.durationSeconds]);
+    return {action:"pause",videoId:selected.id,title:selected.title,start:0,end:null,position:0,at:0,volume:80,startMuted:false,durationSeconds:selected.durationSeconds,placement:{x:0,y:0,width:100,height:100},playbackId:"dashboard-selected-"+selected.id};
+  },[selected?.id,selected?.durationSeconds]);
   return <section className="youtube-host-panel" aria-label="YouTube host controls">
     <h3>YouTube · Live clips</h3><p>Search and selection stay on this dashboard. The audience sees a video only after you press Play on overlay.</p>
     {configured === false && <p role="status">YouTube search needs the site's Google API connection. Checking and playing a YouTube link is available.</p>}
@@ -98,7 +99,7 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     {selected && <p><strong>Selected privately:</strong> {selected.title} · {selected.live ? "Live" : formatYoutubeDuration(selected.durationSeconds)}</p>}
     <div className="youtube-clip-settings"><label>Start (seconds or m:ss)<input value={start} onChange={e=>setStart(e.target.value)}/></label><label>End (optional)<input value={end} onChange={e=>setEnd(e.target.value)} placeholder="Leave blank to play to the end"/></label><label>Volume<input type="range" min={0} max={100} value={volume} onChange={e=>setVolume(Number(e.target.value))}/>{volume}%</label></div>
     <details><summary>Overlay screen size & position</summary><div className="youtube-clip-settings">{(["x","y","width","height"] as const).map(key=><label key={key}>{key === "x" ? "Left %" : key === "y" ? "Top %" : key === "width" ? "Width %" : "Height %"}<input type="number" min={key==="width" || key==="height" ? 20 : 0} max={100} value={placement[key]} onChange={e=>setPlacement(safeYoutubePlacement({...placement,[key]:Number(e.target.value)}))}/></label>)}</div><small>Position and volume apply when you press Play on overlay.</small></details>
-    {monitorState && <div className="youtube-dashboard-monitor"><YouTubeOverlayPlayer state={monitorState} monitor/><span className="youtube-monitor-label">Dashboard monitor · broadcast sound plays on the overlay</span></div>}
+    {monitorState && <div className="youtube-dashboard-monitor"><YouTubeOverlayPlayer state={monitorState} monitor/><span className="youtube-monitor-label">Private player · play and hear this video here. Only Play on overlay sends it to the audience.</span></div>}
     <div className="youtube-player-controls"><button type="button" disabled={busy || !selected || (!hostKey && !onCommand)} onClick={()=>void command("play")}>Play on overlay</button><button type="button" disabled={busy || !active} onClick={()=>void command("pause")}>Pause</button><button type="button" disabled={busy || !active} onClick={()=>void command("resume")}>Resume</button><button type="button" disabled={busy || !active} onClick={()=>void command("stop")}>Stop & hide</button></div>
     {busy && <p role="status">Working…</p>}{error && <p role="alert">{error}</p>}{!error && <p role="status">{statusText[playerStatus] || message}</p>}
   </section>;
