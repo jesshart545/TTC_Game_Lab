@@ -59,7 +59,8 @@ export async function GET(request: Request, context: Context) {
         else youtube[0].payload={...state,position,at:Date.now(),action:reported && report.status==="paused" ? "pause" : state.action};
       }
     }
-    const events=[...activePolls,...activeTrivia,...youtube].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
+    const background=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${live.project.controls.filter(c=>c.action.startsWith("background.show.")).map(c=>c.id)}) ORDER BY id DESC LIMIT 1`;
+    const events=[...background,...activePolls,...activeTrivia,...youtube].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
     return NextResponse.json({ cursor: Number(rows[0].cursor), events, usedTrivia }, { headers: { "Cache-Control": "no-store" } });
   }
   const rows = await live.db`SELECT id, control_id, event_type, payload FROM live_events WHERE project_id = ${live.project.id} AND id > ${since} ORDER BY id ASC LIMIT 100`;

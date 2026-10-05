@@ -20,3 +20,12 @@
 .side-by-side-testing .youtube-results{max-height:170px}
 .side-by-side-testing .youtube-dashboard-monitor{margin-bottom:48px}
 @media(max-width:760px){.side-by-side-testing>.preview-panel{grid-template-columns:minmax(0,1fr);padding:12px}.side-by-side-testing .stage{grid-row:2;top:0;z-index:110;min-height:180px;max-height:35vh}.side-by-side-testing .youtube-draft-testing{grid-column:1;grid-row:3}}
+
+.side-by-side-testing .dashboard-preview{grid-column:2;grid-row:2;padding:18px;min-height:0}
+.side-by-side-testing .dashboard-toolbox{margin-bottom:16px}
+.side-by-side-testing .dashboard-preview>.youtube-draft-testing{margin-top:18px}
+@media(max-width:760px){.side-by-side-testing .dashboard-preview{grid-column:1;grid-row:3}}
+
+.side-by-side-testing.workflow-stage-1>.assets-panel{display:block;grid-column:1;grid-row:auto}
+.side-by-side-testing .dashboard-preview{max-height:75vh;overflow:auto}
+@media(max-width:760px){.side-by-side-testing .dashboard-preview{max-height:55vh}.side-by-side-testing .stage{aspect-ratio:16/9}}

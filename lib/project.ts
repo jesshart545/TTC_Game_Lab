@@ -9,6 +9,10 @@ export type ChainTiming = { mode: "immediate" | "delay"; seconds?: number };
 export type ChainStep = { id: string; kind: "tool" | "asset" | "composition" | "animation"; refId: string; label: string; timing: ChainTiming };
 export type ProjectEvent = { id: string; label: string; action: string; detail: string; compositionId?: string; overlayResult?: OverlayResult; buttonMode?: "single" | "chain"; toolIds?: string[]; chain?: ChainStep[] };
 export type ProjectAssetEdits = {
+  loop?: boolean;
+  sound?: boolean;
+  volume?: number;
+  placement?: { x: number; y: number; width: number; height: number };
   crop?: "original" | "square" | "landscape" | "portrait";
   trimStart?: number;
   trimEnd?: number;
