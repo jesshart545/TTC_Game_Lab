@@ -24,7 +24,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
   const latest = useRef(state); latest.current = state;
   const statusCallback = useRef(onStatus); statusCallback.current = onStatus;
   const [ready, setReady] = useState(false), [hidden, setHidden] = useState(false), [blocked, setBlocked] = useState(false), [error, setError] = useState("");
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(state?.startMuted === true);
   const soundMuted = useRef(true), autoplayBlocked = useRef(false), failed = useRef(false);
   const active = Boolean(state && state.action !== "stop" && (state.end === null || state.position < state.end));
   const playbackId = active ? state?.playbackId : undefined;
@@ -40,15 +40,19 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
     if (!playbackId || !root.current) { player.current?.destroy(); player.current = null; setReady(false); return; }
     let cancelled = false;
     setReady(false); setHidden(false); setBlocked(false); setError(""); loadedId.current = ""; failed.current=false; autoplayBlocked.current=false;
+    const waitingSince=Date.now();
+    const readinessTimer=window.setInterval(()=>{
+      if (Date.now()-waitingSince>=20000) {clearInterval(readinessTimer);if (!cancelled) {failed.current=true;setHidden(true);report("timeout");player.current?.destroy();player.current=null;}}
+    },1000);
     const element = document.createElement("div"); root.current.replaceChildren(element);
     void loadPlayerApi().then(() => {
-      if (cancelled) return;
+      if (cancelled || failed.current) return;
       const api = (window as PlayerWindow).YT!;
       player.current = new api.Player(element, {
         width: "100%", height: "100%", videoId: latest.current?.videoId,
-        playerVars: { autoplay: 0, mute: latest.current?.startMuted === false ? 0 : 1, start: latest.current?.position ?? 0, ...(latest.current?.end != null ? {end:latest.current.end} : {}), playsinline: 1, controls: 1, rel: 0, origin: window.location.origin },
+        playerVars: { autoplay: 0, mute: latest.current?.startMuted === true ? 1 : 0, start: latest.current?.position ?? 0, ...(latest.current?.end != null ? {end:latest.current.end} : {}), playsinline: 1, controls: 1, rel: 0, origin: window.location.origin },
         events: {
-          onReady: () => { if (!cancelled) setReady(true); },
+          onReady: () => { clearInterval(readinessTimer);if (!cancelled && !failed.current) setReady(true); },
           onStateChange: (event: { data: number }) => {
             if (cancelled) return;
             if (failed.current) return;
@@ -58,11 +62,11 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
             if (event.data === 0) { setHidden(true); report("ended"); }
           },
           onAutoplayBlocked: () => { if (!cancelled && !failed.current) { autoplayBlocked.current=true; setBlocked(true); report("blocked"); } },
-          onError: (event: {data:number}) => { if (!cancelled) { failed.current=true; setHidden(true); setError([100,101,150].includes(event.data) ? "YouTube does not allow this video to play here. Choose another video in the host dashboard." : "The YouTube player could not play this video. Check the browser playback settings or choose another video."); report("error",event.data); } },
+          onError: (event: {data:number}) => { clearInterval(readinessTimer);if (!cancelled) { failed.current=true; setHidden(true); setError([100,101,150].includes(event.data) ? "YouTube does not allow this video to play here. Choose another video in the host dashboard." : "The YouTube player could not play this video. Check the browser playback settings or choose another video."); report("error",event.data); } },
         },
       });
-    }).catch(() => { if (!cancelled) { failed.current=true; setHidden(true); setError("YouTube player could not load."); report("error"); } });
-    return () => { cancelled = true; player.current?.destroy(); player.current = null; };
+    }).catch(() => { clearInterval(readinessTimer);if (!cancelled && !failed.current) { failed.current=true; setHidden(true); setError("YouTube player could not load."); report("error"); } });
+    return () => { cancelled = true; clearInterval(readinessTimer);player.current?.destroy(); player.current = null; };
   }, [playbackId]);
   const loadedId = useRef("");
   useEffect(() => {
@@ -72,7 +76,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
     p.setVolume(state.volume);
     if (loadedId.current !== state.playbackId) {
       loadedId.current = state.playbackId;
-      if (state.startMuted !== false) p.mute(); else p.unMute();
+      if (state.startMuted === true) p.mute(); else p.unMute();
       soundMuted.current=p.isMuted(); setMuted(soundMuted.current);
       if (state.action === "pause") p.pauseVideo(); else p.playVideo();
     } else if (state.action === "pause") p.pauseVideo();

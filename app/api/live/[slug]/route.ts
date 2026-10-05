@@ -99,7 +99,7 @@ export async function POST(request: Request, context: Context) {
         const region = /^[A-Z]{2}$/.test(body.youtube.region || "") ? body.youtube.region : "US";
         const verified = await verifyYoutube(id, region);
         if (verified.durationSeconds && (start >= verified.durationSeconds || end !== null && end > verified.durationSeconds + 1)) return NextResponse.json({error:"Choose clip times within the video's length."},{status:400});
-        state = { action, videoId: id, title: verified.title, durationSeconds: verified.durationSeconds, startMuted: body.youtube.startMuted !== false, start, end, position: start, at: Date.now(), volume, placement: safeYoutubePlacement(body.youtube.placement), playbackId: randomUUID() };
+        state = { action, videoId: id, title: verified.title, durationSeconds: verified.durationSeconds, startMuted: body.youtube.startMuted === true, start, end, position: start, at: Date.now(), volume, placement: safeYoutubePlacement(body.youtube.placement), playbackId: randomUUID() };
       } else {
         if (!previous || previous.action === "stop") return NextResponse.json({ error: "No YouTube clip is active on the overlay." }, { status: 400 });
         const reports = await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube-feedback' AND payload->>'playbackId'=${previous.playbackId} ORDER BY id DESC LIMIT 1`;
