@@ -8,6 +8,10 @@ export function toolStyle(tool: GameTool): CSSProperties {
   const a = (tool.config.appearance || {}) as Record<string, unknown>;
   return { color: String(a.textColor || "#ffffff"), backgroundColor: String(a.backgroundColor || "#101827"), border: "2px solid " + String(a.accentColor || "#20e8ff"), fontFamily: fonts.includes(String(a.fontFamily)) ? String(a.fontFamily) : fonts[0], fontSize: Math.max(12, Math.min(96, Number(a.fontSize) || 28)), borderRadius: Math.max(0, Math.min(64, Number(a.borderRadius) || 12)), padding: 16 };
 }
+export function overlayToolPlacement(tool:GameTool):CSSProperties {
+ const p=tool.config.placement as {x:number;y:number;width:number;height:number}|undefined;
+ return p?{position:"absolute",left:p.x+"%",top:p.y+"%",width:p.width+"%",height:p.height+"%",right:"auto",bottom:"auto",maxWidth:"none",maxHeight:"none"}:{};
+}
 export function ToolArtwork({tool, assets}: {tool:GameTool;assets:ProjectAsset[]}) {
   const a=(tool.config.appearance || {}) as Record<string,unknown>;
   const asset=assets.find(x=>(x.storageKey || x.name)===(a.imageKey || tool.config.backgroundAssetKey));

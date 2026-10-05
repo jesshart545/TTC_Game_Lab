@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
-import { toolStyle, ToolArtwork } from "./GameToolEditor";
+import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
 type Run = { id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
 export function useRuntimeActions(project: Project | null) {
@@ -102,8 +102,9 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
   const tool = run.tool!; const [now, setNow] = useState(run.at);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 100); return () => clearInterval(timer); }, []);
   const config = tool.config; const remaining = Math.max(0, Math.ceil((Number(config.seconds) || 10) - (now - run.at) / 1000));
+  const placement=run.control.overlayResult;
   const revealResult = now - run.at >= 1800;
-  return <section aria-label={tool.name} style={{ position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto" }}>
+  return <section aria-label={tool.name} style={{ position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto", ...overlayToolPlacement(tool), ...(placement?{left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxHeight:"none",zIndex:placement.layer}: {}) }}>
     <ToolArtwork tool={tool} assets={assets}/><h3>{String(config.title || tool.name)}</h3>
     {(tool.type === "wheel" || tool.type === "random-picker") && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
@@ -111,6 +112,14 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
     {tool.type === "trivia-list" && <><p>{String(run.question?.question || run.question?.prompt || "No questions saved")}</p>{run.reveal && <strong>Answer: {String(run.question?.answer || "")}</strong>}</>}
   </section>;
+}
+
+export function ControlAppearancePreview({control,project}:{control:ProjectEvent;project:Project}) {
+ const tool=project.gameTools.find(t=>control.toolIds?.includes(t.id)&&t.type!=="youtube");
+ if(!tool)return null;
+ const questions=Array.isArray(tool.config.questions)?tool.config.questions:[];
+ const run:Run={id:0,at:Date.now(),control,tool,question:questions[0],reveal:false,result:String((Array.isArray(tool.config.items)?tool.config.items[0]:null)||"Preview")};
+ return <div style={{position:"absolute",inset:0,pointerEvents:"none"}}><ToolRun run={run} assets={project.assets} index={0} count={1} live={false} slug={project.slug}/></div>;
 }
 
 
@@ -129,10 +138,10 @@ function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
 export default function RuntimeActionLayers({ runtime, project, live = false }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project; live?: boolean }) {
   const toolRuns=runtime.runs.filter(run=>run.tool);
   return <>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length} live={live} slug={project.slug}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
-    {project.gameTools.filter(t => t.enabled && t.inOverlayBuild && t.type === "blank-board").map(tool => <section key={tool.id} aria-label={tool.name} style={{position:"absolute",inset:"15%",zIndex:5,padding:"1rem",...toolStyle(tool)}}><ToolArtwork tool={tool} assets={project.assets}/><h3>{String(tool.config.title || tool.name)}</h3></section>)}
+    {project.gameTools.filter(t => t.enabled && t.inOverlayBuild && t.type === "blank-board").map(tool => <section key={tool.id} aria-label={tool.name} style={{position:"absolute",inset:"15%",zIndex:5,padding:"1rem",...toolStyle(tool),...overlayToolPlacement(tool)}}><ToolArtwork tool={tool} assets={project.assets}/><h3>{String(tool.config.title || tool.name)}</h3></section>)}
     {runtime.runs.map(run => run.tool ? null : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
       return composition ? <CompositionPlayer key={run.id} composition={composition} assets={project.assets} placement={run.control.overlayResult || defaultOverlayResult} startedAt={run.at} onEnd={() => runtime.remove(run.id)}/> : null;
-    })() : run.asset ? <div key={run.id} style={{position:"absolute",inset:0,zIndex:20}}>{run.asset.type.includes("video") || run.asset.type.includes("audio") ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
+    })() : run.asset ? <div key={run.id} style={{position:"absolute",...(run.control.overlayResult?{left:run.control.overlayResult.x+"%",top:run.control.overlayResult.y+"%",width:run.control.overlayResult.width+"%",height:run.control.overlayResult.height+"%"}:{inset:0}),zIndex:run.control.overlayResult?.layer??20}}>{run.asset.type.includes("video") || run.asset.type.includes("audio") ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
   </>;
 }
