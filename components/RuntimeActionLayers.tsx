@@ -7,11 +7,14 @@ import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
 type Run = { id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
-export function useRuntimeActions(project: Project | null) {
+export function useRuntimeActions(project: Project | null,onCardStates?:(states:Record<string,CardState>)=>void) {
+  const savedCallback=useRef(onCardStates);savedCallback.current=onCardStates;
+  const initialized=useRef<string|null>(null);
   const cardRef=useRef<Record<string,CardState>>({});
   const [cardStates,setCardStates]=useState<Record<string,CardState>>({});
-  const cardCommand=useCallback((id:string,action:CardAction,text='')=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.enabled);if(!p||!tool)throw new Error('Card system unavailable.');const next=cardTransition(p,tool,cardRef.current[id]||freshCardState(),action,Date.now(),Math.random,text);cardRef.current={...cardRef.current,[id]:next};setCardStates(cardRef.current);},[]);
+  const cardCommand=useCallback((id:string,action:CardAction,text='')=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.enabled);if(!p||!tool)throw new Error('Card system unavailable.');const next=cardTransition(p,tool,cardRef.current[id]||freshCardState(),action,Date.now(),Math.random,text);cardRef.current={...cardRef.current,[id]:next};setCardStates(cardRef.current);savedCallback.current?.(cardRef.current);},[]);
   const latest = useRef(project); latest.current = project;
+  useEffect(()=>{if(project&&initialized.current!==project.id){initialized.current=project.id;cardRef.current=project.cardPreviewStates||{};setCardStates(cardRef.current);}},[project?.id]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
   const [runs, setRuns] = useState<Run[]>([]);

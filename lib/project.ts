@@ -1,3 +1,4 @@
+import type {CardState} from "./question-cards";
 export type OverlayResult = {
   x: number; y: number; width: number; height: number;
   entrance: "none" | "fade" | "slide" | "zoom";
@@ -54,6 +55,7 @@ export type Project = {
   wheel: GameWheel;
   gameTools: GameTool[];
   gamePlan?: Record<string, string>;
+  cardPreviewStates?:Record<string,CardState>;
   workflow?: { stage: number; workshopStep: number; promptDraft: string; generatorPrompt?: string };
   publishedSnapshot?: Omit<Project, "publishedSnapshot">;
 };

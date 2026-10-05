@@ -64,7 +64,7 @@ export default function ProjectWorkspace() {
   const params = useParams<{ id: string }>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project | null>(null);
-  const runtime = useRuntimeActions(project);
+  const runtime = useRuntimeActions(project,states=>{if(project)persist({...project,cardPreviewStates:states});});
   const projectRef = useRef<Project | null>(null);
   projectRef.current = project;
   const [draft, setDraft] = useState("");
@@ -766,7 +766,7 @@ export default function ProjectWorkspace() {
       setAssetStatus("Publish needs cloud-stored assets. Re-upload any browser-only asset before publishing.");
       return;
     }
-    const { publishedSnapshot: _previous, ...draft } = project;
+    const { publishedSnapshot: _previous, cardPreviewStates:_previewCards, ...draft } = project;
     const snapshot = { ...draft, gameTools:draft.gameTools.map(t=>({...t,inOverlayBuild:Boolean(t.inOverlayBuild)})), wheel:{...draft.wheel,spinning:false,visible:false}, compositions: (draft.compositions || []).filter(c => c.inProject), status: "Published" as const, updatedAt: "just now" };
     const next = { ...project, status: "Published" as const, publishedSnapshot: snapshot, updatedAt: "just now" };
     setPublishing(true);
