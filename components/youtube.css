@@ -21,3 +21,6 @@
 
 .youtube-host-panel .youtube-muted-start {display:flex;align-items:center;gap:8px;margin:12px 0;}
 .youtube-host-panel .youtube-muted-start input {width:auto;}
+
+.youtube-dashboard-monitor {position:relative;aspect-ratio:16/9;background:#000;border-radius:8px;margin:16px 0 30px;}
+.youtube-monitor-label {position:absolute;bottom:-24px;left:0;font-size:12px;color:#93bdcc;}
