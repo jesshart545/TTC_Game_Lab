@@ -4,8 +4,9 @@ import { clipTime, safeYoutubePlacement, youtubeId, youtubePlacement } from "../
 import type { YouTubeState, YouTubeVideo, YouTubePlacement } from "../lib/youtube";
 import "./youtube.css";
 
-export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlacement, onCommand }: {
+export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlacement, onCommand, previewState, previewFeedback }: {
   slug?: string; hostKey?: string; placement?: YouTubePlacement;
+  previewState?: YouTubeState | null; previewFeedback?: {playbackId:string;status:string}|null;
   onCommand?: (command: Record<string, unknown>) => Promise<YouTubeState>;
 }) {
   const id = useId();
@@ -64,9 +65,11 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     } catch(e) { setError(e instanceof Error ? e.message : "Could not send the player command."); }
     finally { setBusy(false); }
   }
-  const active = state && state.action !== "stop";
-  const playerStatus = feedback && state && feedback.playbackId === state.playbackId && active ? feedback.status : "";
-  const statusText: Record<string,string> = {playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The overlay browser blocked playback. Enable playback in the browser source, then press Resume.",error:"This video cannot play on the overlay. Choose another video."};
+  const currentState = onCommand ? previewState ?? state : state;
+  const currentFeedback = onCommand ? previewFeedback : feedback;
+  const active = currentState && currentState.action !== "stop";
+  const playerStatus = currentFeedback && currentState && currentFeedback.playbackId === currentState.playbackId && active ? currentFeedback.status : "";
+  const statusText: Record<string,string> = {loading:"YouTube is loading the video…",playing:"Playing on the overlay.",paused:"Paused on the overlay.",ended:"The clip has finished.",blocked:"The overlay browser blocked playback. Enable playback in the browser source, then press Resume.",error:"This video cannot play on the overlay. Choose another video."};
   return <section className="youtube-host-panel" aria-label="YouTube host controls">
     <h3>YouTube · Live clips</h3><p>Search and selection stay on this dashboard. The audience sees a video only after you press Play on overlay.</p>
     {configured === false && <p role="status">YouTube search needs the site's Google API connection. Checking and playing a YouTube link is available.</p>}

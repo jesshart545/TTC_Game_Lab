@@ -19,16 +19,20 @@ function loadPlayerApi() {
   });
   return apiPromise;
 }
-export default function YouTubeOverlayPlayer({ state, slug }: { state: YouTubeState | null; slug?: string }) {
+export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state: YouTubeState | null; slug?: string; onStatus?: (feedback: {playbackId:string;status:string;position:number}) => void }) {
   const root = useRef<HTMLDivElement>(null), player = useRef<Player | null>(null);
   const latest = useRef(state); latest.current = state;
+  const statusCallback = useRef(onStatus); statusCallback.current = onStatus;
   const [ready, setReady] = useState(false), [hidden, setHidden] = useState(false), [blocked, setBlocked] = useState(false), [error, setError] = useState("");
-  const active = Boolean(state && state.action !== "stop" && (state.end === null || youtubePosition(state) < state.end));
+  const active = Boolean(state && state.action !== "stop" && (state.end === null || state.position < state.end));
   const playbackId = active ? state?.playbackId : undefined;
   const report = (status: string) => {
     const current = latest.current;
-    if (!slug || !current) return;
-    void fetch("/api/live/" + encodeURIComponent(slug) + "/youtube", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playbackId: current.playbackId, status, position: player.current?.getCurrentTime() }) }).catch(() => {});
+    if (!current) return;
+    const position = player.current?.getCurrentTime() ?? current.position;
+    statusCallback.current?.({playbackId:current.playbackId,status,position});
+    if (!slug) return;
+    void fetch("/api/live/" + encodeURIComponent(slug) + "/youtube", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playbackId: current.playbackId, status, position }) }).catch(() => {});
   };
   useEffect(() => {
     if (!playbackId || !root.current) { player.current?.destroy(); player.current = null; setReady(false); return; }
@@ -62,7 +66,7 @@ export default function YouTubeOverlayPlayer({ state, slug }: { state: YouTubeSt
     if (!p || !ready || !state || !active) return;
     setHidden(false);
     p.setVolume(state.volume);
-    const options = { videoId: state.videoId, startSeconds: Date.now()-state.at < 5000 ? state.position : youtubePosition(state), ...(state.end !== null ? { endSeconds: state.end } : {}) };
+    const options = { videoId: state.videoId, startSeconds: state.position, ...(state.end !== null ? { endSeconds: state.end } : {}) };
     if (loadedId.current !== state.playbackId) {
       loadedId.current = state.playbackId;
       if (state.action === "pause") p.cueVideoById(options); else p.loadVideoById(options);
@@ -70,6 +74,7 @@ export default function YouTubeOverlayPlayer({ state, slug }: { state: YouTubeSt
     else if (state.action === "resume" || state.action === "play") { p.seekTo(youtubePosition(state), true); p.playVideo(); }
     const timer = window.setInterval(() => {
       if (p.getPlayerState() === 0) { clearInterval(timer); return; }
+      if (latest.current && (p.getPlayerState() === 1 || p.getPlayerState() === 2)) statusCallback.current?.({playbackId:latest.current.playbackId,status:p.getPlayerState() === 1 ? "playing" : "paused",position:p.getCurrentTime()});
       if (state.end !== null && p.getCurrentTime() >= state.end) { clearInterval(timer); p.stopVideo(); setHidden(true); report("ended"); }
     }, 200);
     return () => clearInterval(timer);
