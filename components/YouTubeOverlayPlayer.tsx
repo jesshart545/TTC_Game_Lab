@@ -29,7 +29,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
   const report = (status: string) => {
     const current = latest.current;
     if (!current) return;
-    const position = player.current?.getCurrentTime() ?? current.position;
+    const position = Math.max(current.start, player.current?.getCurrentTime() ?? current.position);
     statusCallback.current?.({playbackId:current.playbackId,status,position});
     if (!slug) return;
     void fetch("/api/live/" + encodeURIComponent(slug) + "/youtube", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playbackId: current.playbackId, status, position }) }).catch(() => {});
@@ -74,7 +74,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus }: { state:
     else if (state.action === "resume" || state.action === "play") { p.seekTo(youtubePosition(state), true); p.playVideo(); }
     const timer = window.setInterval(() => {
       if (p.getPlayerState() === 0) { clearInterval(timer); return; }
-      if (latest.current && (p.getPlayerState() === 1 || p.getPlayerState() === 2)) statusCallback.current?.({playbackId:latest.current.playbackId,status:p.getPlayerState() === 1 ? "playing" : "paused",position:p.getCurrentTime()});
+      if (latest.current && (p.getPlayerState() === 1 || p.getPlayerState() === 2)) statusCallback.current?.({playbackId:latest.current.playbackId,status:p.getPlayerState() === 1 ? "playing" : "paused",position:Math.max(latest.current.start,p.getCurrentTime())});
       if (state.end !== null && p.getCurrentTime() >= state.end) { clearInterval(timer); p.stopVideo(); setHidden(true); report("ended"); }
     }, 200);
     return () => clearInterval(timer);
