@@ -90,8 +90,8 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
   // The private player never consumes broadcast state or sends overlay commands.
   const monitorState = useMemo<YouTubeState|null>(()=>{
     if (!selected) return null;
-    return {action:"pause",videoId:selected.id,title:selected.title,start:0,end:null,position:0,at:0,volume:80,startMuted:false,durationSeconds:selected.durationSeconds,placement:{x:0,y:0,width:100,height:100},playbackId:"dashboard-selected-"+selected.id};
-  },[selected?.id,selected?.durationSeconds]);
+    return {action:"pause",videoId:selected.id,title:selected.title,start:0,end:null,position:0,at:0,volume,startMuted:false,durationSeconds:selected.durationSeconds,placement:{x:0,y:0,width:100,height:100},playbackId:"dashboard-selected-"+selected.id};
+  },[selected?.id,selected?.durationSeconds,volume]);
   return <section className="youtube-host-panel" aria-label="YouTube host controls">
     <h3>YouTube · Live clips</h3><p>Search and selection stay on this dashboard. The audience sees a video only after you press Play on overlay.</p>
     {configured === false && <p role="status">YouTube search needs the site's Google API connection. Checking and playing a YouTube link is available.</p>}
