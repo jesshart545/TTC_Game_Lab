@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import {CountdownDesignPreview} from "./QuestionCardEditor";
+import type { Project } from "../lib/project";
 import type { GameTool, ProjectAsset } from "../lib/project";
 
 const fonts = ["Arial, sans-serif", "Georgia, serif", "Verdana, sans-serif", "Trebuchet MS, sans-serif", "monospace"];
@@ -17,7 +19,7 @@ export function ToolArtwork({tool, assets}: {tool:GameTool;assets:ProjectAsset[]
   const asset=assets.find(x=>(x.storageKey || x.name)===(a.imageKey || tool.config.backgroundAssetKey));
   return asset?.url ? <img src={asset.url} alt={asset.name} style={{width:"100%",maxHeight:140,objectFit:"contain"}}/> : null;
 }
-export default function GameToolEditor({tool,assets,onSave}: {tool:GameTool;assets:ProjectAsset[];onSave:(next:GameTool)=>void}) {
+export default function GameToolEditor({tool,assets,onSave,project}: {tool:GameTool;assets:ProjectAsset[];project?:Project;onSave:(next:GameTool)=>void}) {
   const [draft,setDraft]=useState(tool);
   const [saved,setSaved]=useState(false);
   const cfg=draft.config;
@@ -41,10 +43,11 @@ export default function GameToolEditor({tool,assets,onSave}: {tool:GameTool;asse
     {draft.type==="wheel" && list("segments","Wheel segments",["Prize","Bonus"])}
     {draft.type==="random-picker" && list("items","Picker entries",["Player 1","Player 2"])}
     {draft.type==="poll" && <><label>Poll question<input value={String(cfg.question || "")} onChange={e=>update({question:e.target.value})}/></label>{list("options","Poll choices",["Option A","Option B"])}</>}
-    {draft.type==="countdown" && <label>Duration in seconds<input type="number" min={1} max={86400} value={Number(cfg.seconds)||10} onChange={e=>update({seconds:Math.max(1,Math.min(86400,+e.target.value))})}/></label>}
+    {draft.type==="countdown" && <><label>Timer label<input value={String(cfg.label||draft.name)} onChange={e=>update({label:e.target.value})}/></label><label>Countdown display<select value={String(cfg.display||"numbers")} onChange={e=>update({display:e.target.value})}>{[["numbers","Numbers"],["bar","Draining bar"],["circle","Circular countdown"],["numbers-bar","Numbers and bar"],["numbers-circle","Numbers and circle"]].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label>Duration in seconds<input type="number" min={1} max={86400} value={Number(cfg.seconds)||10} onChange={e=>update({seconds:Math.max(1,Math.min(86400,+e.target.value))})}/></label><div style={{display:"grid",gap:8}}>{(["x","y","width","height"] as const).map((key,i)=><label key={key}>{["Left %","Top %","Width %","Height %"][i]}<input type="number" min={key==="width"||key==="height"?1:0} max={100} value={Number((cfg.placement as Record<string,number>|undefined)?.[key]??[15,78,20,12][i])} onChange={e=>update({placement:{...((cfg.placement as Record<string,number>)||{x:15,y:78,width:20,height:12}),[key]:Number(e.target.value)}})}/></label>)}</div>{project&&<CountdownDesignPreview project={project} tool={draft}/>}</>}
     {draft.type==="dice" && <label>Number of sides<input type="number" min={2} max={100} value={Number(cfg.sides)||6} onChange={e=>update({sides:Math.max(2,Math.min(100,+e.target.value))})}/></label>}
     <div aria-label="Tool appearance preview" style={toolStyle(draft)}><ToolArtwork tool={draft} assets={assets}/><strong>{draft.name}</strong><div>{content}</div></div>
     <small>Appearance preview. Save to store these settings in the toolbox; publish from Build Space to update the live tool.</small>
     <button type="button" className="build-btn" onClick={()=>{const clean={...draft,config:{...draft.config}};for(const key of ["segments","items","options"]){if(Array.isArray(clean.config[key]))clean.config[key]=(clean.config[key] as string[]).map(x=>x.trim()).filter(Boolean)}onSave({...clean,inToolbox:tool.type!=="trivia-board" && tool.type!=="blank-board"?true:tool.inToolbox});setSaved(true)}}>Save tool</button>{saved && <small role="status">Tool settings saved to draft.</small>}
   </div></details>;
 }
+

@@ -1,0 +1,2 @@
+"use client";
+export default function GoogleSearch(){return <section className="card-host" aria-label="Private Google search"><h3>Google Search</h3><form action="https://www.google.com/search" method="get" target="_blank" rel="noopener noreferrer"><label>Search the web<input name="q" required placeholder="Search for information during the game"/></label><button type="submit">Search Google</button></form><small>Regular Google results open in a separate tab. No API or search credits. The overlay is unchanged.</small></section>;}

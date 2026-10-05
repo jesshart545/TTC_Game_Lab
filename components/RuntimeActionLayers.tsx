@@ -1,11 +1,16 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
+import QuestionCards from './QuestionCards';
+import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
 type Run = { id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
 export function useRuntimeActions(project: Project | null) {
+  const cardRef=useRef<Record<string,CardState>>({});
+  const [cardStates,setCardStates]=useState<Record<string,CardState>>({});
+  const cardCommand=useCallback((id:string,action:CardAction,text='')=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.enabled);if(!p||!tool)throw new Error('Card system unavailable.');const next=cardTransition(p,tool,cardRef.current[id]||freshCardState(),action,Date.now(),Math.random,text);cardRef.current={...cardRef.current,[id]:next};setCardStates(cardRef.current);},[]);
   const latest = useRef(project); latest.current = project;
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
@@ -16,6 +21,7 @@ export function useRuntimeActions(project: Project | null) {
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
   const fire = useCallback((control: ProjectEvent) => {
     const p = latest.current; if (!p) return;
+    const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action);return;}
     const later = (fn: () => void, ms: number) => { const timer = setTimeout(() => { timers.current = timers.current.filter(x => x !== timer); fn(); }, ms); timers.current.push(timer); };
     const add = (entry: Omit<Run, "id" | "at" | "control">, seconds: number) => {
       const id = ++serial.current;
@@ -67,8 +73,8 @@ export function useRuntimeActions(project: Project | null) {
       if (elapsed) later(execute, elapsed); else execute();
     }
     if (!control.toolIds?.length && !control.compositionId && !control.chain?.length) { setFlash(true); later(() => setFlash(false), 700); }
-  }, [remove]);
-  return { runs, backgroundKey, flash, fire, remove };
+  }, [remove,cardCommand]);
+  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand };
 }
 
 
@@ -137,7 +143,7 @@ function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
 
 export default function RuntimeActionLayers({ runtime, project, live = false }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project; live?: boolean }) {
   const toolRuns=runtime.runs.filter(run=>run.tool);
-  return <>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length} live={live} slug={project.slug}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
+  return <><QuestionCards project={project} states={runtime.cardStates}/>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length} live={live} slug={project.slug}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
     {project.gameTools.filter(t => t.enabled && t.inOverlayBuild && t.type === "blank-board").map(tool => <section key={tool.id} aria-label={tool.name} style={{position:"absolute",inset:"15%",zIndex:5,padding:"1rem",...toolStyle(tool),...overlayToolPlacement(tool)}}><ToolArtwork tool={tool} assets={project.assets}/><h3>{String(tool.config.title || tool.name)}</h3></section>)}
     {runtime.runs.map(run => run.tool ? null : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
@@ -145,3 +151,4 @@ export default function RuntimeActionLayers({ runtime, project, live = false }: 
     })() : run.asset ? <div key={run.id} style={{position:"absolute",...(run.control.overlayResult?{left:run.control.overlayResult.x+"%",top:run.control.overlayResult.y+"%",width:run.control.overlayResult.width+"%",height:run.control.overlayResult.height+"%"}:{inset:0}),zIndex:run.control.overlayResult?.layer??20}}>{run.asset.type.includes("video") || run.asset.type.includes("audio") ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
   </>;
 }
+
