@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { clipTime, formatYoutubeDuration, safeYoutubePlacement, youtubeId, youtubePlacement } from "../lib/youtube";
 import type { YouTubeState, YouTubeVideo, YouTubePlacement } from "../lib/youtube";
+import type { PrivatePlaybackControls } from "./YouTubeOverlayPlayer";
 import YouTubeOverlayPlayer from "./YouTubeOverlayPlayer";
 import "./youtube.css";
 const countryNames = new Intl.DisplayNames(["en"], {type:"region"});
@@ -13,6 +14,8 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
   onCommand?: (command: Record<string, unknown>) => Promise<YouTubeState>;
 }) {
   const id = useId();
+  const privateControls=useRef<PrivatePlaybackControls|null>(null);
+  const [privateReady,setPrivateReady]=useState(false), [privateStatus,setPrivateStatus]=useState("");
   const [region,setRegion] = useState("US");
   const rejected = useRef(new Set<string>());
   const [query,setQuery] = useState(""), [link,setLink] = useState(""), [results,setResults] = useState<YouTubeVideo[]>([]);
@@ -99,7 +102,8 @@ export default function YouTubeHostPanel({ slug, hostKey, placement: initialPlac
     {selected && <p><strong>Selected privately:</strong> {selected.title} · {selected.live ? "Live" : formatYoutubeDuration(selected.durationSeconds)}</p>}
     <div className="youtube-clip-settings"><label>Start (seconds or m:ss)<input value={start} onChange={e=>setStart(e.target.value)}/></label><label>End (optional)<input value={end} onChange={e=>setEnd(e.target.value)} placeholder="Leave blank to play to the end"/></label><label>Volume<input type="range" min={0} max={100} value={volume} onChange={e=>setVolume(Number(e.target.value))}/>{volume}%</label></div>
     <details><summary>Overlay screen size & position</summary><div className="youtube-clip-settings">{(["x","y","width","height"] as const).map(key=><label key={key}>{key === "x" ? "Left %" : key === "y" ? "Top %" : key === "width" ? "Width %" : "Height %"}<input type="number" min={key==="width" || key==="height" ? 20 : 0} max={100} value={placement[key]} onChange={e=>setPlacement(safeYoutubePlacement({...placement,[key]:Number(e.target.value)}))}/></label>)}</div><small>Position and volume apply when you press Play on overlay.</small></details>
-    {monitorState && <div className="youtube-dashboard-monitor"><YouTubeOverlayPlayer state={monitorState} monitor/><span className="youtube-monitor-label">Private player · play and hear this video here. Only Play on overlay sends it to the audience.</span></div>}
+    {monitorState && <div className="youtube-dashboard-monitor"><YouTubeOverlayPlayer state={monitorState} monitor onPrivateControls={controls=>{privateControls.current=controls;setPrivateReady(Boolean(controls));}} onStatus={feedback=>setPrivateStatus(feedback.status)}/><span className="youtube-monitor-label">Private player · play and hear this video here. Only Play on overlay sends it to the audience.</span></div>}
+    {selected && <div className="youtube-player-controls" aria-label="Private playback controls"><button type="button" disabled={!privateReady} onClick={()=>privateControls.current?.play(volume)}>Play privately with sound</button><button type="button" disabled={!privateReady} onClick={()=>privateControls.current?.pause()}>Pause private player</button><span role="status">{privateStatus === "playing" ? "Private player is playing with sound enabled." : privateStatus === "playing-muted" ? "Private player is muted. Press Play privately with sound." : privateStatus === "buffering" ? "Private video is buffering." : privateStatus === "blocked" ? "Private playback was blocked. Click the video's own Play button." : privateStatus === "error" ? "YouTube could not play the private video." : "Private playback does not change the overlay."}</span></div>}
     <div className="youtube-player-controls"><button type="button" disabled={busy || !selected || (!hostKey && !onCommand)} onClick={()=>void command("play")}>Play on overlay</button><button type="button" disabled={busy || !active} onClick={()=>void command("pause")}>Pause</button><button type="button" disabled={busy || !active} onClick={()=>void command("resume")}>Resume</button><button type="button" disabled={busy || !active} onClick={()=>void command("stop")}>Stop & hide</button></div>
     {busy && <p role="status">Working…</p>}{error && <p role="alert">{error}</p>}{!error && <p role="status">{statusText[playerStatus] || message}</p>}
   </section>;

@@ -4,6 +4,7 @@ import { formatYoutubeDuration, youtubePosition } from "../lib/youtube";
 import type { YouTubeState } from "../lib/youtube";
 
 type Player = { destroy(): void; playVideo(): void; pauseVideo(): void; stopVideo(): void; mute(): void; unMute(): void; isMuted(): boolean; setVolume(n: number): void; getCurrentTime(): number; getPlayerState(): number; seekTo(n: number, allow: boolean): void; loadVideoById(options: Record<string, unknown>): void; cueVideoById(options: Record<string, unknown>): void };
+export type PrivatePlaybackControls = { play(volume:number):void; pause():void };
 type PlayerWindow = Window & { YT?: { Player: new (element: HTMLElement, options: Record<string, unknown>) => Player } };
 let apiPromise: Promise<void> | null = null;
 function loadPlayerApi() {
@@ -19,9 +20,10 @@ function loadPlayerApi() {
   });
   return apiPromise;
 }
-export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = false, interactive = false }: { state: YouTubeState | null; slug?: string; monitor?: boolean; interactive?: boolean; onStatus?: (feedback: {playbackId:string;status:string;position:number;errorCode?:number}) => void }) {
+export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = false, interactive = false, onPrivateControls }: { state: YouTubeState | null; slug?: string; monitor?: boolean; interactive?: boolean; onPrivateControls?: (controls:PrivatePlaybackControls|null)=>void; onStatus?: (feedback: {playbackId:string;status:string;position:number;errorCode?:number}) => void }) {
   const root = useRef<HTMLDivElement>(null), player = useRef<Player | null>(null);
   const latest = useRef(state); latest.current = state;
+  const privateCallback = useRef(onPrivateControls); privateCallback.current = onPrivateControls;
   const statusCallback = useRef(onStatus); statusCallback.current = onStatus;
   const [ready, setReady] = useState(false), [hidden, setHidden] = useState(false), [error, setError] = useState("");
   const soundMuted = useRef(true), autoplayBlocked = useRef(false), failed = useRef(false);
@@ -51,7 +53,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = 
         width: "100%", height: "100%", videoId: latest.current?.videoId,
         playerVars: { autoplay: 0, mute: latest.current?.startMuted === true ? 1 : 0, start: latest.current?.position ?? 0, ...(latest.current?.end != null ? {end:latest.current.end} : {}), playsinline: 1, controls: monitor || interactive ? 1 : 0, rel: 0, origin: window.location.origin },
         events: {
-          onReady: () => { clearInterval(readinessTimer);if (!cancelled && !failed.current) setReady(true); },
+          onReady: () => { clearInterval(readinessTimer);if (!cancelled && !failed.current) { setReady(true); if (monitor && player.current) {const p=player.current;privateCallback.current?.({play:(volume)=>{p.setVolume(volume);p.unMute();p.playVideo();},pause:()=>p.pauseVideo()});} } },
           onStateChange: (event: { data: number }) => {
             if (cancelled) return;
             if (failed.current) return;
@@ -65,7 +67,7 @@ export default function YouTubeOverlayPlayer({ state, slug, onStatus, monitor = 
         },
       });
     }).catch(() => { clearInterval(readinessTimer);if (!cancelled && !failed.current) { failed.current=true; setHidden(!monitor); setError("YouTube player could not load."); report("error"); } });
-    return () => { cancelled = true; clearInterval(readinessTimer);player.current?.destroy(); player.current = null; };
+    return () => { cancelled = true; if(monitor)privateCallback.current?.(null); clearInterval(readinessTimer);player.current?.destroy(); player.current = null; };
   }, [playbackId]);
   const loadedId = useRef("");
   useEffect(() => {
