@@ -945,6 +945,7 @@ export default function ProjectWorkspace() {
         <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
         <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>
         <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button><button type="button" onClick={openNewList}>Create list and cards</button>
+        <button type="button" onClick={() => {setSideBySideTesting(false);requestAnimationFrame(()=>document.getElementById("workshop-assets")?.scrollIntoView({behavior:"smooth",block:"start"}));}}>Organize assets &amp; pools</button>
         <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
       </div>}
       {workflowStep === 0 && <section className="workshop-help" aria-label="Artwork and interactive board guide">
@@ -1077,8 +1078,8 @@ export default function ProjectWorkspace() {
             <p className="empty-note">Add the Game Wheel from the library when you need it.</p>
           )}
         </div>
-        <div className="detail-block">
-          <span>ASSETS</span>
+        <div className="detail-block" id="workshop-assets">
+          <h3>Images, videos &amp; asset pools</h3>
           <p className="asset-library-help">Select an asset to edit it, place it on the overlay, or add it to a pool.</p>
           <AssetPoolManager pools={project.assetPools || []} onChange={assetPools => persist({ ...project, assetPools, updatedAt: "just now" })} />
           <div className="workshop-assets-toolbar">

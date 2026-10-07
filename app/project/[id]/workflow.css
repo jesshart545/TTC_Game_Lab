@@ -85,3 +85,7 @@
 .asset-pool-manager :is(label,legend,summary,p,span,input,button){font-size:14px}.asset-pool-manager h3{font-size:17px}.asset-pool-create input,.asset-pool-card-heading input{font-size:14px;padding:10px}.asset-pool-option{min-height:36px}.asset-pool-option input{width:18px;height:18px}.asset-detail-panel :is(label,summary,p,button),.workshop-asset-name{font-size:14px}.workshop-asset-tile small{font-size:12px}.build-space p{line-height:1.55}.build-space :is(button,input,select){min-height:40px}.build-space button:disabled{opacity:.5;cursor:default}
 
 .workflow-layout .message p{font-size:15px;line-height:1.65;color:#c3ccda}.workflow-layout .message strong,.workflow-layout .composer label,.workflow-layout .idea-card button{font-size:14px}.workflow-layout .composer textarea{font-size:16px}.workflow-layout .idea-card>span{font-size:12px}.workflow-layout .chat-panel .panel-heading h2{font-size:22px}
+
+/* Workshop organization stays available on smaller screens and in rehearsal layouts. */
+.workflow-layout.workflow-stage-0>.assets-panel{display:block}
+#workshop-assets{scroll-margin-top:20px}
