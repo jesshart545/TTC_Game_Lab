@@ -3,7 +3,10 @@ const output=ts.transpileModule(fs.readFileSync('lib/question-cards.ts','utf8'),
 const exported={};vm.runInNewContext(output,{exports:exported,crypto:require('node:crypto').webcrypto,Date,Math,Set});
 const {createCardSystem,freshCardState,cardTransition,cardPhase,publicCardState,questionPool}=exported;
 let p={id:'test',gameTools:[{id:'pool',type:'trivia-list',enabled:true,config:{questions:[{question:'First question?',answer:'First answer'},{question:'Second question?',answer:'Second answer'},{prompt:'First question?',answer:'Duplicate must not repeat'}]}}],controls:[]};
-p=createCardSystem(p);const tool=p.gameTools.find(t=>t.type==='question-card'),turn=p.gameTools.find(t=>t.id===tool.config.turnTimerId),steal=p.gameTools.find(t=>t.id===tool.config.stealTimerId);turn.config.seconds=3;steal.config.seconds=2;
+p=createCardSystem(p);const tool=p.gameTools.find(t=>t.type==='question-card');
+assert.equal(tool.config.turnTimerId,'');assert.equal(tool.config.stealTimerId,'');
+const turn={id:'optional-turn',type:'countdown',enabled:true,config:{seconds:3}},steal={id:'optional-steal',type:'countdown',enabled:true,config:{seconds:2}};
+p.gameTools.push(turn,steal);tool.config.turnTimerId=turn.id;tool.config.stealTimerId=steal.id;
 assert.equal(questionPool(p,tool).length,2);let state=freshCardState();state=cardTransition(p,tool,state,'show',1000,()=>.8);assert.equal(state.question.answer,'Second answer');assert.equal(state.turnAt,null);assert.equal(state.stealAt,null);assert.equal(publicCardState(p,tool,state,1000).question.answer,'');
 assert.throws(()=>cardTransition(p,tool,state,'steal',1000),/Wait/);assert.throws(()=>cardTransition(p,tool,state,'show',1000),/Finish or clear/);
 state=cardTransition(p,tool,state,'turn',5000);assert.equal(cardPhase(p,tool,state,9000),'question');assert.equal(state.stealAt,null);assert.equal(publicCardState(p,tool,state,9000).question.answer,'');assert.throws(()=>cardTransition(p,tool,state,'turn',9000),/already/);
