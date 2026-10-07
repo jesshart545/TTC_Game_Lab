@@ -24,3 +24,8 @@ const replacement={newTools:[{type:'card-list',name:'Instrument Facts',config:{e
 groundedResearchCards(replacement,evidence,[{id:'saved-pool',type:'card-list',name:'Instrument Facts'}],'Replace the existing Instrument Facts pool');
 assert.equal(replacement.newTools.length,0);assert.equal(replacement.gameTools[0].id,'saved-pool');assert.equal(replacement.gameTools[0].config.cards.length,0);
 console.log('PASS: an explicit pool replacement updates its saved ID rather than creating a duplicate.');
+
+const identified=groundedResearchCards({newTools:[{type:'card-list',config:{entries:[{sourceId:0,sourceUrl:'https://wrong-link.example',sourceQuote:evidence[0].summary}]}}]},evidence);
+assert.equal(identified.newTools[0].config.entries[0].sourceUrl,evidence[0].url);
+assert.throws(()=>groundedResearchCards({newTools:[{type:'card-list',config:{entries:[{sourceId:99,sourceQuote:evidence[0].summary}]}}]},evidence),/source URL/);
+console.log('PASS: source selection uses a supplied result ID and the app attaches its actual URL; unknown result IDs are rejected.');
