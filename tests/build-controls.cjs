@@ -19,3 +19,8 @@ assert.equal(flip.label,'Flip Coin Toss');assert.equal(flip.action,'tool.coin');
 assert(result.project.controls.some(c=>c.label==='Hide Coin Toss'&&c.action==='result.hide.'+flip.id));
 assert.equal(addCreationControl(result.project,'tool','coin').project.controls.length,2);
 console.log('PASS: standalone coin connects Flip/Hide controls without card pools or duplicate buttons.');
+const {clarifyYoutubeSearch}=load('lib/build-controls.ts',{'./control-connections':connections,'./board-design':load('lib/board-design.ts')});
+const legacy={assets:[],gameTools:[{id:'yt',type:'youtube',name:'YouTube Clip',config:{}}],controls:[{id:'open',action:'tool.yt',label:'Open YouTube Clip',detail:'old'}]};
+const clarified=clarifyYoutubeSearch(legacy);assert.equal(clarified.gameTools[0].name,'YouTube search');assert.equal(clarified.controls[0].label,'Open YouTube search');assert.match(clarified.controls[0].detail,/host dashboard/);assert.equal(legacy.controls[0].label,'Open YouTube Clip');
+assert.equal(clarifyYoutubeSearch({...legacy,controls:[{...legacy.controls[0],label:'Find my music'}]}).controls[0].label,'Find my music');
+console.log('PASS: existing YouTube defaults clarify dashboard search while custom button names are preserved.');

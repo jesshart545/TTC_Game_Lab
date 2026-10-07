@@ -22,7 +22,7 @@ import MediaEditor from "../../../components/MediaEditor";
 import AssetComposer from "../../../components/AssetComposer";
 import CompositionPlayer, { defaultOverlayResult } from "../../../components/CompositionPlayer";
 import { applyBuildChanges } from "../../../lib/build-edits";
-import {addCreationControl} from "../../../lib/build-controls";
+import {addCreationControl,clarifyYoutubeSearch} from "../../../lib/build-controls";
 import {toolDefaults,infoTypes} from "../../../lib/game-tools";
 import {GameInfoHostPanel} from "../../../components/GameInfoTools";
 import {buildReadiness} from "../../../lib/build-readiness";
@@ -206,7 +206,7 @@ export default function ProjectWorkspace() {
         hydrated = found;
       }
       if (cancelled) return;
-      setProject(removeLegacyCardTimers({ ...hydrated, gameTools: (hydrated.gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) }));
+      setProject(removeLegacyCardTimers({ ...clarifyYoutubeSearch(hydrated), gameTools: (clarifyYoutubeSearch(hydrated).gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) }));
       setWorkflowStep(Math.max(0, Math.min(2, found.workflow?.stage ?? 0)));
       setWorkshopStep(Math.max(0, Math.min(2, found.workflow?.workshopStep ?? 0)));
       setDraft(found.workflow?.promptDraft || "");

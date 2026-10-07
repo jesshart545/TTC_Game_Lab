@@ -2,7 +2,12 @@ import type { Project, ProjectEvent, OverlayResult } from './project';
 import { mediaKind } from './board-design';
 import { connectQuestionCard } from './control-connections';
 export const initialResult:OverlayResult={x:15,y:20,width:70,height:60,entrance:'none',exit:'none',entranceSeconds:0,exitSeconds:0,layer:20};
+export function clarifyYoutubeSearch(project:Project):Project {
+ const youtubeIds=new Set(project.gameTools.filter(t=>t.type==='youtube').map(t=>t.id));
+ return {...project,gameTools:project.gameTools.map(t=>t.type==='youtube'&&['YouTube','YouTube Clip','YouTube clip'].includes(t.name)?{...t,name:'YouTube search'}:t),controls:project.controls.map(c=>youtubeIds.has(c.action.replace(/^tool\./,''))?{...c,label:['Open YouTube','Open YouTube Clip','Open YouTube clip','Open YouTube search'].includes(c.label)?'Open YouTube search':c.label,detail:'Open YouTube search in the host dashboard. Choose a video, then send it to the overlay when ready.'}:c)};
+}
 export function addCreationControl(project:Project,kind:'asset'|'tool'|'composition',id:string):{project:Project;controlId:string}{
+ project=clarifyYoutubeSearch(project);
  let next=project;
  const asset=kind==='asset'?project.assets.find(a=>(a.storageKey||a.name)===id):undefined;
  const tool=kind==='tool'?project.gameTools.find(t=>t.id===id&&t.enabled):undefined;
