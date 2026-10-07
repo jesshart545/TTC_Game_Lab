@@ -11,7 +11,7 @@ export default function OverlayAsset({asset,background=false,className}:{asset:P
  const video=kind.includes("video") || /\.(mp4|webm|mov)(?:$|\s)/.test(kind),audio=kind.includes("audio") || /\.(mp3|wav|ogg)(?:$|\s)/.test(kind);
  const e=asset.edits||{};
  useEffect(()=>{if(media.current)media.current.volume=Math.max(0,Math.min(100,e.volume??80))/100;},[e.volume,asset.url]);
- const style:CSSProperties={...overlayAssetStyle(asset),...(background?{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",pointerEvents:"none"}: {})};
+ const style:CSSProperties={...overlayAssetStyle(asset),...(background?{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",pointerEvents:"none"}:{objectFit:"contain"})};
  if(video)return <video ref={media} aria-label={asset.name} src={asset.url} className={className} style={style} autoPlay playsInline loop={e.loop??true} muted={!(e.sound??false)}/>;
  if(audio)return <audio ref={media} aria-label={asset.name} src={asset.url} autoPlay loop={e.loop??false} muted={!(e.sound??true)}/>;
  return <img src={asset.url} alt={asset.name} className={className} style={style}/>;
