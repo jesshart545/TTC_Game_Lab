@@ -1,0 +1,27 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript');
+function load(path,requires={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:id=>requires[id],crypto:require('node:crypto').webcrypto,Date,Math,Set});return exports;}
+const cards=load('lib/question-cards.ts');
+const {assignControlAction,connectQuestionCard,controlConnectionError}=load('lib/control-connections.ts',{'./question-cards':cards});
+let p=cards.createCardSystem({gameTools:[{id:'pool',type:'trivia-list',enabled:true,config:{questions:[{question:'Test question',answer:'Test answer'}]}}],controls:[]});
+const card=p.gameTools.find(t=>t.type==='question-card');
+assert.equal(card.config.turnTimerId,'');assert.equal(card.config.stealTimerId,'');
+const blank={id:'button',label:'Test button',action:'',detail:''};
+assert.match(controlConnectionError(p,blank),/Choose an action/);
+assert.match(controlConnectionError(p,{...blank,action:'tool.'+card.id,toolIds:[card.id]}),/specific card action/);
+const assigned=assignControlAction(p,blank,'cards.show.'+card.id);
+assert.equal(assigned.toolIds[0],card.id);assert.equal(controlConnectionError(p,assigned),null);
+let state=cards.cardTransition(p,card,cards.freshCardState(),'show',1000,()=>0);
+assert.equal(cards.publicCardState(p,card,state,2000).question.answer,'');
+assert.equal(cards.cardPhase(p,card,state,1000000),'question');
+state=cards.cardTransition(p,card,state,'reveal',1000001);
+assert.equal(cards.publicCardState(p,card,state,1000002).question.answer,'Test answer');
+assert.throws(()=>cards.cardTransition(p,card,state,'show'),/No unused/);
+p={...p,controls:[{...blank,action:'tool.'+card.id,toolIds:[card.id]}]};
+const connected=connectQuestionCard(p,card.id),again=connectQuestionCard(connected,card.id);
+assert.equal(connected.controls.length,2);assert.equal(again.controls.length,2);
+assert.equal(connected.controls[0].id,blank.id);assert.equal(connected.controls[0].label,blank.label);
+assert.equal(connected.controls[0].action,'cards.show.'+card.id);
+assert.equal(connected.controls[1].action,'cards.reveal.'+card.id);
+assert.equal(controlConnectionError({...p,gameTools:[]},assigned).includes('available'),true);
+assert.equal(assignControlAction(p,assigned,'').toolIds.length,0);
+console.log('PASS: unassigned/invalid/missing connections rejected, specific actions retain card link, timer-free question holds and reveals, no repeated questions, legacy button repaired, repeated placement does not duplicate controls.');

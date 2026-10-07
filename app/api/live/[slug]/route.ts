@@ -1,3 +1,4 @@
+import {controlConnectionError} from "../../../../lib/control-connections";
 import {changeCard} from "../../../../lib/card-server";
 import {cardControl} from "../../../../lib/question-cards";
 import { NextResponse } from "next/server";
@@ -146,6 +147,7 @@ export async function POST(request: Request, context: Context) {
   if (!control || (control.compositionId && !live.project.compositions?.some(comp => comp.id === control.compositionId && comp.inProject))) {
     return NextResponse.json({ error: "Control is not in the published experience." }, { status: 400 });
   }
+  const connectionError=controlConnectionError(live.project,control);if(connectionError)return NextResponse.json({error:connectionError},{status:409});
   const card=cardControl(control.action);if(card){try{return NextResponse.json({ok:true,state:await changeCard(live.db,live.project,card.toolId,card.action)});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Card action failed."},{status:409});}}
   const rows = await live.db`INSERT INTO live_events (project_id, control_id, event_type) VALUES (${live.project.id}, ${control.id}, ${"control"}) RETURNING id`;
   return NextResponse.json({ ok: true, id: Number(rows[0].id) });

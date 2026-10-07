@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
+import {controlConnectionError} from "../lib/control-connections";
 import QuestionCards from './QuestionCards';
 import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
@@ -24,6 +25,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
   const fire = useCallback((control: ProjectEvent) => {
     const p = latest.current; if (!p) return;
+    const connectionError=controlConnectionError(p,control);if(connectionError)throw new Error(connectionError);
     const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action);return;}
     const later = (fn: () => void, ms: number) => { const timer = setTimeout(() => { timers.current = timers.current.filter(x => x !== timer); fn(); }, ms); timers.current.push(timer); };
     const add = (entry: Omit<Run, "id" | "at" | "control">, seconds: number) => {
