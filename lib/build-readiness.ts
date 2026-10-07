@@ -1,3 +1,4 @@
+import {pickerCards} from './card-lists';
 import type { Project } from './project';
 import { controlConnectionError } from './control-connections';
 import { questionPool } from './question-cards';
@@ -9,6 +10,7 @@ export function buildReadiness(project: Project): BuildIssue[] {
   if(error)issues.push({id:'control-'+control.id,message:control.label+': '+error,kind:'control',targetId:control.id});
  }
  for(const tool of project.gameTools.filter(t=>t.enabled&&(t.inToolbox||t.inOverlayBuild))){
+  if(tool.type==='random-picker'&&!pickerCards(project,tool).length)issues.push({id:'list-'+tool.id,message:tool.name+': choose a saved list containing individual cards.',kind:'tool',targetId:tool.id});
   if(tool.type==='question-card'){
    if(!questionPool(project,tool).length)issues.push({id:'pool-'+tool.id,message:tool.name+': choose a question pool with questions and answers.',kind:'tool',targetId:tool.id});
    if(!tool.inOverlayBuild)issues.push({id:'overlay-'+tool.id,message:tool.name+': add the cards to the audience overlay.',kind:'tool',targetId:tool.id});

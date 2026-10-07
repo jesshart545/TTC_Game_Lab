@@ -8,7 +8,7 @@ export const additionTypes = [
   { id: 'question-card', label: 'Question & answer cards', help: 'Choose cards and their question pool, design both faces, then connect Show Question, Reveal Answer and Clear. Timers are optional.' },
   { id: 'blank-card', label: 'Text cards', help: 'Choose a card, set its text and appearance, then connect Show and Clear buttons.' },
   { id: 'wheel', label: 'Wheels', help: 'Choose a wheel, review its choices and placement, then connect Spin and Hide buttons.' },
-  { id: 'random-picker', label: 'Random pickers', help: 'Choose a picker, review its entries and placement, then connect Pick and Hide buttons.' },
+  { id: 'random-picker', label: 'Random pickers', help: 'Create a list in Workshop: each entry becomes its own designed card. Connect that saved list here, then test Pick next card and Hide. No repeats until Start new game.' },
   { id: 'dice', label: 'Dice', help: 'Choose dice, review the settings and placement, then connect Roll and Hide buttons.' },
   { id: 'countdown', label: 'Timers', help: 'Choose a timer, set its duration and appearance, then connect Start and Hide buttons. Starting a timer does not reveal an answer.' },
   { id: 'poll', label: 'Polls', help: 'Choose a poll, review its options and placement, then connect Show and Hide buttons.' },

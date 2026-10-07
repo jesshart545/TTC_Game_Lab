@@ -16,7 +16,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const initialized=useRef<string|null>(null);
   const cardRef=useRef<Record<string,CardState>>({});
   const [cardStates,setCardStates]=useState<Record<string,CardState>>({});
-  const cardCommand=useCallback((id:string,action:CardAction,text='')=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.enabled);if(!p||!tool)throw new Error('Card system unavailable.');const next=cardTransition(p,tool,cardRef.current[id]||freshCardState(),action,Date.now(),Math.random,text);cardRef.current={...cardRef.current,[id]:next};setCardStates(cardRef.current);savedCallback.current?.(cardRef.current);},[]);
+  const cardCommand=useCallback((id:string,action:CardAction,text='')=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.enabled);if(!p||!tool)throw new Error('Card system unavailable.');const next=cardTransition(p,tool,cardRef.current[id]||freshCardState(),action,Date.now(),undefined,text);cardRef.current={...cardRef.current,[id]:next};setCardStates(cardRef.current);savedCallback.current?.(cardRef.current);},[]);
   const latest = useRef(project); latest.current = project;
   useEffect(()=>{if(project&&initialized.current!==project.id){initialized.current=project.id;cardRef.current=project.cardPreviewStates||{};setCardStates(cardRef.current);}},[project?.id]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -30,6 +30,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     const p = latest.current; if (!p) return;
     if(control.action.startsWith("result.hide.")){setRuns(items=>items.filter(item=>item.control.id!==control.action.slice(12)));return;}
     const connectionError=controlConnectionError(p,control);if(connectionError)throw new Error(connectionError);
+    const legacyPicker=p.gameTools.find(t=>t.type==='random-picker'&&control.action===`tool.${t.id}`);if(legacyPicker){cardCommand(legacyPicker.id,'draw');return;}
     const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action,String(p.gameTools.find(t=>t.id===card.toolId)?.config.text||""));return;}
     const later = (fn: () => void, ms: number) => { const timer = setTimeout(() => { timers.current = timers.current.filter(x => x !== timer); fn(); }, ms); timers.current.push(timer); };
     const add = (entry: Omit<Run, "id" | "at" | "control">, seconds: number) => {
@@ -43,10 +44,11 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
       if (!storedTool) return;
       const chosen=outcomes?.[id];
       const tool=chosen?.segments?{...storedTool,config:{...storedTool.config,segments:chosen.segments}}:storedTool;
+      if(tool.type==='random-picker'){cardCommand(id,'draw');return;}
       const config = tool.config;
       const choices = (Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : ["Winner"]).map(String);
       let result = "";
-      if (tool.type === "wheel" || tool.type === "random-picker") { if(!choices.length)throw new Error("Add choices to "+tool.name+" in Workshop."); result = choices[Math.floor(Math.random() * choices.length)]; }
+      if (tool.type === "wheel") { if(!choices.length)throw new Error("Add choices to "+tool.name+" in Workshop."); result = choices[Math.floor(Math.random() * choices.length)]; }
       if (tool.type === "dice") result = String(1 + Math.floor(Math.random() * Math.min(100,Math.max(2, Math.floor(Number(config.sides) || 6)))));
       if (tool.type === "trivia-list") {
         const questions = Array.isArray(config.questions) ? config.questions : [];

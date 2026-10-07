@@ -8,14 +8,14 @@ export async function readCards(db:NonNullable<ReturnType<typeof getDb>>,project
  return Object.fromEntries(rows.flatMap(row=>{const tool=project.gameTools.find(t=>t.id===row.tool_id&&t.enabled);return tool?[[row.tool_id,privateView?row.data:publicCardState(project,tool,row.data as CardState)]]:[];}));
 }
 export async function changeCard(db:NonNullable<ReturnType<typeof getDb>>,project:Project,toolId:string,action:CardAction,expectedVersion?:number,text=''){
- const tool=project.gameTools.find(t=>t.id===toolId&&t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'));
+ const tool=project.gameTools.find(t=>t.id===toolId&&t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'||t.type==='random-picker'));
  if(!tool)throw new Error('This card system is not connected in the published project.');
  await ensureCards(db);const empty=JSON.stringify(freshCardState());
  await db`INSERT INTO live_cards(project_id,tool_id,data) VALUES(${project.id},${toolId},${empty}::jsonb) ON CONFLICT DO NOTHING`;
  const rows=await db`SELECT version,data FROM live_cards WHERE project_id=${project.id} AND tool_id=${toolId}`;
  const previous=rows[0].data as CardState;
  if(expectedVersion!==undefined&&expectedVersion!==Number(rows[0].version))throw new Error('The active question changed. Refresh the card controls and try again.');
- const next=cardTransition(project,tool,previous,action,Date.now(),Math.random,text);
+ const next=cardTransition(project,tool,previous,action,Date.now(),undefined,text);
  const json=JSON.stringify(next);
  const updated=await db`UPDATE live_cards SET data=${json}::jsonb,version=${next.version} WHERE project_id=${project.id} AND tool_id=${toolId} AND version=${previous.version} RETURNING data`;
  if(!updated.length)throw new Error('Another question action just finished. Try again from the current question.');

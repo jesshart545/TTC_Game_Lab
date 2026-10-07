@@ -1,6 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript');
 const output=ts.transpileModule(fs.readFileSync('lib/question-cards.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
-const exported={};vm.runInNewContext(output,{exports:exported,crypto:require('node:crypto').webcrypto,Date,Math,Set});
+const lists={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/card-lists.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:lists,crypto:require('node:crypto').webcrypto,Uint32Array});
+const exported={};vm.runInNewContext(output,{exports:exported,require:()=>lists,crypto:require('node:crypto').webcrypto,Date,Math,Set});
 const {createCardSystem,freshCardState,cardTransition,cardPhase,publicCardState,questionPool}=exported;
 let p={id:'test',gameTools:[{id:'pool',type:'trivia-list',enabled:true,config:{questions:[{question:'First question?',answer:'First answer'},{question:'Second question?',answer:'Second answer'},{prompt:'First question?',answer:'Duplicate must not repeat'}]}}],controls:[]};
 p=createCardSystem(p);const tool=p.gameTools.find(t=>t.type==='question-card');

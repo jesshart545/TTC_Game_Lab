@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript');
-function load(path,requires={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:id=>requires[id],crypto:require('node:crypto').webcrypto,Date,Math,Set});return exports;}
-const cards=load('lib/question-cards.ts');
+function load(path,requires={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:id=>requires[id],crypto:require('node:crypto').webcrypto,Uint32Array,Date,Math,Set});return exports;}
+const cards=load('lib/question-cards.ts',{'./card-lists':load('lib/card-lists.ts')});
 const {assignControlAction,connectQuestionCard,controlConnectionError}=load('lib/control-connections.ts',{'./question-cards':cards});
 let p=cards.createCardSystem({gameTools:[{id:'pool',type:'trivia-list',enabled:true,config:{questions:[{question:'Test question',answer:'Test answer'}]}}],controls:[]});
 const card=p.gameTools.find(t=>t.type==='question-card');

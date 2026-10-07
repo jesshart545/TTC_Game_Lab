@@ -1,0 +1,15 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript');
+const cache={};function load(file){if(cache[file])return cache[file];const exp={};cache[file]=exp;vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports:exp,require:id=>id==='./db'?{}:load('lib/'+id.slice(2)+'.ts'),crypto:require('node:crypto').webcrypto,Uint32Array,Date,Math,Set});return exp;}
+const card=load('lib/question-cards.ts'),{changeCard}=load('lib/card-server.ts');
+const list={id:'list',type:'card-list',enabled:true,config:{cards:[{id:'a',text:'First quote',design:{fontFamily:'Georgia, serif'}},{id:'b',text:'Second quote',design:{backgroundColor:'#ff0000'}},{id:'c',text:'Third quote',design:{}}]}};
+const picker={id:'picker',type:'random-picker',enabled:true,inOverlayBuild:true,config:{listId:'list'}};
+const project={id:'test',gameTools:[list,picker],controls:[],assets:[]};
+let state=card.freshCardState(),drawn=[];
+for(let i=0;i<3;i++){state=card.cardTransition(project,picker,state,'draw',1000+i,()=>.6);drawn.push(state.question.id);assert.equal(state.question.answer,'');state=card.cardTransition(project,picker,state,'clear');state=JSON.parse(JSON.stringify(state));}
+assert.equal(new Set(drawn).size,3);assert.throws(()=>card.cardTransition(project,picker,state,'draw'),/All cards/);
+state=card.cardTransition(project,picker,state,'new-game');assert.equal(state.used.length,0);assert(state.cleared);
+state=card.cardTransition(project,picker,state,'draw',2000,()=>0);assert.equal(state.question.id,'a');assert.equal(state.selectedDesign.fontFamily,'Georgia, serif');
+assert.throws(()=>card.cardTransition({...project,gameTools:[picker]},picker,state,'draw'),/Connect a saved/);
+let row;
+async function db(parts,...v){const q=parts.join('?');if(q.includes('CREATE TABLE'))return [];if(q.includes('INSERT INTO')){if(!row)row={version:0,data:JSON.parse(v[2])};return [];}if(q.includes('SELECT version'))return [{version:row.version,data:JSON.parse(JSON.stringify(row.data))}];if(q.includes('UPDATE live_cards')){if(v[4]!==row.version)return [];row={version:v[1],data:JSON.parse(v[0])};return [{data:row.data}];}throw Error(q);}
+(async()=>{const draws=await Promise.allSettled([changeCard(db,project,'picker','draw',0),changeCard(db,project,'picker','draw',0)]);assert.equal(draws.filter(x=>x.status==='fulfilled').length,1);assert.equal(row.data.used.length,1);const first=row.data.question.id;await changeCard(db,project,'picker','clear',1);const next=await changeCard(db,project,'picker','draw',2);assert.notEqual(next.question.id,first);await assert.rejects(changeCard(db,project,'picker','draw',0),/changed/);console.log('PASS: one saved card per entry; individual design preserved; no repeats across clear/reload; explicit reset; missing lists rejected; concurrent and stale draws cannot overwrite saved history.');})().catch(e=>{console.error(e);process.exitCode=1;});

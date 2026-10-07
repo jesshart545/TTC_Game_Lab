@@ -1,7 +1,8 @@
+import {pickerCards,randomFraction} from './card-lists';
 import type { GameTool, Project, ProjectEvent } from './project';
-export type CardAction = 'show'|'turn'|'steal'|'reveal'|'clear'|'new-game'|'blank';
+export type CardAction = 'draw'|'show'|'turn'|'steal'|'reveal'|'clear'|'new-game'|'blank';
 export type CardQuestion = {id:string;question:string;answer:string;category?:string};
-export type CardState = {version:number;gameId:string;used:string[];question:CardQuestion|null;shownAt:number;turnAt:number|null;stealAt:number|null;revealAt:number|null;cleared:boolean;blankText?:string};
+export type CardState = {version:number;gameId:string;used:string[];question:CardQuestion|null;shownAt:number;turnAt:number|null;stealAt:number|null;revealAt:number|null;cleared:boolean;blankText?:string;selectedDesign?:Record<string,unknown>};
 export const freshCardState = ():CardState => ({version:0,gameId:'game-'+Date.now(),used:[],question:null,shownAt:0,turnAt:null,stealAt:null,revealAt:null,cleared:true});
 const record=(value:unknown):Record<string,unknown> => value && typeof value==='object' ? value as Record<string,unknown> : {};
 export function bounded(value:unknown,fallback:number,min:number,max:number){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback;}
@@ -20,11 +21,19 @@ export function cardPhase(project:Project,tool:GameTool,state:CardState,now=Date
  if(state.stealAt!==null&&linkedTimer(project,tool,true)){const finish=state.stealAt+timerSeconds(project,tool,true)*1000;if(now>=finish){const design=cardDesign(tool);const exit=design.exit==='none'?0:bounded(design.exitSeconds,.5,0,5)*1000;return now>=finish+exit?'answer':'exit';}}
  return 'question';
 }
-export function cardTransition(project:Project,tool:GameTool,previous:CardState,action:CardAction,now=Date.now(),random=Math.random,text=''):CardState{
+export function cardTransition(project:Project,tool:GameTool,previous:CardState,action:CardAction,now=Date.now(),random=randomFraction,text=''):CardState{
  const state={...previous,used:[...previous.used],version:previous.version+1};
  if(action==='new-game')return {...freshCardState(),version:state.version,gameId:'game-'+now};
  if(action==='clear')return {...state,cleared:true,turnAt:null,stealAt:null};
  if(action==='blank'){if(tool.type!=='blank-card')throw new Error('Choose a blank card.');if(!text.trim()||text.length>20000)throw new Error('Enter card text (up to 20,000 characters).');return {...state,blankText:text.trim(),question:null,shownAt:now,cleared:false,revealAt:null};}
+ if(action==='draw'){
+  if(tool.type!=='random-picker')throw new Error('Choose a card picker.');
+  const cards=pickerCards(project,tool);if(!cards.length)throw new Error('Connect a saved card list in Build Space first.');
+  const available=cards.filter(c=>!state.used.includes(c.id));if(!available.length)throw new Error('All cards have been drawn. Start a new game to reset the history.');
+  const chosen=available[Math.min(available.length-1,Math.floor(Math.max(0,random())*available.length))];
+  return {...state,used:[...state.used,chosen.id],question:{id:chosen.id,question:chosen.text,answer:''},selectedDesign:{...chosen.design},blankText:undefined,shownAt:now,cleared:false,revealAt:null,turnAt:null,stealAt:null};
+ }
+ if(tool.type==='random-picker')throw new Error('Use Pick next card, Hide, or Start new game.');
  if(action==='show'){
   if(!state.cleared&&state.question&&cardPhase(project,tool,state,now)!=='answer')throw new Error('Finish or clear the current question before drawing another.');
   if(tool.type!=='question-card')throw new Error('Choose a question card system.');
@@ -44,7 +53,7 @@ export function publicCardState(project:Project,tool:GameTool,state:CardState,no
  return {...state,used:[],question:state.question?{...state.question,answer:cardPhase(project,tool,state,now)==='answer'?state.question.answer:''}:null};
 }
 export function cardControl(action:string):{toolId:string;action:CardAction}|null{
- const m=action.match(/^cards\.(show|turn|steal|reveal|clear|new-game|blank)\.(.+)$/);return m?{action:m[1] as CardAction,toolId:m[2]}:null;
+ const m=action.match(/^cards\.(draw|show|turn|steal|reveal|clear|new-game|blank)\.(.+)$/);return m?{action:m[1] as CardAction,toolId:m[2]}:null;
 }
 export function createCardSystem(project:Project,backgroundKey?:string,kind:'question'|'answer'|'blank'='question'):Project{
  const id='card-'+crypto.randomUUID();
