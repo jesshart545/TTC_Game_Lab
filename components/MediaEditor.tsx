@@ -16,6 +16,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   const video = isVideo(asset);
   const [edits, setEdits] = useState<ProjectAssetEdits>(asset.edits || {});
   const [duration,setDuration] = useState(0);
+  const [originalRatio,setOriginalRatio] = useState(16/9);
   const update=(patch:Partial<ProjectAssetEdits>)=>setEdits(value=>({...value,...patch}));
   const [prompt, setPrompt] = useState("");
   const [working, setWorking] = useState(false);
@@ -57,6 +58,8 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
     setWorking(true);setError("");
     try {await onSaveAsNew({...asset,edits});onClose();}catch(e){setError(e instanceof Error?e.message:"Could not save the edited copy.");}finally{setWorking(false);}
   }
+  const previewRatio=edits.crop==="square"?1:edits.crop==="portrait"?9/16:edits.crop==="landscape"?16/9:originalRatio;
+  const cropped=Boolean(edits.crop&&edits.crop!=="original");
   const style={transform:`translate(${edits.offsetX || 0}px,${edits.offsetY || 0}px) scale(${edits.zoom || 1}) rotate(${edits.rotation || 0}deg) scaleX(${edits.flipX?-1:1}) scaleY(${edits.flipY?-1:1})`,opacity:edits.opacity??1,filter:`brightness(${edits.brightness??100}%) contrast(${edits.contrast??100}%) saturate(${edits.saturation??100}%)`};
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true">
     <div className="media-editor-modal">
@@ -65,10 +68,11 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
         <button className="media-editor-close" onClick={onClose}>×</button>
       </div>
       <div className="media-editor-preview-wrap">
-        <div className="media-editor-preview" style={{overflow:"hidden",aspectRatio:edits.crop==="square"?"1":edits.crop==="portrait"?"9/16":edits.crop==="landscape"?"16/9":undefined}}>
-          {video ? <video src={asset.url} controls style={style} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : <img src={asset.url} alt={asset.name} style={style}/>}
+        <div className={`media-editor-preview ${cropped?"crop-selected":"crop-original"}`} style={{aspectRatio:previewRatio,width:`min(100%, ${previewRatio*48}vh)`}}>
+          {video ? <video src={asset.url} controls style={style} onLoadedMetadata={e=>{setDuration(e.currentTarget.duration);if(e.currentTarget.videoWidth&&e.currentTarget.videoHeight)setOriginalRatio(e.currentTarget.videoWidth/e.currentTarget.videoHeight);}} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : <img src={asset.url} alt={asset.name} style={style} onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight)setOriginalRatio(image.naturalWidth/image.naturalHeight);}}/>}
         </div>
       </div>
+      {!video&&<div className="media-editor-view-options"><button type="button" disabled={working} onClick={()=>update({crop:"original",zoom:1,rotation:0,offsetX:0,offsetY:0})}>Show full image</button><p>{cropped?"Crop preview: parts outside this shape will be removed in the edited copy.":"Original shape: the whole image fits in the preview. Zoom and position changes may move parts outside it."}</p></div>}
       <div className="media-editor-fields">
         <fieldset disabled={working} style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,padding:16}}>
           <legend>Direct edits · save as a new copy</legend>
@@ -107,3 +111,4 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
     </div>
   </div>;
 }
+
