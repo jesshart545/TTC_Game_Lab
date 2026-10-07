@@ -274,7 +274,7 @@ export default function ProjectWorkspace() {
     try {
       const current = triviaConfig || TRIVIA_CONFIG;
       const categories = triviaTopics.length===5 ? triviaTopics : current.categories.map((c:any)=>c.name);
-      const response = await fetch("/api/trivia",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode,categories,category:categoryName || ""})});
+      const response = await fetch("/api/trivia",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode,categories,category:categoryName || "",exclude:[...current.categories.flatMap((c:any)=>c.questions||[]),...project.gameTools.flatMap(t=>Array.isArray(t.config.questions)?t.config.questions:[])]})});
       const data = await response.json();
       if(!response.ok) throw new Error(data.error || "Trivia generation failed.");
       const nextConfig = categoryName
@@ -301,13 +301,14 @@ export default function ProjectWorkspace() {
     setTriviaListBusy(true);setTriviaListQuestions([]);
     const all:any[]=[],pending=new Map<string,any>();
     const key=(q:any)=>String(q.question||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    const previousQuestions=(projectRef.current || options?.baseProject || project).gameTools.flatMap(t=>{const qs=Array.isArray(t.config.questions)?t.config.questions:[];const cats=Array.isArray(t.config.categories)?t.config.categories:[];return [...qs,...cats.flatMap((c:any)=>Array.isArray(c.questions)?c.questions:[])].map((q:any)=>({question:String(q.question||q.prompt||""),answer:String(q.answer||"")}))});
     let lastError="";
     try {
       const limit=Math.max(6,Math.ceil(target/10)*6);
       for(let attempt=0;all.length<target && attempt<limit;attempt++){
         setAssetStatus(`Searching additional sources · ${all.length}/${target} verified · attempt ${attempt+1}/${limit}`);
         try{
-          const response=await fetch("/api/trivia-list",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({count:Math.min(10,target-all.length),categories,attempt,exclude:all.map(x=>x.question)})});
+          const response=await fetch("/api/trivia-list",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({count:Math.min(10,target-all.length),categories,attempt,exclude:[...previousQuestions,...all,...pending.values()]})});
           const data=await response.json();
           if(!response.ok){lastError=data.error||"Source temporarily unavailable.";continue}
           for(const q of data.questions||[]){if(all.length<target && !all.some(x=>key(x)===key(q))){all.push({...q,verificationStatus:"verified"});pending.delete(key(q))}}

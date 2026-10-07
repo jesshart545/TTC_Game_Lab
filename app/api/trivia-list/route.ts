@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireCreator } from "../../../lib/auth/server";
+import { triviaHistory, repeatedTrivia, type TriviaIdentity } from "../../../lib/trivia-history";
+import { randomInt } from "node:crypto";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -66,10 +69,10 @@ async function verifyCandidate(candidate:any, deadline:number){
   }
   return pending;
 }
-async function generatedFallback(category:string,count:number){
+async function generatedFallback(category:string,count:number,excluded:TriviaIdentity[]){
   const key=process.env.AGNES_API_KEY;
   if(!key) return [];
-  const prompt=`Generate ${Math.min(20,count*2)} conventional, established trivia candidates for category "${category}". Questions must be objective, self-contained, uniquely answerable, notable/recognizable knowledge a knowledgeable player could plausibly know without reading a specific article. Do not use opinions, article-specific details, ordinary regular-season game scores, vague references, or ambiguous superlatives. Return JSON array only: [{"question":"...","answer":"...","category":"${category}"}].`;
+  const prompt=`Generate ${Math.min(20,count*2)} conventional, established trivia candidates for category "${category}". Questions must be objective, self-contained, uniquely answerable, notable/recognizable knowledge a knowledgeable player could plausibly know without reading a specific article. Do not use opinions, article-specific details, ordinary regular-season game scores, vague references, or ambiguous superlatives. Use a variety of subtopics within the requested category. Do not repeat or reword any of these previously offered questions: ${JSON.stringify(excluded.slice(-120).map(x=>x.question))}. Return JSON array only: [{"question":"...","answer":"...","category":"${category}"}].`;
   const r=await fetch("https://apihub.agnes-ai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:"agnes-2.5-flash",messages:[{role:"system",content:"Generate established trivia candidates, not news extraction. JSON only."},{role:"user",content:prompt}],temperature:0.7}),signal:AbortSignal.timeout(20000)}).catch(()=>null);
   if(!r?.ok) return [];
   const p=await r.json().catch(()=>({}));
@@ -78,6 +81,10 @@ async function generatedFallback(category:string,count:number){
   try{return JSON.parse(raw.slice(a,b+1)).map((x:any)=>({text:x.question,answers:[{text:x.answer,isCorrect:true}],category:x.category||category}))}catch{return []}
 }
 export async function POST(request:Request){
+  const user=await requireCreator();
+  if(!user)return NextResponse.json({error:"Sign in to generate trivia."},{status:401});
+  let saved:Awaited<ReturnType<typeof triviaHistory>>;
+  try{saved=await triviaHistory(user.id)}catch{return NextResponse.json({error:"Trivia history is unavailable. Please try again shortly."},{status:503})}
   const body=await request.json().catch(()=>({}));
   const count=Math.max(1,Math.min(10,Math.floor(Number(body.count)||10)));
   const requested=Array.isArray(body.categories)?body.categories.map(String).map((x:string)=>x.trim()).filter(Boolean):[];
@@ -85,24 +92,29 @@ export async function POST(request:Request){
   const pool=categories.length?categories:DEFAULT_CATEGORIES;
   const accepted:any[]=[],manual:any[]=[];
   const seen=new Set<string>((Array.isArray(body.exclude)?body.exclude:[]).map((x:any)=>normalize(String(x))));
+  const history=[...saved.history,...(Array.isArray(body.exclude)?body.exclude:[]).map((x:any)=>typeof x==="string"?{question:x}:{question:String(x?.question||x?.prompt||""),answer:String(x?.answer||"")})];
+  const categoryOffset=randomInt(pool.length);
   const deadline=Date.now()+180000;
   async function process(candidates:any[]){
     for(let offset=0;offset<candidates.length && accepted.length<count && Date.now()<deadline;offset+=4){
       const batch=candidates.slice(offset,offset+4).filter(candidate=>{
         const key=normalize(String(candidate?.text??candidate?.question??""));
-        if(!key || seen.has(key) || !acceptable(candidate))return false;
-        seen.add(key);return true;
+        if(!key || seen.has(key) || !acceptable(candidate) || repeatedTrivia({question:String(candidate.text??candidate.question??""),answer:directAnswer(candidate)},history))return false;
+        seen.add(key);history.push({question:String(candidate.text??candidate.question),answer:directAnswer(candidate)});return true;
       });
       const results=await Promise.all(batch.map(candidate=>verifyCandidate(candidate,deadline)));
       for(const result of results){if(!result)continue;if(result.verificationStatus==="verified"){if(accepted.length<count)accepted.push(result)}else manual.push(result)}
     }
   }
   for(let round=0;round<3 && accepted.length<count && Date.now()<deadline;round++){
-    const category=pool[(Math.max(0,Number(body.attempt)||0)+round)%pool.length];
+    const category=pool[(categoryOffset+Math.max(0,Number(body.attempt)||0)+round)%pool.length];
     await process(await quizApi(category,count-accepted.length));
-    if(accepted.length<count && Date.now()<deadline)await process(await generatedFallback(category,count-accepted.length));
+    if(accepted.length<count && Date.now()<deadline)await process(await generatedFallback(category,count-accepted.length,history));
   }
   // Pending source-backed candidates are separate. The client retries for verified
   // replacements before including any of them as clearly marked review items.
-  return NextResponse.json({questions:accepted,manualCandidates:manual.slice(0,count),requested:count,verified:accepted.length,shortfall:Math.max(0,count-accepted.length)});
+  const fresh:any[]=[],review:any[]=[];
+  try{for(const q of accepted){if(await saved.claim(q))fresh.push(q)}for(const q of manual.slice(0,count)){if(await saved.claim(q))review.push(q)}}catch{return NextResponse.json({error:"Could not save trivia history. Please try again."},{status:503})}
+  return NextResponse.json({questions:fresh,manualCandidates:review,requested:count,verified:fresh.length,shortfall:Math.max(0,count-fresh.length)});
 }
+

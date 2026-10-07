@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireCreator } from "../../../lib/auth/server";
+import { triviaHistory, repeatedTrivia, type TriviaIdentity } from "../../../lib/trivia-history";
+export const maxDuration=300;
 
 const DEFAULT_CATEGORIES = ["Science", "History", "Pop Culture", "Gaming", "Space"];
 
@@ -67,7 +70,12 @@ async function sourceContext(topic: string, category: string) {
 }
 
 export async function POST(request: Request) {
+  const user=await requireCreator();
+  if(!user)return jsonError("Sign in to generate trivia.",401);
+  let saved:Awaited<ReturnType<typeof triviaHistory>>;
+  try{saved=await triviaHistory(user.id)}catch{return jsonError("Trivia history is unavailable. Please try again shortly.",503)}
   const body = await request.json().catch(() => ({}));
+  const excluded:TriviaIdentity[]=(Array.isArray(body.exclude)?body.exclude:[]).map((q:any)=>({question:String(q.question||q.prompt||""),answer:String(q.answer||"")}));
   const seedTopics = Array.isArray(body?.categories)
     ? body.categories.map(String).filter(Boolean).slice(0, 5)
     : [];
@@ -93,6 +101,7 @@ export async function POST(request: Request) {
       );
     }
 
+    for(let attempt=0;attempt<3;attempt++){
     const prompt = `
 Create a Jeopardy-style trivia category for TTCGameLab using ONLY the supplied source material.
 
@@ -101,6 +110,7 @@ Category: ${topic}
 Return EXACTLY 5 questions worth 100, 200, 300, 400, 500 points, increasing in difficulty.
 
 Strict rules:
+- Do not repeat or reword these previously offered questions: ${JSON.stringify([...saved.history.slice(-100),...excluded,...built.flatMap(c=>c.questions.map((q:any)=>({question:q.prompt})))].map(q=>q.question))}. Choose different facts and subtopics within this category.
 - Every question MUST be answerable directly from the supplied sources.
 - DO NOT use outside knowledge.
 - DO NOT invent facts, dates, names, numbers, or answers.
@@ -173,6 +183,10 @@ ${JSON.stringify(context)}
       });
 
       if (questions.length !== 5) continue;
+      const prior:TriviaIdentity[]=[...saved.history,...excluded,...built.flatMap(c=>c.questions.map((q:any)=>({question:q.prompt,answer:q.answer})))];
+      let duplicate=false;
+      for(const q of questions){const identity={question:String(q.prompt),answer:String(q.answer)};if(repeatedTrivia(identity,prior)){duplicate=true;break}prior.push(identity)}
+      if(duplicate)continue;
 
       built.push({
         name: String(cat.name),
@@ -185,8 +199,10 @@ ${JSON.stringify(context)}
           evidence: String(q.evidence),
         })),
       });
+      break;
     } catch {
       // Reject malformed AI output rather than returning unsourced trivia.
+    }
     }
   }
 
@@ -204,5 +220,7 @@ ${JSON.stringify(context)}
     );
   }
 
+  try{for(const category of built){for(const q of category.questions){if(!await saved.claim({question:q.prompt,answer:q.answer}))return jsonError("A question was already generated. Please regenerate for fresh questions.",409)}}}catch{return jsonError("Could not save trivia history. Please try again.",503)}
   return NextResponse.json({ mode: "source", categories: built });
 }
+
