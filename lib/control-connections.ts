@@ -1,4 +1,5 @@
 import type { Project, ProjectEvent } from './project';
+import {sequenceControls} from './sequences';
 import { cardControl } from './question-cards';
 
 export function removeLegacyCardTimers(project: Project): Project {
@@ -17,10 +18,11 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
   }
   if(control.action?.startsWith('asset.show.'))return project.assets.some(a=>(a.storageKey||a.name)===control.action.slice(11)&&a.url)?null:'Choose an available media file for this control.';
   if(control.action?.startsWith('result.hide.'))return project.controls.some(c=>c.id===control.action.slice(12))?null:'The display control for this Hide button is missing.';
+  if(control.action==='sequence'){try{for(const step of sequenceControls(project,control)){const error=controlConnectionError(project,step.control);if(error)return error;}return null;}catch(error){return error instanceof Error?error.message:'Check the sequence actions.';}}
   const card = cardControl(control.action || '');
   if (card) {
     const tool = project.gameTools.find(t => t.id === card.toolId && t.enabled);
-    if (!tool || (tool.type !== 'question-card' && !(tool.type==='random-picker'&&['draw','clear','new-game'].includes(card.action)) && !(tool.type==='blank-card' && ['blank','clear','new-game'].includes(card.action)))) return 'This button is not connected to an available question card. Choose its action again in Build Space.';
+    if (!tool || (tool.type !== 'question-card' && !(tool.type==='random-picker'&&['toggle','draw','clear','new-game'].includes(card.action)) && !(['scoreboard','prize-list','game-tool-list'].includes(tool.type)&&['toggle','score','award','clear','new-game'].includes(card.action)) && !(tool.type==='blank-card' && ['blank','clear','new-game'].includes(card.action)))) return 'This button is not connected to an available question card. Choose its action again in Build Space.';
   }
   const ids = card ? [] : [...(control.toolIds || []), ...(control.action?.startsWith('tool.') ? [control.action.slice(5)] : []), ...(control.buttonMode === 'chain' ? (control.chain || []).filter(s => s.kind === 'tool').map(s => s.refId) : [])];
   for (const id of ids) {

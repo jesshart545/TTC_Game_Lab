@@ -8,7 +8,7 @@ export async function readCards(db:NonNullable<ReturnType<typeof getDb>>,project
  return Object.fromEntries(rows.flatMap(row=>{const tool=project.gameTools.find(t=>t.id===row.tool_id&&t.enabled);return tool?[[row.tool_id,privateView?row.data:publicCardState(project,tool,row.data as CardState)]]:[];}));
 }
 export async function changeCard(db:NonNullable<ReturnType<typeof getDb>>,project:Project,toolId:string,action:CardAction,expectedVersion?:number,text=''){
- const tool=project.gameTools.find(t=>t.id===toolId&&t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'||t.type==='random-picker'));
+ const tool=project.gameTools.find(t=>t.id===toolId&&t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'||t.type==='random-picker'||t.type==='scoreboard'||t.type==='prize-list'||t.type==='game-tool-list'));
  if(!tool)throw new Error('This card system is not connected in the published project.');
  await ensureCards(db);const empty=JSON.stringify(freshCardState());
  await db`INSERT INTO live_cards(project_id,tool_id,data) VALUES(${project.id},${toolId},${empty}::jsonb) ON CONFLICT DO NOTHING`;
@@ -21,3 +21,4 @@ export async function changeCard(db:NonNullable<ReturnType<typeof getDb>>,projec
  if(!updated.length)throw new Error('Another question action just finished. Try again from the current question.');
  return next;
 }
+

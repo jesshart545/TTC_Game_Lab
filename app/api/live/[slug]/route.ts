@@ -167,6 +167,7 @@ export async function POST(request: Request, context: Context) {
   const connectionError=controlConnectionError(live.project,control);if(connectionError)return NextResponse.json({error:connectionError},{status:409});
   const legacyPicker=live.project.gameTools.find(t=>t.type==='random-picker'&&control.action===`tool.${t.id}`);
   const card=legacyPicker?{toolId:legacyPicker.id,action:'draw' as const}:cardControl(control.action);if(card){try{return NextResponse.json({ok:true,state:await changeCard(live.db,live.project,card.toolId,card.action,undefined,String(live.project.gameTools.find(t=>t.id===card.toolId)?.config.text||""))});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Card action failed."},{status:409});}}
+  if(control.action==='sequence')return NextResponse.json({error:"Run this sequence from the host dashboard."},{status:400});
   const outcomes:Record<string,{result:string;segments?:string[]}>= {};
   for(const tool of live.project.gameTools.filter(t=>t.enabled&&control.toolIds?.includes(t.id))){
     if(tool.type==="wheel"){
@@ -184,4 +185,5 @@ export async function POST(request: Request, context: Context) {
   const rows = await live.db`INSERT INTO live_events (project_id, control_id, event_type,payload) VALUES (${live.project.id}, ${control.id}, ${"control"},${payload}::jsonb) RETURNING id`;
   return NextResponse.json({ ok: true, id: Number(rows[0].id) });
 }
+
 

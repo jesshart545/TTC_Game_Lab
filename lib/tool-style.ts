@@ -1,0 +1,10 @@
+import type {CSSProperties} from "react";
+import type {GameTool} from "./project";
+const fonts=["Arial, sans-serif","Georgia, serif","Verdana, sans-serif","Trebuchet MS, sans-serif","monospace"];
+export function toolStyle(tool:GameTool):CSSProperties {const a=(tool.config.appearance||{}) as Record<string,unknown>;return {color:String(a.textColor||"#ffffff"),backgroundColor:String(a.backgroundColor||"#101827"),border:"2px solid "+String(a.accentColor||"#20e8ff"),fontFamily:fonts.includes(String(a.fontFamily))?String(a.fontFamily):fonts[0],fontSize:Math.max(12,Math.min(96,Number(a.fontSize)||28)),borderRadius:Math.max(0,Math.min(64,Number(a.borderRadius)||12)),padding:16};}
+export function overlayToolPlacement(tool:GameTool):CSSProperties {
+ const p=tool.config.placement as Record<string,unknown>|undefined;if(!p)return {};
+ const bound=(v:unknown,d:number,min:number,max:number)=>Number.isFinite(Number(v))?Math.max(min,Math.min(max,Number(v))):d;
+ const x=bound(p.x,15,0,99),y=bound(p.y,15,0,99),width=bound(p.width,70,1,100-x),height=bound(p.height,60,1,100-y);
+ return {position:"absolute",left:x+"%",top:y+"%",width:width+"%",height:height+"%",right:"auto",bottom:"auto",maxWidth:"none",maxHeight:"none"};
+}

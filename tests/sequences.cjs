@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict'),load=require('./load.cjs');
+const {applyBuildChanges}=load('lib/build-edits.ts'),{sequenceControls,runSequence}=load('lib/sequences.ts');
+const p={id:'game',assets:[{name:'Image',storageKey:'a',type:'image',url:'/a.svg'}],gameTools:[],overlay:{},controls:[{id:'show',label:'Show',action:'asset.show.a'},{id:'hide',label:'Hide',action:'result.hide.show'}]};
+const result=applyBuildChanges(p,{sequences:[{name:'Show then hide',steps:[{controlId:'show',delaySeconds:0},{controlId:'hide',delaySeconds:.01}]}]});
+assert.equal(result.warnings.length,0);const sequence=result.project.controls[2];
+assert.equal(sequenceControls(result.project,sequence)[1].delayMs,10);
+assert.equal(applyBuildChanges(p,{sequences:[{name:'Broken',steps:[{controlId:'missing'}]}]}).project.controls.length,2);
+assert.throws(()=>sequenceControls(result.project,{...sequence,chain:[{kind:'control',refId:sequence.id,timing:{mode:'immediate'}}]}),/single-action/);
+assert.throws(()=>sequenceControls(result.project,{...sequence,chain:[{kind:'control',refId:'hide',timing:{mode:'delay',seconds:301}}]}),/five minutes/);
+const sourced=applyBuildChanges(p,{newTools:[{type:'card-list',name:'Researched cards',config:{cards:[{text:'Supported fact',sourceUrl:'https://example.com/source',sourceTitle:'Source'}]}}]});
+assert(sourced.project.gameTools[0].config.cards[0].id);assert.equal(sourced.project.gameTools[0].config.cards[0].sourceUrl,'https://example.com/source');
+(async()=>{
+ const order=[],controller=new AbortController();await runSequence(result.project,sequence,async c=>{order.push(c.id);},controller.signal);assert.deepEqual(order,['show','hide']);
+ const stopped=[],abort=new AbortController();await runSequence(result.project,sequence,async c=>{stopped.push(c.id);abort.abort();},abort.signal);assert.deepEqual(stopped,['show']);
+ await assert.rejects(runSequence(result.project,sequence,async()=>{throw Error('Failed action');},new AbortController().signal),/Failed action/);
+ console.log('PASS: saved sequences run in order, honor delays, stop on cancellation or failure, reject missing/cyclic actions, and researched card pools retain source links.');
+})().catch(e=>{console.error(e);process.exitCode=1});

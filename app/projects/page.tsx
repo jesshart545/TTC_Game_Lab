@@ -5,9 +5,11 @@ import { deleteProjectFromServer, Project } from "../../lib/project";
 import { useEffect, useState } from "react";
 
 export default function ProjectsPage() {
+  const [loading,setLoading]=useState(true),[loadError,setLoadError]=useState(""),[retry,setRetry]=useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
 
   useEffect(() => {
+    setLoading(true);setLoadError("");
     let cancelled = false;
     (async () => {
       try {
@@ -20,11 +22,11 @@ export default function ProjectsPage() {
         if (!cancelled) setProjects(serverProjects);
       } catch (error) {
         console.error("Project library load failed:", error);
-        if (!cancelled) setProjects([]);
-      }
+        if (!cancelled) setLoadError("Your projects could not be loaded. Please try again.");
+      } finally {if(!cancelled)setLoading(false);}
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [retry]);
 
   async function handleDelete(project: Project) {
     const confirmed = window.confirm(`Delete "${project.name}"? This permanently removes the saved project and its stored assets.`);
@@ -45,7 +47,7 @@ export default function ProjectsPage() {
         <div><small>PROJECT LIBRARY</small><h1>My Projects</h1></div>
         <Link href="/project/new" className="build-btn">＋ New Project</Link>
       </header>
-      <div className="project-library-grid">
+      {loading&&<p role="status">Loading your saved projects…</p>}{loadError&&<div role="alert"><p>{loadError}</p><button className="outline-btn" onClick={()=>setRetry(v=>v+1)}>Try again</button></div>}<div className="project-library-grid">
         <article className="library-card project-library-card">
           <Link href="/reference" className="project-library-link">
             <div className="library-preview purple"><span>SHARED · READ ONLY</span><strong>Verification Project</strong><em>A working reference for everyone</em></div>
@@ -72,7 +74,7 @@ export default function ProjectsPage() {
             </div>
           </article>
         ))}
-        {projects.length === 0 && (
+        {!loading&&!loadError&&projects.length === 0 && (
           <div className="asset-library-empty">
             <strong>No projects yet.</strong>
             <span>Create a new project to get started.</span>
@@ -83,3 +85,4 @@ export default function ProjectsPage() {
     </main>
   );
 }
+

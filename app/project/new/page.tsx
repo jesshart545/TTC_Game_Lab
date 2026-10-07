@@ -15,7 +15,11 @@ export default function NewProject() {
   useEffect(() => {
     let cancelled = false;
     if (!creation.current) {
+      const idea=new URLSearchParams(window.location.search).get("idea")?.trim().slice(0,12000)||"";
       const project = createProject("");
+      project.prompt=idea;
+      project.workflow={stage:0,workshopStep:0,promptDraft:idea};
+      if(idea)project.gamePlan={theme:idea};
       project.name = "New Project";
       project.description = "Your TikTok LIVE creation workspace.";
       project.controls = [];
@@ -47,3 +51,4 @@ export default function NewProject() {
     </main>
   );
 }
+

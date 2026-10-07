@@ -1,5 +1,8 @@
 "use client";
 
+import {runSequence} from "../../../lib/sequences";
+import {controlLabel,controlButtonStyle,infoTypes} from "../../../lib/game-tools";
+import {GameInfoHostPanel} from "../../../components/GameInfoTools";
 import PickerHostPanel from "../../../components/PickerHostPanel";
 import WheelHostPanel from "../../../components/WheelHostPanel";
 import QuestionHostPanel from "../../../components/QuestionHostPanel";
@@ -9,7 +12,7 @@ import {cardControl} from "../../../lib/question-cards";
 import YouTubeHostPanel from "../../../components/YouTubeHostPanel";
 import { safeYoutubePlacement } from "../../../lib/youtube";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { loadPublishedProjectFromServer, Project, ProjectEvent } from "../../../lib/project";
 
 export default function PublishedDashboard() {
@@ -20,6 +23,9 @@ export default function PublishedDashboard() {
   const [showYoutube, setShowYoutube] = useState(false);
   const [status, setStatus] = useState("");
   const [hostKey, setHostKey] = useState("");
+  const sequence=useRef<AbortController|null>(null);
+  const [sequenceRunning,setSequenceRunning]=useState(false);
+  useEffect(()=>()=>sequence.current?.abort(),[]);
   const cards=useLiveCards(slug,hostKey);
   const [activeTrivia, setActiveTrivia] = useState<{categoryIndex:number;questionIndex:number} | null>(null);
   const [usedTrivia, setUsedTrivia] = useState<Record<string, boolean>>({});
@@ -43,13 +49,21 @@ export default function PublishedDashboard() {
     const response = await fetch(`/api/live/${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json", "x-host-key": hostKey }, body: JSON.stringify(body) });
     if (!response.ok) throw new Error((await response.json()).error || "Trigger failed.");
   }
-  async function trigger(control: ProjectEvent) {
-    if (!project) return;
-    const card=cardControl(control.action);if(card){try{await cards.command(card.toolId,card.action);setStatus(control.label+" completed.");}catch(e){setStatus(e instanceof Error?e.message:"Card action failed.");}return;}
-    if (control.toolIds?.some(id=>project.gameTools.some(t=>t.id===id && t.type==="youtube" && t.enabled)) || project.gameTools.some(t=>t.type==="youtube" && t.enabled && control.action===`tool.${t.id}`)) {setShowYoutube(true);setStatus("Private YouTube search opened. The audience overlay is unchanged.");return;}
-    if (control.compositionId && !project.compositions?.some(c => c.id === control.compositionId && c.inProject)) { setStatus("This package is not in the published experience."); return; }
-    try { await post({ controlId: control.id }); setStatus(`${control.label} sent to the overlay.`); }
-    catch (error) { setStatus(error instanceof Error ? error.message : "Could not reach the live server."); }
+  async function perform(control:ProjectEvent){
+    if(!project)return;
+    const card=cardControl(control.action);if(card){await cards.command(card.toolId,card.action);return;}
+    if(project.gameTools.some(t=>t.type==='youtube'&&t.enabled&&(control.toolIds?.includes(t.id)||control.action===`tool.${t.id}`))){setShowYoutube(true);return;}
+    await post({controlId:control.id});
+  }
+  async function trigger(control:ProjectEvent){
+    if(!project)return;
+    try{
+      if(control.action==='sequence'){
+        sequence.current?.abort();const controller=new AbortController();sequence.current=controller;setSequenceRunning(true);
+        setStatus('Running '+control.label+'. Keep this dashboard open.');
+        try{await runSequence(project,control,perform,controller.signal);setStatus(controller.signal.aborted?'Sequence stopped. Completed actions remain in place.':control.label+' completed.');}finally{if(sequence.current===controller)setSequenceRunning(false);}
+      }else{await perform(control);setStatus(control.label+' completed.');}
+    }catch(error){setStatus(error instanceof Error?error.message:'Could not complete this action.');}
   }
   async function triviaAction(action:"question"|"answer"|"close", categoryIndex?:number, questionIndex?:number) {
     if (!project) return;
@@ -68,6 +82,7 @@ export default function PublishedDashboard() {
   const overlayPath = projectHost ? "/overlay" : `/published/${project.slug}/overlay`;
   const trivia = (project.gameTools || []).find(tool => tool.type === "trivia-board" && tool.enabled && tool.inOverlayBuild);
   const categories = Array.isArray(trivia?.config?.categories) ? trivia.config.categories as any[] : [];
-  return <main className={`published-dashboard runtime-${project.theme}`}><header><div><small>TTCGameLab · HOST DASHBOARD</small><h1>{project.name}</h1><p>Control the approved live experience.</p></div><a href={overlayPath} target="_blank" rel="noopener noreferrer">Open Overlay ↗</a></header><section><h2>Live controls</h2><div className="published-controls">{project.controls.map(control => <button type="button" key={control.id} onClick={() => trigger(control)}><strong>{control.label}</strong><span>{control.toolIds?.length ? control.toolIds.map(id=>project.gameTools.find(tool=>tool.id===id)?.name).filter(Boolean).join(" + ") : control.chain?.length ? control.chain.map(step=>step.label).join(" → ") : control.detail === "Unassigned dashboard button" ? "No action assigned" : control.detail}</span></button>)}</div>{!project.controls.length && !trivia && <p>No controls were published for this project.</p>}{status && <p role="status">{status}</p>}</section><GoogleSearch slug={slug} hostKey={hostKey}/>{project.gameTools.filter(t=>t.enabled&&t.inToolbox&&t.type==="wheel").map(t=><WheelHostPanel key={t.id} tool={t} slug={slug} hostKey={hostKey}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&(t.type==="question-card"||t.type==="blank-card")).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={cards.states[t.id]} onCommand={cards.command}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker").map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={cards.states[t.id]} onCommand={cards.command}/>)}{cards.error&&<p role="alert">{cards.error}</p>}{trivia && <section><h2>{trivia.name}</h2>{categories.length === 5 ? <><div className="published-trivia-grid">{categories.map((category:any, ci:number)=><div className="published-trivia-column" key={`${category.name}-${ci}`}><strong>{category.name}</strong>{(category.questions || []).slice(0,5).map((question:any, qi:number)=>{const key=`${ci}:${qi}`; const used=usedTrivia[key] || Boolean(question.used); return <button type="button" key={key} disabled={used} onClick={()=>triviaAction("question",ci,qi)}>{used ? "USED" : `$${question.value}`}</button>})}</div>)}</div><div className="published-controls"><button type="button" disabled={!activeTrivia} onClick={()=>activeTrivia && triviaAction("answer",activeTrivia.categoryIndex,activeTrivia.questionIndex)}><strong>SHOW ANSWER</strong><span>Reveal the current clue answer</span></button><button type="button" disabled={!activeTrivia} onClick={()=>triviaAction("close")}><strong>BACK TO BOARD</strong><span>Close the clue and continue the game</span></button></div></> : <p>Generate five trivia categories in the builder before publishing.</p>}</section>}{showYoutube && <section><h2>Private YouTube tool</h2>{<><YouTubeHostPanel canShow={project.gameTools.find(t=>t.type==="youtube"&&t.enabled)?.inOverlayBuild!==false} slug={slug} hostKey={hostKey} placement={safeYoutubePlacement(project.gameTools.find(tool=>tool.type==="youtube")?.config.placement)}/><button type="button" onClick={()=>{setShowYoutube(false);window.localStorage.removeItem(`ttc-youtube-dashboard-${slug}`);}}>Close dashboard panel</button><p>Closing this panel does not stop the overlay. Use Stop &amp; hide first to end playback.</p></>}</section>}<section><h2>Overlay URL</h2><code>{typeof window !== "undefined" ? `${window.location.origin}${overlayPath}` : ""}</code><p>Use this URL as the browser source in your livestream software.</p></section></main>;
+  return <main className={`published-dashboard runtime-${project.theme}`}><header><div><small>TTCGameLab · HOST DASHBOARD</small><h1>{project.name}</h1><p>Control the approved live experience.</p></div><a href={overlayPath} target="_blank" rel="noopener noreferrer">Open Overlay ↗</a></header><section><h2>Live controls</h2><div className="published-controls">{project.controls.map(control => <button type="button" key={control.id} style={controlButtonStyle(control)} onClick={() => trigger(control)}><strong>{controlLabel(project,control,cards.states)}</strong><span>{control.toolIds?.length ? control.toolIds.map(id=>project.gameTools.find(tool=>tool.id===id)?.name).filter(Boolean).join(" + ") : control.chain?.length ? control.chain.map(step=>step.label).join(" → ") : control.detail === "Unassigned dashboard button" ? "No action assigned" : control.detail}</span></button>)}</div>{!project.controls.length && !trivia && <p>No controls were published for this project.</p>}{sequenceRunning&&<button type="button" onClick={()=>sequence.current?.abort()}>Stop sequence</button>}{status && <p role="status">{status}</p>}</section><GoogleSearch slug={slug} hostKey={hostKey}/>{project.gameTools.filter(t=>t.enabled&&t.inToolbox&&t.type==="wheel").map(t=><WheelHostPanel key={t.id} tool={t} slug={slug} hostKey={hostKey}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&(t.type==="question-card"||t.type==="blank-card")).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={cards.states[t.id]} onCommand={cards.command}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker").map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={cards.states[t.id]} onCommand={cards.command}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={cards.states[t.id]} onCommand={cards.command}/>)}{cards.error&&<p role="alert">{cards.error}</p>}{trivia && <section><h2>{trivia.name}</h2>{categories.length === 5 ? <><div className="published-trivia-grid">{categories.map((category:any, ci:number)=><div className="published-trivia-column" key={`${category.name}-${ci}`}><strong>{category.name}</strong>{(category.questions || []).slice(0,5).map((question:any, qi:number)=>{const key=`${ci}:${qi}`; const used=usedTrivia[key] || Boolean(question.used); return <button type="button" key={key} disabled={used} onClick={()=>triviaAction("question",ci,qi)}>{used ? "USED" : `$${question.value}`}</button>})}</div>)}</div><div className="published-controls"><button type="button" disabled={!activeTrivia} onClick={()=>activeTrivia && triviaAction("answer",activeTrivia.categoryIndex,activeTrivia.questionIndex)}><strong>SHOW ANSWER</strong><span>Reveal the current clue answer</span></button><button type="button" disabled={!activeTrivia} onClick={()=>triviaAction("close")}><strong>BACK TO BOARD</strong><span>Close the clue and continue the game</span></button></div></> : <p>Generate five trivia categories in the builder before publishing.</p>}</section>}{showYoutube && <section><h2>Private YouTube tool</h2>{<><YouTubeHostPanel canShow={project.gameTools.find(t=>t.type==="youtube"&&t.enabled)?.inOverlayBuild!==false} slug={slug} hostKey={hostKey} placement={safeYoutubePlacement(project.gameTools.find(tool=>tool.type==="youtube")?.config.placement)}/><button type="button" onClick={()=>{setShowYoutube(false);window.localStorage.removeItem(`ttc-youtube-dashboard-${slug}`);}}>Close dashboard panel</button><p>Closing this panel does not stop the overlay. Use Stop &amp; hide first to end playback.</p></>}</section>}<section><h2>Overlay URL</h2><code>{typeof window !== "undefined" ? `${window.location.origin}${overlayPath}` : ""}</code><p>Use this URL as the browser source in your livestream software.</p></section></main>;
 }
+
 

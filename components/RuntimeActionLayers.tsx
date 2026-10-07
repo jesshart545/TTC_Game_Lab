@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {overlayAssetStyle} from "./OverlayAsset";
+import {runSequence} from "../lib/sequences";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
 import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
@@ -10,7 +12,7 @@ import {cardControl,cardTransition,freshCardState,type CardState,type CardAction
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
-type Run = { id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
+type Run = { exitingAt?:number; id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
 export function useRuntimeActions(project: Project | null,onCardStates?:(states:Record<string,CardState>)=>void) {
   const savedCallback=useRef(onCardStates);savedCallback.current=onCardStates;
   const initialized=useRef<string|null>(null);
@@ -19,6 +21,10 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const cardCommand=useCallback((id:string,action:CardAction,text='')=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.enabled);if(!p||!tool)throw new Error('Card system unavailable.');const next=cardTransition(p,tool,cardRef.current[id]||freshCardState(),action,Date.now(),undefined,text);cardRef.current={...cardRef.current,[id]:next};setCardStates(cardRef.current);savedCallback.current?.(cardRef.current);},[]);
   const latest = useRef(project); latest.current = project;
   useEffect(()=>{if(project&&initialized.current!==project.id){initialized.current=project.id;cardRef.current=project.cardPreviewStates||{};setCardStates(cardRef.current);}},[project?.id]);
+  const sequence=useRef<AbortController|null>(null);
+  const [sequenceRunning,setSequenceRunning]=useState(false),[sequenceError,setSequenceError]=useState("");
+  const stopSequence=useCallback(()=>{sequence.current?.abort();setSequenceRunning(false);},[]);
+  useEffect(()=>()=>sequence.current?.abort(),[]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
   const [runs, setRuns] = useState<Run[]>([]);
@@ -26,9 +32,19 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const [flash, setFlash] = useState(false);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
-  const fire = useCallback((control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[]}>) => {
+  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[]}>) {
     const p = latest.current; if (!p) return;
-    if(control.action.startsWith("result.hide.")){setRuns(items=>items.filter(item=>item.control.id!==control.action.slice(12)));return;}
+    if(control.action==='sequence'){
+      const error=controlConnectionError(p,control);if(error)throw new Error(error);
+      sequence.current?.abort();const controller=new AbortController();sequence.current=controller;setSequenceRunning(true);setSequenceError('');
+      void runSequence(p,control,async target=>{fire(target);},controller.signal).catch(e=>setSequenceError(e instanceof Error?e.message:'Sequence stopped.')).finally(()=>{if(sequence.current===controller)setSequenceRunning(false);});return;
+    }
+    if(control.action.startsWith("result.hide.")){
+      const target=control.action.slice(12);
+      setRuns(items=>items.map(item=>item.control.id===target?{...item,exitingAt:Date.now()}:item));
+      const shown=p.controls.find(c=>c.id===target),seconds=shown?.overlayResult?.exitSeconds||0;
+      const timer=setTimeout(()=>{timers.current=timers.current.filter(t=>t!==timer);setRuns(items=>items.filter(item=>item.control.id!==target||!item.exitingAt));},Math.max(0,Math.min(5,seconds))*1000);timers.current.push(timer);return;
+    }
     const connectionError=controlConnectionError(p,control);if(connectionError)throw new Error(connectionError);
     const legacyPicker=p.gameTools.find(t=>t.type==='random-picker'&&control.action===`tool.${t.id}`);if(legacyPicker){cardCommand(legacyPicker.id,'draw');return;}
     const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action,String(p.gameTools.find(t=>t.id===card.toolId)?.config.text||""));return;}
@@ -89,7 +105,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     }
     if (!control.toolIds?.length && !control.compositionId && !control.chain?.length) { setFlash(true); later(() => setFlash(false), 700); }
   }, [remove,cardCommand]);
-  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand };
+  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand,sequenceRunning,sequenceError,stopSequence };
 }
 
 
@@ -152,12 +168,18 @@ function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
   const media=useRef<HTMLMediaElement|null>(null);
   const [blocked,setBlocked]=useState(false);
   const [failed,setFailed]=useState(false);
-  useEffect(()=>{const element=media.current;if(element){element.volume=Math.max(0,Math.min(1,(asset.edits?.volume??80)/100));element.muted=!(asset.edits?.sound??mediaKind(asset)==="audio");element.loop=asset.edits?.loop??false;void element.play().catch(()=>setBlocked(true));}},[asset.edits?.volume,asset.edits?.sound,asset.edits?.loop]);
+  useEffect(()=>{const element=media.current;if(element){element.volume=Math.max(0,Math.min(1,(asset.edits?.volume??80)/100));element.muted=!(asset.edits?.sound??["audio","video"].includes(mediaKind(asset)));element.loop=asset.edits?.loop??false;void element.play().catch(()=>setBlocked(true));}},[asset.edits?.volume,asset.edits?.sound,asset.edits?.loop]);
   const start=()=>{void media.current?.play().then(()=>setBlocked(false)).catch(()=>setFailed(true));};
   return <>{mediaKind(asset)==="video" ? <video ref={media as import("react").Ref<HTMLVideoElement>} aria-label={asset.name} src={asset.url} autoPlay playsInline style={{width:"100%",height:"100%",objectFit:"contain"}} onEnded={onEnd} onError={()=>setFailed(true)}/> : <audio ref={media as import("react").Ref<HTMLAudioElement>} aria-label={asset.name} src={asset.url} autoPlay onEnded={onEnd} onError={()=>setFailed(true)}/>}
     {blocked && !failed && <button onClick={start} style={{position:"absolute",left:"30%",top:"80%",zIndex:60}}>Enable audio</button>}
     {failed && <p role="alert">Unable to play {asset.name}. Reload the overlay to refresh its media.</p>}
   </>;
+}
+
+function motionStyle(run:Run):import("react").CSSProperties{
+ const result=run.control.overlayResult,exit=!!run.exitingAt,mode=exit?result?.exit:result?.entrance,seconds=exit?result?.exitSeconds:result?.entranceSeconds;
+ if(!mode||mode==='none'||!seconds)return {};
+ return {animation:`overlay-${mode} ${Math.min(5,seconds)}s ${exit?'reverse':'normal'} both`};
 }
 
 export default function RuntimeActionLayers({ runtime, project, live = false }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project; live?: boolean }) {
@@ -167,7 +189,8 @@ export default function RuntimeActionLayers({ runtime, project, live = false }: 
     {runtime.runs.map(run => run.tool ? null : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
       return composition ? <CompositionPlayer key={run.id} composition={composition} assets={project.assets} placement={run.control.overlayResult || defaultOverlayResult} startedAt={run.at} onEnd={() => runtime.remove(run.id)}/> : null;
-    })() : run.asset ? <div key={run.id} style={{position:"absolute",...(run.control.overlayResult?{left:run.control.overlayResult.x+"%",top:run.control.overlayResult.y+"%",width:run.control.overlayResult.width+"%",height:run.control.overlayResult.height+"%"}:{inset:0}),zIndex:run.control.overlayResult?.layer??20}}>{["video","audio"].includes(mediaKind(run.asset)) ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
+    })() : run.asset ? <div key={run.id} style={{position:"absolute",...(run.control.overlayResult?{left:run.control.overlayResult.x+"%",top:run.control.overlayResult.y+"%",width:run.control.overlayResult.width+"%",height:run.control.overlayResult.height+"%"}:{inset:0}),zIndex:run.control.overlayResult?.layer??20,...motionStyle(run)}}>{["video","audio"].includes(mediaKind(run.asset)) ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain",...overlayAssetStyle({...run.asset,edits:{...run.asset.edits,placement:undefined}})}}/>}</div> : null)}
   </>;
 }
+
 

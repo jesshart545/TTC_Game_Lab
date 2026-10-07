@@ -1,0 +1,28 @@
+"use client";
+import {useState} from 'react';
+import type {GameTool,Project} from '../lib/project';
+import {gameEntries} from '../lib/game-tools';
+import type {CardAction,CardState} from '../lib/question-cards';
+import {toolStyle,overlayToolPlacement} from '../lib/tool-style';
+
+export function GameEntriesEditor({tool,project,onChange}:{tool:GameTool;project?:Project;onChange:(entries:unknown[])=>void}){
+ const entries=gameEntries(tool),gift=tool.type==='game-tool-list';
+ return <section className="simple-tool-section"><h4>{gift?'Gifts and game actions':tool.type==='scoreboard'?'Players or teams':'Prizes'}</h4><p>{gift?'Add the gift viewers can send and explain what it does. The host carries out the action.':tool.type==='scoreboard'?'Add names and starting scores. Change scores from the host dashboard during play.':'Add prizes here. Mark each one awarded from the host dashboard.'}</p>
+ {entries.map((entry,index)=><fieldset key={entry.id}><legend>{gift?'Gift':tool.type==='scoreboard'?'Player or team':'Prize'} {index+1}</legend><label>Name<input value={entry.name} onChange={e=>onChange(entries.map(x=>x.id===entry.id?{...x,name:e.target.value}:x))}/></label>{gift&&<label>What does this gift do?<input placeholder="For example: Skip the current question" value={entry.meaning||''} onChange={e=>onChange(entries.map(x=>x.id===entry.id?{...x,meaning:e.target.value}:x))}/></label>}{tool.type==='scoreboard'?<label>Starting score<input type="number" value={entry.score||0} onChange={e=>onChange(entries.map(x=>x.id===entry.id?{...x,score:Math.trunc(Number(e.target.value)||0)}:x))}/></label>:<label>Picture (optional)<select value={entry.imageKey||''} onChange={e=>onChange(entries.map(x=>x.id===entry.id?{...x,imageKey:e.target.value}:x))}><option value="">No picture</option>{project?.assets.filter(a=>a.url&&a.type.toLowerCase().includes('image')).map(a=><option key={a.storageKey||a.name} value={a.storageKey||a.name}>{a.name}</option>)}</select></label>}<button type="button" onClick={()=>onChange(entries.filter(x=>x.id!==entry.id))}>Remove this entry</button></fieldset>)}
+ <button type="button" onClick={()=>onChange([...entries,{id:crypto.randomUUID(),name:gift?'New gift':tool.type==='scoreboard'?'New player':'New prize',score:0}])}>{gift?'Add gift and action':tool.type==='scoreboard'?'Add player or team':'Add prize'}</button></section>;
+}
+
+export function GameInfoOverlay({tool,project,state}:{tool:GameTool;project:Project;state:CardState}){
+ return <section aria-label={tool.name} style={{position:'absolute',left:'15%',top:'15%',width:'70%',height:'60%',zIndex:40,overflow:'auto',...toolStyle(tool),...overlayToolPlacement(tool)}}><h3>{tool.name}</h3>{gameEntries(tool).map(entry=>{
+  const image=project.assets.find(a=>(a.storageKey||a.name)===entry.imageKey);
+  return <div key={entry.id} className="game-info-row">{image?.url&&<img src={image.url} alt="" style={{width:64,height:64,objectFit:'contain'}}/>}<strong>{entry.name}</strong>{tool.type==='scoreboard'?<span>{state.scores?.[entry.id]??entry.score??0}</span>:tool.type==='prize-list'?<span>{state.awarded?.[entry.id]?`Awarded to ${state.awarded[entry.id]}`:'Available'}</span>:<span>{entry.meaning}</span>}</div>;
+ })}</section>;
+}
+
+export function GameInfoHostPanel({tool,state,onCommand}:{tool:GameTool;state?:CardState;onCommand:(id:string,action:CardAction,text?:string)=>void|Promise<void>}){
+ const [points,setPoints]=useState(1),[prize,setPrize]=useState(''),[winner,setWinner]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[reset,setReset]=useState(false);
+ const entries=gameEntries(tool);if(tool.type==='game-tool-list')return null;
+ async function run(action:CardAction,text=''){setBusy(true);setError('');try{await onCommand(tool.id,action,text);setReset(false);}catch(e){setError(e instanceof Error?e.message:'The update could not be saved.');}finally{setBusy(false);}}
+ return <section className="card-host" aria-label={`${tool.name} controls`}><h3>{tool.name}</h3>{!entries.length?<p>Add entries in Workshop or ask Build Space AI to add them.</p>:tool.type==='scoreboard'?<><label>Points to add or subtract<input type="number" min={1} max={100000} value={points} onChange={e=>setPoints(Math.max(1,Math.min(100000,Math.trunc(Number(e.target.value)||1))))}/></label>{entries.map(entry=><div key={entry.id} className="game-info-row"><strong>{entry.name}: {state?.scores?.[entry.id]??entry.score??0}</strong><button disabled={busy} onClick={()=>void run('score',JSON.stringify({id:entry.id,delta:points}))}>Add {points}</button><button disabled={busy} onClick={()=>void run('score',JSON.stringify({id:entry.id,delta:-points}))}>Subtract {points}</button></div>)}</>:<><label>Choose a prize<select value={prize} onChange={e=>setPrize(e.target.value)}><option value="">Choose an available prize</option>{entries.filter(e=>!state?.awarded?.[e.id]).map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label><label>Winner’s name<input value={winner} onChange={e=>setWinner(e.target.value)}/></label><button disabled={busy||!prize||!winner.trim()} onClick={()=>void run('award',JSON.stringify({id:prize,recipient:winner}))}>Mark awarded</button>{entries.filter(e=>state?.awarded?.[e.id]).map(e=><p key={e.id}>{e.name} → {state?.awarded?.[e.id]}</p>)}</>}
+ <button disabled={busy} onClick={()=>setReset(true)}>Start new game</button>{reset&&<div role="alert"><p>Reset {tool.type==='scoreboard'?'scores to their starting values':'awarded prizes'} for a new game?</p><button disabled={busy} onClick={()=>void run('new-game')}>Yes, start new game</button><button onClick={()=>setReset(false)}>Keep current game</button></div>}{error&&<p role="alert">{error}</p>}</section>;
+}

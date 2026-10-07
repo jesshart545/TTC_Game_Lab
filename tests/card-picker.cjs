@@ -6,10 +6,11 @@ const picker={id:'picker',type:'random-picker',enabled:true,inOverlayBuild:true,
 const project={id:'test',gameTools:[list,picker],controls:[],assets:[]};
 let state=card.freshCardState(),drawn=[];
 for(let i=0;i<3;i++){state=card.cardTransition(project,picker,state,'draw',1000+i,()=>.6);drawn.push(state.question.id);assert.equal(state.question.answer,'');state=card.cardTransition(project,picker,state,'clear');state=JSON.parse(JSON.stringify(state));}
-assert.equal(new Set(drawn).size,3);assert.throws(()=>card.cardTransition(project,picker,state,'draw'),/All cards/);
+assert.equal(new Set(drawn).size,3);assert.throws(()=>card.cardTransition(project,picker,state,'draw'),/No unused cards/);
 state=card.cardTransition(project,picker,state,'new-game');assert.equal(state.used.length,0);assert(state.cleared);
 state=card.cardTransition(project,picker,state,'draw',2000,()=>0);assert.equal(state.question.id,'a');assert.equal(state.selectedDesign.fontFamily,'Georgia, serif');
 assert.throws(()=>card.cardTransition({...project,gameTools:[picker]},picker,state,'draw'),/Connect a saved/);
 let row;
 async function db(parts,...v){const q=parts.join('?');if(q.includes('CREATE TABLE'))return [];if(q.includes('INSERT INTO')){if(!row)row={version:0,data:JSON.parse(v[2])};return [];}if(q.includes('SELECT version'))return [{version:row.version,data:JSON.parse(JSON.stringify(row.data))}];if(q.includes('UPDATE live_cards')){if(v[4]!==row.version)return [];row={version:v[1],data:JSON.parse(v[0])};return [{data:row.data}];}throw Error(q);}
 (async()=>{const draws=await Promise.allSettled([changeCard(db,project,'picker','draw',0),changeCard(db,project,'picker','draw',0)]);assert.equal(draws.filter(x=>x.status==='fulfilled').length,1);assert.equal(row.data.used.length,1);const first=row.data.question.id;await changeCard(db,project,'picker','clear',1);const next=await changeCard(db,project,'picker','draw',2);assert.notEqual(next.question.id,first);await assert.rejects(changeCard(db,project,'picker','draw',0),/changed/);console.log('PASS: one saved card per entry; individual design preserved; no repeats across clear/reload; explicit reset; missing lists rejected; concurrent and stale draws cannot overwrite saved history.');})().catch(e=>{console.error(e);process.exitCode=1;});
+

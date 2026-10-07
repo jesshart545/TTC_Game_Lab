@@ -1,6 +1,9 @@
 "use client";
+import {overlayToolPlacement} from "../lib/tool-style";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import type { GameTool, Project } from '../lib/project';
+import {GameInfoOverlay} from "./GameInfoTools";
+import {infoTypes} from "../lib/game-tools";
 import { bounded, cardDesign, cardPhase, type CardState } from '../lib/question-cards';
 import './question-cards.css';
 export function useCardClock(){const [now,setNow]=useState(Date.now());useEffect(()=>{const t=setInterval(()=>setNow(Date.now()),100);return()=>clearInterval(t);},[]);return now;}
@@ -44,7 +47,9 @@ export function StyledTimer({tool,remaining,total}:{tool:GameTool;remaining:numb
  </section>;
 }
 export default function QuestionCards({project,states}:{project:Project;states:Record<string,CardState>}){
- const now=useCardClock();return <>{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'||t.type==='random-picker')).map(tool=>{const state=states[tool.id];if(!state)return null;const phase=cardPhase(project,tool,state,now);if(phase==='hidden')return null;const answer=phase==='answer';
+ const now=useCardClock();return <>{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'||t.type==='random-picker'||infoTypes.includes(t.type))).map(tool=>{const state=states[tool.id];if(!state)return null;const phase=cardPhase(project,tool,state,now);if(phase==='hidden')return null;const answer=phase==='answer';if(infoTypes.includes(tool.type))return <GameInfoOverlay key={tool.id} tool={tool} project={project} state={state}/>;
+ if(state.selectedAssetKey){const asset=project.assets.find(a=>(a.storageKey||a.name)===state.selectedAssetKey);if(!asset?.url)return null;return <img key={tool.id} src={asset.url} alt={asset.name} style={{position:'absolute',left:'15%',top:'20%',width:'70%',height:'60%',...overlayToolPlacement(tool),objectFit:'contain',zIndex:50}}/>;}
+
  return <div key={tool.id} style={{position:'absolute',inset:0,pointerEvents:'none'}}><FittedCard key={state.shownAt+'-'+phase} project={project} tool={tool.type==='random-picker'?{...tool,config:{...tool.config,questionCard:state.selectedDesign||{}}}:tool} text={state.blankText||String(answer?state.question?.answer:state.question?.question)} answer={answer} phase={phase} shownAt={state.shownAt}/></div>;
  })}</>;
 }

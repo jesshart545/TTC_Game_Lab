@@ -2,6 +2,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { type Project, type ProjectEvent } from "../../lib/project";
+import {controlLabel,controlButtonStyle,infoTypes} from "../../lib/game-tools";
+import {GameInfoHostPanel} from "../../components/GameInfoTools";
+import PickerHostPanel from "../../components/PickerHostPanel";
 import RuntimeActionLayers, { useRuntimeActions } from "../../components/RuntimeActionLayers";
 import "./reference.css";
 
@@ -9,7 +12,7 @@ function PracticePreview({project}:{project:Project}) {
   const runtime=useRuntimeActions(project);
   const [feedback,setFeedback]=useState("");
   function fire(control:ProjectEvent) {
-    try { runtime.fire(control); setFeedback(""); }
+    try { if(control.action.startsWith("cards.new-game.")&&!window.confirm("Start a new practice game and reset used questions?"))return; runtime.fire(control); setFeedback(""); }
     catch(error) { setFeedback(error instanceof Error ? error.message : "Unable to run this control."); }
   }
   const background=project.assets.find(a=>runtime.backgroundKey ? (a.storageKey || a.name)===runtime.backgroundKey : a.role==="background");
@@ -21,9 +24,11 @@ function PracticePreview({project}:{project:Project}) {
   return <div className="reference-workbench">
     <section aria-label="Practice controls" className="reference-controls">
       <p role="status">{feedback}</p><h2>Dashboard buttons</h2><p>Try the saved assignments.</p>
-      {project.controls.map(control=><button key={control.id} onClick={()=>fire(control)}>{control.label}<small>{control.toolIds?.map(id=>tools.find(t=>t.id===id)?.name).filter(Boolean).join(" + ") || control.detail}</small></button>)}
+      {project.controls.map(control=><button key={control.id} onClick={()=>fire(control)} style={controlButtonStyle(control)}>{controlLabel(project,control,runtime.cardStates)}<small>{control.toolIds?.map(id=>tools.find(t=>t.id===id)?.name).filter(Boolean).join(" + ") || control.detail}</small></button>)}
+      {tools.filter(t=>t.type==="random-picker").map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}
+      {tools.filter(t=>infoTypes.includes(t.type)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}
       <h2>Toolbox</h2><p>Try each tool individually. The optional timer runs separately from the cards.</p>
-      {tools.filter(tool=>tool.type!=="question-card" && tool.type!=="blank-card").map(tool=><button key={tool.id} onClick={()=>tryTool(tool.id,tool.name)}>{tool.name}<small>{tool.type.replaceAll("-"," ")}</small></button>)}
+      {tools.filter(tool=>!["question-card","blank-card","random-picker",...infoTypes].includes(tool.type)).map(tool=><button key={tool.id} onClick={()=>tryTool(tool.id,tool.name)}>{tool.name}<small>{tool.type.replaceAll("-"," ")}</small></button>)}
     </section>
     <section className="reference-preview" aria-label="Audience practice preview">
       {background?.url && <img className="reference-background" src={background.url} alt={background.name}/>}
@@ -57,3 +62,4 @@ export default function ReferenceProject() {
     </>}
   </main>;
 }
+

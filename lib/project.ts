@@ -7,8 +7,8 @@ export type OverlayResult = {
   layer: number;
 };
 export type ChainTiming = { mode: "immediate" | "delay"; seconds?: number };
-export type ChainStep = { id: string; kind: "tool" | "asset" | "composition" | "animation"; refId: string; label: string; timing: ChainTiming };
-export type ProjectEvent = { id: string; label: string; action: string; detail: string; compositionId?: string; overlayResult?: OverlayResult; buttonMode?: "single" | "chain"; toolIds?: string[]; chain?: ChainStep[] };
+export type ChainStep = { id: string; kind: "tool" | "asset" | "composition" | "animation" | "control"; refId: string; label: string; timing: ChainTiming };
+export type ProjectEvent = { appearance?: {backgroundColor?:string;color?:string;fontFamily?:string;fontSize?:number;borderRadius?:number}; id: string; label: string; action: string; detail: string; compositionId?: string; overlayResult?: OverlayResult; buttonMode?: "single" | "chain"; toolIds?: string[]; chain?: ChainStep[] };
 export type ProjectAssetEdits = {
   loop?: boolean;
   sound?: boolean;
@@ -37,7 +37,7 @@ export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx
 export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
 export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string; inProject?:boolean };
 export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean; visible: boolean };
-export type GameToolType = "wheel" | "random-picker" | "card-list" | "countdown" | "poll" | "dice" | "trivia-board" | "blank-board" | "trivia-list" | "youtube" | "question-card" | "blank-card";
+export type GameToolType = "wheel" | "random-picker" | "card-list" | "countdown" | "poll" | "dice" | "trivia-board" | "blank-board" | "trivia-list" | "youtube" | "question-card" | "blank-card" | "scoreboard" | "prize-list" | "game-tool-list";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown>; inToolbox?: boolean; inOverlayBuild?: boolean };
 export type Project = {
   id: string;

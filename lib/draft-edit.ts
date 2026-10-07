@@ -1,3 +1,4 @@
+import {assignControlAction,controlConnectionError} from "./control-connections";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -13,10 +14,14 @@ export function applyDraftChanges(project: Project, input: unknown) {
   for (const key of ["title", "subtitle"] as const) { const value = text(overlay[key]); if (value !== undefined && value !== next.overlay[key]) { next.overlay[key] = value; applied++; } }
   for (const key of ["showChat", "showAlerts", "showCharacter"] as const) if (typeof overlay[key] === "boolean" && next.overlay[key] !== overlay[key]) { next.overlay[key] = overlay[key] as boolean; applied++; }
   if (Array.isArray(changes.assets)) for (const raw of changes.assets) {
-    const edit = object(raw), asset = next.assets.find(a => a.storageKey && a.storageKey === edit.storageKey); if (!asset) continue;
+    const edit = object(raw), asset = next.assets.find(a => (a.storageKey||a.name) === edit.storageKey); if (!asset) continue;
     if (typeof edit.inProject === "boolean") { asset.inProject = edit.inProject; applied++; }
     if (["background", "layer", "video", "audio"].includes(String(edit.role))) { asset.role = edit.role as typeof asset.role; applied++; }
     const values = object(edit.edits);
+    for(const key of ['loop','sound','flipX','flipY'] as const)if(typeof values[key]==='boolean'){asset.edits={...asset.edits,[key]:values[key] as boolean};applied++;}
+    if(typeof values.volume==='number'){asset.edits={...asset.edits,volume:Math.max(0,Math.min(100,values.volume))};applied++;}
+    const pos=object(values.placement);if(Object.keys(pos).length){const placement={x:5,y:20,width:40,height:40,...asset.edits?.placement};for(const key of ['x','y','width','height'] as const){const n=number(pos[key],key==='width'||key==='height'?1:0,key==='x'||key==='y'?99:100);if(n!==undefined)placement[key]=n;}placement.width=Math.min(placement.width,100-placement.x);placement.height=Math.min(placement.height,100-placement.y);asset.edits={...asset.edits,placement};applied++;}
+
     for (const key of ["zoom", "rotation", "opacity", "brightness", "contrast", "saturation", "blur", "offsetX", "offsetY", "trimStart", "trimEnd"] as (keyof ProjectAssetEdits)[]) {
       const value = number(values[key], key === "opacity" ? 0 : -10000, 10000);
       if (value !== undefined) { asset.edits = { ...asset.edits, [key]: value }; applied++; }
@@ -43,11 +48,14 @@ export function applyDraftChanges(project: Project, input: unknown) {
     if (!tool) continue;
     const name = text(edit.name, 80);
     if (name) { tool.name = name; applied++; }
+    for(const key of ['inToolbox','inOverlayBuild','enabled'] as const)if(typeof edit[key]==='boolean'){tool[key]=edit[key] as boolean;applied++;}
     const config = object(edit.config);
-    if (Object.keys(config).length) { tool.config = { ...tool.config, ...config }; applied++; }
+    if (Object.keys(config).length) { tool.config = { ...tool.config, ...config, ...Object.fromEntries(["appearance","placement","questionCard","answerCard"].filter(k=>Object.keys(object(config[k])).length).map(k=>[k,{...object(tool.config[k]),...object(config[k])}])) }; applied++; }
   }
   if (Array.isArray(changes.controls)) for (const raw of changes.controls) {
     const edit = object(raw), control = next.controls.find(c => c.id === edit.id); if (!control) continue;
+    if(typeof edit.action==='string'){const assigned=assignControlAction(next,control,edit.action);if(!controlConnectionError(next,assigned)){Object.assign(control,assigned);applied++;}}
+    const appearance=object(edit.appearance);if(Object.keys(appearance).length){const style={...control.appearance};for(const key of ['backgroundColor','color'] as const)if(/^#[0-9a-f]{6}$/i.test(String(appearance[key])))style[key]=String(appearance[key]);if(['Arial, sans-serif','Georgia, serif','Verdana, sans-serif','Trebuchet MS, sans-serif','monospace'].includes(String(appearance.fontFamily)))style.fontFamily=String(appearance.fontFamily);for(const key of ['fontSize','borderRadius'] as const){const n=number(appearance[key],key==='fontSize'?12:0,64);if(n!==undefined)style[key]=n;}control.appearance=style;applied++;}
     const label = text(edit.label, 80); if (label) { control.label = label; applied++; }
     if (typeof edit.compositionId === "string" && next.compositions?.some(c => c.id === edit.compositionId && c.inProject)) { control.compositionId = edit.compositionId; applied++; }
     const result = object(edit.overlayResult);
@@ -59,3 +67,4 @@ export function applyDraftChanges(project: Project, input: unknown) {
   }
   return { project: next, applied };
 }
+
