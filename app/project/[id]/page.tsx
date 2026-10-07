@@ -62,6 +62,19 @@ function isAudio(asset: ProjectAsset) {
   return Boolean(asset.url && (asset.type.toLowerCase().includes("audio") || asset.name.toLowerCase().startsWith("voice") || asset.name.toLowerCase().startsWith("music") || asset.name.toLowerCase().startsWith("sfx")));
 }
 
+function assetCategory(asset: ProjectAsset): "image" | "video" | "audio" | "other" {
+  const type = asset.type.toLowerCase();
+  const name = asset.name.toLowerCase();
+  if (type.includes("image") || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i.test(name) || name.startsWith("image")) return "image";
+  if (type.includes("video") || /\.(mp4|mov|webm|m4v|avi)$/i.test(name)) return "video";
+  if (type.includes("audio") || /voice|music|sfx|sound/.test(type) || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(name)) return "audio";
+  return "other";
+}
+
+function assetIcon(category: ReturnType<typeof assetCategory>) {
+  return category === "image" ? "▣" : category === "video" ? "▶" : category === "audio" ? "♫" : "▤";
+}
+
 function assetEditStyle(asset: ProjectAsset) {
   const e=asset.edits||{};
   return { transform:`translate(${e.offsetX||0}px,${e.offsetY||0}px) scale(${e.zoom||1}) rotate(${e.rotation||0}deg) scaleX(${e.flipX?-1:1}) scaleY(${e.flipY?-1:1})`, opacity:e.opacity??1, filter:`brightness(${e.brightness??100}%) contrast(${e.contrast??100}%) saturate(${e.saturation??100}%) blur(${e.blur??0}px)` };
@@ -116,6 +129,9 @@ export default function ProjectWorkspace() {
   const [chatDrawer, setChatDrawer] = useState(false);
   const [youtubeToolOpen,setYoutubeToolOpen] = useState(false);
   const [positionAssetKey,setPositionAssetKey]=useState<string|null>(null);
+  const [selectedAssetKey,setSelectedAssetKey]=useState<string|null>(null);
+  const [assetSearch,setAssetSearch]=useState("");
+  const [assetKindFilter,setAssetKindFilter]=useState<"all"|"image"|"video"|"audio"|"other">("all");
   const [youtubePreview, setYoutubePreview] = useState<YouTubeState | null>(null);
   const [youtubeFeedback, setYoutubeFeedback] = useState<{playbackId:string;status:string;errorCode?:number}|null>(null);
   const youtubeActualPosition = useRef<number | null>(null);
@@ -493,6 +509,7 @@ export default function ProjectWorkspace() {
       await saveProjectToServer(next);
       if (asset.storageKey) await deleteStoredAsset(asset.storageKey);
       setProject(await hydrateProjectAssets(next));
+      if (selectedAssetKey === assetKey) setSelectedAssetKey(null);
       setAssetStatus("Asset deleted.");
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "Asset deletion failed.");
@@ -623,6 +640,7 @@ export default function ProjectWorkspace() {
     const role: ProjectAsset["role"] = isImage(asset) ? (project.assets.some(a => a.inProject && a.role === "background") ? "layer" : "background") : isVideo(asset) ? "video" : "audio";
     const nextAssets = project.assets.map((item, i) => i === index ? { ...item, inProject: adding, role: adding ? role : item.role } : item);
     persist({ ...project, assets: nextAssets, updatedAt: "just now" });
+    setPreviewMode("overlay");
     setAssetStatus(adding ? asset.name + " added to the draft overlay." : asset.name + " removed from the draft overlay.");
   }
 
@@ -715,17 +733,6 @@ export default function ProjectWorkspace() {
     const latest = project;
     persist({ ...latest, assets:[...latest.assets,{...stored,name:file.name}], updatedAt:"just now" });
     setAssetStatus(file.name + " saved as a new permanent asset.");
-  }
-
-  function renderAsset(asset: ProjectAsset, index: number) {
-    if (!asset.url) return null;
-    const cropStyle = asset.edits?.crop && asset.edits.crop !== "original"
-      ? { aspectRatio: asset.edits.crop === "square" ? "1 / 1" : asset.edits.crop === "portrait" ? "9 / 16" : "16 / 9" }
-      : undefined;
-    if (isImage(asset)) return <button type="button" className="asset-thumbnail-button" aria-label={`Edit or crop ${asset.name}`} onClick={() => setEditingAssetIndex(index)}><img src={asset.url} alt="" className="asset-thumb" style={{ objectFit: asset.edits?.crop === "original" ? "contain" : "cover" }} /><span>Edit image</span></button>;
-    if (isVideo(asset)) return <div className="editable-media-preview" style={cropStyle}><video src={asset.url} className="asset-thumb" controls preload="metadata" /><button type="button" className="media-edit-btn" onClick={() => setEditingAssetIndex(index)}>Edit / Crop / Trim</button></div>;
-    if (isAudio(asset)) return <audio src={asset.url} controls />;
-    return null;
   }
 
   function toggleAssetPoolMembership(poolId: string, asset: ProjectAsset, checked: boolean) {
@@ -867,6 +874,12 @@ export default function ProjectWorkspace() {
   async function beginBlank() { const p = createProject("Create a new interactive TikTok LIVE experience"); try { await saveProjectToServer(p); window.location.href = `/project/${p.id}`; } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Project could not be created."); } }
 
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
+  const visibleAssets=project.assets.filter(asset=>{
+    const kind=assetCategory(asset);
+    return (assetKindFilter==="all"||kind===assetKindFilter) && (!assetSearch.trim()||`${asset.name} ${asset.type}`.toLowerCase().includes(assetSearch.trim().toLowerCase()));
+  });
+  const selectedAssetIndex=project.assets.findIndex(asset=>(asset.storageKey||asset.name)===selectedAssetKey);
+  const selectedAsset=selectedAssetIndex>=0?project.assets[selectedAssetIndex]:null;
   const editingBoard=project.gameTools.find(t=>t.id===boardDesignerId);
   if(editingBoard)return <main className="workspace-page"><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t)});}} onClose={()=>setBoardDesignerId("")} onCreateArtwork={()=>{setBoardDesignerId("");setShowGenerator(true);setGeneratorType("video");setGeneratorPrompt("Create a seamless animated game board background. Keep game spaces readable. ");setBackgroundIntent(true);}}/></main>;
   const draftOverlay = <>{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <><div className="stage-scan"/>{bg && <OverlayAsset asset={bg} background className="builder-preview-background"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">${q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}<div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></>; })()}<RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
@@ -1040,26 +1053,34 @@ export default function ProjectWorkspace() {
         </div>
         <div className="detail-block">
           <span>ASSETS</span>
-          <p className="empty-note">Organize saved images, video, voice, music, and sound effects into groups. Click an image thumbnail to edit it.</p>
-          <AssetPoolManager assets={project.assets} pools={project.assetPools || []} onChange={assetPools => persist({ ...project, assetPools, updatedAt: "just now" })} />
-          {project.assets.map((a, index) => (
-            <div className="asset-card" key={(a.storageKey || a.name) + index}>
-              <div className="asset-card-title">
-                <div>
-                  <b>{a.name}</b>
-                  <em>{a.type}</em>
-                </div>
-                <button type="button" className="danger-btn asset-delete-btn" onClick={() => handleDeleteAsset(a)}>Delete</button>
-              </div>
-              {renderAsset(a, index)}
-              <details className="asset-pool-assignment"><summary>Assign to pools</summary>{(project.assetPools || []).length ? (project.assetPools || []).map(pool => <label key={pool.id}><input type="checkbox" checked={pool.assetKeys.includes(a.storageKey || a.name)} onChange={event => toggleAssetPoolMembership(pool.id, a, event.target.checked)} />{pool.name}</label>) : <p>Create a pool above to organize this asset.</p>}</details>
-              {(isImage(a)||isVideo(a))&&<BackgroundDestination project={project} asset={a} onChange={persist}/>} {(isImage(a) || isVideo(a)) && <div className="asset-placement-actions"><button type="button" className="outline-btn" onClick={() => placeSceneImage(index, "background")}>{a.inProject && a.role === "background" ? "Current Background" : "Use as Background"}</button><button type="button" className="outline-btn" onClick={() => placeSceneImage(index, "layer")}>{a.inProject && a.role === "layer" ? "Image Layer Added" : "Add as Image Layer"}</button><small>Place this creation in the draft overlay, then test it.</small>{a.inProject && a.role!=="background" && <button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(a.storageKey||a.name);setSideBySideTesting(true);}}>Position / resize in draft overlay</button>}{isVideo(a) && <><label>Loop<input type="checkbox" checked={a.edits?.loop??true} onChange={e=>persist({...project,assets:project.assets.map((item,i)=>i===index?{...item,edits:{...item.edits,loop:e.target.checked}}:item)})}/></label><label>Sound<input type="checkbox" checked={a.edits?.sound??false} onChange={e=>persist({...project,assets:project.assets.map((item,i)=>i===index?{...item,edits:{...item.edits,sound:e.target.checked}}:item)})}/></label><label>Volume<input type="range" min="0" max="100" value={a.edits?.volume??80} onChange={e=>persist({...project,assets:project.assets.map((item,i)=>i===index?{...item,edits:{...item.edits,volume:+e.target.value}}:item)})}/></label></>}</div>}
-              <button type="button" className={a.inProject ? "outline-btn asset-project-btn build-only active" : "outline-btn asset-project-btn build-only"} onClick={() => toggleAssetInProject(index)}>{a.inProject ? "✓ Added to Project" : "+ Add to Project"}</button>{(isImage(a)||isVideo(a)) && (project.gameTools || []).some(tool => tool.type === "blank-board" && tool.enabled) && <button type="button" className="outline-btn asset-project-btn build-only" onClick={() => useImageAsBlankBoardBackground(index)}>▣ Use as Board Background</button>}
+          <p className="asset-library-help">Select an asset to edit it, place it on the overlay, or add it to a pool.</p>
+          <AssetPoolManager pools={project.assetPools || []} onChange={assetPools => persist({ ...project, assetPools, updatedAt: "just now" })} />
+          <div className="workshop-assets-toolbar">
+            <label className="workshop-assets-search">Find an asset<input type="search" value={assetSearch} onChange={event => setAssetSearch(event.target.value)} placeholder="Search by name" /></label>
+            <label className="workshop-assets-filter">Show<select value={assetKindFilter} onChange={event => setAssetKindFilter(event.target.value as typeof assetKindFilter)}><option value="all">All media</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="other">Other files</option></select></label>
+          </div>
+          {visibleAssets.length > 0 ? <div className="workshop-assets-grid" aria-label="Saved assets">
+            {visibleAssets.map(asset => {
+              const key=asset.storageKey||asset.name,kind=assetCategory(asset),selected=key===selectedAssetKey;
+              return <button type="button" key={key} className={`workshop-asset-tile${selected?" selected":""}`} aria-pressed={selected} aria-label={`Select ${asset.name}, ${kind}`} onClick={()=>setSelectedAssetKey(key)}>
+                <span className="workshop-asset-preview">{kind==="image"&&asset.url?<img src={asset.url} alt="" />:<span aria-hidden="true">{assetIcon(kind)}</span>}</span>
+                <span className="workshop-asset-name">{asset.name}</span><small>{kind==="audio"?"Audio":kind==="other"?asset.type:kind[0].toUpperCase()+kind.slice(1)}</small>
+              </button>;
+            })}
+          </div> : <p className="empty-note">{project.assets.length===0?"Your saved assets will appear here. Create or upload something to get started.":"No assets match that search. Try a different name or media type."}</p>}
+          {selectedAsset && <section className="asset-detail-panel" aria-label={`Actions for ${selectedAsset.name}`}>
+            <header><div><h3>{selectedAsset.name}</h3><p>{selectedAsset.type} · {selectedAsset.inProject?"On the overlay":"In your library"}</p></div><button type="button" className="asset-detail-close" aria-label="Close asset details" onClick={()=>setSelectedAssetKey(null)}>×</button></header>
+            <div className="asset-detail-actions">
+              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<button type="button" className="build-btn" onClick={()=>setEditingAssetIndex(selectedAssetIndex)}>Edit {isImage(selectedAsset)?"image":"video"}</button>}
+              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>placeSceneImage(selectedAssetIndex,"background")}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>placeSceneImage(selectedAssetIndex,"layer")}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
+              {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
+              {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);}}>Position and size on overlay</button>}
             </div>
-          ))}
-          {project.assets.length === 0 && (
-            <p className="empty-note">No assets yet. Use the visible Workshop creation tools to generate or upload your first background or other media.</p>
-          )}
+            <fieldset className="asset-detail-pools"><legend>Organize in pools</legend>{(project.assetPools||[]).length?(project.assetPools||[]).map(pool=><label key={pool.id}><input type="checkbox" checked={pool.assetKeys.includes(selectedAsset.storageKey||selectedAsset.name)} onChange={event=>toggleAssetPoolMembership(pool.id,selectedAsset,event.target.checked)} />{pool.name}</label>):<p>Create a pool above, then select it here.</p>}</fieldset>
+            {(isVideo(selectedAsset)||isAudio(selectedAsset))&&<details className="asset-playback-options"><summary>Playback options</summary><label>Repeat this media<input type="checkbox" checked={selectedAsset.edits?.loop??isVideo(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,loop:event.target.checked}}:asset)})}/></label><label>Play sound<input type="checkbox" checked={selectedAsset.edits?.sound??isAudio(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,sound:event.target.checked}}:asset)})}/></label><label>Volume <span>{selectedAsset.edits?.volume??80}%</span><input type="range" min="0" max="100" value={selectedAsset.edits?.volume??80} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,volume:+event.target.value}}:asset)})}/></label></details>}
+            {(isImage(selectedAsset)||isVideo(selectedAsset))&&<details className="asset-more-options"><summary>Other ways to use this</summary><BackgroundDestination project={project} asset={selectedAsset} onChange={persist}/>{(project.gameTools||[]).some(tool=>tool.type==="blank-board"&&tool.enabled)&&<button type="button" className="outline-btn" onClick={()=>useImageAsBlankBoardBackground(selectedAssetIndex)}>Use as board background</button>}</details>}
+            <button type="button" className="danger-btn asset-detail-delete" onClick={()=>handleDeleteAsset(selectedAsset)}>Delete asset</button>
+          </section>}
         </div>
         <div className="detail-block">
           <span>NEW PROJECT</span>
