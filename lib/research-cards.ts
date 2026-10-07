@@ -8,8 +8,12 @@ export function groundedResearchCards(changes:Record<string,any>,evidence:unknow
   if(!Array.isArray(entries))throw Error('Research pools need saved source excerpts.');
   pool.config.entries=entries.map((card:any)=>{
    const source=sources.find(s=>s?.url===card.sourceUrl);
-   const quote=normalize(typeof card.sourceQuote==='string'?card.sourceQuote:typeof card.text==='string'?card.text:'');
-   if(!source||!quote||quote.length>320||!normalize(String(source.summary||'')).toLowerCase().includes(quote.toLowerCase()))throw Error('Each researched card must include sourceQuote copied exactly from its cited searchEvidence summary, at most 320 characters. Do not add unsupported facts.');
+   let quote=normalize(typeof card.sourceQuote==='string'?card.sourceQuote:typeof card.text==='string'?card.text:'');
+   if(!source)throw Error('Choose a source URL from the search results. Invented source links cannot be saved.');
+   const summary=normalize(String(source.summary||''));if(!summary)throw Error('That search result has no source excerpt to save.');
+   // Pools store search excerpts, not model-written facts. Repair an unsupported
+   // model quote directly from the actual result rather than inventing content.
+   if(!quote||quote.length>320||!summary.toLowerCase().includes(quote.toLowerCase())){quote=summary.slice(0,320);if(summary.length>320&&quote.lastIndexOf(' ')>240)quote=quote.slice(0,quote.lastIndexOf(' '));}
    return {...card,text:quote,sourceQuote:quote,sourceTitle:String(source.title||'Source')};
   });
   pool.config.cards=[];

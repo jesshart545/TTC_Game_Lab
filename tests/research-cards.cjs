@@ -4,9 +4,9 @@ const changes={newTools:[{type:'card-list',config:{cards:[{text:'Invented embell
 const grounded=groundedResearchCards(changes,evidence).newTools[0].config.entries[0];
 assert.equal(changes.newTools[0].config.cards.length,0);
 assert.equal(grounded.text,'A standard violin has four strings.');assert.equal(grounded.sourceTitle,'Instrument source');
-assert.throws(()=>groundedResearchCards({newTools:[{type:'card-list',config:{cards:[{sourceUrl:evidence[0].url,sourceQuote:'A piano contains 12 million parts.'}]}}]},evidence),/copied exactly/);
-assert.throws(()=>groundedResearchCards({newTools:[{type:'card-list',config:{cards:[{sourceUrl:'https://invented.example',sourceQuote:evidence[0].summary}]}}]},evidence),/copied exactly/);
-console.log('PASS: researched pools reject fabricated links and unsupported details; saved card text comes from its actual source excerpt.');
+assert.equal(groundedResearchCards({newTools:[{type:'card-list',config:{cards:[{sourceUrl:evidence[0].url,sourceQuote:'A piano contains 12 million parts.'}]}}]},evidence).newTools[0].config.entries[0].text,evidence[0].summary);
+assert.throws(()=>groundedResearchCards({newTools:[{type:'card-list',config:{cards:[{sourceUrl:'https://invented.example',sourceQuote:evidence[0].summary}]}}]},evidence),/Invented source/);
+console.log('PASS: researched pools reject fabricated links and replace unsupported details with actual source excerpts; saved card text comes from its actual source excerpt.');
 const {applyBuildChanges}=require('./load.cjs')('lib/build-edits.ts');
 const {listCards,savedListEntries,pickerCards}=require('./load.cjs')('lib/card-lists.ts');
 const project={id:'research-test',assets:[],gameTools:[],controls:[],overlay:{}};
