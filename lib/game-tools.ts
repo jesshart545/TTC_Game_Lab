@@ -10,7 +10,7 @@ export function toolDefaults(type:GameToolType):Record<string,unknown>{
  const defaults:Partial<Record<GameToolType,Record<string,unknown>>>={
   wheel:{title:'Game Wheel',segments:['Prize','Challenge','Bonus','Mystery']},
   'random-picker':{source:'cards',listId:'',placement:{x:15,y:20,width:70,height:60}},
-  countdown:{seconds:10},poll:{question:'Choose what happens next',options:['Option A','Option B']},dice:{sides:6},
+  countdown:{seconds:10},poll:{question:'Choose what happens next',options:['Option A','Option B']},dice:{sides:6},'coin-toss':{placement:{x:35,y:20,width:30,height:55}},
   'blank-board':{title:'Custom Board',areas:[]},youtube:{placement:{x:15,y:15,width:70,height:70}},
   scoreboard:{entries:[]},'prize-list':{entries:[]},'game-tool-list':{entries:[]},
  };

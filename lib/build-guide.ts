@@ -9,6 +9,7 @@ export const additionTypes = [
   { id: 'blank-card', label: 'Text cards', help: 'Choose a card, set its text and appearance, then connect Show and Clear buttons.' },
   { id: 'wheel', label: 'Wheels', help: 'Choose a wheel, review its choices and placement, then connect Spin and Hide buttons.' },
   { id: 'random-picker', label: 'Random pickers', help: 'Choose an image pool or a saved card list. One button draws an unused item at random, then removes it. No repeats during a game.' },
+  { id: 'coin-toss', label: 'Coin Toss', help: 'Choose a coin, customize its look and placement, then use Flip and Hide. Each flip randomly lands on Heads or Tails.' },
   { id: 'dice', label: 'Dice', help: 'Choose dice, review the settings and placement, then connect Roll and Hide buttons.' },
   { id: 'countdown', label: 'Timers', help: 'Choose a timer, set its duration and appearance, then connect Start and Hide buttons. Starting a timer does not reveal an answer.' },
   { id: 'poll', label: 'Polls', help: 'Choose a poll, review its options and placement, then connect Show and Hide buttons.' },

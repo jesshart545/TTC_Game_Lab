@@ -21,3 +21,9 @@ export function DiceDisplay({result,sides=6,elapsed=0,preview=false,faceColor="#
  return <div className="chance-tool"><div className={'chance-die'+(rolling?' chance-die-rolling':'')} role="img" aria-label={rolling?'Dice rolling':`${sides}-sided die: ${face}`} style={{background:faceColor,color:pipColor,'--die-turn':`${Math.floor(elapsed/90)*40}deg`} as CSSProperties}>
  {sides===6?<div className="dice-pips">{Array.from({length:9},(_,i)=><span key={i} className={pips[face]?.includes(i)?'pip':'pip-empty'}/>)}</div>:<strong>{face}</strong>}</div><strong role="status">{preview?'Ready to roll':rolling?'Rolling…':`Result: ${result}`}</strong></div>;
 }
+
+export function CoinDisplay({result="Heads",elapsed=0,preview=false,faceColor="#ffd166",textColor="#382608"}:{result?:string;elapsed?:number;preview?:boolean;faceColor?:string;textColor?:string}){
+ const flipping=!preview&&elapsed<1800;
+ const face=result==="Tails"?"Tails":"Heads";
+ return <div className="chance-tool"><div className="chance-coin-scene"><div className={'chance-coin'+(flipping?' chance-coin-flipping':'')} role="img" aria-label={preview?'Coin design':flipping?'Coin flipping':`Coin landed on ${face}`} style={{background:faceColor,color:textColor} as CSSProperties}><span>{flipping?'?':face}</span></div></div><strong role="status">{preview?'Ready to flip':flipping?'Flipping…':face}</strong></div>;
+}

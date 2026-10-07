@@ -11,3 +11,11 @@ const blank=cards.createCardSystem(p,undefined,'blank');const b=blank.gameTools.
 const areas=boardAreas({config:{areas:[{label:'Space',x:95,width:50,y:98,height:30}]}});assert.equal(areas[0].width,5);assert.equal(areas[0].height,2);
 console.log('PASS: animated media detection; additions do not autoplay; display/hide controls; no duplicate controls; timer-free cards; blank-card controls; board spaces stay within bounds.');
 
+
+const coin={id:'coin',name:'Coin Toss',type:'coin-toss',enabled:true,config:{}};
+result=addCreationControl({assets:[],gameTools:[coin],controls:[]},'tool','coin');
+const flip=result.project.controls.find(c=>c.id===result.controlId);
+assert.equal(flip.label,'Flip Coin Toss');assert.equal(flip.action,'tool.coin');assert.equal(connections.controlConnectionError(result.project,flip),null);
+assert(result.project.controls.some(c=>c.label==='Hide Coin Toss'&&c.action==='result.hide.'+flip.id));
+assert.equal(addCreationControl(result.project,'tool','coin').project.controls.length,2);
+console.log('PASS: standalone coin connects Flip/Hide controls without card pools or duplicate buttons.');

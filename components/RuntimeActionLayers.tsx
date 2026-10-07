@@ -5,7 +5,8 @@ import {runSequence} from "../lib/sequences";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
 import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
-import {WheelDisplay,DiceDisplay} from "./ChanceTools";
+import {WheelDisplay,DiceDisplay,CoinDisplay} from "./ChanceTools";
+import {coinOutcome} from "../lib/coin-toss";
 import {BoardSurface} from "./BoardDesigner";
 import QuestionCards from './QuestionCards';
 import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
@@ -65,6 +66,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
       const choices = (Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : ["Winner"]).map(String);
       let result = "";
       if (tool.type === "wheel") { if(!choices.length)throw new Error("Add choices to "+tool.name+" in Workshop."); result = choices[Math.floor(Math.random() * choices.length)]; }
+      if (tool.type === "coin-toss") result = chosen?.result || coinOutcome(crypto.getRandomValues(new Uint32Array(1))[0]);
       if (tool.type === "dice") result = String(1 + Math.floor(Math.random() * Math.min(100,Math.max(2, Math.floor(Number(config.sides) || 6)))));
       if (tool.type === "trivia-list") {
         const questions = Array.isArray(config.questions) ? config.questions : [];
@@ -146,6 +148,7 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
     {tool.type === "wheel" && <WheelDisplay colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} entries={(Array.isArray(config.segments)?config.segments:[]).map(String)} result={run.result||""} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "random-picker" && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
+    {tool.type === "coin-toss" && <CoinDisplay result={run.result} elapsed={now-run.at} preview={run.id===0} faceColor={String(config.faceColor||"#ffd166")} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#382608")}/>}
     {tool.type === "dice" && <DiceDisplay faceColor={String(config.faceColor||"#f5faff")} pipColor={String(config.pipColor||"#102132")} result={Number(run.result)||1} sides={Math.min(100,Math.max(2,Math.floor(Number(config.sides)||6)))} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
     {tool.type === "trivia-board" && <div className="runtime-jeopardy-grid">{(Array.isArray(config.categories)?config.categories:[]).map((category:any,i:number)=><div key={i}><strong>{String(category.name)}</strong>{(Array.isArray(category.questions)?category.questions:[]).map((q:any,j:number)=><p key={j}>{q.used?'USED':String(q.value)}</p>)}</div>)}</div>}

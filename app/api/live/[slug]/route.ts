@@ -1,3 +1,4 @@
+import {coinOutcome} from "../../../../lib/coin-toss";
 import {controlConnectionError} from "../../../../lib/control-connections";
 import {changeCard} from "../../../../lib/card-server";
 import {cardControl} from "../../../../lib/question-cards";
@@ -179,6 +180,7 @@ export async function POST(request: Request, context: Context) {
       if(!Array.isArray(entries)||!entries.length)return NextResponse.json({error:"Add choices before spinning or picking."},{status:400});
       const slots=entries.map(String);outcomes[tool.id]={result:slots[randomInt(slots.length)],...(tool.type==="wheel"?{segments:slots}:{})};
     }
+    if(tool.type==="coin-toss")outcomes[tool.id]={result:coinOutcome(randomInt(2))};
     if(tool.type==="dice")outcomes[tool.id]={result:String(1+randomInt(Math.min(100,Math.max(2,Math.floor(Number(tool.config.sides)||6)))))};
   }
   const payload=JSON.stringify({outcomes});
