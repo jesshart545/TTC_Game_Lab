@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import type { Project } from "../../../../lib/project";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { verifyYoutube } from "../../../../lib/youtube-server";
 import { youtubeId, youtubePosition, safeYoutubePlacement } from "../../../../lib/youtube";
 import type { YouTubeState } from "../../../../lib/youtube";
@@ -32,6 +32,13 @@ export async function GET(request: Request, context: Context) {
   const live = await published(slug);
   if (!live) return NextResponse.json({ error: "Published project unavailable." }, { status: 404 });
   await ensureLiveEvents(live.db);
+  const wheelId=new URL(request.url).searchParams.get("wheelSlots");
+  if(wheelId){
+    const tool=live.project.gameTools.find(t=>t.id===wheelId&&t.type==="wheel"&&t.enabled);
+    if(!tool)return NextResponse.json({error:"Wheel not found."},{status:404});
+    const rows=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='wheel-slots' AND control_id=${wheelId} ORDER BY id DESC LIMIT 1`;
+    return NextResponse.json({segments:rows[0]?.payload?.segments||tool.config.segments||[]},{headers:{"Cache-Control":"no-store"}});
+  }
   const since = Number(new URL(request.url).searchParams.get("since") || 0);
   if (!Number.isSafeInteger(since) || since < 0) return NextResponse.json({ error: "Invalid cursor." }, { status: 400 });
   if (new URL(request.url).searchParams.has("init")) {
@@ -86,6 +93,16 @@ export async function POST(request: Request, context: Context) {
   }
 
   await ensureLiveEvents(live.db);
+
+  if(body.wheelSlots){
+    const tool=live.project.gameTools.find(t=>t.id===body.wheelSlots.toolId&&t.type==="wheel"&&t.enabled&&t.inToolbox);
+    const entries=body.wheelSlots.segments;
+    if(!tool||!Array.isArray(entries)||entries.length<2||entries.length>100||entries.some(x=>typeof x!=="string"||!x.trim()||x.length>200))return NextResponse.json({error:"Use 2–100 nonempty wheel slots, up to 200 characters each."},{status:400});
+    const segments=entries.map(x=>x.trim());
+    const payload=JSON.stringify({segments});
+    await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${tool.id},'wheel-slots',${payload}::jsonb)`;
+    return NextResponse.json({ok:true,segments});
+  }
 
   if (body.youtube) {
     try {
@@ -149,7 +166,21 @@ export async function POST(request: Request, context: Context) {
   }
   const connectionError=controlConnectionError(live.project,control);if(connectionError)return NextResponse.json({error:connectionError},{status:409});
   const card=cardControl(control.action);if(card){try{return NextResponse.json({ok:true,state:await changeCard(live.db,live.project,card.toolId,card.action,undefined,String(live.project.gameTools.find(t=>t.id===card.toolId)?.config.text||""))});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Card action failed."},{status:409});}}
-  const rows = await live.db`INSERT INTO live_events (project_id, control_id, event_type) VALUES (${live.project.id}, ${control.id}, ${"control"}) RETURNING id`;
+  const outcomes:Record<string,{result:string;segments?:string[]}>= {};
+  for(const tool of live.project.gameTools.filter(t=>t.enabled&&control.toolIds?.includes(t.id))){
+    if(tool.type==="wheel"||tool.type==="random-picker"){
+      let entries=tool.type==="wheel"?tool.config.segments:tool.config.items;
+      if(tool.type==="wheel"){
+        const saved=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='wheel-slots' AND control_id=${tool.id} ORDER BY id DESC LIMIT 1`;
+        entries=saved[0]?.payload?.segments||entries;
+      }
+      if(!Array.isArray(entries)||!entries.length)return NextResponse.json({error:"Add choices before spinning or picking."},{status:400});
+      const slots=entries.map(String);outcomes[tool.id]={result:slots[randomInt(slots.length)],...(tool.type==="wheel"?{segments:slots}:{})};
+    }
+    if(tool.type==="dice")outcomes[tool.id]={result:String(1+randomInt(Math.min(100,Math.max(2,Math.floor(Number(tool.config.sides)||6)))))};
+  }
+  const payload=JSON.stringify({outcomes});
+  const rows = await live.db`INSERT INTO live_events (project_id, control_id, event_type,payload) VALUES (${live.project.id}, ${control.id}, ${"control"},${payload}::jsonb) RETURNING id`;
   return NextResponse.json({ ok: true, id: Number(rows[0].id) });
 }
 

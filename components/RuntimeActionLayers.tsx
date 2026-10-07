@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
 import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
+import {WheelDisplay,DiceDisplay} from "./ChanceTools";
 import {BoardSurface} from "./BoardDesigner";
 import QuestionCards from './QuestionCards';
 import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
@@ -25,7 +26,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const [flash, setFlash] = useState(false);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
-  const fire = useCallback((control: ProjectEvent) => {
+  const fire = useCallback((control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[]}>) => {
     const p = latest.current; if (!p) return;
     if(control.action.startsWith("result.hide.")){setRuns(items=>items.filter(item=>item.control.id!==control.action.slice(12)));return;}
     const connectionError=controlConnectionError(p,control);if(connectionError)throw new Error(connectionError);
@@ -38,19 +39,22 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     };
     if(control.action.startsWith('asset.show.')){const asset=p.assets.find(a=>(a.storageKey||a.name)===control.action.slice(11));if(asset)add({asset},Infinity);return;}
     const playTool = (id: string) => {
-      const tool = latest.current?.gameTools.find(t => t.id === id && t.enabled && t.inToolbox);
-      if (!tool) return;
+      const storedTool = latest.current?.gameTools.find(t => t.id === id && t.enabled && t.inToolbox);
+      if (!storedTool) return;
+      const chosen=outcomes?.[id];
+      const tool=chosen?.segments?{...storedTool,config:{...storedTool.config,segments:chosen.segments}}:storedTool;
       const config = tool.config;
       const choices = (Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : ["Winner"]).map(String);
       let result = "";
-      if (tool.type === "wheel" || tool.type === "random-picker") result = choices[Math.floor(Math.random() * choices.length)] || "No choices";
-      if (tool.type === "dice") result = String(1 + Math.floor(Math.random() * Math.max(2, Number(config.sides) || 6)));
+      if (tool.type === "wheel" || tool.type === "random-picker") { if(!choices.length)throw new Error("Add choices to "+tool.name+" in Workshop."); result = choices[Math.floor(Math.random() * choices.length)]; }
+      if (tool.type === "dice") result = String(1 + Math.floor(Math.random() * Math.min(100,Math.max(2, Math.floor(Number(config.sides) || 6)))));
       if (tool.type === "trivia-list") {
         const questions = Array.isArray(config.questions) ? config.questions : [];
         const turn = trivia.current[id] || 0; trivia.current[id] = turn + 1;
         const question = questions[Math.floor(turn / 2) % Math.max(1, questions.length)];
         add({ tool, question, reveal: turn % 2 === 1 }, 60); return;
       }
+      if(chosen)result=chosen.result;
       add({ tool, result }, tool.config.triggerOnly ? Infinity : tool.type === "countdown" ? Math.max(1, Number(config.seconds) || 10) + 3 : tool.type === "poll" ? 3600 : 12);
     };
     if (control.action.startsWith("background.show.")) { setBackgroundKey(control.action.slice("background.show.".length)); return; }
@@ -121,9 +125,10 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
   const revealResult = now - run.at >= 1800;
   return <section aria-label={tool.name} style={{ position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto", ...overlayToolPlacement(tool), ...(placement?{left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxHeight:"none",zIndex:placement.layer}: {}) }}>
     <ToolArtwork tool={tool} assets={assets}/><h3>{String(config.title || tool.name)}</h3>
-    {(tool.type === "wheel" || tool.type === "random-picker") && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
+    {tool.type === "wheel" && <WheelDisplay colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} entries={(Array.isArray(config.segments)?config.segments:[]).map(String)} result={run.result||""} elapsed={now-run.at} preview={run.id===0}/>}
+    {tool.type === "random-picker" && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
-    {tool.type === "dice" && <strong role="status">{run.result}</strong>}
+    {tool.type === "dice" && <DiceDisplay faceColor={String(config.faceColor||"#f5faff")} pipColor={String(config.pipColor||"#102132")} result={Number(run.result)||1} sides={Math.min(100,Math.max(2,Math.floor(Number(config.sides)||6)))} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
     {tool.type === "trivia-board" && <div className="runtime-jeopardy-grid">{(Array.isArray(config.categories)?config.categories:[]).map((category:any,i:number)=><div key={i}><strong>{String(category.name)}</strong>{(Array.isArray(category.questions)?category.questions:[]).map((q:any,j:number)=><p key={j}>{q.used?'USED':String(q.value)}</p>)}</div>)}</div>}
     {tool.type === "trivia-list" && <><p>{String(run.question?.question || run.question?.prompt || "No questions saved")}</p>{run.reveal && <strong>Answer: {String(run.question?.answer || "")}</strong>}</>}

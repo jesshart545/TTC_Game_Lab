@@ -73,7 +73,7 @@ export default function PublishedProject() {
             }
             const control = published.controls.find(item => item.id === event.controlId);
             if (!control) continue;
-            fireRef.current(control);
+            fireRef.current(control,event.payload?.outcomes);
           }
         } catch {} finally { if (!cancelled) timer = window.setTimeout(poll, 1000); }
       };

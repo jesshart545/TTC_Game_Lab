@@ -4,6 +4,7 @@ import type { Project, ProjectEvent, ProjectAsset, GameTool } from "../lib/proje
 import type { YouTubeState } from "../lib/youtube";
 import { safeYoutubePlacement } from "../lib/youtube";
 import { defaultOverlayResult } from "./CompositionPlayer";
+import WheelHostPanel from "./WheelHostPanel";
 import QuestionCardEditor from "./QuestionCardEditor";
 import GameToolEditor from "./GameToolEditor";
 import {assignControlAction} from "../lib/control-connections";
@@ -72,6 +73,7 @@ export default function BuildSpace({project,onChange,overlay,onTrigger,onWorksho
     {!project.controls.length&&!dashboardExtras&&<p className="canvas-empty">Place your host controls here.</p>}
     <div className="dashboard-preview-buttons">{project.controls.map(c=><button type="button" key={c.id} aria-pressed={!testing&&control?.id===c.id} onClick={()=>testing?onTrigger(c):(setStep(2),setSelection({kind:"control",id:c.id}))}>{c.label}<small>{c.detail||"Choose an action"}</small></button>)}</div>
     {testing&&dashboardExtras}
+    {testing&&project.gameTools.filter(t=>t.enabled&&t.inToolbox&&t.type==="wheel").map(t=><WheelHostPanel key={t.id} tool={t} onSave={segments=>onChange({...project,gameTools:project.gameTools.map(x=>x.id===t.id?{...x,config:{...x.config,segments}}:x)})}/>)}
     {testing&&youtubeOpen&&youtube&&<div className="youtube-draft-testing"><button type="button" className="outline-btn" onClick={onCloseYoutube}>Close private tool</button>{!youtube.inOverlayBuild&&<p>Private search and listening are available. Configure its overlay destination to test showing a clip.</p>}<YouTubeHostPanel canShow={Boolean(youtube.inOverlayBuild)} onCommand={onYoutubeCommand} previewState={youtubeState} previewFeedback={youtubeFeedback} placement={safeYoutubePlacement(youtube.config.placement)}/></div>}
    </div>{!testing&&<p>Add a working control from a Workshop creation above.</p>}</section>
   </div>

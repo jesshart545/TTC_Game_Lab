@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import {WheelDisplay,DiceDisplay} from "./ChanceTools";
 import {CountdownDesignPreview} from "./QuestionCardEditor";
 import type { Project } from "../lib/project";
 import type { GameTool, ProjectAsset } from "../lib/project";
@@ -30,8 +31,9 @@ export default function GameToolEditor({tool,assets,onSave,project}: {tool:GameT
   const images=assets.filter(x=>x.url && (x.type.toLowerCase().includes("image") || /\.(png|jpe?g|webp|gif|svg)$/i.test(x.name)));
   let content:ReactNode=draft.name;
   if(draft.type==="countdown") content=String(cfg.seconds ?? 10)+" seconds";
-  if(draft.type==="dice") content=String(cfg.sides ?? 6)+" sided dice";
+  if(draft.type==="dice") content=<DiceDisplay faceColor={String(cfg.faceColor||"#f5faff")} pipColor={String(cfg.pipColor||"#102132")} result={1} sides={Number(cfg.sides)||6} preview/>;
   if(draft.type==="wheel" || draft.type==="random-picker") content=(Array.isArray(cfg[draft.type==="wheel"?"segments":"items"]) ? cfg[draft.type==="wheel"?"segments":"items"] as string[] : []).join(" · ");
+  if(draft.type==="wheel") content=<WheelDisplay colors={[String(cfg.slotColor||"#154c69"),String(cfg.alternateSlotColor||"#512b75")]} textColor={String(a.textColor||"#ffffff")} entries={(Array.isArray(cfg.segments)?cfg.segments:[]).map(String)} result="" preview/>;
   if(draft.type==="poll") content=<><strong>{String(cfg.question || "Live Poll")}</strong><div>{(Array.isArray(cfg.options)?cfg.options as string[]:[]).join(" · ")}</div></>;
   return <details style={{width:"100%",marginTop:8}}><summary style={{cursor:"pointer",color:"#20e8ff"}}>Edit appearance and settings</summary><div style={{display:"grid",gap:10,paddingTop:12}}>
     <label>Tool name<input value={draft.name} onChange={e=>{setDraft({...draft,name:e.target.value});setSaved(false)}}/></label>
@@ -40,6 +42,8 @@ export default function GameToolEditor({tool,assets,onSave,project}: {tool:GameT
     <label>Text size<input type="number" min={12} max={96} value={Number(a.fontSize)||28} onChange={e=>appearance({fontSize:Math.max(12,Math.min(96,+e.target.value))})}/></label>
     <label>Corner rounding<input type="number" min={0} max={64} value={Number(a.borderRadius)||0} onChange={e=>appearance({borderRadius:Math.max(0,Math.min(64,+e.target.value))})}/></label>
     <label>Tool image<select value={String(a.imageKey || "")} onChange={e=>appearance({imageKey:e.target.value})}><option value="">No image</option>{images.map((x,i)=><option key={(x.storageKey || x.name)+i} value={x.storageKey || x.name}>{x.name}</option>)}</select><small>Upload or generate an image in Workshop, then select it here.</small></label>
+    {draft.type==="wheel"&&<>{["slotColor","alternateSlotColor"].map((key,i)=><label key={key}>{i?"Alternate slot color":"Slot color"}<input type="color" value={String(cfg[key]||["#154c69","#512b75"][i])} onChange={e=>update({[key]:e.target.value})}/></label>)}</>}
+    {draft.type==="dice"&&<>{["faceColor","pipColor"].map((key,i)=><label key={key}>{i?"Dice pips / number color":"Dice face color"}<input type="color" value={String(cfg[key]||["#f5faff","#102132"][i])} onChange={e=>update({[key]:e.target.value})}/></label>)}</>}
     {draft.type==="wheel" && list("segments","Wheel segments",["Prize","Bonus"])}
     {draft.type==="random-picker" && list("items","Picker entries",["Player 1","Player 2"])}
     {draft.type==="poll" && <><label>Poll question<input value={String(cfg.question || "")} onChange={e=>update({question:e.target.value})}/></label>{list("options","Poll choices",["Option A","Option B"])}</>}
