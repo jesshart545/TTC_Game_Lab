@@ -77,7 +77,8 @@ export async function POST(request: Request) {
           ? { type:"tool", toolType:raw.toolType, name:typeof raw.name === "string" ? raw.name.slice(0,80) : "", config:raw.config && typeof raw.config === "object" && !Array.isArray(raw.config) ? raw.config : {} }
           : raw && ["image","video","voice","music","sfx"].includes(raw.type) && typeof raw.prompt === "string"
             ? { type:raw.type, prompt:raw.prompt.slice(0,12000), sourceKey:typeof raw.sourceKey === "string" ? raw.sourceKey : null, voice:["Aria","Roger"].includes(raw.voice) ? raw.voice : null, ...(raw.type === "music" ? { durationSeconds: musicDuration(String(body.request || ""), raw.durationSeconds ?? musicDuration(raw.prompt)), lyrics: typeof raw.lyrics === "string" ? raw.lyrics.slice(0,3500) : "" } : {}) } : null;
-      if (raw && !action) throw new Error("Unsupported action format");
+      if(raw?.type==='search'&&body.searchEvidence)throw new Error('The search is already complete. Use searchEvidence to return changes for the requested pool, with action null. Do not search again.');
+      if (raw && !action) throw new Error(`The action ${String(raw.type||'unknown')} is not supported in that format. Edit an existing pool using changes.gameTools with its saved ID; create a new pool using changes.newTools; return action null for these saved edits.`);
       if (Array.isArray(parsed.changes.gameTools) && parsed.changes.gameTools.some((tool:any)=>!body.project?.gameTools?.some((existing:any)=>existing.id===tool.id))) throw new Error("New tools must use the tool action");
       if(body.searchEvidence)parsed.changes=groundedResearchCards(parsed.changes,body.searchEvidence,body.project?.gameTools||[],String(body.request||''));
       const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
             body:JSON.stringify({model:lastModel,response_format:{type:"json_object"},temperature:0,messages:[
               {role:"system",content:DRAFT_SYSTEM},
               {role:"user",content:JSON.stringify({request:body.request,recentConversation:body.history,project:body.project,selectedImageKey:body.selectedImageKey,workspaceStage:body.workspaceStage,selectedItem:body.selectedItem,searchEvidence:body.searchEvidence})},
+              {role:'assistant',content:String(message)},
               {role:"user",content:(validationError instanceof Error?'Correct this missing setting: '+validationError.message+' ':'')+'Return one complete JSON object with reply, changes, manualSteps, action. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research cards require sourceQuote copied exactly from the cited searchEvidence summary, with no added facts. Trivia creation uses the documented trivia action with the requested count and categories.'}
             ]}),signal:AbortSignal.timeout(60000)
           });
