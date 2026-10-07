@@ -98,7 +98,9 @@ export async function POST(request: Request) {
           if(retry.ok){message=data?.choices?.[0]?.message?.content || "";continue;}
         } catch {}
       }
-      return NextResponse.json({error:"I could not understand the response for that request. No changes were made."},{status:502});
+      const reason=validationError instanceof Error&&validationError.message&&! (validationError instanceof SyntaxError)?validationError.message:'The assistant did not return a usable response.';
+      console.warn('AI draft validation failed:',reason);
+      return NextResponse.json({error:`I could not apply that request: ${reason} No changes were made.`},{status:502});
     }
     }
   }

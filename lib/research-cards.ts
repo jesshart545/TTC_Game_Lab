@@ -8,7 +8,7 @@ export function groundedResearchCards(changes:Record<string,any>,evidence:unknow
   if(!Array.isArray(entries))throw Error('Research pools need saved source excerpts.');
   pool.config.entries=entries.map((card:any)=>{
    const source=sources.find(s=>s?.url===card.sourceUrl);
-   const quote=typeof card.sourceQuote==='string'?normalize(card.sourceQuote):'';
+   const quote=normalize(typeof card.sourceQuote==='string'?card.sourceQuote:typeof card.text==='string'?card.text:'');
    if(!source||!quote||quote.length>320||!normalize(String(source.summary||'')).toLowerCase().includes(quote.toLowerCase()))throw Error('Each researched card must include sourceQuote copied exactly from its cited searchEvidence summary, at most 320 characters. Do not add unsupported facts.');
    return {...card,text:quote,sourceQuote:quote,sourceTitle:String(source.title||'Source')};
   });
