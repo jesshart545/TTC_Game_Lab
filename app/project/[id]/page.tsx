@@ -31,6 +31,7 @@ import CardListEditor from "../../../components/CardListEditor";
 import PickerHostPanel from "../../../components/PickerHostPanel";
 import AssetPoolManager from "../../../components/AssetPoolManager";
 import AssetPoolAssignment from "../../../components/AssetPoolAssignment";
+import AssetDetailsDialog from "../../../components/AssetDetailsDialog";
 import AssetThumbnail from "../../../components/AssetThumbnail";
 import { removeAssetFromPools } from "../../../lib/asset-pools";
 import { removeLegacyCardTimers } from "../../../lib/control-connections";
@@ -1096,19 +1097,20 @@ export default function ProjectWorkspace() {
               </button>;
             })}
           </div> : <p className="empty-note">{project.assets.length===0?"Your saved assets will appear here. Create or upload something to get started.":"No assets match that search. Try a different name or media type."}</p>}
-          {selectedAsset && <section className="asset-detail-panel" aria-label={`Actions for ${selectedAsset.name}`}>
-            <header><div><h3>{selectedAsset.name}</h3><p>{selectedAsset.type} · {selectedAsset.inProject?"On the overlay":"In your library"}</p></div><button type="button" className="asset-detail-close" aria-label="Close asset details" onClick={()=>setSelectedAssetKey(null)}>×</button></header>
-            <div className="asset-detail-actions">
-              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<button type="button" className="build-btn" onClick={()=>setEditingAssetIndex(selectedAssetIndex)}>Edit {isImage(selectedAsset)?"image":"video"}</button>}
-              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>placeSceneImage(selectedAssetIndex,"background")}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>placeSceneImage(selectedAssetIndex,"layer")}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
-              {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
-              {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);}}>Position and size on overlay</button>}
-            </div>
+          {selectedAsset && <AssetDetailsDialog key={selectedAsset.storageKey||selectedAsset.name} label={`Actions for ${selectedAsset.name}`} onClose={()=>setSelectedAssetKey(null)}><section className="asset-detail-panel">
+            <header><AssetThumbnail key={selectedAsset.url||selectedAsset.name} asset={selectedAsset} kind={assetCategory(selectedAsset)}/><div><h3>{selectedAsset.name}</h3><p>{selectedAsset.type} · {selectedAsset.inProject?"On the overlay":"In your library"}</p></div><button type="button" className="asset-detail-close" aria-label="Close asset details" onClick={()=>setSelectedAssetKey(null)}>×</button></header>
             <AssetPoolAssignment key={selectedAsset.storageKey||selectedAsset.name} asset={selectedAsset} pools={project.assetPools||[]} onChange={saveAssetPools}/>
+            <p role="status">{saveStatus}</p>
+            <div className="asset-detail-actions">
+              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<button type="button" className="build-btn" onClick={()=>{setSelectedAssetKey(null);setEditingAssetIndex(selectedAssetIndex);}}>Edit {isImage(selectedAsset)?"image":"video"}</button>}
+              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"background");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"layer");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
+              {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
+              {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);setSelectedAssetKey(null);}}>Position and size on overlay</button>}
+            </div>
             {(isVideo(selectedAsset)||isAudio(selectedAsset))&&<details className="asset-playback-options"><summary>Playback options</summary><label>Repeat this media<input type="checkbox" checked={selectedAsset.edits?.loop??isVideo(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,loop:event.target.checked}}:asset)})}/></label><label>Play sound<input type="checkbox" checked={selectedAsset.edits?.sound??isAudio(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,sound:event.target.checked}}:asset)})}/></label><label>Volume <span>{selectedAsset.edits?.volume??80}%</span><input type="range" min="0" max="100" value={selectedAsset.edits?.volume??80} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,volume:+event.target.value}}:asset)})}/></label></details>}
             {(isImage(selectedAsset)||isVideo(selectedAsset))&&<details className="asset-more-options"><summary>Other ways to use this</summary><BackgroundDestination project={project} asset={selectedAsset} onChange={persist}/>{(project.gameTools||[]).some(tool=>tool.type==="blank-board"&&tool.enabled)&&<button type="button" className="outline-btn" onClick={()=>useImageAsBlankBoardBackground(selectedAssetIndex)}>Use as board background</button>}</details>}
             <button type="button" className="danger-btn asset-detail-delete" onClick={()=>handleDeleteAsset(selectedAsset)}>Delete asset</button>
-          </section>}
+          </section></AssetDetailsDialog>}
         </div>
         <div className="detail-block">
           <span>NEW PROJECT</span>
