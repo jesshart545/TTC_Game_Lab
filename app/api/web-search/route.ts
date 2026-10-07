@@ -15,14 +15,15 @@ export async function POST(request:Request){
   }else{const user=await requireCreator();if(user)identity=`user:${user.id}`;}
   if(!identity)return NextResponse.json({error:"Sign in or open your private dashboard to search."},{status:401});
   const base=process.env.SEARCH_INTERNAL_URL;
-  if(!base)return NextResponse.json({error:"Embedded search is not available in this deployment yet."},{status:503});
+  const serviceKey=process.env.SEARCH_SERVICE_KEY;
+  if(!base||!serviceKey)return NextResponse.json({error:"Embedded search is not available in this deployment yet."},{status:503});
   try{
     await db`CREATE TABLE IF NOT EXISTS web_search_limits (identity TEXT PRIMARY KEY, window_start BIGINT NOT NULL, count INTEGER NOT NULL)`;
     const windowStart=Math.floor(Date.now()/60000)*60000;
     const limits=await db`INSERT INTO web_search_limits (identity,window_start,count) VALUES (${identity},${windowStart},1) ON CONFLICT (identity) DO UPDATE SET count=CASE WHEN web_search_limits.window_start=${windowStart} THEN web_search_limits.count+1 ELSE 1 END, window_start=${windowStart} RETURNING count`;
     if(Number(limits[0].count)>20)return NextResponse.json({error:"Please wait a minute before searching again."},{status:429,headers:{"Retry-After":"60"}});
     const url=new URL("/search",base);url.search=new URLSearchParams({q,format:"json",categories:"general",language:"en-US",safesearch:"1"}).toString();
-    const response=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(18000),headers:{Accept:"application/json"}});
+    const response=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(18000),headers:{Accept:"application/json","x-search-service-key":serviceKey}});
     if(!response.ok)throw new Error(`Search provider returned ${response.status}`);
     const data=await response.json();const results=webResults(data.results);
     if(!results.length&&data.unresponsive_engines?.length)throw new Error("Search engines unavailable");

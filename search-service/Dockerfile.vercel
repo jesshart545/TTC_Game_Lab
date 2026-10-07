@@ -1,6 +1,7 @@
 FROM docker.io/searxng/searxng:2026.10.4-d48c4b555
 COPY settings.yml /etc/searxng/settings.yml
 COPY start.sh /usr/local/searxng/ttc-start.sh
+COPY ttc_app.py /usr/local/searxng/ttc_app.py
 ENV SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml \
     SEARXNG_DATA_PATH=/tmp/searxng-data \
     GRANIAN_HOST=0.0.0.0 \
