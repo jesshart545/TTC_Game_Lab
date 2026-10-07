@@ -1,0 +1,8 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript');
+function load(path,requires={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:id=>requires[id],Set});return exports;}
+const guide=load('lib/build-guide.ts',{'./board-design':load('lib/board-design.ts')});
+const p={assets:[{name:'base',type:'video/mp4',role:'background',inProject:true},{name:'clip.webm',type:'Generated'},{name:'voice',type:'audio/mpeg'}],gameTools:[{id:'board',type:'blank-board',enabled:true},{id:'pool',type:'trivia-list',enabled:true},{id:'q',name:'Cards',type:'question-card',enabled:true},{id:'disabled',type:'wheel',enabled:false}],compositions:[],controls:[{id:'show',action:'asset.show.clip.webm'},{id:'hide',action:'result.hide.show'},{id:'other',action:'asset.show.voice'}]};
+assert.equal(guide.creationsForType(p,'video').length,1);assert.equal(guide.creationsForType(p,'video')[0].id,'clip.webm');assert.equal(guide.creationsForType(p,'audio').length,1);assert.equal(guide.creationsForType(p,'wheel').length,0);
+const all=guide.additionTypes.flatMap(t=>guide.creationsForType(p,t.id));assert(!all.some(c=>['board','pool','disabled'].includes(c.id)));
+assert.deepEqual(Array.from(guide.creationControls(p,{kind:'asset',id:'clip.webm'}),c=>c.id),['show','hide']);
+console.log('PASS: initial background excluded from additions; animated files classified; boards and pools excluded; disabled tools omitted; each addition gets only its own controls.');

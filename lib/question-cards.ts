@@ -44,7 +44,7 @@ export function publicCardState(project:Project,tool:GameTool,state:CardState,no
  return {...state,used:[],question:state.question?{...state.question,answer:cardPhase(project,tool,state,now)==='answer'?state.question.answer:''}:null};
 }
 export function cardControl(action:string):{toolId:string;action:CardAction}|null{
- const m=action.match(/^cards\.(show|turn|steal|reveal|clear|new-game)\.(.+)$/);return m?{action:m[1] as CardAction,toolId:m[2]}:null;
+ const m=action.match(/^cards\.(show|turn|steal|reveal|clear|new-game|blank)\.(.+)$/);return m?{action:m[1] as CardAction,toolId:m[2]}:null;
 }
 export function createCardSystem(project:Project,backgroundKey?:string,kind:'question'|'answer'|'blank'='question'):Project{
  const id='card-'+crypto.randomUUID();

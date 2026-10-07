@@ -5,10 +5,12 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
   if (!control.action?.trim() && !control.toolIds?.length && !control.compositionId && !(control.buttonMode === 'chain' && control.chain?.length)) {
     return 'Choose an action for this dashboard button in Build Space before using it.';
   }
+  if(control.action?.startsWith('asset.show.'))return project.assets.some(a=>(a.storageKey||a.name)===control.action.slice(11)&&a.url)?null:'Choose an available media file for this control.';
+  if(control.action?.startsWith('result.hide.'))return project.controls.some(c=>c.id===control.action.slice(12))?null:'The display control for this Hide button is missing.';
   const card = cardControl(control.action || '');
   if (card) {
     const tool = project.gameTools.find(t => t.id === card.toolId && t.enabled);
-    if (!tool || tool.type !== 'question-card') return 'This button is not connected to an available question card. Choose its action again in Build Space.';
+    if (!tool || (tool.type !== 'question-card' && !(tool.type==='blank-card' && ['blank','clear','new-game'].includes(card.action)))) return 'This button is not connected to an available question card. Choose its action again in Build Space.';
   }
   const ids = card ? [] : [...(control.toolIds || []), ...(control.action?.startsWith('tool.') ? [control.action.slice(5)] : []), ...(control.buttonMode === 'chain' ? (control.chain || []).filter(s => s.kind === 'tool').map(s => s.refId) : [])];
   for (const id of ids) {

@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
 import {controlConnectionError} from "../lib/control-connections";
+import {mediaKind} from "../lib/board-design";
+import {BoardSurface} from "./BoardDesigner";
 import QuestionCards from './QuestionCards';
 import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
@@ -25,14 +27,16 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
   const fire = useCallback((control: ProjectEvent) => {
     const p = latest.current; if (!p) return;
+    if(control.action.startsWith("result.hide.")){setRuns(items=>items.filter(item=>item.control.id!==control.action.slice(12)));return;}
     const connectionError=controlConnectionError(p,control);if(connectionError)throw new Error(connectionError);
-    const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action);return;}
+    const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action,String(p.gameTools.find(t=>t.id===card.toolId)?.config.text||""));return;}
     const later = (fn: () => void, ms: number) => { const timer = setTimeout(() => { timers.current = timers.current.filter(x => x !== timer); fn(); }, ms); timers.current.push(timer); };
     const add = (entry: Omit<Run, "id" | "at" | "control">, seconds: number) => {
       const id = ++serial.current;
       setRuns(items => [...items.filter(item => entry.tool ? item.tool?.id !== entry.tool.id : entry.asset ? (item.asset?.storageKey || item.asset?.name) !== (entry.asset.storageKey || entry.asset.name) : true), { ...entry, id, at: Date.now(), control }]);
-      later(() => remove(id), Math.max(1, seconds) * 1000);
+      if(Number.isFinite(seconds))later(() => remove(id), Math.max(1, seconds) * 1000);
     };
+    if(control.action.startsWith('asset.show.')){const asset=p.assets.find(a=>(a.storageKey||a.name)===control.action.slice(11));if(asset)add({asset},Infinity);return;}
     const playTool = (id: string) => {
       const tool = latest.current?.gameTools.find(t => t.id === id && t.enabled && t.inToolbox);
       if (!tool) return;
@@ -47,7 +51,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
         const question = questions[Math.floor(turn / 2) % Math.max(1, questions.length)];
         add({ tool, question, reveal: turn % 2 === 1 }, 60); return;
       }
-      add({ tool, result }, tool.type === "countdown" ? Math.max(1, Number(config.seconds) || 10) + 3 : tool.type === "poll" ? 3600 : 12);
+      add({ tool, result }, tool.config.triggerOnly ? Infinity : tool.type === "countdown" ? Math.max(1, Number(config.seconds) || 10) + 3 : tool.type === "poll" ? 3600 : 12);
     };
     if (control.action.startsWith("background.show.")) { setBackgroundKey(control.action.slice("background.show.".length)); return; }
     if (control.action.startsWith("alert.") && p.overlay.showAlerts) add({ message: control.label }, 5);
@@ -121,12 +125,15 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
     {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
     {tool.type === "dice" && <strong role="status">{run.result}</strong>}
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
+    {tool.type === "trivia-board" && <div className="runtime-jeopardy-grid">{(Array.isArray(config.categories)?config.categories:[]).map((category:any,i:number)=><div key={i}><strong>{String(category.name)}</strong>{(Array.isArray(category.questions)?category.questions:[]).map((q:any,j:number)=><p key={j}>{q.used?'USED':String(q.value)}</p>)}</div>)}</div>}
     {tool.type === "trivia-list" && <><p>{String(run.question?.question || run.question?.prompt || "No questions saved")}</p>{run.reveal && <strong>Answer: {String(run.question?.answer || "")}</strong>}</>}
   </section>;
 }
 
 export function ControlAppearancePreview({control,project}:{control:ProjectEvent;project:Project}) {
  const tool=project.gameTools.find(t=>control.toolIds?.includes(t.id)&&t.type!=="youtube");
+ const asset=control.action.startsWith('asset.show.')?project.assets.find(a=>(a.storageKey||a.name)===control.action.slice(11)):undefined;
+ if(asset){const r=control.overlayResult||defaultOverlayResult;return <div aria-label="Appearance preview only" style={{position:'absolute',left:r.x+'%',top:r.y+'%',width:r.width+'%',height:r.height+'%',pointerEvents:'none'}}>{mediaKind(asset)==='video'?<video src={asset.url} muted style={{width:'100%',height:'100%',objectFit:'contain'}}/>:mediaKind(asset)==='audio'?<p>{asset.name} · audio</p>:<img src={asset.url} alt={asset.name} style={{width:'100%',height:'100%',objectFit:'contain'}}/>}</div>;}
  if(!tool)return null;
  const questions=Array.isArray(tool.config.questions)?tool.config.questions:[];
  const run:Run={id:0,at:Date.now(),control,tool,question:questions[0],reveal:false,result:String((Array.isArray(tool.config.items)?tool.config.items[0]:null)||"Preview")};
@@ -138,9 +145,9 @@ function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
   const media=useRef<HTMLMediaElement|null>(null);
   const [blocked,setBlocked]=useState(false);
   const [failed,setFailed]=useState(false);
-  useEffect(()=>{const element=media.current;if(element)void element.play().catch(()=>setBlocked(true));},[]);
+  useEffect(()=>{const element=media.current;if(element){element.volume=Math.max(0,Math.min(1,(asset.edits?.volume??80)/100));element.muted=!(asset.edits?.sound??mediaKind(asset)==="audio");element.loop=asset.edits?.loop??false;void element.play().catch(()=>setBlocked(true));}},[asset.edits?.volume,asset.edits?.sound,asset.edits?.loop]);
   const start=()=>{void media.current?.play().then(()=>setBlocked(false)).catch(()=>setFailed(true));};
-  return <>{asset.type.includes("video") ? <video ref={media as import("react").Ref<HTMLVideoElement>} aria-label={asset.name} src={asset.url} autoPlay playsInline style={{width:"100%",height:"100%",objectFit:"contain"}} onEnded={onEnd} onError={()=>setFailed(true)}/> : <audio ref={media as import("react").Ref<HTMLAudioElement>} aria-label={asset.name} src={asset.url} autoPlay onEnded={onEnd} onError={()=>setFailed(true)}/>}
+  return <>{mediaKind(asset)==="video" ? <video ref={media as import("react").Ref<HTMLVideoElement>} aria-label={asset.name} src={asset.url} autoPlay playsInline style={{width:"100%",height:"100%",objectFit:"contain"}} onEnded={onEnd} onError={()=>setFailed(true)}/> : <audio ref={media as import("react").Ref<HTMLAudioElement>} aria-label={asset.name} src={asset.url} autoPlay onEnded={onEnd} onError={()=>setFailed(true)}/>}
     {blocked && !failed && <button onClick={start} style={{position:"absolute",left:"30%",top:"80%",zIndex:60}}>Enable audio</button>}
     {failed && <p role="alert">Unable to play {asset.name}. Reload the overlay to refresh its media.</p>}
   </>;
@@ -149,11 +156,11 @@ function MediaRun({asset,onEnd}:{asset:ProjectAsset;onEnd:()=>void}) {
 export default function RuntimeActionLayers({ runtime, project, live = false }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project; live?: boolean }) {
   const toolRuns=runtime.runs.filter(run=>run.tool);
   return <><QuestionCards project={project} states={runtime.cardStates}/>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length} live={live} slug={project.slug}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
-    {project.gameTools.filter(t => t.enabled && t.inOverlayBuild && t.type === "blank-board").map(tool => <section key={tool.id} aria-label={tool.name} style={{position:"absolute",inset:"15%",zIndex:5,padding:"1rem",...toolStyle(tool),...overlayToolPlacement(tool)}}><ToolArtwork tool={tool} assets={project.assets}/><h3>{String(tool.config.title || tool.name)}</h3></section>)}
+    {project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==='blank-board'&&!t.config.triggerOnly).map(tool=><section key={tool.id} aria-label={tool.name} style={{position:'absolute',inset:0,zIndex:5}}><BoardSurface tool={tool} project={project}/></section>)}
     {runtime.runs.map(run => run.tool ? null : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
       return composition ? <CompositionPlayer key={run.id} composition={composition} assets={project.assets} placement={run.control.overlayResult || defaultOverlayResult} startedAt={run.at} onEnd={() => runtime.remove(run.id)}/> : null;
-    })() : run.asset ? <div key={run.id} style={{position:"absolute",...(run.control.overlayResult?{left:run.control.overlayResult.x+"%",top:run.control.overlayResult.y+"%",width:run.control.overlayResult.width+"%",height:run.control.overlayResult.height+"%"}:{inset:0}),zIndex:run.control.overlayResult?.layer??20}}>{run.asset.type.includes("video") || run.asset.type.includes("audio") ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
+    })() : run.asset ? <div key={run.id} style={{position:"absolute",...(run.control.overlayResult?{left:run.control.overlayResult.x+"%",top:run.control.overlayResult.y+"%",width:run.control.overlayResult.width+"%",height:run.control.overlayResult.height+"%"}:{inset:0}),zIndex:run.control.overlayResult?.layer??20}}>{["video","audio"].includes(mediaKind(run.asset)) ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain"}}/>}</div> : null)}
   </>;
 }
 
