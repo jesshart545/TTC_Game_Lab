@@ -1,0 +1,20 @@
+const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
+// Catch omitted explicit settings before the application accepts a model edit.
+export function validateExplicitSettings(request:string,response:unknown){
+ const r=record(response),changes=record(r.changes),tools=[...(Array.isArray(changes.newTools)?changes.newTools:[]),...(Array.isArray(changes.gameTools)?changes.gameTools:[]),...(r.action?.type==='tool'?[{config:r.action.config}]:[])];
+ const controls=Array.isArray(changes.controls)?changes.controls:[],assets=Array.isArray(changes.assets)?changes.assets:[];
+ if(!tools.length&&!controls.length&&!assets.length)return;
+ const placements=[...tools.flatMap(t=>[record(t.config).placement,record(t.config).questionCard,record(t.config).answerCard]),...controls.map(c=>c.overlayResult),...assets.map(a=>record(a.edits).placement)].map(record);
+ for(const field of ['x','y','width','height']){
+  const match=request.match(new RegExp('\\b'+field+'\\s*(?:to|of|at|=|:)??\\s*(\\d+(?:\\.\\d+)?)\\s*(%|pixels?|px)?','i'));
+  if(!match)continue;
+  const expected=Number(match[1])*(match[2]&&match[2]!=='%'?100/(field==='x'||field==='width'?1920:1080):1);
+  if(!placements.some(p=>Number.isFinite(p[field])&&Math.abs(p[field]-expected)<.1))throw new Error('Include the requested '+field+' '+match[1]+(match[2]||'%')+' in the saved placement.');
+ }
+ const appearances=[...tools.map(t=>record(t.config).appearance),...controls.map(c=>c.appearance),...tools.flatMap(t=>[record(t.config).questionCard,record(t.config).answerCard])].map(record);
+ const font=request.match(/\b(Georgia|Arial|Verdana|Trebuchet|monospace)\b/i)?.[1];
+ if(font&&!appearances.some(a=>String(a.fontFamily||'').toLowerCase().startsWith(font.toLowerCase())))throw new Error('Include the requested '+font+' font in the saved appearance.');
+ if(/\b(?:background|button)\b[^.\n]{0,50}\b(?:colou?r|purple|blue|red|green|black|white|pink)\b|\b(?:purple|blue|red|green|black|white|pink)\b[^.\n]{0,20}\bbackground\b/i.test(request)&&!appearances.some(a=>a.backgroundColor))throw new Error('Include the requested background color in the saved appearance.');
+ const colors=request.match(/#[0-9a-f]{6}\b/gi)||[];
+ for(const color of colors)if(!appearances.some(a=>[a.backgroundColor,a.textColor,a.color,a.accentColor].some(v=>String(v||'').toLowerCase()===color.toLowerCase())))throw new Error('Include the requested color '+color+' in the saved appearance.');
+}
