@@ -17,7 +17,7 @@ export function timerSeconds(project:Project,tool:GameTool,steal=false){return b
 export function cardPhase(project:Project,tool:GameTool,state:CardState,now=Date.now()):'hidden'|'question'|'exit'|'answer'{
  if(state.cleared||(!state.question&&!state.blankText))return 'hidden';
  if(state.revealAt!==null&&now>=state.revealAt)return 'answer';
- if(state.stealAt!==null){const finish=state.stealAt+timerSeconds(project,tool,true)*1000;if(now>=finish){const design=cardDesign(tool);const exit=design.exit==='none'?0:bounded(design.exitSeconds,.5,0,5)*1000;return now>=finish+exit?'answer':'exit';}}
+ if(state.stealAt!==null&&linkedTimer(project,tool,true)){const finish=state.stealAt+timerSeconds(project,tool,true)*1000;if(now>=finish){const design=cardDesign(tool);const exit=design.exit==='none'?0:bounded(design.exitSeconds,.5,0,5)*1000;return now>=finish+exit?'answer':'exit';}}
  return 'question';
 }
 export function cardTransition(project:Project,tool:GameTool,previous:CardState,action:CardAction,now=Date.now(),random=Math.random,text=''):CardState{
@@ -28,7 +28,6 @@ export function cardTransition(project:Project,tool:GameTool,previous:CardState,
  if(action==='show'){
   if(!state.cleared&&state.question&&cardPhase(project,tool,state,now)!=='answer')throw new Error('Finish or clear the current question before drawing another.');
   if(tool.type!=='question-card')throw new Error('Choose a question card system.');
-  if(!linkedTimer(project,tool)||!linkedTimer(project,tool,true)||tool.config.turnTimerId===tool.config.stealTimerId)throw new Error('Connect two different countdown timers before playing.');
   const available=questionPool(project,tool).filter(q=>!state.used.includes(q.id));
   if(!available.length)throw new Error('No unused questions remain. Start a new game explicitly to reset the question history.');
   const question=available[Math.min(available.length-1,Math.floor(Math.max(0,random())*available.length))];
@@ -37,8 +36,8 @@ export function cardTransition(project:Project,tool:GameTool,previous:CardState,
  if(!state.question||state.cleared)throw new Error('Show a question first.');
  if(action==='reveal')return {...state,revealAt:now,turnAt:null,stealAt:null};
  if(cardPhase(project,tool,state,now)!=='question')throw new Error('This question has finished. Show the next unused question.');
- if(action==='turn'){if(state.turnAt!==null)throw new Error('The Player Turn timer has already started.');return {...state,turnAt:now};}
- if(action==='steal'){if(state.turnAt===null||now<state.turnAt+timerSeconds(project,tool)*1000)throw new Error('Wait for the Player Turn timer to finish.');if(state.stealAt!==null)throw new Error('The Steal timer has already started.');return {...state,stealAt:now};}
+ if(action==='turn'){if(!linkedTimer(project,tool))throw new Error('Connect an optional Player Turn timer first.');if(state.turnAt!==null)throw new Error('The Player Turn timer has already started.');return {...state,turnAt:now};}
+ if(action==='steal'){if(!linkedTimer(project,tool,true))throw new Error('Connect an optional Steal timer first.');if(linkedTimer(project,tool)&&(state.turnAt===null||now<state.turnAt+timerSeconds(project,tool)*1000))throw new Error('Wait for the Player Turn timer to finish.');if(state.stealAt!==null)throw new Error('The Steal timer has already started.');return {...state,stealAt:now};}
  throw new Error('Invalid card action.');
 }
 export function publicCardState(project:Project,tool:GameTool,state:CardState,now=Date.now()):CardState{
@@ -51,8 +50,7 @@ export function createCardSystem(project:Project,backgroundKey?:string,kind:'que
  const id='card-'+crypto.randomUUID();
  const design={backgroundKey:backgroundKey||'',fontFamily:'Arial, sans-serif',fontSize:48,textColor:'#ffffff',backgroundColor:'#101827',accentColor:'#20e8ff',borderRadius:18,alignment:'center',vertical:'center',padding:28,width:65,height:25,x:17.5,y:30,marginTop:6,marginBottom:6,marginLeft:5,marginRight:5,entrance:'fade',exit:'fade',entranceSeconds:.5,exitSeconds:.5,delaySeconds:0,outline:0,glow:0};
  const tool:GameTool={id,type:kind==='blank'?'blank-card':'question-card',name:kind==='blank'?'Blank Card':'Question Cards',enabled:true,inToolbox:true,inOverlayBuild:true,config:{questionCard:{...design,...(kind==='answer'?{backgroundKey:''}:{})},answerCard:{...design,backgroundKey:kind==='answer'?backgroundKey||'':backgroundKey||''}}};
- const controls:ProjectEvent[]=kind==='blank'?[]:[{id:id+'-show',label:'Show Question',action:'cards.show.'+id,detail:'Random unused question',toolIds:[id]},{id:id+'-turn',label:'Start Player Turn',action:'cards.turn.'+id,detail:'Start after reading',toolIds:[id]},{id:id+'-steal',label:'Start Steal',action:'cards.steal.'+id,detail:'Start the steal opportunity',toolIds:[id]}];
- const timers:GameTool[]=kind==='blank'?[]:[['turn','Player Turn',30,15],['steal','Steal',10,65]].map(([role,label,seconds,x])=>({id:id+'-'+role,type:'countdown',name:String(label),enabled:true,inToolbox:true,inOverlayBuild:true,config:{seconds,label,display:'numbers-bar',placement:{x,y:78,width:20,height:12},appearance:{fontSize:28,textColor:'#ffffff',backgroundColor:'#101827',accentColor:'#20e8ff',borderRadius:12}}}));
- if(kind!=='blank')tool.config={...tool.config,poolId:project.gameTools.find(t=>t.type==='trivia-list'&&t.enabled)?.id||'',turnTimerId:id+'-turn',stealTimerId:id+'-steal'};
- return {...project,gameTools:[...project.gameTools,tool,...timers],controls:[...project.controls,...controls]};
+ const controls:ProjectEvent[]=kind==='blank'?[]:[{id:id+'-show',label:'Show Question',action:'cards.show.'+id,detail:'Random unused question',toolIds:[id]},{id:id+'-reveal',label:'Reveal Answer',action:'cards.reveal.'+id,detail:'Show the matching answer when ready',toolIds:[id]}];
+ if(kind!=='blank')tool.config={...tool.config,poolId:project.gameTools.find(t=>t.type==='trivia-list'&&t.enabled)?.id||'',turnTimerId:'',stealTimerId:''};
+ return {...project,gameTools:[...project.gameTools,tool],controls:[...project.controls,...controls]};
 }

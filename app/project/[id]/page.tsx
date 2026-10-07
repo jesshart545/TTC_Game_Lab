@@ -932,7 +932,7 @@ export default function ProjectWorkspace() {
           <span>WORKSPACE CREATIONS</span>
           <p className="empty-note">Choose templates from Creation Tools above. Edit appearance and settings below, or customize them in chat, then add finished boards to the overlay and finished tools to the dashboard toolbox.</p>
           <div className="tool-config-list">
-            <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={()=>persist(createCardSystem(project))}>Create question and answer cards with two timers</button><button type="button" onClick={()=>persist(createCardSystem(project,undefined,"blank"))}>Create blank card</button></div>{(project.gameTools || []).map(tool => (
+            <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={()=>persist(createCardSystem(project))}>Create question and answer cards</button><button type="button" onClick={()=>persist(createCardSystem(project,undefined,"blank"))}>Create blank card</button></div>{(project.gameTools || []).map(tool => (
               <div className="tool-config" key={tool.id}>
                 <div>
                   <b>{tool.name}</b>
