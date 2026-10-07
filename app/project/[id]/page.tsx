@@ -30,6 +30,7 @@ import "./workflow.css";
 import CardListEditor from "../../../components/CardListEditor";
 import PickerHostPanel from "../../../components/PickerHostPanel";
 import AssetPoolManager from "../../../components/AssetPoolManager";
+import AssetThumbnail from "../../../components/AssetThumbnail";
 import { removeAssetFromPools, setPoolAssetMembership } from "../../../lib/asset-pools";
 import { removeLegacyCardTimers } from "../../../lib/control-connections";
 import {createCardList,savedListEntries} from "../../../lib/card-lists";
@@ -66,6 +67,8 @@ function isAudio(asset: ProjectAsset) {
 }
 
 function assetCategory(asset: ProjectAsset): "image" | "video" | "audio" | "other" {
+  const detected = mediaKind(asset);
+  if (detected !== "unknown") return detected;
   const type = asset.type.toLowerCase();
   const name = asset.name.toLowerCase();
   if (type.includes("image") || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i.test(name) || name.startsWith("image")) return "image";
@@ -74,9 +77,6 @@ function assetCategory(asset: ProjectAsset): "image" | "video" | "audio" | "othe
   return "other";
 }
 
-function assetIcon(category: ReturnType<typeof assetCategory>) {
-  return category === "image" ? "▣" : category === "video" ? "▶" : category === "audio" ? "♫" : "▤";
-}
 
 function assetEditStyle(asset: ProjectAsset) {
   const e=asset.edits||{};
@@ -1090,7 +1090,7 @@ export default function ProjectWorkspace() {
             {visibleAssets.map(asset => {
               const key=asset.storageKey||asset.name,kind=assetCategory(asset),selected=key===selectedAssetKey;
               return <button type="button" key={key} className={`workshop-asset-tile${selected?" selected":""}`} aria-pressed={selected} aria-label={`Select ${asset.name}, ${kind}`} onClick={()=>setSelectedAssetKey(key)}>
-                <span className="workshop-asset-preview">{kind==="image"&&asset.url?<img src={asset.url} alt="" />:<span aria-hidden="true">{assetIcon(kind)}</span>}</span>
+                <AssetThumbnail key={asset.url||key} asset={asset} kind={kind}/>
                 <span className="workshop-asset-name">{asset.name}</span><small>{kind==="audio"?"Audio":kind==="other"?asset.type:kind[0].toUpperCase()+kind.slice(1)}</small>
               </button>;
             })}
