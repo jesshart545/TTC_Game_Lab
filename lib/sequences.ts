@@ -8,7 +8,9 @@ export function sequenceControls(project:Project,control:ProjectEvent){
   if(step.kind!=='control'||!target||target.id===control.id||target.buttonMode==='chain'||target.action==='sequence')throw new Error('Choose an existing single-action button for each sequence step.');
   const seconds=step.timing.mode==='delay'?Number(step.timing.seconds||0):0;
   if(!Number.isFinite(seconds)||seconds<0||seconds>300||(total+=seconds)>300)throw new Error('Keep the complete sequence within five minutes.');
-  return {control:target,delayMs:seconds*1000};
+  let action=target;
+  if(step.cardAction){const match=target.action.match(/^cards\.(?:toggle|show|draw|reveal|clear)\.(.+)$/);if(!match||!['clear','reveal'].includes(step.cardAction))throw new Error('Choose a card control for this sequence action.');action={...target,action:`cards.${step.cardAction}.${match[1]}`,label:step.label};}
+  return {control:action,delayMs:seconds*1000};
  });
 }
 export async function runSequence(project:Project,control:ProjectEvent,execute:(control:ProjectEvent)=>Promise<void>,signal:AbortSignal){

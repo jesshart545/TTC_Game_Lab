@@ -1,5 +1,9 @@
 import type {GameTool,Project} from './project';
 export type ListCard={id:string;text:string;assetKey?:string;sourceUrl?:string;sourceTitle?:string;design:Record<string,unknown>};
+export function savedListEntries(tool:GameTool|undefined):ListCard[]{
+ const raw=tool?.config.entries;if(!Array.isArray(raw))return [];
+ return raw.filter((e):e is ListCard=>!!e&&typeof e==='object'&&typeof e.text==='string'&&!!e.text.trim()).map((e,i)=>({...e,id:e.id||'entry-'+i,design:{}}));
+}
 export function listCards(tool:GameTool|undefined):ListCard[]{
  const raw=tool?.config.cards;if(!Array.isArray(raw))return [];
  return raw.filter((c):c is ListCard=>!!c&&typeof c==='object'&&typeof c.id==='string'&&typeof c.text==='string'&&!!c.text.trim()).map(c=>({...c,design:c.design&&typeof c.design==='object'?c.design:{}}));

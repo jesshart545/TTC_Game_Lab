@@ -9,6 +9,10 @@ assert.throws(()=>sequenceControls(result.project,{...sequence,chain:[{kind:'con
 assert.throws(()=>sequenceControls(result.project,{...sequence,chain:[{kind:'control',refId:'hide',timing:{mode:'delay',seconds:301}}]}),/five minutes/);
 const sourced=applyBuildChanges(p,{newTools:[{type:'card-list',name:'Researched cards',config:{cards:[{text:'Supported fact',sourceUrl:'https://example.com/source',sourceTitle:'Source'}]}}]});
 assert(sourced.project.gameTools[0].config.cards[0].id);assert.equal(sourced.project.gameTools[0].config.cards[0].sourceUrl,'https://example.com/source');
+const linked=applyBuildChanges(p,{sequences:[{name:'Connect show and hide',steps:[{kind:'asset',refId:'a',operation:'show'},{kind:'asset',refId:'a',operation:'hide',delaySeconds:1}]}]});
+assert.equal(linked.warnings.length,0);
+const linkedSteps=sequenceControls(linked.project,linked.project.controls.find(c=>c.action==='sequence'));
+assert.equal(linkedSteps[0].control.action,'asset.show.a');assert.match(linkedSteps[1].control.action,/^result.hide./);
 (async()=>{
  const order=[],controller=new AbortController();await runSequence(result.project,sequence,async c=>{order.push(c.id);},controller.signal);assert.deepEqual(order,['show','hide']);
  const stopped=[],abort=new AbortController();await runSequence(result.project,sequence,async c=>{stopped.push(c.id);abort.abort();},abort.signal);assert.deepEqual(stopped,['show']);

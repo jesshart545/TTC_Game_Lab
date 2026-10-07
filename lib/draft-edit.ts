@@ -50,6 +50,11 @@ export function applyDraftChanges(project: Project, input: unknown) {
     if (name) { tool.name = name; applied++; }
     for(const key of ['inToolbox','inOverlayBuild','enabled'] as const)if(typeof edit[key]==='boolean'){tool[key]=edit[key] as boolean;applied++;}
     const config = object(edit.config);
+    if(tool.type==='card-list'&&Array.isArray(config.entries))config.entries=config.entries.filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).slice(0,500).map((e:any)=>({...e,id:e.id||crypto.randomUUID(),text:e.text.slice(0,20000)}));
+    if(tool.type==='card-list'&&config.makeCardsFromEntries===true){
+      const entries=Array.isArray(config.entries)?config.entries:Array.isArray(tool.config.entries)?tool.config.entries:[];
+      config.cards=entries.map((e:any)=>({...e,id:crypto.randomUUID(),design:{}}));delete config.makeCardsFromEntries;
+    }
     if(tool.type==='card-list'&&Array.isArray(config.cards)){
       const previous=Array.isArray(tool.config.cards)?tool.config.cards:[],seen=new Set<string>();
       config.cards=config.cards.filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,500).map((raw:any)=>{
