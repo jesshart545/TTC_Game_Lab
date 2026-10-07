@@ -26,6 +26,9 @@ import { applyDraftChanges } from "../../../lib/draft-edit";
 import "./workflow.css";
 import CardListEditor from "../../../components/CardListEditor";
 import PickerHostPanel from "../../../components/PickerHostPanel";
+import AssetPoolManager from "../../../components/AssetPoolManager";
+import { removeAssetFromPools, setPoolAssetMembership } from "../../../lib/asset-pools";
+import { removeLegacyCardTimers } from "../../../lib/control-connections";
 import {createCardList} from "../../../lib/card-lists";
 import GameToolEditor, { overlayToolPlacement } from "../../../components/GameToolEditor";
 import RuntimeActionLayers, { useRuntimeActions } from "../../../components/RuntimeActionLayers";
@@ -182,7 +185,7 @@ export default function ProjectWorkspace() {
         hydrated = found;
       }
       if (cancelled) return;
-      setProject({ ...hydrated, gameTools: (hydrated.gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) });
+      setProject(removeLegacyCardTimers({ ...hydrated, gameTools: (hydrated.gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) }));
       setWorkflowStep(Math.max(0, Math.min(2, found.workflow?.stage ?? 0)));
       setWorkshopStep(Math.max(0, Math.min(2, found.workflow?.workshopStep ?? 0)));
       setDraft(found.workflow?.promptDraft || "");
@@ -484,7 +487,8 @@ export default function ProjectWorkspace() {
       asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
     );
     if (index < 0) return;
-    const next = { ...current, assets: current.assets.filter((_, i) => i !== index), updatedAt: "just now" };
+    const assetKey = asset.storageKey || asset.name;
+    const next = { ...current, assets: current.assets.filter((_, i) => i !== index), assetPools: removeAssetFromPools(current.assetPools || [], assetKey), updatedAt: "just now" };
     try {
       await saveProjectToServer(next);
       if (asset.storageKey) await deleteStoredAsset(asset.storageKey);
@@ -718,10 +722,16 @@ export default function ProjectWorkspace() {
     const cropStyle = asset.edits?.crop && asset.edits.crop !== "original"
       ? { aspectRatio: asset.edits.crop === "square" ? "1 / 1" : asset.edits.crop === "portrait" ? "9 / 16" : "16 / 9" }
       : undefined;
-    if (isImage(asset)) return <div className="editable-media-preview" style={cropStyle}><img src={asset.url} alt={asset.name} className="asset-thumb" style={{ objectFit: asset.edits?.crop === "original" ? "contain" : "cover" }} /><button type="button" className="media-edit-btn" onClick={() => setEditingAssetIndex(index)}>Edit / Crop</button></div>;
+    if (isImage(asset)) return <button type="button" className="asset-thumbnail-button" aria-label={`Edit or crop ${asset.name}`} onClick={() => setEditingAssetIndex(index)}><img src={asset.url} alt="" className="asset-thumb" style={{ objectFit: asset.edits?.crop === "original" ? "contain" : "cover" }} /><span>Edit image</span></button>;
     if (isVideo(asset)) return <div className="editable-media-preview" style={cropStyle}><video src={asset.url} className="asset-thumb" controls preload="metadata" /><button type="button" className="media-edit-btn" onClick={() => setEditingAssetIndex(index)}>Edit / Crop / Trim</button></div>;
     if (isAudio(asset)) return <audio src={asset.url} controls />;
     return null;
+  }
+
+  function toggleAssetPoolMembership(poolId: string, asset: ProjectAsset, checked: boolean) {
+    if (!project) return;
+    const assetKey = asset.storageKey || asset.name;
+    persist({ ...project, assetPools: setPoolAssetMembership(project.assetPools || [], poolId, assetKey, checked), updatedAt: "just now" });
   }
 
   async function sendMessage(e: FormEvent) {
@@ -1030,7 +1040,8 @@ export default function ProjectWorkspace() {
         </div>
         <div className="detail-block">
           <span>ASSETS</span>
-          <p className="empty-note">Choose where each asset belongs. Backgrounds fill the scene; image layers sit over them. Edits stay in the draft until you publish.</p>
+          <p className="empty-note">Organize saved images, video, voice, music, and sound effects into groups. Click an image thumbnail to edit it.</p>
+          <AssetPoolManager assets={project.assets} pools={project.assetPools || []} onChange={assetPools => persist({ ...project, assetPools, updatedAt: "just now" })} />
           {project.assets.map((a, index) => (
             <div className="asset-card" key={(a.storageKey || a.name) + index}>
               <div className="asset-card-title">
@@ -1041,6 +1052,7 @@ export default function ProjectWorkspace() {
                 <button type="button" className="danger-btn asset-delete-btn" onClick={() => handleDeleteAsset(a)}>Delete</button>
               </div>
               {renderAsset(a, index)}
+              <details className="asset-pool-assignment"><summary>Assign to pools</summary>{(project.assetPools || []).length ? (project.assetPools || []).map(pool => <label key={pool.id}><input type="checkbox" checked={pool.assetKeys.includes(a.storageKey || a.name)} onChange={event => toggleAssetPoolMembership(pool.id, a, event.target.checked)} />{pool.name}</label>) : <p>Create a pool above to organize this asset.</p>}</details>
               {(isImage(a)||isVideo(a))&&<BackgroundDestination project={project} asset={a} onChange={persist}/>} {(isImage(a) || isVideo(a)) && <div className="asset-placement-actions"><button type="button" className="outline-btn" onClick={() => placeSceneImage(index, "background")}>{a.inProject && a.role === "background" ? "Current Background" : "Use as Background"}</button><button type="button" className="outline-btn" onClick={() => placeSceneImage(index, "layer")}>{a.inProject && a.role === "layer" ? "Image Layer Added" : "Add as Image Layer"}</button><small>Place this creation in the draft overlay, then test it.</small>{a.inProject && a.role!=="background" && <button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(a.storageKey||a.name);setSideBySideTesting(true);}}>Position / resize in draft overlay</button>}{isVideo(a) && <><label>Loop<input type="checkbox" checked={a.edits?.loop??true} onChange={e=>persist({...project,assets:project.assets.map((item,i)=>i===index?{...item,edits:{...item.edits,loop:e.target.checked}}:item)})}/></label><label>Sound<input type="checkbox" checked={a.edits?.sound??false} onChange={e=>persist({...project,assets:project.assets.map((item,i)=>i===index?{...item,edits:{...item.edits,sound:e.target.checked}}:item)})}/></label><label>Volume<input type="range" min="0" max="100" value={a.edits?.volume??80} onChange={e=>persist({...project,assets:project.assets.map((item,i)=>i===index?{...item,edits:{...item.edits,volume:+e.target.value}}:item)})}/></label></>}</div>}
               <button type="button" className={a.inProject ? "outline-btn asset-project-btn build-only active" : "outline-btn asset-project-btn build-only"} onClick={() => toggleAssetInProject(index)}>{a.inProject ? "✓ Added to Project" : "+ Add to Project"}</button>{(isImage(a)||isVideo(a)) && (project.gameTools || []).some(tool => tool.type === "blank-board" && tool.enabled) && <button type="button" className="outline-btn asset-project-btn build-only" onClick={() => useImageAsBlankBoardBackground(index)}>▣ Use as Board Background</button>}
             </div>

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import type { GameTool, Project } from '../lib/project';
-import { bounded, cardDesign, cardPhase, linkedTimer, timerSeconds, type CardState } from '../lib/question-cards';
+import { bounded, cardDesign, cardPhase, type CardState } from '../lib/question-cards';
 import './question-cards.css';
 export function useCardClock(){const [now,setNow]=useState(Date.now());useEffect(()=>{const t=setInterval(()=>setNow(Date.now()),100);return()=>clearInterval(t);},[]);return now;}
 export function FittedCard({project,tool,text,answer=false,phase='question',shownAt=Date.now()}: {project:Project;tool:GameTool;text:string;answer?:boolean;phase?:string;shownAt?:number}){
@@ -44,7 +44,7 @@ export function StyledTimer({tool,remaining,total}:{tool:GameTool;remaining:numb
  </section>;
 }
 export default function QuestionCards({project,states}:{project:Project;states:Record<string,CardState>}){
- const now=useCardClock();return <>{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'||t.type==='random-picker')).map(tool=>{const state=states[tool.id];if(!state)return null;const phase=cardPhase(project,tool,state,now);if(phase==='hidden')return null;const answer=phase==='answer',turn=linkedTimer(project,tool),steal=linkedTimer(project,tool,true);
- return <div key={tool.id} style={{position:'absolute',inset:0,pointerEvents:'none'}}><FittedCard key={state.shownAt+'-'+phase} project={project} tool={tool.type==='random-picker'?{...tool,config:{...tool.config,questionCard:state.selectedDesign||{}}}:tool} text={state.blankText||String(answer?state.question?.answer:state.question?.question)} answer={answer} phase={phase} shownAt={state.shownAt}/>{!answer&&tool.type==='question-card'&&<>{turn&&<StyledTimer tool={turn} total={timerSeconds(project,tool)} remaining={state.turnAt===null?timerSeconds(project,tool):Math.max(0,timerSeconds(project,tool)-(now-state.turnAt)/1000)}/>} {steal&&<StyledTimer tool={steal} total={timerSeconds(project,tool,true)} remaining={state.stealAt===null?timerSeconds(project,tool,true):Math.max(0,timerSeconds(project,tool,true)-(now-state.stealAt)/1000)}/>}</>}</div>;
+ const now=useCardClock();return <>{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&(t.type==='question-card'||t.type==='blank-card'||t.type==='random-picker')).map(tool=>{const state=states[tool.id];if(!state)return null;const phase=cardPhase(project,tool,state,now);if(phase==='hidden')return null;const answer=phase==='answer';
+ return <div key={tool.id} style={{position:'absolute',inset:0,pointerEvents:'none'}}><FittedCard key={state.shownAt+'-'+phase} project={project} tool={tool.type==='random-picker'?{...tool,config:{...tool.config,questionCard:state.selectedDesign||{}}}:tool} text={state.blankText||String(answer?state.question?.answer:state.question?.question)} answer={answer} phase={phase} shownAt={state.shownAt}/></div>;
  })}</>;
 }

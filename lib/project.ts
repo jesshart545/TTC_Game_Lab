@@ -32,6 +32,7 @@ export type ProjectAssetEdits = {
   offsetY?: number;
 };
 export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio" };
+export type AssetPool = { id: string; name: string; assetKeys: string[] };
 export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
 export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
 export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string; inProject?:boolean };
@@ -50,6 +51,7 @@ export type Project = {
   messages: { role: "user" | "assistant"; text: string }[];
   controls: ProjectEvent[];
   assets: ProjectAsset[];
+  assetPools?: AssetPool[];
   compositions?: AssetComposition[];
   overlay: { title: string; subtitle: string; showChat: boolean; showAlerts: boolean; showCharacter: boolean };
   wheel: GameWheel;

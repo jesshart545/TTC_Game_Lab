@@ -1,6 +1,16 @@
 import type { Project, ProjectEvent } from './project';
 import { cardControl } from './question-cards';
 
+export function removeLegacyCardTimers(project: Project): Project {
+  const cardIds = new Set(project.gameTools.filter(tool => tool.type === 'question-card').map(tool => tool.id));
+  const controls = project.controls.filter(control => ![...cardIds].some(id => control.action === `cards.turn.${id}` || control.action === `cards.steal.${id}`));
+  const gameTools = project.gameTools.map(tool => tool.type !== 'question-card' ? tool : {
+    ...tool,
+    config: Object.fromEntries(Object.entries(tool.config).filter(([key]) => key !== 'turnTimerId' && key !== 'stealTimerId')),
+  });
+  return { ...project, controls, gameTools };
+}
+
 export function controlConnectionError(project: Project, control: ProjectEvent): string | null {
   if (!control.action?.trim() && !control.toolIds?.length && !control.compositionId && !(control.buttonMode === 'chain' && control.chain?.length)) {
     return 'Choose an action for this dashboard button in Build Space before using it.';
@@ -34,9 +44,11 @@ export function connectQuestionCard(project: Project, toolId: string): Project {
   const tool = project.gameTools.find(t => t.id === toolId && t.type === 'question-card' && t.enabled);
   if (!tool) return project;
   // Repair legacy generic buttons without changing their labels or appearance.
-  const controls = project.controls.map(c => c.action === `tool.${toolId}` ? assignControlAction(project, c, `cards.show.${toolId}`) : c);
+  const controls = project.controls
+    .filter(c => c.action !== `cards.turn.${toolId}` && c.action !== `cards.steal.${toolId}`)
+    .map(c => c.action === `tool.${toolId}` ? assignControlAction(project, c, `cards.show.${toolId}`) : c);
   for (const [action, label] of [['show', 'Show Question'], ['reveal', 'Reveal Answer']]) {
     if (!controls.some(c => c.action === `cards.${action}.${toolId}`)) controls.push({id: crypto.randomUUID(), label: `${label}: ${tool.name}`, action: `cards.${action}.${toolId}`, detail: `${label}: ${tool.name}`, toolIds: [toolId]});
   }
-  return {...project, controls, gameTools: project.gameTools.map(t => t.id === toolId ? {...t, inToolbox: true, inOverlayBuild: true} : t)};
+  return {...project, controls, gameTools: project.gameTools.map(t => t.id === toolId ? {...t, config: Object.fromEntries(Object.entries(t.config).filter(([key]) => key !== 'turnTimerId' && key !== 'stealTimerId')), inToolbox: true, inOverlayBuild: true} : t)};
 }

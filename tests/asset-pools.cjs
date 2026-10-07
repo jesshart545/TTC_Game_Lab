@@ -1,0 +1,12 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript');
+const output=ts.transpileModule(fs.readFileSync('lib/asset-pools.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const exported={};vm.runInNewContext(output,{exports:exported,require:()=>({})});
+const {setPoolAssetMembership,removeAssetFromPools}=exported;
+const pools=[{id:'one',name:'Prize images',assetKeys:[]},{id:'two',name:'Characters',assetKeys:[]}];
+let next=setPoolAssetMembership(pools,'one','asset-a',true);
+next=setPoolAssetMembership(next,'one','asset-a',true);
+assert.deepEqual(Array.from(next[0].assetKeys),['asset-a']);assert.deepEqual(Array.from(next[1].assetKeys),[]);
+next=setPoolAssetMembership(next,'two','asset-a',true);assert.deepEqual(Array.from(next[1].assetKeys),['asset-a']);
+next=setPoolAssetMembership(next,'one','asset-a',false);assert.deepEqual(Array.from(next[0].assetKeys),[]);assert.deepEqual(Array.from(next[1].assetKeys),['asset-a']);
+next=removeAssetFromPools(next,'asset-a');assert.deepEqual(Array.from(next[0].assetKeys),[]);assert.deepEqual(Array.from(next[1].assetKeys),[]);
+console.log('PASS: images can belong to separate named pools, duplicate selection is prevented, removal from one pool preserves other memberships, and deleting an image clears it from every pool.');
