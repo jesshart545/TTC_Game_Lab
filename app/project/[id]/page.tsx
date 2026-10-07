@@ -30,8 +30,9 @@ import "./workflow.css";
 import CardListEditor from "../../../components/CardListEditor";
 import PickerHostPanel from "../../../components/PickerHostPanel";
 import AssetPoolManager from "../../../components/AssetPoolManager";
+import AssetPoolAssignment from "../../../components/AssetPoolAssignment";
 import AssetThumbnail from "../../../components/AssetThumbnail";
-import { removeAssetFromPools, setPoolAssetMembership } from "../../../lib/asset-pools";
+import { removeAssetFromPools } from "../../../lib/asset-pools";
 import { removeLegacyCardTimers } from "../../../lib/control-connections";
 import {createCardList,savedListEntries} from "../../../lib/card-lists";
 import GameToolEditor, { overlayToolPlacement } from "../../../components/GameToolEditor";
@@ -476,6 +477,7 @@ export default function ProjectWorkspace() {
       ...next,
       assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset),
     };
+    projectRef.current = next;
     setProject(next);
     saveQueue.current = saveQueue.current.then(() => saveProjectToServer(storedNext)).then(() => { setSaveStatus("Changes saved."); }).catch(error => { setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
   }
@@ -744,10 +746,9 @@ export default function ProjectWorkspace() {
     setAssetStatus(file.name + " saved as a new permanent asset.");
   }
 
-  function toggleAssetPoolMembership(poolId: string, asset: ProjectAsset, checked: boolean) {
-    if (!project) return;
-    const assetKey = asset.storageKey || asset.name;
-    persist({ ...project, assetPools: setPoolAssetMembership(project.assetPools || [], poolId, assetKey, checked), updatedAt: "just now" });
+  function saveAssetPools(assetPools: NonNullable<Project["assetPools"]>) {
+    const current = projectRef.current || project;
+    if (current) persist({ ...current, assetPools, updatedAt: "just now" });
   }
 
   async function sendMessage(e: FormEvent) {
@@ -1081,7 +1082,7 @@ export default function ProjectWorkspace() {
         <div className="detail-block" id="workshop-assets">
           <h3>Images, videos &amp; asset pools</h3>
           <p className="asset-library-help">Select an asset to edit it, place it on the overlay, or add it to a pool.</p>
-          <AssetPoolManager pools={project.assetPools || []} onChange={assetPools => persist({ ...project, assetPools, updatedAt: "just now" })} />
+          <AssetPoolManager pools={project.assetPools || []} assets={project.assets} onChange={saveAssetPools} saveStatus={saveStatus} />
           <div className="workshop-assets-toolbar">
             <label className="workshop-assets-search">Find an asset<input type="search" value={assetSearch} onChange={event => setAssetSearch(event.target.value)} placeholder="Search by name" /></label>
             <label className="workshop-assets-filter">Show<select value={assetKindFilter} onChange={event => setAssetKindFilter(event.target.value as typeof assetKindFilter)}><option value="all">All media</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="other">Other files</option></select></label>
@@ -1103,7 +1104,7 @@ export default function ProjectWorkspace() {
               {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
               {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);}}>Position and size on overlay</button>}
             </div>
-            <fieldset className="asset-detail-pools"><legend>Organize in pools</legend>{(project.assetPools||[]).length?(project.assetPools||[]).map(pool=><label key={pool.id}><input type="checkbox" checked={pool.assetKeys.includes(selectedAsset.storageKey||selectedAsset.name)} onChange={event=>toggleAssetPoolMembership(pool.id,selectedAsset,event.target.checked)} />{pool.name}</label>):<p>Create a pool above, then select it here.</p>}</fieldset>
+            <AssetPoolAssignment key={selectedAsset.storageKey||selectedAsset.name} asset={selectedAsset} pools={project.assetPools||[]} onChange={saveAssetPools}/>
             {(isVideo(selectedAsset)||isAudio(selectedAsset))&&<details className="asset-playback-options"><summary>Playback options</summary><label>Repeat this media<input type="checkbox" checked={selectedAsset.edits?.loop??isVideo(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,loop:event.target.checked}}:asset)})}/></label><label>Play sound<input type="checkbox" checked={selectedAsset.edits?.sound??isAudio(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,sound:event.target.checked}}:asset)})}/></label><label>Volume <span>{selectedAsset.edits?.volume??80}%</span><input type="range" min="0" max="100" value={selectedAsset.edits?.volume??80} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,volume:+event.target.value}}:asset)})}/></label></details>}
             {(isImage(selectedAsset)||isVideo(selectedAsset))&&<details className="asset-more-options"><summary>Other ways to use this</summary><BackgroundDestination project={project} asset={selectedAsset} onChange={persist}/>{(project.gameTools||[]).some(tool=>tool.type==="blank-board"&&tool.enabled)&&<button type="button" className="outline-btn" onClick={()=>useImageAsBlankBoardBackground(selectedAssetIndex)}>Use as board background</button>}</details>}
             <button type="button" className="danger-btn asset-detail-delete" onClick={()=>handleDeleteAsset(selectedAsset)}>Delete asset</button>
