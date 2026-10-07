@@ -19,3 +19,8 @@ assert.equal(listCards(created.gameTools[0]).length,1);assert.equal(savedListEnt
 assert.equal(listCards(created.gameTools[0])[0].sourceUrl,evidence[0].url);
 assert.equal(listCards(saved.gameTools[0]).length,0);
 console.log('PASS: saving research creates only pool entries; a later explicit choice creates cards and retains sources.');
+
+const replacement={newTools:[{type:'card-list',name:'Instrument Facts',config:{entries:[{text:evidence[0].summary,sourceUrl:evidence[0].url,sourceQuote:evidence[0].summary}]}}]};
+groundedResearchCards(replacement,evidence,[{id:'saved-pool',type:'card-list',name:'Instrument Facts'}],'Replace the existing Instrument Facts pool');
+assert.equal(replacement.newTools.length,0);assert.equal(replacement.gameTools[0].id,'saved-pool');assert.equal(replacement.gameTools[0].config.cards.length,0);
+console.log('PASS: an explicit pool replacement updates its saved ID rather than creating a duplicate.');

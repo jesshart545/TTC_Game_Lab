@@ -14,5 +14,15 @@ export function groundedResearchCards(changes:Record<string,any>,evidence:unknow
   });
   pool.config.cards=[];
  }
+ // A requested replacement must update the saved pool, even if the model
+ // describes its researched content as a new tool.
+ if(typeof request==='string'&&/\b(replace|update|refresh)\b/i.test(request)&&Array.isArray(changes.newTools)){
+  changes.newTools=changes.newTools.filter((tool:any)=>{
+   const existing=existingTools.filter(e=>e.type==='card-list'&&typeof tool.name==='string'&&String(e.name).toLowerCase()===tool.name.toLowerCase()&&request.toLowerCase().includes(tool.name.toLowerCase()));
+   if(tool.type!=='card-list'||!existing.length)return true;
+   if(existing.length>1)throw Error('More than one saved pool has that name. Choose which pool to update.');
+   changes.gameTools=[...(Array.isArray(changes.gameTools)?changes.gameTools:[]).filter((e:any)=>e.id!==existing[0].id),{id:existing[0].id,config:tool.config}];return false;
+  });
+ }
  return changes;
 }
