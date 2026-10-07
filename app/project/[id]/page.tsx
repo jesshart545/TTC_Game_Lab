@@ -121,6 +121,14 @@ export default function ProjectWorkspace() {
   const [triviaListCount, setTriviaListCount] = useState(25);
   const [triviaListQuestions, setTriviaListQuestions] = useState<any[]>([]);
   const [triviaListBusy, setTriviaListBusy] = useState(false);
+  const [newCardEditorId,setNewCardEditorId]=useState("");
+  const newCardDialog=useRef<HTMLDialogElement>(null);
+  useEffect(()=>{if(newCardEditorId&&newCardDialog.current&&!newCardDialog.current.open){newCardDialog.current.showModal();newCardDialog.current.querySelector<HTMLInputElement>('input')?.focus();}},[newCardEditorId]);
+  function createWorkshopCard(kind:'question'|'blank'){
+    const current=projectRef.current||project;if(!current)return;
+    try{const next=createCardSystem(current,undefined,kind);const card=next.gameTools[next.gameTools.length-1];persist(next);setNewCardEditorId(card.id);setAssetStatus(kind==='blank'?'Blank card created. Customize it in the editor.':'Question and answer cards created. Choose their question pool and customize their appearance.');}
+    catch(error){setAssetStatus(error instanceof Error?error.message:'Card creation failed. Please try again.');}
+  }
   const [showBoardTemplates, setShowBoardTemplates] = useState(false);
   const [showBoardGuide, setShowBoardGuide] = useState(false);
   const [guideBoardId, setGuideBoardId] = useState("");
@@ -932,7 +940,7 @@ export default function ProjectWorkspace() {
           <span>WORKSPACE CREATIONS</span>
           <p className="empty-note">Choose templates from Creation Tools above. Edit appearance and settings below, or customize them in chat, then add finished boards to the overlay and finished tools to the dashboard toolbox.</p>
           <div className="tool-config-list">
-            <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={()=>persist(createCardSystem(project))}>Create question and answer cards</button><button type="button" onClick={()=>persist(createCardSystem(project,undefined,"blank"))}>Create blank card</button></div>{(project.gameTools || []).map(tool => (
+            <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={()=>createWorkshopCard("question")}>Create question and answer cards</button><button type="button" onClick={()=>createWorkshopCard("blank")}>Create blank card</button></div>{(project.gameTools || []).map(tool => (
               <div className="tool-config" key={tool.id}>
                 <div>
                   <b>{tool.name}</b>
@@ -1035,6 +1043,7 @@ export default function ProjectWorkspace() {
     {showAssetComposer && <AssetComposer assets={project.assets} compositions={project.compositions || []} initial={editingComposition} onSave={saveComposition} onClose={() => setShowAssetComposer(false)} />}
     {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={saveAssetAsNew} />}
     {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}
+    {newCardEditorId&&project.gameTools.find(t=>t.id===newCardEditorId)&&<dialog ref={newCardDialog} className="card-creation-dialog" aria-label="Customize new card" onCancel={()=>setNewCardEditorId("")}><button type="button" className="outline-btn" onClick={()=>{newCardDialog.current?.close();setNewCardEditorId("");}}>Close card editor</button><p role="status">Card created. Customize it below, then save your changes.</p><QuestionCardEditor key={newCardEditorId} project={project} tool={project.gameTools.find(t=>t.id===newCardEditorId)!} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)});}}/></dialog>}
   </main>;
 }
 
