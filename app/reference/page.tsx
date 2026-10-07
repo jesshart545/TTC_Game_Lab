@@ -7,18 +7,23 @@ import "./reference.css";
 
 function PracticePreview({project}:{project:Project}) {
   const runtime=useRuntimeActions(project);
+  const [feedback,setFeedback]=useState("");
+  function fire(control:ProjectEvent) {
+    try { runtime.fire(control); setFeedback(""); }
+    catch(error) { setFeedback(error instanceof Error ? error.message : "Unable to run this control."); }
+  }
   const background=project.assets.find(a=>runtime.backgroundKey ? (a.storageKey || a.name)===runtime.backgroundKey : a.role==="background");
   const tools=project.gameTools.filter(tool=>tool.enabled && tool.inToolbox);
   function tryTool(id:string,name:string) {
     const control:ProjectEvent={id:"reference-"+id,label:name,detail:"Preview "+name,action:"tool."+id,toolIds:[id]};
-    runtime.fire(control);
+    fire(control);
   }
   return <div className="reference-workbench">
     <section aria-label="Practice controls" className="reference-controls">
-      <h2>Dashboard buttons</h2><p>Try the saved assignments.</p>
-      {project.controls.map(control=><button key={control.id} onClick={()=>runtime.fire(control)}>{control.label}<small>{control.toolIds?.map(id=>tools.find(t=>t.id===id)?.name).filter(Boolean).join(" + ") || control.detail}</small></button>)}
-      <h2>Toolbox</h2><p>Try each tool individually. Trigger trivia again to reveal its answer.</p>
-      {tools.map(tool=><button key={tool.id} onClick={()=>tryTool(tool.id,tool.name)}>{tool.name}<small>{tool.type.replaceAll("-"," ")}</small></button>)}
+      <p role="status">{feedback}</p><h2>Dashboard buttons</h2><p>Try the saved assignments.</p>
+      {project.controls.map(control=><button key={control.id} onClick={()=>fire(control)}>{control.label}<small>{control.toolIds?.map(id=>tools.find(t=>t.id===id)?.name).filter(Boolean).join(" + ") || control.detail}</small></button>)}
+      <h2>Toolbox</h2><p>Try each tool individually. The optional timer runs separately from the cards.</p>
+      {tools.filter(tool=>tool.type!=="question-card" && tool.type!=="blank-card").map(tool=><button key={tool.id} onClick={()=>tryTool(tool.id,tool.name)}>{tool.name}<small>{tool.type.replaceAll("-"," ")}</small></button>)}
     </section>
     <section className="reference-preview" aria-label="Audience practice preview">
       {background?.url && <img className="reference-background" src={background.url} alt={background.name}/>}
