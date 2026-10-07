@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       messages: draftEdit ? [{ role: "system", content: DRAFT_SYSTEM }, { role: "user", content: JSON.stringify({ request: body.request, recentConversation: body.history, project: body.project, selectedImageKey: body.selectedImageKey, workspaceStage: body.workspaceStage, selectedItem: body.selectedItem, searchEvidence: body.searchEvidence }) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
       ...(draftEdit ? { response_format: { type: "json_object" } } : {}),
       temperature: draftEdit ? .2 : .7,
+      ...(draftEdit ? {max_tokens:4096} : {}),
     }),
     });
     payload = await response.json().catch(() => ({}));
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
       const first = stripped.indexOf("{"), last = stripped.lastIndexOf("}");
       const clean = first >= 0 && last > first ? stripped.slice(first,last+1) : stripped;
       const parsed = JSON.parse(clean);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Return one JSON object, not a list or text.");
       if (!parsed.changes || typeof parsed.changes !== "object") parsed.changes = {};
       validateExplicitSettings(String(body.request||""),parsed);
       const raw = parsed.action;
@@ -82,14 +83,14 @@ export async function POST(request: Request) {
       if (Array.isArray(parsed.changes.gameTools) && parsed.changes.gameTools.some((tool:any)=>!body.project?.gameTools?.some((existing:any)=>existing.id===tool.id))) throw new Error("New tools must use the tool action");
       if(body.searchEvidence)parsed.changes=groundedResearchCards(parsed.changes,body.searchEvidence,body.project?.gameTools||[],String(body.request||''));
       const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
-      if (!reply && !action && !Object.keys(parsed.changes).length) throw new Error();
+      if (!reply && !action && !Object.keys(parsed.changes).length) throw new Error("Return the requested pool edit and a nonempty reply; the previous response contained neither.");
       return NextResponse.json({ configured: true, action, reply, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
     } catch(validationError) {
       if (attempt === 0) {
         try {
           const retry = await fetch("https://apihub.agnes-ai.com/v1/chat/completions", {
             method:"POST", headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},
-            body:JSON.stringify({model:lastModel,response_format:{type:"json_object"},temperature:0,messages:[
+            body:JSON.stringify({model:lastModel,response_format:{type:"json_object"},temperature:0,max_tokens:4096,messages:[
               {role:"system",content:DRAFT_SYSTEM},
               {role:"user",content:JSON.stringify({request:body.request,recentConversation:body.history,project:body.project,selectedImageKey:body.selectedImageKey,workspaceStage:body.workspaceStage,selectedItem:body.selectedItem,searchEvidence:body.searchEvidence})},
               {role:'assistant',content:String(message)},
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
           if(retry.ok){message=data?.choices?.[0]?.message?.content || "";continue;}
         } catch {}
       }
-      const reason=validationError instanceof Error&&validationError.message&&! (validationError instanceof SyntaxError)?validationError.message:'The assistant did not return a usable response.';
+      const reason=validationError instanceof Error&&validationError.message&&! (validationError instanceof SyntaxError)?validationError.message:'The assistant returned incomplete or invalid JSON.';
       console.warn('AI draft validation failed:',reason);
       return NextResponse.json({error:`I could not apply that request: ${reason} No changes were made.`},{status:502});
     }

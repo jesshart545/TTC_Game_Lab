@@ -758,7 +758,7 @@ export default function ProjectWorkspace() {
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
     setDraft(""); setBuilding(true);
     try {
-      const context = { ...updated, assets: updated.assets.map(({ url, ...asset }) => asset), publishedSnapshot: undefined };
+      const context = { ...updated, messages:undefined, assets: updated.assets.map(({ url, ...asset }) => asset), publishedSnapshot: undefined };
       const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, history: updated.messages.slice(-30), project: context, selectedImageKey: videoReferenceKey || null, workspaceStage: workflowStep===1?"build":"workshop", selectedItem:buildSelection }) });
       let data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI editing is unavailable right now.");
