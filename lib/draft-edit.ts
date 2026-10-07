@@ -18,6 +18,7 @@ export function applyDraftChanges(project: Project, input: unknown) {
     if (typeof edit.inProject === "boolean") { asset.inProject = edit.inProject; applied++; }
     if (["background", "layer", "video", "audio"].includes(String(edit.role))) { asset.role = edit.role as typeof asset.role; applied++; }
     const values = object(edit.edits);
+    if (["contain", "cover", "fill"].includes(String(values.fit))) { asset.edits = {...asset.edits, fit: values.fit as ProjectAssetEdits["fit"]}; applied++; }
     for(const key of ['loop','sound','flipX','flipY'] as const)if(typeof values[key]==='boolean'){asset.edits={...asset.edits,[key]:values[key] as boolean};applied++;}
     if(typeof values.volume==='number'){asset.edits={...asset.edits,volume:Math.max(0,Math.min(100,values.volume))};applied++;}
     const pos=object(values.placement);if(Object.keys(pos).length){const placement={x:5,y:20,width:40,height:40,...asset.edits?.placement};for(const key of ['x','y','width','height'] as const){const n=number(pos[key],key==='width'||key==='height'?1:0,key==='x'||key==='y'?99:100);if(n!==undefined)placement[key]=n;}placement.width=Math.min(placement.width,100-placement.x);placement.height=Math.min(placement.height,100-placement.y);asset.edits={...asset.edits,placement};applied++;}

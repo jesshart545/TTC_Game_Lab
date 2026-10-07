@@ -10,6 +10,7 @@ export type ChainTiming = { mode: "immediate" | "delay"; seconds?: number };
 export type ChainStep = { id: string; kind: "tool" | "asset" | "composition" | "animation" | "control"; refId: string; label: string; cardAction?: "clear" | "reveal"; timing: ChainTiming };
 export type ProjectEvent = { appearance?: {backgroundColor?:string;color?:string;fontFamily?:string;fontSize?:number;borderRadius?:number}; id: string; label: string; action: string; detail: string; compositionId?: string; overlayResult?: OverlayResult; buttonMode?: "single" | "chain"; toolIds?: string[]; chain?: ChainStep[] };
 export type ProjectAssetEdits = {
+  fit?: "contain" | "cover" | "fill";
   loop?: boolean;
   sound?: boolean;
   volume?: number;

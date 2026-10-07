@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ProjectAsset } from "../lib/project";
-export function overlayAssetStyle(asset: ProjectAsset): CSSProperties {
+export function overlayAssetStyle(asset: ProjectAsset, background=false): CSSProperties {
  const e=asset.edits || {}, placement=e.placement;
- return { ...(placement ? {position:"absolute",left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxWidth:"none",maxHeight:"none",right:"auto",bottom:"auto"} : {}), transform:`translate(${e.offsetX||0}px,${e.offsetY||0}px) scale(${e.zoom||1}) rotate(${e.rotation||0}deg) scaleX(${e.flipX?-1:1}) scaleY(${e.flipY?-1:1})`,opacity:e.opacity??1,filter:`brightness(${e.brightness??100}%) contrast(${e.contrast??100}%) saturate(${e.saturation??100}%) blur(${e.blur??0}px)` };
+ return { ...(background ? {position:"absolute",left:0,top:0,width:"100%",height:"100%",pointerEvents:"none"} : {}), objectFit:e.fit || (background?"cover":"contain"), ...(placement ? {position:"absolute",left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxWidth:"none",maxHeight:"none",right:"auto",bottom:"auto"} : {}), transform:`translate(${e.offsetX||0}px,${e.offsetY||0}px) scale(${e.zoom||1}) rotate(${e.rotation||0}deg) scaleX(${e.flipX?-1:1}) scaleY(${e.flipY?-1:1})`,opacity:e.opacity??1,filter:`brightness(${e.brightness??100}%) contrast(${e.contrast??100}%) saturate(${e.saturation??100}%) blur(${e.blur??0}px)` };
 }
 export default function OverlayAsset({asset,background=false,className}:{asset:ProjectAsset;background?:boolean;className?:string}) {
  const [blocked,setBlocked]=useState(false),[failed,setFailed]=useState(false);
@@ -15,7 +15,7 @@ export default function OverlayAsset({asset,background=false,className}:{asset:P
  const enable=()=>{void media.current?.play().then(()=>setBlocked(false)).catch(()=>setBlocked(true));};
  const notice=<>{blocked&&!failed&&<button type="button" onClick={enable} style={{position:'absolute',left:'35%',top:'85%',zIndex:60}}>Enable audio for {asset.name}</button>}{failed&&<p role="alert">Unable to load {asset.name}. Check this media in Workshop.</p>}</>;
 
- const style:CSSProperties={...overlayAssetStyle(asset),...(background?{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",pointerEvents:"none"}:{objectFit:"contain"})};
+ const style=overlayAssetStyle(asset,background);
  if(video)return <><video ref={media} aria-label={asset.name} src={asset.url} className={className} style={style} autoPlay playsInline loop={e.loop??background} muted={!(e.sound??true)} onError={()=>setFailed(true)}/>{notice}</>;
  if(audio)return <><audio ref={media} aria-label={asset.name} src={asset.url} autoPlay loop={e.loop??false} muted={!(e.sound??true)} onError={()=>setFailed(true)}/>{notice}</>;
  return <img src={asset.url} alt={asset.name} className={className} style={style}/>;
