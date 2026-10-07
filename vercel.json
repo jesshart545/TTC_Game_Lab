@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "frontend": {"root":".","framework":"nextjs","bindings":[{"type":"service","service":"search","format":"url","env":"SEARCH_INTERNAL_URL"}]},
+    "search": {"root":"search-service","runtime":"container","entrypoint":"Dockerfile.vercel"}
+  },
+  "rewrites": [{"source":"/(.*)","destination":{"service":"frontend"}}]
+}

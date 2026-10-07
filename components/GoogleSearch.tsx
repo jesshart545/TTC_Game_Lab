@@ -1,2 +1,32 @@
 "use client";
-export default function GoogleSearch(){return <section className="card-host" aria-label="Private Google search"><h3>Google Search</h3><form action="https://www.google.com/search" method="get" target="_blank" rel="noopener noreferrer"><label>Search the web<input name="q" required placeholder="Search for information during the game"/></label><button type="submit">Search Google</button></form><small>Regular Google results open in a separate tab. No API or search credits. The overlay is unchanged.</small></section>;}
+import { useRef, useState } from "react";
+import type { WebResult } from "../lib/web-search";
+
+export default function GoogleSearch({slug,hostKey}:{slug?:string;hostKey?:string}) {
+  const [query,setQuery]=useState("");
+  const [results,setResults]=useState<WebResult[]>([]);
+  const [searched,setSearched]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const active=useRef<AbortController|null>(null);
+  async function search(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();const q=query.trim();if(!q)return;
+    active.current?.abort();const controller=new AbortController();active.current=controller;
+    setBusy(true);setError("");
+    try {
+      const response=await fetch("/api/web-search",{method:"POST",headers:{"Content-Type":"application/json",...(hostKey?{"x-host-key":hostKey}:{})},body:JSON.stringify({q,slug}),signal:controller.signal});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||"Search is temporarily unavailable.");
+      if(active.current!==controller)return;
+      setResults(data.results);setSearched(q);
+      if(!data.results.length)setError("No results found. Try a different search.");
+    } catch(e) {if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Search is temporarily unavailable.");}
+    finally {if(active.current===controller)setBusy(false);}
+  }
+  return <section className="card-host" aria-label="Private web search"><h3>Web Search</h3>
+    <form onSubmit={search}><label>Search the web<input value={query} onChange={e=>setQuery(e.target.value)} required maxLength={200} placeholder="Search for information during the game"/></label><button type="submit" disabled={busy}>{busy?"Searching…":"Search"}</button></form>
+    <small>Results and summaries stay here. Open a website in a separate tab when needed. Search never appears on the overlay.</small>
+    {busy&&<p role="status">Searching the web…</p>}{error&&<p role="alert">{error}</p>}
+    {searched&&<div aria-label="Search results" style={{maxHeight:420,overflowY:"auto"}}><p>Results for “{searched}”</p>{results.map(result=><article key={result.url} style={{padding:"12px 0",borderBottom:"1px solid #334155"}}><a href={result.url} target="_blank" rel="noopener noreferrer">{result.title}</a><small style={{display:"block"}}>{new URL(result.url).hostname}</small><p>{result.summary}</p></article>)}</div>}
+    <small>Powered by <a href="https://github.com/searxng/searxng" target="_blank" rel="noopener noreferrer">SearXNG</a>.</small>
+  </section>;
+}
