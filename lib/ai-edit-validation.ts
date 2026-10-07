@@ -1,6 +1,10 @@
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
 // Catch omitted explicit settings before the application accepts a model edit.
 export function validateExplicitSettings(request:string,response:unknown){
+ const responseData=record(response),draftChanges=record(responseData.changes);
+ const sequenceRequest=/\bsequence\b|\b(?:button|action|function)[ -](?:string|chain)\b|\b(?:string|chain|link|combine|connect)\b[^.\n]{0,70}\b(?:buttons?|actions?|functions?)\b/i.test(request);
+ const promisedSequence=/\bI(?:'ll| will| have| am going to|’ll)\b[^.\n]{0,100}\b(?:set up|creat(?:e|ed)|add(?:ed)?|connect(?:ed)?|link(?:ed)?|build|built)\b/i.test(String(responseData.reply||''));
+ if(sequenceRequest&&promisedSequence&&!responseData.action&&!Object.keys(draftChanges).length&&!String(responseData.reply||'').includes('?'))throw new Error('Return the actual requested changes.sequences with connected steps, or ask for missing information. Do not promise a button without saved changes.');
  const r=record(response),changes=record(r.changes),tools=[...(Array.isArray(changes.newTools)?changes.newTools:[]),...(Array.isArray(changes.gameTools)?changes.gameTools:[]),...(r.action?.type==='tool'?[{config:r.action.config}]:[])];
  const controls=Array.isArray(changes.controls)?changes.controls:[],assets=Array.isArray(changes.assets)?changes.assets:[];
  if(!tools.length&&!controls.length&&!assets.length)return;

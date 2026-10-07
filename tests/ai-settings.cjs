@@ -7,3 +7,8 @@ assert.throws(()=>validateExplicitSettings('Set the background color to #abcdef'
 validateExplicitSettings('Place at x 960px, width 480px',{changes:{controls:[{overlayResult:{x:50,width:25}}]}});
 validateExplicitSettings('Write a short script about Georgia',{reply:'A script',changes:{}});
 console.log('PASS: AI responses missing explicit dimensions, fonts or colors are rejected for repair; pixel requests use the 1920x1080 canvas; writing remains available.');
+assert.throws(()=>validateExplicitSettings('String these buttons together',{reply:'I will set up the sequence button.',changes:{},action:null}),/actual requested/);
+assert.throws(()=>validateExplicitSettings('Set up a button string',{reply:'I am going to create that button.',changes:{},action:null}),/actual requested/);
+validateExplicitSettings('String these buttons together',{reply:'Which buttons should run, and in what order?',changes:{},action:null});
+validateExplicitSettings('String these buttons together',{reply:'I have created the sequence.',changes:{sequences:[{name:'Start round',steps:[{controlId:'show'}]}]},action:null});
+console.log('PASS: sequence promises without structured changes trigger repair; necessary clarification remains available.');
