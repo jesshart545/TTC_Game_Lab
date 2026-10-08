@@ -958,6 +958,7 @@ export default function ProjectWorkspace() {
     plan: openGamePlanEntry,
     materials: () => chooseWorkflowStep(0, 1),
     media: () => openWorkshopTool("media", true),
+    generate: () => openWorkshopTool("media"),
     tools: () => openWorkshopTool("tools"),
     scene: () => { setEditingComposition(undefined); setShowAssetComposer(true); },
     library: () => openSavedWorkshop(1),

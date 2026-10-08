@@ -11,6 +11,7 @@ assert.equal(task(blank, 1).nextActions[0].intent, 'media');
 const media = { ...blank, assets: [{ name: 'Backdrop', type: 'image/png', storageKey: 'local-backdrop' }] };
 assert.equal(task(media, 1).nextActions[0].intent, 'tools', 'A saved background must not trigger the same Create background recommendation again.');
 assert(task(media, 1).nextDescription.includes('1 media file'));
+assert.equal(task(media, 1).nextActions.find(action => action.label === 'Create more media').intent, 'generate', 'General media must not silently route to background creation.');
 const game = { ...media, gameTools: [{ id: 'coin', type: 'coin-toss', name: 'Coin toss', enabled: true, config: {} }] };
 assert.equal(task(game, 1).nextActions[0].intent, 'build');
 assert(task(game, 1).nextDescription.includes('1 game tool'));

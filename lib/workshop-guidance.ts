@@ -1,6 +1,6 @@
 import type { Project } from "./project";
 
-export type WorkshopIntent = "plan" | "materials" | "media" | "tools" | "scene" | "library" | "scenes" | "build";
+export type WorkshopIntent = "plan" | "materials" | "media" | "generate" | "tools" | "scene" | "library" | "scenes" | "build";
 export type WorkshopTask = {
   stage: string;
   firstTitle: string;
@@ -59,7 +59,7 @@ export function workshopGuidance(project: Project, section: number): WorkshopTas
     nextActions: [
       { label: intent === "build" ? "Continue to Build Space" : intent === "tools" ? "Choose a game tool" : "Create a background", intent },
       ...(intent !== "build" ? [{ label: "Continue to Build Space", intent: "build" as const }] : [{ label: "Review saved materials", intent: "library" as const }]),
-      ...(intent !== "tools" ? [{ label: "Choose a game tool", intent: "tools" as const }] : [{ label: "Create more media", intent: "media" as const }]),
+      ...(intent !== "tools" ? [{ label: "Choose a game tool", intent: "tools" as const }] : [{ label: "Create more media", intent: "generate" as const }]),
     ],
   };
 }
