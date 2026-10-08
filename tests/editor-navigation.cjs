@@ -94,6 +94,7 @@ async function click(text) {
 (async () => {
   try {
     await React.act(async () => root.render(React.createElement(Workspace)));
+    assert.equal(document.querySelector('.workshop-flow h1').textContent, 'Brainstorm & create');
     assert.equal(document.querySelectorAll('nav[aria-label="Project stages"] button').length, 3);
     assert.equal(byText('Save progress') != null, true);
     assert.equal(buttons().filter(button => button.textContent === 'Save progress').length, 1);
@@ -104,6 +105,8 @@ async function click(text) {
     for (const label of ['Create background artwork', 'Upload background image', 'Upload other assets', 'Generate media', 'Generate trivia', 'Create an interactive game board', 'Create game tools', 'Create list and cards', 'Organize assets & pools', 'Asset Composer']) assert(byText(label), `Preserve editing capability: ${label}`);
     savePreview('workshop');
     await click('2Build Space');
+    assert.equal(document.querySelector('.workshop-flow h1').textContent, 'Build & implement');
+    assert(document.querySelector('.workshop-next').textContent.includes('rehearse both together'));
     const tasks = document.querySelector('nav[aria-label="Build Space tasks"]');
     assert(tasks);
     assert.deepEqual([...tasks.querySelectorAll('button')].map(button => button.textContent), ['Background', 'Add items', 'Customize', 'Test', 'Review']);
@@ -112,6 +115,7 @@ async function click(text) {
     await click('Review');
     assert(document.querySelector('[aria-label="Game readiness"]'));
     await click('3Publish');
+    assert(document.querySelector('.workshop-next').textContent.includes('overlay and its controlling dashboard together'));
     assert(!document.querySelector('[aria-label="Build Space assembly"]'), 'Publish must not display the assembly editor beneath it.');
     assert(!document.querySelector('nav[aria-label="Build Space tasks"]'));
     assert(!byText('Final stage'), 'Do not show a non-actionable final-stage button.');
