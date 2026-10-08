@@ -17,20 +17,21 @@ export default function WorkflowEntryGuide({
   stage, started, firstTitle, firstDescription, firstAction,
   nextQuestion, nextDescription, nextActions, onShowFirst,
 }: Props) {
+  const primary = started ? nextActions[0] : firstAction;
   return <section className={`workflow-entry-guide${started ? " entry-started" : ""}`} aria-label={`${stage} getting started`} data-entry-phase={started ? "next" : "first"}>
     <div className="entry-guide-copy">
-      <span className="entry-guide-kicker">{started ? "WHAT NEXT?" : "START HERE"} <span aria-hidden="true">·</span> {stage}</span>
+      <span className="entry-guide-kicker">{started ? "CURRENT TASK" : "START HERE"} <span aria-hidden="true">·</span> {stage}</span>
       <h2>{started ? nextQuestion : firstTitle}</h2>
       <p>{started ? nextDescription : firstDescription}</p>
     </div>
-    {started ? <>
-      <div className="entry-guide-actions" role="group" aria-label="What next actions">
-        {nextActions.map((action, index) => <button type="button" key={action.label} className={index === 0 ? "build-btn" : "outline-btn"} onClick={action.onClick}>{action.label}</button>)}
-      </div>
-      <button type="button" className="entry-guide-replay" onClick={onShowFirst}>Show the first step</button>
-    </> : <div className="entry-guide-actions">
-      <button type="button" className="build-btn" onClick={firstAction.onClick}>{firstAction.label}</button>
-      <span className="entry-guide-note">Start with this one action. Follow-up choices appear afterward.</span>
-    </div>}
+    <div className="entry-guide-actions" role={started ? "group" : undefined} aria-label={started ? "What next actions" : undefined}>
+      {primary && <button type="button" className="build-btn" onClick={primary.onClick}>{primary.label}</button>}
+      {!started && <span className="entry-guide-note">This opens the work area; it does not complete the step.</span>}
+      {started && <details className="entry-guide-options" key={stage}>
+        <summary>Other options &amp; help</summary>
+        {nextActions.slice(1).map(action => <button type="button" key={action.label} className="outline-btn" onClick={action.onClick}>{action.label}</button>)}
+        <button type="button" className="entry-guide-replay" onClick={onShowFirst}>Show the first step</button>
+      </details>}
+    </div>
   </section>;
 }
