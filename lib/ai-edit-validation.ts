@@ -23,6 +23,10 @@ export function validateExplicitSettings(request:string,response:unknown){
   if(!placements.some(p=>Number.isFinite(p[field])&&Math.abs(p[field]-expected)<.1))throw new Error('Include the requested '+field+' '+match[1]+(match[2]||'%')+' in the saved placement.');
  }
  const appearances=[...tools.map(t=>record(t.config).appearance),...controls.map(c=>c.appearance),...tools.flatMap(t=>[record(t.config).questionCard,record(t.config).answerCard])].map(record);
+ if(/\b(?:transparent|no background|remove (?:the |its |my )?background)\b/i.test(request)&&!appearances.some(a=>a.transparentBackground===true||a.backgroundColor==='transparent'))throw new Error('Save the requested transparent background with appearance.transparentBackground true, preserving the tool content.');
+ if(/\b(?:no title|without (?:a |the )?title|hide (?:the |its |my )?title|remove (?:the |its |my )?title)\b/i.test(request)&&!appearances.some(a=>a.showTitle===false)&&!tools.some(t=>record(t.config).title===''||record(t.config).label===''))throw new Error('Save the requested hidden title with appearance.showTitle false; keep the tool name for organization.');
+ const shape=/\brounded rectangle\b/i.test(request)?'rounded':/\b(?:circle|circular)\b/i.test(request)?'circle':/\boval\b/i.test(request)?'oval':/\brectangle\b/i.test(request)?'rectangle':null;
+ if(shape&&!appearances.some(a=>a.shape===shape))throw new Error('Save the requested '+shape+' shape in appearance.shape.');
  const font=requestedFont(request)?.name;
  if(font&&!appearances.some(a=>a.fontFamily&&resolveFont(a.fontFamily)===resolveFont(font)))throw new Error('Include the requested '+font+' font in the saved appearance.');
  if(/\b(?:background|button)\b[^.\n]{0,50}\b(?:colou?r|purple|blue|red|green|black|white|pink)\b|\b(?:purple|blue|red|green|black|white|pink)\b[^.\n]{0,20}\bbackground\b/i.test(request)&&!appearances.some(a=>a.backgroundColor))throw new Error('Include the requested background color in the saved appearance.');

@@ -10,6 +10,9 @@ import {nextCoinPhase,type CoinPhase} from "../lib/coin-cycle";
 import {timerAction,timerTransition,type TimerState} from "../lib/timer-controls";
 import {coinOutcome} from "../lib/coin-toss";
 import {BoardSurface} from "./BoardDesigner";
+import {GameInfoOverlay} from './GameInfoTools';
+import {infoTypes} from '../lib/game-tools';
+import {toolShowsTitle,toolTitle} from '../lib/tool-style';
 import QuestionCards,{StyledTimer} from './QuestionCards';
 import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
@@ -163,7 +166,7 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
   if(tool.type==='countdown')return <StyledTimer tool={{...tool,config:{...tool.config,...(placement?{placement}: {})}}} remaining={run.id===0?Number(config.seconds)||10:remaining} total={Number(config.seconds)||10}/>;
   const revealResult = now - run.at >= 1800;
   return <section aria-label={tool.name} style={{ boxSizing:"border-box", position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto", ...overlayToolPlacement(tool), ...(placement?{left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxHeight:"none",zIndex:placement.layer}: {}) }}>
-    <ToolArtwork tool={tool} assets={assets}/><h3>{String(config.title || tool.name)}</h3>
+    <ToolArtwork tool={tool} assets={assets}/>{toolShowsTitle(tool)&&<h3>{toolTitle(tool)}</h3>}
     {tool.type === "wheel" && <WheelDisplay colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} entries={(Array.isArray(config.segments)?config.segments:[]).map(String)} result={run.result||""} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "random-picker" && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "coin-toss" && <CoinDisplay result={run.result} elapsed={now-run.at} preview={run.id===0} ready={run.coinPhase==='show'} faceColor={String(config.faceColor||"#ffd166")} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#382608")}/>}
@@ -174,11 +177,12 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
   </section>;
 }
 
-export function ControlAppearancePreview({control,project}:{control:ProjectEvent;project:Project}) {
+export function ControlAppearancePreview({control,project,state}:{control:ProjectEvent;project:Project;state?:CardState}) {
  const tool=project.gameTools.find(t=>control.toolIds?.includes(t.id)&&t.type!=="youtube");
  const asset=control.action.startsWith('asset.show.')?project.assets.find(a=>(a.storageKey||a.name)===control.action.slice(11)):undefined;
  if(asset){const r=control.overlayResult||defaultOverlayResult;return <div aria-label="Appearance preview only" style={{position:'absolute',left:r.x+'%',top:r.y+'%',width:r.width+'%',height:r.height+'%',pointerEvents:'none'}}>{mediaKind(asset)==='video'?<video src={asset.url} muted style={{width:'100%',height:'100%',objectFit:'contain'}}/>:mediaKind(asset)==='audio'?<p>{asset.name} · audio</p>:<img src={asset.url} alt={asset.name} style={{width:'100%',height:'100%',objectFit:'contain'}}/>}</div>;}
  if(!tool)return null;
+ if(infoTypes.includes(tool.type))return <GameInfoOverlay tool={tool} project={project} state={state||freshCardState()}/>;
  const questions=Array.isArray(tool.config.questions)?tool.config.questions:[];
  const run:Run={id:0,at:Date.now(),control,tool,question:questions[0],reveal:false,result:String((Array.isArray(tool.config.items)?tool.config.items[0]:null)||"Preview")};
  return <div style={{position:"absolute",inset:0,pointerEvents:"none"}}><ToolRun run={run} assets={project.assets} index={0} count={1} live={false} slug={project.slug}/></div>;

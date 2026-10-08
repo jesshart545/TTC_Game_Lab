@@ -11,7 +11,7 @@ export function BoardArtwork({tool,project}:{tool:GameTool;project:Pick<Project,
  const appearance=(tool.config.appearance||{}) as Record<string,unknown>;
  const asset=project.assets.find(a=>(a.storageKey||a.name)===(tool.config.backgroundAssetKey||appearance.imageKey));
  const motion=['pulse','float'].includes(String(tool.config.backgroundMotion))?String(tool.config.backgroundMotion):'none';
- return <div className={'board-artwork board-motion-'+motion} style={{background:String(appearance.backgroundColor||'#101827')}}>{asset?.url&&(mediaKind(asset)==='video'?<video aria-label={asset.name} src={asset.url} autoPlay muted loop={tool.config.backgroundLoop!==false} playsInline/>:<img src={asset.url} alt={asset.name}/>)}</div>;
+ return <div className={'board-artwork board-motion-'+motion} style={{background:appearance.transparentBackground===true?'transparent':String(appearance.backgroundColor||'#101827')}}>{appearance.transparentBackground!==true&&asset?.url&&(mediaKind(asset)==='video'?<video aria-label={asset.name} src={asset.url} autoPlay muted loop={tool.config.backgroundLoop!==false} playsInline/>:<img src={asset.url} alt={asset.name}/>)}</div>;
 }
 export function BoardSurface({tool,project}:{tool:GameTool;project:Pick<Project,'assets'>}){
  const appearance=(tool.config.appearance||{}) as Record<string,unknown>;
@@ -27,7 +27,8 @@ export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwo
  <header><div><small>WORKSHOP · BOARD DESIGNER</small><h2>Design your game board</h2><p>The board becomes your initial overlay background. Create your own artwork and layout here; connect game actions in Build Space.</p></div><button type="button" onClick={onClose}>Back to Workshop</button></header>
  <div className="board-designer-layout"><aside>
  <label>Board name<input value={draft.name} onChange={e=>{patchTool({name:e.target.value});setSaved(true);}}/></label>
- <label>Board heading<input value={String(draft.config.title||'')} onChange={e=>patch({title:e.target.value})}/></label>
+ <label><input type="checkbox" checked={appearance.transparentBackground===true} onChange={e=>patchAppearance({transparentBackground:e.target.checked})}/>Transparent board background</label>
+ <label>Board heading (optional)<input value={String(draft.config.title||'')} onChange={e=>patch({title:e.target.value})}/></label>
  <label><input type="checkbox" checked={draft.config.showTitle===true} onChange={e=>patch({showTitle:e.target.checked})}/>Show heading</label>
  <label>Board artwork<select value={String(draft.config.backgroundAssetKey||appearance.imageKey||'')} onChange={e=>patch({backgroundAssetKey:e.target.value,appearance:{...appearance,imageKey:''}})}><option value="">Color only</option>{media.map(a=><option key={a.storageKey||a.name} value={a.storageKey||a.name}>{a.name} · {mediaKind(a)==='video'?'animated video':'image / GIF'}</option>)}</select></label>
  <button type="button" onClick={()=>{onSave(draft);onCreateArtwork();}}>Save board & create artwork</button>
