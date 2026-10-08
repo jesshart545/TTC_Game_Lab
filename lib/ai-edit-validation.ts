@@ -2,6 +2,7 @@ const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isAr
 // Catch omitted explicit settings before the application accepts a model edit.
 export function validateExplicitSettings(request:string,response:unknown){
  const responseData=record(response),draftChanges=record(responseData.changes);
+ if(/\btimer\b/i.test(request)&&/\b(?:cycle|cycles|cycling)\b/i.test(String(responseData.reply||''))&&!/\b(?:cycle|cycles|cycling)\b/i.test(request))throw new Error('The user did not request a timer press cycle. Timer show, start/pause, reset and hide are separate supported actions. Do not invent a duration editor on a button.');
  const perPress=/\b(?:each|every)\s+(?:press|click)\b|\b(?:first|second|third)\s+(?:press|click)\b/i.test(request);
  const wholeSequence=/\b(?:each|every)\s+(?:press|click)\b[^.\n]{0,45}\b(?:all|entire|whole)\b/i.test(request);
  if(perPress&&!wholeSequence&&Array.isArray(draftChanges.sequences)&&draftChanges.sequences.length)throw new Error('This request advances one step per separate press. Do not return an automatic sequence. Use coinCycles for Show / Flip / Remove on a coin, or explain a missing capability and ask for the necessary details.');

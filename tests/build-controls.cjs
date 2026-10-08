@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript');
 function load(path,requires={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:id=>requires[id],crypto:require('node:crypto').webcrypto,Date,Math,Set});return exports;}
-const cards=load('lib/question-cards.ts'),connections=load('lib/control-connections.ts',{'./question-cards':cards,'./sequences':require('./load.cjs')('lib/sequences.ts')});
+const cards=load('lib/question-cards.ts'),connections=load('lib/control-connections.ts',{'./timer-controls':require('./load.cjs')('lib/timer-controls.ts'),'./question-cards':cards,'./sequences':require('./load.cjs')('lib/sequences.ts')});
 const {addCreationControl}=load('lib/build-controls.ts',{'./control-connections':connections,'./board-design':load('lib/board-design.ts')});
 const {mediaKind,boardAreas}=load('lib/board-design.ts');
 let p={assets:[{name:'Animated.webm',type:'Generated',url:'https://example.test/board.webm',inProject:true}],gameTools:[],controls:[]};

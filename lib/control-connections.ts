@@ -1,3 +1,4 @@
+import {timerAction} from './timer-controls';
 import type { Project, ProjectEvent } from './project';
 import {sequenceControls} from './sequences';
 import { cardControl } from './question-cards';
@@ -16,6 +17,7 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
   if (!control.action?.trim() && !control.toolIds?.length && !control.compositionId && !(control.buttonMode === 'chain' && control.chain?.length)) {
     return 'Choose an action for this dashboard button in Build Space before using it.';
   }
+  const timer=timerAction(control.action||'');if(timer)return project.gameTools.some(t=>t.id===timer.toolId&&t.type==='countdown'&&t.enabled)?null:'Choose an available countdown timer.';
   if(control.action?.startsWith('coin.cycle.'))return project.gameTools.some(tool=>tool.id===control.action.slice(11)&&tool.type==='coin-toss'&&tool.enabled)?null:'Choose an available Coin Toss tool for this button.';
   if(control.action?.startsWith('asset.show.'))return project.assets.some(a=>(a.storageKey||a.name)===control.action.slice(11)&&a.url)?null:'Choose an available media file for this control.';
   if(control.action?.startsWith('result.hide.'))return project.controls.some(c=>c.id===control.action.slice(12))?null:'The display control for this Hide button is missing.';
@@ -37,7 +39,7 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
 
 export function assignControlAction(project: Project, control: ProjectEvent, action: string): ProjectEvent {
   const card = cardControl(action);
-  const tool = project.gameTools.find(t => t.id === card?.toolId || action === `tool.${t.id}` || action === `coin.cycle.${t.id}`);
+  const tool = project.gameTools.find(t => t.id === timerAction(action)?.toolId || t.id === card?.toolId || action === `tool.${t.id}` || action === `coin.cycle.${t.id}`);
   const composition = project.compositions?.find(c => action === `composition.play.${c.id}`);
   return {...control, action, toolIds: tool ? [tool.id] : [], compositionId: composition?.id,
     detail: card && tool ? `${card.action}: ${tool.name}` : tool ? `Open ${tool.name}` : composition ? `Play ${composition.name}` : action.startsWith('background.show.') ? 'Change background' : 'Unassigned dashboard button'};

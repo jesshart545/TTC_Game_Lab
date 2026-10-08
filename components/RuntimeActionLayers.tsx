@@ -7,6 +7,7 @@ import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
 import {WheelDisplay,DiceDisplay,CoinDisplay} from "./ChanceTools";
 import {nextCoinPhase,type CoinPhase} from "../lib/coin-cycle";
+import {timerAction,timerTransition,type TimerState} from "../lib/timer-controls";
 import {coinOutcome} from "../lib/coin-toss";
 import {BoardSurface} from "./BoardDesigner";
 import QuestionCards from './QuestionCards';
@@ -14,7 +15,7 @@ import {cardControl,cardTransition,freshCardState,type CardState,type CardAction
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
-type Run = { coinPhase?:CoinPhase; exitingAt?:number; id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
+type Run = { timerState?:TimerState; coinPhase?:CoinPhase; exitingAt?:number; id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
 export function useRuntimeActions(project: Project | null,onCardStates?:(states:Record<string,CardState>)=>void) {
   const savedCallback=useRef(onCardStates);savedCallback.current=onCardStates;
   const initialized=useRef<string|null>(null);
@@ -29,13 +30,14 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   useEffect(()=>()=>sequence.current?.abort(),[]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
+  const timerStates=useRef<Record<string,TimerState>>({});
   const coinPhases=useRef<Record<string,CoinPhase>>({});
   const [runs, setRuns] = useState<Run[]>([]);
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
-  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[];phase?:CoinPhase}>) {
+  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[];phase?:CoinPhase;timer?:TimerState}>) {
     const p = latest.current; if (!p) return;
     if(control.action==='sequence'){
       const error=controlConnectionError(p,control);if(error)throw new Error(error);
@@ -57,6 +59,13 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
       setRuns(items => [...items.filter(item => entry.tool ? item.tool?.id !== entry.tool.id : entry.asset ? (item.asset?.storageKey || item.asset?.name) !== (entry.asset.storageKey || entry.asset.name) : true), { ...entry, id, at: Date.now(), control }]);
       if(Number.isFinite(seconds))later(() => remove(id), Math.max(1, seconds) * 1000);
     };
+    const timer=timerAction(control.action);
+    if(timer){const tool=p.gameTools.find(t=>t.id===timer.toolId&&t.type==='countdown'&&t.enabled);if(!tool)return;
+      const state=outcomes?.[tool.id]?.timer||timerTransition(timerStates.current[tool.id],timer.operation,Number(tool.config.seconds)||10,Date.now());timerStates.current[tool.id]=state;
+      if(!state.visible){setRuns(items=>items.filter(item=>item.tool?.id!==tool.id));return;}
+      const existingControl=p.controls.find(c=>c.action===`timer.show.${tool.id}`)||control;
+      const id=++serial.current;setRuns(items=>[...items.filter(item=>item.tool?.id!==tool.id),{id,at:state.at,control:existingControl,tool,timerState:state}]);return;
+    }
     if(control.action.startsWith('coin.cycle.')){
       const id=control.action.slice(11),tool=p.gameTools.find(tool=>tool.id===id&&tool.type==='coin-toss'&&tool.enabled);if(!tool)return;
       const phase=outcomes?.[id]?.phase||nextCoinPhase(coinPhases.current[id]);coinPhases.current[id]=phase;
@@ -149,7 +158,7 @@ function PollRun({tool,controlId,slug,live}:{tool:GameTool;controlId:string;slug
 function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: ProjectAsset[]; index: number; count: number; live: boolean; slug: string }) {
   const tool = run.tool!; const [now, setNow] = useState(run.at);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 100); return () => clearInterval(timer); }, []);
-  const config = tool.config; const remaining = Math.max(0, Math.ceil((Number(config.seconds) || 10) - (now - run.at) / 1000));
+  const config = tool.config; const remaining = run.timerState ? Math.max(0,Math.ceil(run.timerState.remaining-(run.timerState.running?Math.max(0,now-run.timerState.at)/1000:0))) : Math.max(0, Math.ceil((Number(config.seconds) || 10) - (now - run.at) / 1000));
   const placement=run.control.overlayResult;
   const revealResult = now - run.at >= 1800;
   return <section aria-label={tool.name} style={{ position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto", ...overlayToolPlacement(tool), ...(placement?{left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxHeight:"none",zIndex:placement.layer}: {}) }}>

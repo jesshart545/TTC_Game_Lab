@@ -13,6 +13,7 @@ export function addCreationControl(project:Project,kind:'asset'|'tool'|'composit
  const tool=kind==='tool'?project.gameTools.find(t=>t.id===id&&t.enabled):undefined;
  const composition=kind==='composition'?project.compositions?.find(c=>c.id===id):undefined;
  if(!asset&&!tool&&!composition)throw new Error('This creation is unavailable.');
+ if(tool?.type==='countdown'){const show=project.controls.find(c=>c.action===`timer.show.${id}`);if(show)return {project:{...project,gameTools:project.gameTools.map(t=>t.id===id?{...t,inToolbox:true,inOverlayBuild:true}:t)},controlId:show.id};}
  if(tool?.type==='coin-toss'){const cycle=project.controls.find(control=>control.action===`coin.cycle.${id}`);if(cycle)return {project:{...project,gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true}:item)},controlId:cycle.id};}
  if(tool&&(tool.type==='random-picker'||['scoreboard','prize-list','game-tool-list'].includes(tool.type))){
   const action=`cards.toggle.${id}`,noun=tool.type==='random-picker'?(tool.config.source==='images'?'image':'card'):tool.name;

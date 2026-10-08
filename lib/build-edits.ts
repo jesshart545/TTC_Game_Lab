@@ -34,6 +34,18 @@ export function applyBuildChanges(project:Project,input:unknown){
    return next.controls.some(other=>other.chain?.some(step=>step.refId===control.id));
   });extra++;
  }
+ for(const raw of Array.isArray(changes.timerControls)?changes.timerControls:[]){
+  const item=record(raw),tool=next.gameTools.find(t=>t.id===item.toolId&&t.type==='countdown'&&t.enabled);
+  if(!tool){warnings.push('Choose an existing countdown timer.');continue;}
+  const target=item.controlId?next.controls.find(c=>c.id===item.controlId):next.controls.find(c=>c.action===`timer.show.${tool.id}`||c.action===`tool.${tool.id}`);
+  if(item.controlId&&(!target||!target.toolIds?.includes(tool.id))){warnings.push('The selected button is not connected to this timer.');continue;}
+  const show={...target,id:target?.id||crypto.randomUUID(),label:'Show Timer',action:`timer.show.${tool.id}`,toolIds:[tool.id],buttonMode:'single' as const,chain:undefined,compositionId:undefined,detail:'Show the timer without starting, resetting, or changing its duration.'};
+  next.controls=target?next.controls.map(c=>c.id===target.id?show:c):[...next.controls,show];
+  const start=next.controls.find(c=>c.id!==show.id&&(c.action===`tool.${tool.id}`||c.action===`timer.toggle.${tool.id}`));
+  const toggle={...start,id:start?.id||crypto.randomUUID(),label:'Start / Stop Timer',action:`timer.toggle.${tool.id}`,toolIds:[tool.id],buttonMode:'single' as const,chain:undefined,compositionId:undefined,detail:'Start the countdown or pause it at its remaining time.'};
+  next.controls=start?next.controls.map(c=>c.id===start.id?toggle:c):[...next.controls,toggle];
+  next.gameTools=next.gameTools.map(t=>t.id===tool.id?{...t,inToolbox:true,inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t);extra++;
+ }
  const result=applyDraftChanges(next,changes);next={...result.project,assetPools:next.assetPools};
  for(const item of [...created.map(id=>({kind:'tool',id})),...(Array.isArray(changes.connections)?changes.connections:[])]){
   if(!['asset','tool','composition'].includes(item?.kind)||typeof item?.id!=='string'){warnings.push('A requested connection was missing its saved item.');continue;}

@@ -1,3 +1,4 @@
+import {timerAction} from '../../../../lib/timer-controls';
 import {coinOutcome} from "../../../../lib/coin-toss";
 import {controlConnectionError} from "../../../../lib/control-connections";
 import {changeCard} from "../../../../lib/card-server";
@@ -74,7 +75,9 @@ export async function GET(request: Request, context: Context) {
     const coinControlIds=live.project.controls.filter(control=>control.action.startsWith('coin.cycle.')).map(control=>control.id);
     const coinEvents=coinControlIds.length?await live.db`SELECT DISTINCT ON(control_id) id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${coinControlIds}) ORDER BY control_id,id DESC`:[];
     const activeCoins=coinEvents.filter(event=>Object.values(event.payload?.outcomes||{}).some((outcome:any)=>outcome.phase==='show'||outcome.phase==='flip'));
-    const events=[...background,...activePolls,...activeTrivia,...youtube,...activeCoins].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
+    const timerIds=live.project.controls.filter(c=>timerAction(c.action)).map(c=>c.id);
+    const activeTimers=timerIds.length?await live.db`SELECT DISTINCT ON(payload->>'timerId') id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${timerIds}) ORDER BY payload->>'timerId',id DESC`:[];
+    const events=[...activeTimers,...background,...activePolls,...activeTrivia,...youtube,...activeCoins].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
     return NextResponse.json({ cursor: Number(rows[0].cursor), events, usedTrivia }, { headers: { "Cache-Control": "no-store" } });
   }
   const rows = await live.db`SELECT id, control_id, event_type, payload FROM live_events WHERE project_id = ${live.project.id} AND id > ${since} ORDER BY id ASC LIMIT 100`;
@@ -171,6 +174,22 @@ export async function POST(request: Request, context: Context) {
   const connectionError=controlConnectionError(live.project,control);if(connectionError)return NextResponse.json({error:connectionError},{status:409});
   const legacyPicker=live.project.gameTools.find(t=>t.type==='random-picker'&&control.action===`tool.${t.id}`);
   const card=legacyPicker?{toolId:legacyPicker.id,action:'draw' as const}:cardControl(control.action);if(card){try{return NextResponse.json({ok:true,state:await changeCard(live.db,live.project,card.toolId,card.action,undefined,String(live.project.gameTools.find(t=>t.id===card.toolId)?.config.text||""))});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Card action failed."},{status:409});}}
+  const timer=timerAction(control.action);
+  if(timer){
+    const seconds=Math.max(1,Math.min(86400,Number(live.project.gameTools.find(t=>t.id===timer.toolId)!.config.seconds)||10)),at=Date.now(),operation=timer.operation;
+    await live.db`CREATE TABLE IF NOT EXISTS live_timer_states (project_id TEXT NOT NULL,tool_id TEXT NOT NULL,visible BOOLEAN NOT NULL,running BOOLEAN NOT NULL,remaining DOUBLE PRECISION NOT NULL,at DOUBLE PRECISION NOT NULL,PRIMARY KEY(project_id,tool_id))`;
+    const rows=await live.db`WITH next_timer AS (
+      INSERT INTO live_timer_states(project_id,tool_id,visible,running,remaining,at) VALUES(${live.project.id},${timer.toolId},${operation==='show'||operation==='toggle'},${operation==='toggle'},${seconds},${at})
+      ON CONFLICT(project_id,tool_id) DO UPDATE SET
+        visible=CASE WHEN ${operation}='hide' THEN FALSE WHEN ${operation} IN ('show','toggle') THEN TRUE ELSE live_timer_states.visible END,
+        running=CASE WHEN ${operation}='toggle' THEN NOT live_timer_states.running WHEN ${operation} IN ('reset','hide') THEN FALSE ELSE live_timer_states.running END,
+        remaining=CASE WHEN ${operation}='reset' THEN ${seconds}
+          WHEN ${operation}='toggle' AND GREATEST(0,live_timer_states.remaining-CASE WHEN live_timer_states.running THEN (${at}-live_timer_states.at)/1000 ELSE 0 END)<=0 THEN ${seconds}
+          ELSE GREATEST(0,live_timer_states.remaining-CASE WHEN live_timer_states.running THEN (${at}-live_timer_states.at)/1000 ELSE 0 END) END,at=${at}
+      RETURNING visible,running,remaining,at
+    ) INSERT INTO live_events(project_id,control_id,event_type,payload) SELECT ${live.project.id},${control.id},'control',jsonb_build_object('timerId',${timer.toolId}::text,'outcomes',jsonb_build_object(${timer.toolId}::text,jsonb_build_object('result','','timer',jsonb_build_object('visible',visible,'running',running,'remaining',remaining,'at',at)))) FROM next_timer RETURNING id`;
+    return NextResponse.json({ok:true,id:Number(rows[0].id)});
+  }
   if(control.action.startsWith('coin.cycle.')){
     const toolId=control.action.slice(11),result=coinOutcome(randomInt(2));
     await live.db`CREATE TABLE IF NOT EXISTS live_coin_states (project_id TEXT NOT NULL, tool_id TEXT NOT NULL, phase INTEGER NOT NULL, result TEXT NOT NULL DEFAULT '', PRIMARY KEY(project_id,tool_id))`;
