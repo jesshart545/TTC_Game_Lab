@@ -1,5 +1,7 @@
 "use client";
 
+import { backgroundContext, wantsBackgroundMatch } from "../../../lib/ai-background-context";
+
 import CompactConversation from "../../../components/CompactConversation";
 import BoardDesigner, { BoardArtwork } from "../../../components/BoardDesigner";
 import {mediaKind} from "../../../lib/board-design";
@@ -807,15 +809,16 @@ export default function ProjectWorkspace() {
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
     setDraft(""); setBuilding(true);
     try {
+      const backgroundVisual = wantsBackgroundMatch(text) ? await backgroundContext(project, hydrateAsset) : undefined;
       const context = { ...updated, messages:undefined, assets: updated.assets.map(({ url, ...asset }) => asset), publishedSnapshot: undefined };
-      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, history: updated.messages.slice(-30), project: context, selectedImageKey: videoReferenceKey || null, workspaceStage: workflowStep===1?"build":"workshop", selectedItem:buildSelection }) });
+      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, backgroundVisual, history: updated.messages.slice(-30), project: context, selectedImageKey: videoReferenceKey || null, workspaceStage: workflowStep===1?"build":"workshop", selectedItem:buildSelection }) });
       let data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI editing is unavailable right now.");
       if(data.action?.type==='search'){
         const search=await fetch('/api/web-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:data.action.query})});
         const evidence=await search.json();if(!search.ok)throw new Error(evidence.error||'Web search is unavailable. No pool was created.');
         if(!evidence.results?.length)throw new Error('No search results were found. Try a more specific topic.');
-        const followup=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'draft-edit',request:text,history:updated.messages.slice(-30),project:context,workspaceStage:workflowStep===1?'build':'workshop',selectedItem:buildSelection,searchEvidence:evidence.results})});
+        const followup=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'draft-edit',request:text,backgroundVisual,history:updated.messages.slice(-30),project:context,workspaceStage:workflowStep===1?'build':'workshop',selectedItem:buildSelection,searchEvidence:evidence.results})});
         data=await followup.json();if(!followup.ok)throw new Error(data.error||'The search results could not be turned into a pool.');
         if(data.action?.type==='search')throw new Error('The search completed, but a pool could not be created from these results.');
       }
@@ -824,8 +827,11 @@ export default function ProjectWorkspace() {
       const steps = Array.isArray(data.manualSteps) ? data.manualSteps.filter((step: unknown) => typeof step === "string") : [];
       const unapplied = Object.keys(data.changes || {}).length > 0 && !result.applied && !data.action;
       const affectedControls=result.project.controls.filter(control=>{const existing=baseProject.controls.find(item=>item.id===control.id);return !existing||JSON.stringify(existing)!==JSON.stringify(control);});
+      const sequenceSummary = affectedControls.filter(control=>control.action==="sequence").map(control=>`${control.label}: ${(control.chain||[]).map(step=>{const target=result.project.controls.find(c=>c.id===step.refId);return `${step.timing.mode==="delay"&&Number(step.timing.seconds)>0?`wait ${step.timing.seconds}s, then `:""}${target?.label||step.label}`;}).join(" → ")}. Saved as a draft button; it has not been run.`).join("\n");
+      const changedTools=result.project.gameTools.filter(tool=>JSON.stringify(tool)!==JSON.stringify(baseProject.gameTools.find(t=>t.id===tool.id)));
+      const toolSummary=changedTools.length?`Updated draft tools: ${changedTools.map(tool=>tool.name).join(", ")}.`:"";
       const controlsSummary=affectedControls.length?`Updated draft dashboard ${affectedControls.length===1?"button":"buttons"}: ${affectedControls.map(control=>control.label).join(", ")}. You can review them in Build Space and try them in Test.`:"";
-      const reply = [unapplied ? "I could not apply the requested changes. Your draft has not been changed." : result.warnings.length&&result.applied?"I applied part of your request, but could not complete every change. The remaining issues are listed below.": data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), controlsSummary, result.warnings.length?result.warnings.join("\n"):"", steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
+      const reply = [unapplied ? "I could not apply the requested changes. Your draft has not been changed." : result.warnings.length&&result.applied?"I applied part of your request, but could not complete every change. The remaining issues are listed below.": data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), controlsSummary, toolSummary, sequenceSummary, result.warnings.length?result.warnings.join("\n"):"", steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
       if (data.action) {
         const action = data.action;
         if (action.type === "trivia") {

@@ -1,14 +1,20 @@
+import { adviceOnlyRequest } from "../../../lib/assistant-intent";
+import { executionContext } from "../../../lib/ai-execution-context";
+import { checkedBackgroundContext } from "../../../lib/ai-background-context";
 import {fontFamilies} from '../../../lib/fonts';
 import {timerControlRequest} from '../../../lib/timer-controls';
 import {coinCycleRequest} from "../../../lib/coin-cycle";
 import {creatableTools,applyBuildChanges} from "../../../lib/build-edits";
 import { musicDuration } from "../../../lib/music-duration";
 import {groundedResearchCards} from "../../../lib/research-cards";
-import {validateExplicitSettings} from "../../../lib/ai-edit-validation";
+import {validateExplicitSettings, validateSavedReferences, validateCompletionClaim, validateSequenceBehavior, validateRequestedAutomation} from "../../../lib/ai-edit-validation";
 import { NextResponse } from "next/server";
 
 const SYSTEM = `You are TTCGameLab AI, a creative director and application builder for interactive TikTok LIVE experiences. Do not merely return a specification. Interpret the creator's request and propose concrete changes to the project's dashboard, overlay, scenes, controls, assets, and interactions. Keep the existing project context intact and make incremental edits when the user asks for changes.`;
-const DRAFT_SYSTEM = `You assist the creator of a TTCGameLab draft. Follow their lead and perform only the requested task. Return JSON {"reply":string,"changes":object,"manualSteps":string[],"action":null|object}.
+const DRAFT_SYSTEM = `You assist the creator of a TTCGameLab draft. Follow their lead and perform only the requested task. Return JSON {"reply":string,"changes":object,"manualSteps":string[],"needsClarification":boolean,"outcome":"edit"|"action"|"clarification"|"answer"|"unsupported","action":null|object}.
+The latest request is the task; earlier conversation may contain failed proposals, not saved functions. executionGuide lists actual executable references. For a NEW sequence OMIT id entirely; selectedItem.id may be a normal button or tool, NEVER reuse it as a sequence ID unless it is in existingSequenceIds. For EDITING a sequence id must be an existing sequence ID. Use step controlId from actual single-action controls. New sequences add a separate dashboard button, preserving the existing controls. Do not claim to have converted the old button. If the user wants that replacement, ask before removing their original controls. A start/hide sequence can use the existing countdown Start control (tool.TIMER_ID) immediately and existing Hide control after the saved seconds; no generated timer function or fake tool ID. A timer.toggle pauses/resumes, never guarantee a fresh reset/start from it. Respect separate show-only behavior. Only make removal automatic if requested; if “streamline” leaves the choice unclear ask a short question while carrying out unambiguous requested styling.
+backgroundVisual contains client-sampled image colors, not the full artwork. Use its palette to coordinate supported timer/tool/control colors with readable text. Never pretend to have seen its objects, lettering or complete style. If missing/unavailable, ask for a readable image or color description rather than guessing inspected colors. Preserve existing seconds, display mode, placement and content unless requested. Styling an existing tool must return actual changes.gameTools config.appearance, not a written suggestion. needsClarification is true when asking for a necessary missing task choice; useful unambiguous edits may be included alongside a question. Set outcome edit for real field edits, action for execution through a tool, clarification for a necessary choice, answer for useful text, unsupported for a genuinely unavailable capability. No successful-completion claim without real changes or an executable action. Return MINIMAL requested field patches, not whole tools, controls, or project arrays. Do not copy unchanged duration or placement. Use newAutoRemoveSequenceExample only when automatic removal is actually requested, and never combine it with timerControls because timerControls would change the Start control into Show-only. If the user says “streamlined” without specifying automatic versus manual removal, ask that one short question instead of assuming automatic. Never invent a Sequences tab or instruct editing a Hide button to set exit motion: transitions belong to the SHOWN control overlayResult.
+You may suggest optional next steps, but suggestions are NOT authorization to act. If the user asks for ideas, advice, recommendations, how-to explanations, or what to do next, return answer/suggestion text with changes {} and action null. Never implement a step merely because you recommended it. Only requested edits, configuration or generation may return executable changes/actions; publishing is never an AI draft tool.
 For questions, explanations, scripts, advertisements and other writing, write the complete useful text in reply, changes {}, action null. Do not automatically generate media or suggest next steps on every response.
 For a request to generate factual trivia questions, use action {"type":"trivia","count":number,"categories":string[]} with count 1–500. If count is missing, ask how many. Never invent trivia questions or source URLs in reply or gameTools changes; the sourced trivia generator handles them. For adding a supported game tool, action {"type":"tool","toolType":"wheel"|"random-picker"|"countdown"|"poll"|"dice"|"coin-toss"|"blank-board"|"youtube"|"scoreboard"|"prize-list"|"game-tool-list","config":object,"name":string} uses the existing template. A team strike tally is supported using toolType "scoreboard" with config.scoreMode "strikes" and entries [{id,name,score:0}] for the teams. Ask for team names if missing. Do not invent a new tool type for strike counters. For unsupported tool types explain the limitation. New tools can use action type "tool" or changes.newTools. Do not put new tools in changes.gameTools because that edits existing IDs. Example: {"reply":"I will add that wheel.","changes":{},"manualSteps":[],"action":{"type":"tool","toolType":"wheel","name":"Prize Wheel","config":{"segments":["Gold","Silver"],"appearance":{"backgroundColor":"#330066","textColor":"#ffd700","fontFamily":"Georgia, serif"}}}}. Allowed fontFamily strings are ${fontFamilies.map(font=>JSON.stringify(font)).join(", ")}.
 For explicit media requests, action may be {"type":"image"|"video"|"voice"|"music"|"sfx","prompt":string,"sourceKey":string|null,"voice":string|null}. For music also include "durationSeconds": number|null and "lyrics": string. Preserve a requested length, including from earlier conversation; short intros default to 25 seconds. Use the exact lyrics the user supplied or approved from chat. If vocals are requested but lyrics are missing, ask for the lyrics with action null. Instrumental music uses an empty lyrics string. The application executes this action using its existing generators. Use an exact existing asset storageKey as sourceKey for image editing or image-to-video. Never invent an asset or URL. If the referenced image is ambiguous, ask which image and return action null. The selected image key, if provided, identifies "this image". If animation motion is unspecified, ask a short question relevant to the image/game, with action null. Image animation uses video; editing colors, objects or lettering baked into an image uses image with sourceKey. Simple fade/slide/zoom overlay motion uses existing control settings instead.
@@ -24,9 +30,16 @@ export async function POST(request: Request) {
   const body = await request.json();
   if(Array.isArray(body.searchEvidence))body.searchEvidence=body.searchEvidence.map((source:any,sourceId:number)=>({...source,sourceId}));
   const draftEdit = body.mode === "draft-edit";
+  const draftContext = draftEdit ? {
+    request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
+    selectedImageKey: body.selectedImageKey, workspaceStage: body.workspaceStage,
+    selectedItem: body.selectedItem, searchEvidence: body.searchEvidence,
+    executionGuide: body.project ? executionContext(body.project) : undefined,
+    backgroundVisual: checkedBackgroundContext(body.backgroundVisual),
+  } : undefined;
   if(draftEdit&&body.project?.gameTools&&body.project?.controls){const timer=timerControlRequest(String(body.request||''),body.history,body.project,body.selectedItem);if(timer)return NextResponse.json({configured:true,...timer});const cycle=coinCycleRequest(String(body.request||''),body.history,body.project,body.selectedItem);if(cycle)return NextResponse.json({configured:true,...cycle});}
   const configuredModel = (process.env.AGNES_MODEL || "").trim();
-  const models = Array.from(new Set(["agnes-2.5-flash", configuredModel].filter(model => model && !model.startsWith("cpk-"))));
+  const models = Array.from(new Set([configuredModel, "agnes-2.5-flash"].filter(model => model && !model.startsWith("cpk-"))));
   let response: Response | null = null;
   let payload: any = null;
   let lastModel = models[0];
@@ -38,11 +51,11 @@ export async function POST(request: Request) {
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: draftEdit ? [{ role: "system", content: DRAFT_SYSTEM }, { role: "user", content: JSON.stringify({ request: body.request, recentConversation: body.history, project: body.project, selectedImageKey: body.selectedImageKey, workspaceStage: body.workspaceStage, selectedItem: body.selectedItem, searchEvidence: body.searchEvidence }) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
+      messages: draftEdit ? [{ role: "system", content: DRAFT_SYSTEM }, { role: "user", content: JSON.stringify(draftContext) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
       ...(draftEdit ? { response_format: { type: "json_object" } } : {}),
       temperature: draftEdit ? .2 : .7,
       ...(draftEdit ? {max_tokens:4096} : {}),
-    }),
+    }), signal: AbortSignal.timeout(60000),
     });
     payload = await response.json().catch(() => ({}));
     if (response.ok) break;
@@ -74,6 +87,10 @@ export async function POST(request: Request) {
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Return one JSON object, not a list or text.");
       if (!parsed.changes || typeof parsed.changes !== "object") parsed.changes = {};
       validateExplicitSettings(String(body.request||""),parsed);
+      validateSavedReferences(body.project, parsed.changes);
+      validateRequestedAutomation(String(body.request||""), parsed.changes);
+      validateCompletionClaim(parsed);
+      if (adviceOnlyRequest(String(body.request||"")) && (parsed.action || Object.keys(parsed.changes).length)) throw new Error("This request is for advice or suggestions only. Return useful suggestions in reply, changes {}, action null. Wait for the user to ask for implementation.");
       const raw = parsed.action;
       const action = raw?.type === "search" && typeof raw.query === "string" && raw.query.trim() && !body.searchEvidence
         ? {type:"search",query:raw.query.trim().slice(0,200)}
@@ -91,12 +108,14 @@ export async function POST(request: Request) {
         // Client context omits media URLs; saved storage keys still identify connectable assets.
         const validationProject={...body.project,assets:body.project.assets.map((asset:any)=>({...asset,url:asset.url||(asset.storageKey?'saved-asset:'+asset.storageKey:undefined)}))};
         const checked=applyBuildChanges(validationProject,parsed.changes);
+        validateSequenceBehavior(validationProject, checked.project, parsed.changes);
         if(checked.warnings.length)throw new Error(checked.warnings.join(' '));
         if(!checked.applied)throw new Error('No requested edit could be applied. Use the exact saved item IDs and the documented changes fields, or ask for the missing information.');
       }
       const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
       if (!reply && !action && !Object.keys(parsed.changes).length) throw new Error("Return the requested pool edit and a nonempty reply; the previous response contained neither.");
-      return NextResponse.json({ configured: true, action, reply, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
+      const outcome = action ? "action" : Object.keys(parsed.changes).length ? "edit" : parsed.needsClarification === true ? "clarification" : parsed.outcome === "unsupported" ? "unsupported" : "answer";
+      return NextResponse.json({ configured: true, outcome, action, reply, needsClarification: parsed.needsClarification === true, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
     } catch(validationError) {
       if (attempt === 0) {
         try {
@@ -104,9 +123,9 @@ export async function POST(request: Request) {
             method:"POST", headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},
             body:JSON.stringify({model:lastModel,response_format:{type:"json_object"},temperature:0,max_tokens:4096,messages:[
               {role:"system",content:DRAFT_SYSTEM},
-              {role:"user",content:JSON.stringify({request:body.request,recentConversation:body.history,project:body.project,selectedImageKey:body.selectedImageKey,workspaceStage:body.workspaceStage,selectedItem:body.selectedItem,searchEvidence:body.searchEvidence})},
+              {role:"user",content:JSON.stringify(draftContext)},
               {role:'assistant',content:String(message)},
-              {role:"user",content:(validationError instanceof Error?'Correct this missing setting: '+validationError.message+' ':'')+'Return one complete JSON object with reply, changes, manualSteps, action. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories.'}
+              {role:"user",content:(validationError instanceof Error?'Correct this missing setting: '+validationError.message+' ':'')+'Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories.'}
             ]}),signal:AbortSignal.timeout(60000)
           });
           const data=await retry.json();

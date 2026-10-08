@@ -25,3 +25,10 @@
 - [x] Recommendations reflect the selected section and actual named game plan, saved media, enabled tools and compositions. Opening an input is not represented as completing a step; optional scenes are not forced between materials and assembly.
 - [x] Game plan, Assets & tools, and Scenes & effects show their relevant work instead of the same mixed page. Editing state and all existing creation, upload, card, pool, board, media, AI, composition, Build Space, publishing and Web Research capabilities remain reachable.
 - [ ] The duplicated background shortcut and redundant linear navigation are removed without removing their underlying operations. Publishing remains an explicit user action in its review area. The correction is tested and offered in preview; no automatic production change or saved/live project reset.
+
+## Answer Timer AI correction
+
+- [ ] The exact appearance-and-streamlining request no longer fails on an invented sequence: it resolves the existing Answer Timer, saves the requested appearance changes, and can create a real supported sequence with the existing timer controls when requested, or asks the needed removal-behavior question rather than inventing a sequence reference. Saved duration, background and unrelated content remain unchanged; ambiguous timers get a useful choice rather than a guess.
+- [ ] Background-match requests provide actual bounded color samples when readable and disclose missing/unreadable context; no claims to have inspected unavailable artwork or newly generated background. Keep readable timer text and preserve existing placement by default.
+- [ ] The AI-generated sequence uses exact valid Start/Hide controls and the saved duration when automatic removal is requested; manual show-only/pause/reset/hide behavior remains available and unchanged for existing projects. Existing sequences remain valid and unknown sequence edits are not silently converted.
+- [ ] Validate on synthetic projects/mocked providers and offer a production-based GitHub/Vercel preview independently of the unapproved app-wide assistant. No paid generation, live content reset or production publication without owner approval.
