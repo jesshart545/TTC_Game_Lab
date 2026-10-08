@@ -1,6 +1,7 @@
 import type {GameTool,GameToolType,ProjectEvent,Project} from './project';
 import type {CardState} from './question-cards';
 export type GameEntry={id:string;name:string;imageKey?:string;meaning?:string;score?:number};
+export function strikeScoreboard(tool:GameTool){return tool.type==='scoreboard'&&tool.config.scoreMode==='strikes';}
 export const infoTypes=['scoreboard','prize-list','game-tool-list'];
 export function gameEntries(tool:GameTool):GameEntry[]{
  const entries=Array.isArray(tool.config.entries)?tool.config.entries:[];

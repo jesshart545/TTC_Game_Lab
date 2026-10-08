@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm'),ts=require('typescript'),load=require('./load.cjs'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
+const {applyBuildChanges}=load('lib/build-edits.ts'),{cardTransition,freshCardState}=load('lib/question-cards.ts'),{validateExplicitSettings}=load('lib/ai-edit-validation.ts');
+const project={id:'test',assets:[],assetPools:[],compositions:[],controls:[],overlay:{},gameTools:[]};
+const changes={newTools:[{type:'scoreboard',name:'Team Strikes',connect:true,config:{scoreMode:'strikes',entries:[{id:'red',name:'Red Team',score:0},{id:'blue',name:'Blue Team',score:0}]}}]};
+validateExplicitSettings('Add a tally style scoreboard that accumulates each team number of strikes', {changes});
+assert.throws(()=>validateExplicitSettings('Add a team strike tally',{changes:{newTools:[{type:'scoreboard',config:{entries:[]}}]}}),/scoreMode strikes/);
+const built=applyBuildChanges(project,changes);assert.equal(built.warnings.length,0);const tool=built.project.gameTools[0];assert.equal(tool.config.scoreMode,'strikes');assert(tool.inOverlayBuild);assert(built.project.controls.some(c=>c.action==='cards.toggle.'+tool.id));
+let state=freshCardState();const score=(id,delta)=>state=cardTransition(built.project,tool,JSON.parse(JSON.stringify(state)),'score',1,()=>0,JSON.stringify({id,delta}));
+score('red',1);score('red',1);score('blue',1);score('red',1);assert.equal(state.scores.red,3);assert.equal(state.scores.blue,1);
+state=cardTransition(built.project,tool,state,'toggle');state=cardTransition(built.project,tool,state,'clear');assert.equal(state.scores.red,3);state=cardTransition(built.project,tool,state,'toggle');assert.equal(state.scores.red,3);
+score('red',-1);assert.equal(state.scores.red,2);score('blue',-5);assert.equal(state.scores.blue,0);
+const component={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/GameInfoTools.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports:component,require:id=>id.startsWith('../lib/')?load('lib/'+id.split('/').pop()+'.ts'):require(id),crypto:require('node:crypto').webcrypto});
+const markup=renderToStaticMarkup(React.createElement(component.GameInfoOverlay,{tool,project:built.project,state}));assert(markup.includes('aria-label="2 strikes"'));assert(markup.includes('✕✕'));assert(markup.includes('Blue Team'));
+const host=renderToStaticMarkup(React.createElement(component.GameInfoHostPanel,{tool,state,onCommand:()=>{}}));assert.equal((host.match(/Add strike/g)||[]).length,2);assert.equal((host.match(/Remove strike/g)||[]).length,2);assert(!host.includes('Points to add'));assert(host.includes('disabled=""'));
+const ordinary={...tool,config:{...tool.config,scoreMode:'points'}};const points=cardTransition(project,ordinary,freshCardState(),'score',1,()=>0,'{"id":"red","delta":-2}');assert.equal(points.scores.red,-2);
+state=cardTransition(built.project,tool,state,'new-game');assert.equal(state.scores,undefined);
+console.log('PASS: AI strike mode validation, tool creation and connection, independent accumulating team tallies, hide/show and serialization retention, nonnegative strike corrections, X tally overlay and host controls, explicit new game reset, unchanged points scoring.');

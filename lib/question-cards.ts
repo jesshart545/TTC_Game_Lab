@@ -30,7 +30,8 @@ export function cardTransition(project:Project,tool:GameTool,previous:CardState,
   if(!entry)throw new Error('Choose an entry from this tool first.');
   if(action==='score'&&tool.type==='scoreboard'){
    if(!Number.isSafeInteger(data.delta)||Math.abs(data.delta)>100000)throw new Error('Enter a whole number of points.');
-   const value=(state.scores?.[entry.id]??Number(entry.score||0))+data.delta;
+   const sum=(state.scores?.[entry.id]??Number(entry.score||0))+data.delta;
+   const value=tool.config.scoreMode==='strikes'?Math.max(0,sum):sum;
    if(!Number.isSafeInteger(value))throw new Error('That score is too large.');
    return {...state,scores:{...state.scores,[entry.id]:value}};
   }
