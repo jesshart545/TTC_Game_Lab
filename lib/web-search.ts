@@ -1,4 +1,4 @@
-export type WebResult={title:string;url:string;summary:string};
+export type WebResult={title:string;url:string;summary:string;evidenceToken?:string};
 function plain(value:unknown,max:number){return typeof value==="string"?value.replace(/<[^>]*>/g,"").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").trim().slice(0,max):"";}
 export function webResults(value:unknown):WebResult[] {
   if(!Array.isArray(value))return [];
