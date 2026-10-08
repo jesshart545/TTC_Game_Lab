@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./fonts.css";
 import "./feature.css";
+import "./controls.css";
 import HelpLink from '../components/HelpLink';
 
 export const metadata: Metadata = {
@@ -16,4 +17,3 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     </html>
   );
 }
-
