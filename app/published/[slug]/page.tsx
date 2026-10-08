@@ -1,5 +1,6 @@
 "use client";
 
+import { useSupportBridge, requestResearchOpen } from "../../../lib/support-client";
 import {runSequence} from "../../../lib/sequences";
 import {controlLabel,controlButtonStyle,infoTypes} from "../../../lib/game-tools";
 import {GameInfoHostPanel} from "../../../components/GameInfoTools";
@@ -77,6 +78,11 @@ export default function PublishedDashboard() {
       else { setActiveTrivia(null); setStatus("Returned to the trivia board."); }
     } catch (error) { setStatus(error instanceof Error ? error.message : "Could not reach the live server."); }
   }
+  useSupportBridge({
+    context: { scope: `live:${slug}`, page: "host", stage: "live", assetCount: project?.assets.length || 0, toolCount: project?.gameTools.length || 0, controlCount: project?.controls.length || 0, status: status || loadError || cards.error },
+    slug, hostKey,
+    navigate: target => { if (target === "web-research") { requestResearchOpen(); return true; } return false; },
+  });
   if (!project) return <main className="published-dashboard"><h1>{loading ? "Loading published experience…" : loadError || "Project not published."}</h1></main>;
   const projectHost = typeof window !== "undefined" && window.location.hostname === `${project.slug}.${process.env.NEXT_PUBLIC_PROJECT_BASE_DOMAIN}`;
   const overlayPath = projectHost ? "/overlay" : `/published/${project.slug}/overlay`;

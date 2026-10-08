@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { supportPanelEvent } from "../lib/support-client";
 import type { WebResult } from "../lib/web-search";
 import WebResearchWorkspace from "./WebResearchWorkspace";
 
@@ -25,6 +26,13 @@ export default function GoogleSearch({ slug, hostKey, projectId, docked = false,
     if (!docked) setOpen(true);
   }, [docked]);
 
+  useEffect(() => {
+    const panel = (event: Event) => { if (docked && (event as CustomEvent).detail === "support") setOpen(false); };
+    const reveal = () => { supportPanelEvent("research"); setOpen(true); };
+    window.addEventListener("ttc-assistant-panel", panel);
+    window.addEventListener("ttc-open-research", reveal);
+    return () => { window.removeEventListener("ttc-assistant-panel", panel); window.removeEventListener("ttc-open-research", reveal); };
+  }, [docked]);
   function close() {
     setOpen(false);
     window.setTimeout(() => launcher.current?.focus(), 0);
@@ -41,7 +49,7 @@ export default function GoogleSearch({ slug, hostKey, projectId, docked = false,
       type="button"
       aria-expanded={open}
       aria-controls="web-research-panel"
-      onClick={() => setOpen(true)}
+      onClick={() => { supportPanelEvent("research"); setOpen(true); }}
     >
       <span>Web Research</span>
       <small>Search and compare sources privately</small>

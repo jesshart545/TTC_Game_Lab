@@ -10,6 +10,15 @@ export function applyDraftChanges(project: Project, input: unknown) {
   const changes = object(input);
   let applied = 0;
   const next: Project = { ...project, overlay: { ...project.overlay }, assets: project.assets.map(asset => ({ ...asset })), compositions: (project.compositions || []).map(c => ({ ...c, clips: c.clips.map(clip => ({ ...clip })) })), controls: project.controls.map(c => ({ ...c })), gameTools: (project.gameTools || []).map(tool => ({ ...tool, config: { ...tool.config } })) };
+  const name = text(changes.name, 120);
+  if (name && name !== next.name) { next.name = name; applied++; }
+  const plan = object(changes.gamePlan);
+  for (const key of ["theme", "loop", "rules", "rewards", "extras"]) {
+    const value = text(plan[key], 5000);
+    if (value !== undefined && value !== next.gamePlan?.[key]) {
+      next.gamePlan = { ...next.gamePlan, [key]: value }; applied++;
+    }
+  }
   if (["cyan", "purple", "pink"].includes(String(changes.theme)) && next.theme !== changes.theme) { next.theme = changes.theme as Project["theme"]; applied++; }
   const overlay = object(changes.overlay);
   for (const key of ["title", "subtitle"] as const) { const value = text(overlay[key]); if (value !== undefined && value !== next.overlay[key]) { next.overlay[key] = value; applied++; } }
@@ -81,4 +90,3 @@ export function applyDraftChanges(project: Project, input: unknown) {
   }
   return { project: next, applied };
 }
-

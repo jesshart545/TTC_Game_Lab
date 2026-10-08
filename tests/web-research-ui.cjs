@@ -36,6 +36,7 @@ function compile(file){
       if(id==='../lib/web-research')return compile('lib/web-research.ts');
       if(id==='./WebResearchWorkspace')return compile('components/WebResearchWorkspace.tsx');
       if(id==='../lib/web-search')return {};
+      if(id==='../lib/support-client')return {supportPanelEvent: panel => dom.window.dispatchEvent(new dom.window.CustomEvent('ttc-assistant-panel',{detail:panel}))};
       throw new Error('Unexpected module '+id+' from '+file);
     },
     window:dom.window,document:dom.window,fetch:fakeFetch,console,crypto:require('node:crypto').webcrypto,
