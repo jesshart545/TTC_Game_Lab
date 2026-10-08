@@ -10,7 +10,7 @@ import {nextCoinPhase,type CoinPhase} from "../lib/coin-cycle";
 import {timerAction,timerTransition,type TimerState} from "../lib/timer-controls";
 import {coinOutcome} from "../lib/coin-toss";
 import {BoardSurface} from "./BoardDesigner";
-import QuestionCards from './QuestionCards';
+import QuestionCards,{StyledTimer} from './QuestionCards';
 import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
@@ -160,12 +160,12 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 100); return () => clearInterval(timer); }, []);
   const config = tool.config; const remaining = run.timerState ? Math.max(0,Math.ceil(run.timerState.remaining-(run.timerState.running?Math.max(0,now-run.timerState.at)/1000:0))) : Math.max(0, Math.ceil((Number(config.seconds) || 10) - (now - run.at) / 1000));
   const placement=run.control.overlayResult;
+  if(tool.type==='countdown')return <StyledTimer tool={{...tool,config:{...tool.config,...(placement?{placement}: {})}}} remaining={run.id===0?Number(config.seconds)||10:remaining} total={Number(config.seconds)||10}/>;
   const revealResult = now - run.at >= 1800;
-  return <section aria-label={tool.name} style={{ position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto", ...overlayToolPlacement(tool), ...(placement?{left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxHeight:"none",zIndex:placement.layer}: {}) }}>
+  return <section aria-label={tool.name} style={{ boxSizing:"border-box", position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto", ...overlayToolPlacement(tool), ...(placement?{left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxHeight:"none",zIndex:placement.layer}: {}) }}>
     <ToolArtwork tool={tool} assets={assets}/><h3>{String(config.title || tool.name)}</h3>
     {tool.type === "wheel" && <WheelDisplay colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} entries={(Array.isArray(config.segments)?config.segments:[]).map(String)} result={run.result||""} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "random-picker" && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
-    {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
     {tool.type === "coin-toss" && <CoinDisplay result={run.result} elapsed={now-run.at} preview={run.id===0} ready={run.coinPhase==='show'} faceColor={String(config.faceColor||"#ffd166")} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#382608")}/>}
     {tool.type === "dice" && <DiceDisplay faceColor={String(config.faceColor||"#f5faff")} pipColor={String(config.pipColor||"#102132")} result={Number(run.result)||1} sides={Math.min(100,Math.max(2,Math.floor(Number(config.sides)||6)))} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}

@@ -1,7 +1,7 @@
 import type {CSSProperties} from "react";
 import type {GameTool} from "./project";
 const fonts=["Arial, sans-serif","Georgia, serif","Verdana, sans-serif","Trebuchet MS, sans-serif","monospace"];
-export function toolStyle(tool:GameTool):CSSProperties {const a=(tool.config.appearance||{}) as Record<string,unknown>;return {color:String(a.textColor||"#ffffff"),backgroundColor:String(a.backgroundColor||"#101827"),border:"2px solid "+String(a.accentColor||"#20e8ff"),fontFamily:fonts.includes(String(a.fontFamily))?String(a.fontFamily):fonts[0],fontSize:Math.max(12,Math.min(96,Number(a.fontSize)||28)),borderRadius:Math.max(0,Math.min(64,Number(a.borderRadius)||12)),padding:16};}
+export function toolStyle(tool:GameTool):CSSProperties {const a=(tool.config.appearance||{}) as Record<string,unknown>;return {boxSizing:"border-box",color:String(a.textColor||"#ffffff"),backgroundColor:String(a.backgroundColor||"#101827"),border:"2px solid "+String(a.accentColor||"#20e8ff"),fontFamily:fonts.includes(String(a.fontFamily))?String(a.fontFamily):fonts[0],fontSize:Math.max(12,Math.min(96,Number(a.fontSize)||28)),borderRadius:a.shape==='rectangle'?0:a.shape==='circle'||a.shape==='oval'?'50%':Math.max(0,Math.min(64,Number.isFinite(Number(a.borderRadius))?Number(a.borderRadius):12)),padding:16};}
 export function overlayToolPlacement(tool:GameTool):CSSProperties {
  const p=tool.config.placement as Record<string,unknown>|undefined;if(!p)return {};
  const bound=(v:unknown,d:number,min:number,max:number)=>Number.isFinite(Number(v))?Math.max(min,Math.min(max,Number(v))):d;
