@@ -15,3 +15,11 @@ Retain the dark cyan/purple creative-studio identity. Folder rows are compact, r
 
 ## Delivery
 Implement on `feat/collapsible-asset-folders`, run existing and targeted regression checks, build locally with compile-only auth placeholders, and open a pull request/preview for review. Production publication is a separate step requiring approval of this new change set; the earlier approval covered the already-deployed navigation cleanup.
+
+## First-action guidance refinement
+
+The next usability change must make an obvious first step visible before any “What next?” questions appear. Add a prominent Start here card for Workshop (describe the game), Build Space (choose a background/board, or open Workshop to create one), and Publish (open draft rehearsal/review). Its button must open/focus the real existing work area, not merely display an instruction. Only after that action is taken—or meaningful existing project work shows that the entry action has already happened—reveal a small contextual What next question with working action buttons. Starting an action is not presented as completing or verifying the game.
+
+The guide tracks only browser-session display preferences, separately for each project and stage. It must not add server schema, mark a draft tested, publish anything, lock the stage navigation, hide editing tools, lose the owner's new compact AI conversation layout, or overwrite existing project content. A Show first step action allows replay. Existing navigation remains available at all times; the old Next controls/mission details are visually deferred until entry, rather than creating another mandatory wizard.
+
+Implement `components/WorkflowEntryGuide.tsx` for consistent first/next card rendering and `lib/first-step-guidance.ts` for safe session preferences and existing-work detection. The project workspace supplies actual actions. Build Space accepts a sequenced entry request to open/focus Background, Add items, or Test without firing runtime controls. Use the existing TypeScript check because the Webdev diagnostic endpoint reports no active managed project; do not initialize a replacement site. Deliver via a GitHub pull request/Vercel preview on `feat/first-step-guidance`; this new change set is not authorized for production until separately approved.

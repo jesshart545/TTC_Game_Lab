@@ -5,7 +5,6 @@ const assert = require('node:assert/strict');
 const ts = require('typescript');
 const { JSDOM } = require(process.env.TTC_DOM_TEST_MODULE || 'jsdom');
 const React = require('react');
-const { createRoot } = require('react-dom/client');
 const load = require('./load.cjs');
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://example.test' });
@@ -14,6 +13,7 @@ global.document = dom.window.document;
 global.HTMLElement = dom.window.HTMLElement;
 global.IS_REACT_ACT_ENVIRONMENT = true;
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
+const { createRoot } = require('react-dom/client');
 
 function component(file, dependencies = {}) {
   const exports = {};
@@ -46,6 +46,8 @@ function component(file, dependencies = {}) {
 const Nav = component('components/ProjectWorkflowNav.tsx').default;
 const Folder = component('components/CollapsibleFolder.tsx').default;
 const MediaFolders = component('components/AssetFolders.tsx', { './CollapsibleFolder': { default: Folder } }).default;
+const EntryGuide = component('components/WorkflowEntryGuide.tsx').default;
+const EntryPreferences = component('lib/first-step-guidance.ts');
 const Backgrounds = component('components/BackgroundBrowser.tsx', { './CollapsibleFolder': { default: Folder } }).default;
 const BuildSpace = component('components/BuildSpace.tsx', {
   './BackgroundBrowser': { default: Backgrounds },
@@ -73,6 +75,8 @@ const Workspace = component('app/project/[id]/page.tsx', {
   '../../../lib/asset-store': { hydrateProjectAssets: async project => project },
   '../../../components/ProjectWorkflowNav': { default: Nav },
   '../../../components/CollapsibleFolder': { default: Folder },
+  '../../../components/WorkflowEntryGuide': { default: EntryGuide },
+  '../../../lib/first-step-guidance': EntryPreferences,
   '../../../components/AssetFolders': { default: MediaFolders },
   '../../../components/BuildSpace': { default: BuildSpace },
   '../../../components/RuntimeActionLayers': { default: () => null, useRuntimeActions: () => runtime },
@@ -107,6 +111,19 @@ async function click(text) {
     assert.deepEqual([...document.querySelectorAll('nav[aria-label="Workshop sections"] button')].map(button => button.textContent), ['Game plan', 'Assets & tools', 'Scenes & effects']);
     assert(document.getElementById('game-title'));
     assert(document.getElementById('game-rules'));
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'first');
+    assert(!document.querySelector('[aria-label="What next actions"]'), 'Do not ask What next before the first action.');
+    assert.equal(document.querySelector('.workshop-progress').hidden, true);
+    savePreview('workshop-first');
+    const beforeEntry = saves.length;
+    await click('Start my game plan');
+    assert.equal(document.activeElement.id, 'game-title', 'The first button opens and focuses the actual game plan.');
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'next');
+    assert(document.querySelector('[aria-label="What next actions"]'));
+    assert.equal(saves.length, beforeEntry, 'Starting the guide alone must not save or change project data.');
+    await click('Show the first step');
+    assert(!document.querySelector('[aria-label="What next actions"]'), 'Users can replay the first step without losing editing access.');
+    await click('Start my game plan');
     await click('Assets & tools');
     for (const label of ['Create background artwork', 'Upload background image', 'Upload other assets', 'Generate media', 'Generate trivia', 'Create an interactive game board', 'Create game tools', 'Create list and cards', 'Organize assets & pools', 'Asset Composer']) assert(byText(label), `Preserve editing capability: ${label}`);
     const creationFolder = document.querySelector('[data-folder-title="Creation tools"] > button');
@@ -144,6 +161,48 @@ async function click(text) {
     assert(document.getElementById('game-rules'), 'Game-plan editing remains reachable after all stage transitions.');
     assert(saves.length > 0);
     for (const saved of saves) assert.deepEqual(saved.publishedSnapshot, initial.publishedSnapshot);
+
+    initial.id = 'fresh-guide-review';
+    initial.publishedSnapshot = undefined;
+    initial.gamePlan = {};
+    initial.assets = [{ name: 'Safe backdrop.png', type: 'image/png', url: 'data:image/png;base64,aW1hZ2U=', storageKey: 'local-backdrop' }];
+    await React.act(async () => root.render(React.createElement(Workspace, { key: initial.id })));
+    const freshSaveStart = saves.length;
+    await click('2Build Space');
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'first');
+    assert(!document.querySelector('[aria-label="What next actions"]'));
+    savePreview('build-first');
+    await click('Choose my background');
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'next');
+    assert.equal(document.activeElement, document.querySelector('.build-background-browser input'), 'The first action focuses the real background search.');
+    await click('Test');
+    await click('Browse saved backgrounds');
+    assert.equal(document.querySelector('nav[aria-label="Build Space tasks"] button').getAttribute('aria-pressed'), 'true', 'A repeated guide action reopens the requested task.');
+    await click('3Publish');
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'first');
+    assert(!document.querySelector('[aria-label="What next actions"]'));
+    assert.equal(document.querySelector('.workshop-next').hidden, true);
+    savePreview('publish-first');
+    await click('Review my draft');
+    assert.equal(document.querySelector('.workshop-flow h1').textContent, 'Build & implement');
+    assert.equal([...document.querySelectorAll('nav[aria-label="Build Space tasks"] button')].find(button => button.textContent === 'Test').getAttribute('aria-pressed'), 'true', 'Publish first action opens actual draft rehearsal.');
+    await click('3Publish');
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'next');
+    assert(document.querySelector('[data-entry-phase]').textContent.includes('not proof that the game is tested'));
+    assert.equal(document.querySelector('.workshop-next').hidden, false);
+    for (const saved of saves.slice(freshSaveStart)) assert.equal(saved.publishedSnapshot, undefined, 'Entry/rehearsal navigation must never publish or replace a live snapshot.');
+
+    initial.id = 'blank-cross-section-entry';
+    initial.assets = [];
+    await React.act(async () => root.render(React.createElement(Workspace, { key: initial.id })));
+    await click('3Publish');
+    await click('Review my draft');
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'first', 'Opening Publish rehearsal must not mark Build Space\'s own first action taken.');
+    await click('Create a background in Workshop');
+    assert.equal(document.querySelector('.workshop-flow h1').textContent, 'Brainstorm & create');
+    assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'first', 'Routing to create a background must not prematurely start Workshop\'s game-plan guide.');
+    assert(!document.querySelector('[aria-label="What next actions"]'));
+    assert(document.getElementById('generator-prompt'), 'The background first action opens the actual media creation input, without generating anything automatically.');
     console.log('PASS: one numbered stage track, one save action, unnumbered local tasks, focused Publish view, freely reachable editing tools, and unchanged live snapshot.');
   } finally {
     await React.act(async () => root.unmount());
