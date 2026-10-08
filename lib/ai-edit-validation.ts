@@ -80,6 +80,7 @@ export function validateSavedReferences(project:any,input:unknown) {
 }
 export function validateCompletionClaim(response:unknown) {
  const r=record(response),changes=record(r.changes);
+ if(/\bI(?: have|'ve|’ve)?\s+(?:removed|deleted)\s+(?:(?:the|your|my|a|an|automatic|blank)\s+){0,4}(?:sequence|button|control|tool|board)\b/i.test(String(r.reply||'')))throw new Error('A draft proposal has not executed any removal. Describe what the prepared patch will remove only when removal is requested; never narrate rejected proposals as saved changes.');
  if(!r.action&&!Object.keys(changes).length&&(r.outcome==='edit'||/\b(?:I(?: have|'ve|’ve)?|I've|I’ve)\s+(?:successfully\s+)?(?:updated|changed|created|connected|configured|applied|added|removed|completed|made)\b|^\s*(?:done|completed|updated)[.!\s]/i.test(String(r.reply||''))))throw new Error('A completion claim has no executable action or saved changes. Return the actual supported edits, or a truthful clarification/limitation; do not report success from text alone.');
 }
 
@@ -100,4 +101,25 @@ export function validateRequestedAutomation(request:string,input:unknown) {
  const timed=(changes.sequences||[]).some((sequence:any)=>(sequence.steps||[]).some((step:any)=>Number(step.delaySeconds)>0));
  const requested=/\b(?:sequence|automatically|automatic|auto[- ]?(?:hide|remove)|wait|delay)\b|\bwhen\b[^.\n]{0,100}\b(?:ends?|finishes?|expires?|zero)\b|\bafter\b[^.\n]{0,50}\b(?:seconds?|countdown|timer|finishes?|ends?)\b/i.test(request);
  if(timed&&!requested)throw new Error('Timed automation was not explicitly requested. Preserve manual controls; apply unambiguous edits and ask whether removal should be automatic at countdown end or manual. Do not assume automatic behavior from a vague request to streamline.');
+}
+
+/** Sequences create their own button; additional tools need independent request grounding. */
+export function validateSequenceAdditions(request:string,input:unknown,action?:unknown) {
+ const changes=record(input);
+ if(!Array.isArray(changes.sequences)||!changes.sequences.length)return;
+ const toolAction=record(action);
+ const additions=[...(Array.isArray(changes.newTools)?changes.newTools:[]),...(toolAction.type==='tool'?[{type:toolAction.toolType}]:[])];
+ const mentions:Record<string,RegExp>={
+  'blank-board':/\b(?:boards?|panels?)\b/i,
+  scoreboard:/\b(?:score\s*boards?|leader\s*boards?|score\s+trackers?|team\s+scores?|strike\s+(?:tally|counter))\b/i,
+  countdown:/\b(?:countdown|timer)\b/i,
+  wheel:/\bwheel\b/i,'random-picker':/\b(?:picker|random\s+(?:image|card|item|choice))\b/i,
+  poll:/\b(?:poll|vote|voting)\b/i,dice:/\b(?:dice|die)\b/i,'coin-toss':/\bcoin\b/i,
+  youtube:/\byoutube\b/i,'prize-list':/\bprize\b/i,'game-tool-list':/\b(?:gift|tool\s+list)\b/i,
+  'card-list':/\b(?:cards?|list|pool|trivia)\b/i,
+ };
+ for(const raw of additions){
+  const tool=record(raw),pattern=mentions[String(tool.type)];
+  if(pattern&&!pattern.test(request))throw new Error(`A new ${String(tool.type)} is unrelated to this sequence request. changes.sequences creates its own dashboard button; omit placeholder or unrelated newTools. Add a separate tool only when that tool is part of the user's request.`);
+ }
 }

@@ -150,6 +150,13 @@ export const SUPPORT_CATALOG: readonly SupportCatalogEntry[] = [
     targets: ["game-tools", "add-items"],
   },
   {
+    id: "countdown",
+    title: "Answer timers and countdowns",
+    terms: ["answer timer", "countdown", "timer", "auto hide", "timer colors"],
+    excerpt: "Countdowns support numbers, bar, circle, numbers-bar and numbers-circle displays; background/text/accent colors, supported fonts, font size, shape, border visibility, transparency and placement. Connected control transitions support none, fade, slide or zoom for appearance/removal. Show-only, start/pause, reset and hide are distinct operations. An existing fresh Start and Hide control can be combined into an additional sequence button only when the user asks for automation. Matching a background can use sampled colors, not full artwork understanding. The timer editor supports custom minutes/seconds and duration preset buttons. A duration popup on the live trigger button is not available. Countdown color-phase changes, automatic ticking/warning sounds, player-answer submission feedback and automatic fastest-answer scoring are not implemented countdown features. Do not recommend them as settings the user can switch on. Suggest one supported improvement, and leave implementation to the user's request.",
+    targets: ["game-tools", "test"],
+  },
+  {
     id: "projects",
     title: "Projects and contact",
     terms: ["project", "project list", "account", "sign in", "contact", "problem", "error", "help"],
