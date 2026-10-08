@@ -9,6 +9,6 @@ export function assistantProvider() {
     url: `${base}/chat/completions`, key,
     models: process.env.TTC_AI_BASE_URL || process.env.TTC_AI_MODEL
       ? [configuredModel || "agnes-2.5-flash"]
-      : Array.from(new Set(["agnes-2.5-flash", configuredModel].filter(model => model && !model.startsWith("cpk-")))),
+      : Array.from(new Set([configuredModel, "agnes-2.5-flash"].filter(model => model && !model.startsWith("cpk-")))),
   };
 }

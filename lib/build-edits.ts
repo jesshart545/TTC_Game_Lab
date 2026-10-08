@@ -53,7 +53,7 @@ export function applyBuildChanges(project:Project,input:unknown){
  }
  for(const raw of Array.isArray(changes.sequences)?changes.sequences:[]){
   const item=record(raw),old=next.controls.find(c=>c.id===item.id&&c.action==='sequence');
-  if(item.id&&!old){warnings.push('The sequence could not be found.');continue;}
+  if(item.id&&!old){warnings.push('The supplied id is not a saved sequence. Omit id for a new sequence; only reuse an existing sequence ID when editing.');continue;}
   let candidate:Project={...next,controls:[...next.controls]};
   let steps:NonNullable<ProjectEvent['chain']>;
   try{steps=(Array.isArray(item.steps)?item.steps:[]).map((raw:any)=>{
