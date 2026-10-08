@@ -31,8 +31,11 @@ function BuildAssetThumbnail({asset,label,onSelect,selected}:{asset?:ProjectAsse
  return <button type="button" className="build-asset-thumbnail" aria-label={label} aria-pressed={selected} onClick={onSelect}><AssetThumbnail key={asset.url||asset.storageKey||asset.name} asset={asset} kind={kind}/></button>;
 }
 
-type Props={focusControl?:{id:string;request:number}|null;sequenceRunning:boolean;sequenceError:string;onStopSequence:()=>void;cardStates:Record<string,CardState>;onSelect:(selection:{kind:string;id:string}|null)=>void;project:Project;onChange:(project:Project)=>void;overlay:ReactNode;onTrigger:(control:ProjectEvent)=>void;onWorkshop:()=>void;youtubeOpen:boolean;onOpenYoutube:()=>void;onCloseYoutube:()=>void;onYoutubeCommand:(command:Record<string,unknown>)=>Promise<YouTubeState>;youtubeState:YouTubeState|null;youtubeFeedback:{playbackId:string;status:string;errorCode?:number}|null;dashboardExtras?:(toolId?:string)=>ReactNode;feedback?:string;onPublishStep:()=>void};
-export default function BuildSpace({focusControl,sequenceRunning,sequenceError,onStopSequence,cardStates,onSelect,project,onChange,overlay,onTrigger,onWorkshop,youtubeOpen,onOpenYoutube,onCloseYoutube,onYoutubeCommand,youtubeState,youtubeFeedback,dashboardExtras,feedback,onPublishStep}:Props){
+export type BuildEntryRequest = { task: "background" | "add" | "test"; request: number };
+
+type Props={entryRequest?:BuildEntryRequest|null;onEntryHandled?:(request:number)=>void;showNextGuidance?:boolean;focusControl?:{id:string;request:number}|null;sequenceRunning:boolean;sequenceError:string;onStopSequence:()=>void;cardStates:Record<string,CardState>;onSelect:(selection:{kind:string;id:string}|null)=>void;project:Project;onChange:(project:Project)=>void;overlay:ReactNode;onTrigger:(control:ProjectEvent)=>void;onWorkshop:()=>void;youtubeOpen:boolean;onOpenYoutube:()=>void;onCloseYoutube:()=>void;onYoutubeCommand:(command:Record<string,unknown>)=>Promise<YouTubeState>;youtubeState:YouTubeState|null;youtubeFeedback:{playbackId:string;status:string;errorCode?:number}|null;dashboardExtras?:(toolId?:string)=>ReactNode;feedback?:string;onPublishStep:()=>void};
+export default function BuildSpace({entryRequest,onEntryHandled,showNextGuidance=true,focusControl,sequenceRunning,sequenceError,onStopSequence,cardStates,onSelect,project,onChange,overlay,onTrigger,onWorkshop,youtubeOpen,onOpenYoutube,onCloseYoutube,onYoutubeCommand,youtubeState,youtubeFeedback,dashboardExtras,feedback,onPublishStep}:Props){
+ const assemblyRef=useRef<HTMLElement>(null);
  const currentProject=useRef(project);currentProject.current=project;
  const save=(next:Project)=>{currentProject.current=next;onChange(next);};
  const [testing,setTesting]=useState(false),[selection,setSelection]=useState<{kind:"asset"|"tool"|"control";id:string}|null>(null);
@@ -50,6 +53,21 @@ export default function BuildSpace({focusControl,sequenceRunning,sequenceError,o
  const settings=useRef<HTMLElement>(null);
  useEffect(()=>{if(selection&&!testing)settings.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[selection,testing]);
  useEffect(()=>{if(!focusControl)return;setActiveCreation(null);setTesting(false);setStep(2);setSelection({kind:'control',id:focusControl.id});},[focusControl]);
+ useEffect(()=>{
+  if(!entryRequest)return;
+  setActiveCreation(null);
+  goStep(entryRequest.task==="background"?0:entryRequest.task==="add"?1:3);
+ },[entryRequest]);
+ useEffect(()=>{
+  if(!entryRequest)return;
+  const expected=entryRequest.task==="background"?0:entryRequest.task==="add"?1:3;
+  if(step!==expected)return;
+  const selector=entryRequest.task==="background"?'.build-background-browser input':entryRequest.task==="add"?'[aria-label="Addition types"] button':'.dashboard-preview-buttons button';
+  const target=assemblyRef.current?.querySelector<HTMLElement>(selector)||assemblyRef.current?.querySelector<HTMLElement>('.build-guidance');
+  target?.scrollIntoView({behavior:"smooth",block:"center"});
+  target?.focus({preventScroll:true});
+  onEntryHandled?.(entryRequest.request);
+ },[step,entryRequest,onEntryHandled]);
  const issues=buildReadiness(project);
  function goStep(next:number){setStep(next);setTesting(next===3);setSelection(null);}
  const key=(asset:ProjectAsset)=>asset.storageKey||asset.name;
@@ -76,10 +94,10 @@ export default function BuildSpace({focusControl,sequenceRunning,sequenceError,o
  function applyBackground(id:string,board=false){onChange({...project,assets:project.assets.map(a=>({...a,inProject:board?(a.role==='background'?false:a.inProject):(key(a)===id?true:a.role==='background'?false:a.inProject),role:!board&&key(a)===id?'background':a.role})),gameTools:project.gameTools.map(t=>(t.type==='blank-board'||t.type==='trivia-board')?{...t,inOverlayBuild:board&&t.id===id,config:{...t.config,triggerOnly:false}}:t)});}
  function drop(e:React.DragEvent){e.preventDefault();try{const item=JSON.parse(e.dataTransfer.getData('application/ttc-creation'));if(['asset','tool','composition'].includes(item.kind))chooseCreation(item.kind,item.id);}catch{}}
 
- return <section className="build-space" aria-label="Build Space assembly">
+ return <section ref={assemblyRef} className="build-space" aria-label="Build Space assembly">
   <header className="build-space-toolbar"><div><h2>Assemble & rehearse</h2><p>{testing?"Rehearse the dashboard and its paired overlay. These actions stay in your draft.":"Start with a background or board. Then add creations and configure their dashboard controls and overlay appearance."}</p></div><button type="button" className="build-btn" aria-pressed={testing} onClick={()=>{setActiveCreation(null);goStep(testing?2:3);}}>{testing?"Return to assembly":"Test dashboard & overlay"}</button></header>
   <div className="build-local-navigation"><span className="workflow-section-label">Build Space tasks · edit in any order</span><nav className="build-steps" aria-label="Build Space tasks">{['Background','Add items','Customize','Test','Review'].map((label,index)=><button type="button" key={label} aria-pressed={step===index} onClick={()=>{if(index===3)setActiveCreation(null);goStep(index);}}>{label}</button>)}</nav></div>
-  <section className="build-guidance" aria-label="Current build step"><h3>{['Set your initial background','Choose the next addition','Choose how this addition looks and works','Play a complete round','Review before publishing'][step]}</h3><p>{['Choose a still image, animated background, or a board designed in Workshop. This is the starting scene.','Choose something you made in Workshop. We’ll add the matching dashboard buttons. You’ll then choose how it looks and try it. It stays hidden until you press its button.','The selected result is shown here only as an editing preview. Adjust its appearance and placement, name its controls, then test them.','Use the dashboard to show, reveal, play, and hide your additions. The background starts with the scene; game actions start only when you trigger them.','Fix missing connections and check a complete round before publishing.'][step]}</p>{step<4&&step!==1&&step!==2&&<button type="button" disabled={step===0&&!hasBackground} onClick={()=>goStep(step+1)}>Next: {['Choose additions','Set up this addition','Rehearse','Ready to publish'][step]}</button>}</section>
+  <section className="build-guidance" aria-label="Current build step" tabIndex={-1}><h3>{['Set your initial background','Choose the next addition','Choose how this addition looks and works','Play a complete round','Review before publishing'][step]}</h3><p>{['Choose a still image, animated background, or a board designed in Workshop. This is the starting scene.','Choose something you made in Workshop. We’ll add the matching dashboard buttons. You’ll then choose how it looks and try it. It stays hidden until you press its button.','The selected result is shown here only as an editing preview. Adjust its appearance and placement, name its controls, then test them.','Use the dashboard to show, reveal, play, and hide your additions. The background starts with the scene; game actions start only when you trigger them.','Fix missing connections and check a complete round before publishing.'][step]}</p>{showNextGuidance&&step<4&&step!==1&&step!==2&&<button type="button" disabled={step===0&&!hasBackground} onClick={()=>goStep(step+1)}>Next: {['Choose additions','Set up this addition','Rehearse','Ready to publish'][step]}</button>}</section>
   {step===0&&<BackgroundBrowser project={project} onChoose={applyBackground} onWorkshop={onWorkshop}/>}
   {step===4&&<section className="build-readiness" aria-label="Game readiness"><h3>{issues.length?`${issues.length} connection issues to fix`:'No connection issues detected'}</h3>{issues.length?issues.map(issue=><div key={issue.id}><p>{issue.message}</p><button type="button" onClick={()=>{goStep(2);setSelection({kind:issue.kind,id:issue.targetId});}}>Fix connection</button></div>):<p>Check your game's rules, media playback, and complete round in rehearsal before publishing.</p>}<button type="button" onClick={()=>goStep(3)}>Rehearse game</button><button type="button" disabled={issues.length>0} onClick={onPublishStep}>Continue to Publish</button></section>}
   {!testing&&(step===1||step===2)&&<section className="addition-guide" aria-label="Additions guide">
