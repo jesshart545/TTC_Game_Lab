@@ -778,7 +778,7 @@ export default function ProjectWorkspace() {
       const unapplied = Object.keys(data.changes || {}).length > 0 && !result.applied && !data.action;
       const affectedControls=result.project.controls.filter(control=>{const existing=baseProject.controls.find(item=>item.id===control.id);return !existing||JSON.stringify(existing)!==JSON.stringify(control);});
       const controlsSummary=affectedControls.length?`Updated draft dashboard ${affectedControls.length===1?"button":"buttons"}: ${affectedControls.map(control=>control.label).join(", ")}. You can review them in Build Space and try them in Test.`:"";
-      const reply = [unapplied ? "I could not apply the requested changes. Your draft has not been changed." : data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), controlsSummary, result.warnings.length?result.warnings.join("\n"):"", steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
+      const reply = [unapplied ? "I could not apply the requested changes. Your draft has not been changed." : result.warnings.length&&result.applied?"I applied part of your request, but could not complete every change. The remaining issues are listed below.": data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), controlsSummary, result.warnings.length?result.warnings.join("\n"):"", steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
       if (data.action) {
         const action = data.action;
         if (action.type === "trivia") {

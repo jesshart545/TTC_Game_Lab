@@ -12,3 +12,6 @@ assert.throws(()=>validateExplicitSettings('Set up a button string',{reply:'I am
 validateExplicitSettings('String these buttons together',{reply:'Which buttons should run, and in what order?',changes:{},action:null});
 validateExplicitSettings('String these buttons together',{reply:'I have created the sequence.',changes:{sequences:[{name:'Start round',steps:[{controlId:'show'}]}]},action:null});
 console.log('PASS: sequence promises without structured changes trigger repair; necessary clarification remains available.');
+assert.throws(()=>validateExplicitSettings('Each press should perform the next action',{reply:'Configured',changes:{sequences:[{name:'Wrong automatic sequence',steps:[]}]}}),/one step per separate press/);
+validateExplicitSettings('Each press should run all the intro actions',{reply:'Configured',changes:{sequences:[{name:'Intro',steps:[]}]}});
+console.log('PASS: per-press tasks cannot silently become automatic sequences; explicit requests to run all actions still support sequences.');

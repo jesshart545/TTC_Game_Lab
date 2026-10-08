@@ -1,5 +1,5 @@
 import {coinCycleRequest} from "../../../lib/coin-cycle";
-import {creatableTools} from "../../../lib/build-edits";
+import {creatableTools,applyBuildChanges} from "../../../lib/build-edits";
 import { musicDuration } from "../../../lib/music-duration";
 import {groundedResearchCards} from "../../../lib/research-cards";
 import {validateExplicitSettings} from "../../../lib/ai-edit-validation";
@@ -85,6 +85,13 @@ export async function POST(request: Request) {
       if (raw && !action) throw new Error(`The action ${String(raw.type||'unknown')} is not supported in that format. Edit an existing pool using changes.gameTools with its saved ID; create a new pool using changes.newTools; return action null for these saved edits.`);
       if (Array.isArray(parsed.changes.gameTools) && parsed.changes.gameTools.some((tool:any)=>!body.project?.gameTools?.some((existing:any)=>existing.id===tool.id))) throw new Error("New tools must use the tool action");
       if(body.searchEvidence)parsed.changes=groundedResearchCards(parsed.changes,body.searchEvidence,body.project?.gameTools||[],String(body.request||''));
+      if(Object.keys(parsed.changes).length&&Array.isArray(body.project?.assets)&&Array.isArray(body.project?.controls)&&Array.isArray(body.project?.gameTools)){
+        // Client context omits media URLs; saved storage keys still identify connectable assets.
+        const validationProject={...body.project,assets:body.project.assets.map((asset:any)=>({...asset,url:asset.url||(asset.storageKey?'saved-asset:'+asset.storageKey:undefined)}))};
+        const checked=applyBuildChanges(validationProject,parsed.changes);
+        if(checked.warnings.length)throw new Error(checked.warnings.join(' '));
+        if(!checked.applied)throw new Error('No requested edit could be applied. Use the exact saved item IDs and the documented changes fields, or ask for the missing information.');
+      }
       const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
       if (!reply && !action && !Object.keys(parsed.changes).length) throw new Error("Return the requested pool edit and a nonempty reply; the previous response contained neither.");
       return NextResponse.json({ configured: true, action, reply, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });

@@ -2,6 +2,9 @@ const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isAr
 // Catch omitted explicit settings before the application accepts a model edit.
 export function validateExplicitSettings(request:string,response:unknown){
  const responseData=record(response),draftChanges=record(responseData.changes);
+ const perPress=/\b(?:each|every)\s+(?:press|click)\b|\b(?:first|second|third)\s+(?:press|click)\b/i.test(request);
+ const wholeSequence=/\b(?:each|every)\s+(?:press|click)\b[^.\n]{0,45}\b(?:all|entire|whole)\b/i.test(request);
+ if(perPress&&!wholeSequence&&Array.isArray(draftChanges.sequences)&&draftChanges.sequences.length)throw new Error('This request advances one step per separate press. Do not return an automatic sequence. Use coinCycles for Show / Flip / Remove on a coin, or explain a missing capability and ask for the necessary details.');
  const sequenceRequest=/\bsequence\b|\b(?:button|action|function)[ -](?:string|chain)\b|\b(?:string|chain|link|combine|connect)\b[^.\n]{0,70}\b(?:buttons?|actions?|functions?)\b/i.test(request);
  const promisedSequence=/\bI(?:'ll| will| have| am going to|’ll)\b[^.\n]{0,100}\b(?:set up|creat(?:e|ed)|add(?:ed)?|connect(?:ed)?|link(?:ed)?|build|built)\b/i.test(String(responseData.reply||''));
  if(sequenceRequest&&promisedSequence&&!responseData.action&&!Object.keys(draftChanges).length&&!String(responseData.reply||'').includes('?'))throw new Error('Return the actual requested changes.sequences with connected steps, or ask for missing information. Do not promise a button without saved changes.');
