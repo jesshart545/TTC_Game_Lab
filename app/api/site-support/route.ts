@@ -1,7 +1,7 @@
 import { adviceOnlyRequest } from "../../../lib/assistant-intent";
 import { assistantProvider } from "../../../lib/assistant-provider";
 import { NextResponse } from "next/server";
-import { checkedSupportContext, checkedSupportHistory, checkedSupportReply, checkedSupportText, SUPPORT_TARGETS, supportCatalogExcerpts } from "../../../lib/site-support";
+import { checkedSupportContext, checkedSupportHistory, checkedSupportReply, checkedSupportText, SUPPORT_TARGETS, supportCatalogExcerpts, fallbackSupport } from "../../../lib/site-support";
 import { researchAccess } from "../../../lib/web-research-server";
 
 export const runtime = "nodejs";
@@ -63,6 +63,12 @@ export async function POST(request: Request) {
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || content.length > 15000) throw new Error("Incomplete provider response");
     const result = checkedSupportReply(JSON.parse(content.trim().replace(/^```(?:json)?\s*|\s*```$/g, "")), { allowTask });
+    if (result.kind === "help" && /\b(?:timer|countdown)\b/i.test(text) && /final (?:few )?seconds|as (?:the )?time runs out|color[- ]phase|warning (?:hue|colou?r)|save custom (?:duration )?presets|add preset buttons/i.test(result.reply) && !/not (?:available|implemented|supported)|cannot|does not support/i.test(result.reply)) {
+      return NextResponse.json({ ...fallbackSupport(text, context), offline: true }, { headers });
+    }
+    if (/^[\x00-\x7f]+$/.test(text) && /[\u3400-\u9fff]/.test(result.reply)) {
+      return NextResponse.json(result.kind === 'task' ? { ...result, reply: 'I will carry out your requested draft task using the existing project tools.' } : { ...fallbackSupport(text, context), offline: true }, { headers });
+    }
     if (result.kind === "task" && adviceOnlyRequest(text)) return NextResponse.json({kind:"help",reply:"No task has run. Your message asked for suggestions, so I will wait for you to ask me to carry out a specific step.",targets:[]}, {headers});
     return NextResponse.json(result, { headers });
   } catch (error) {

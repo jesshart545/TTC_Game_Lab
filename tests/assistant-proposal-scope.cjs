@@ -37,3 +37,8 @@ const multiple=supportCatalogExcerpts('How do I trim a video and create a trivia
 assert(multiple.some(e=>e.id==='editing'));assert(multiple.some(e=>e.id==='trivia-research'));assert(multiple.length<=4);
 const countdown=supportCatalogExcerpts('Suggest ways I could improve my Answer Timer',{scope:'project:test',page:'project',section:'game-tools'});assert.equal(countdown[0].id,'countdown');
 console.log('PASS: malformed tool design patches are rejected; multi-feature help retains editing and research context.');
+
+const {validateExplicitSettings}=load('lib/ai-edit-validation.ts');
+assert.throws(()=>validateExplicitSettings('Add a scoreboard. Connect it to my dashboard so I can show and remove it',{changes:{newTools:[{type:'scoreboard'}]}}),/connect:true/);
+validateExplicitSettings('Add a scoreboard. Connect it to my dashboard so I can show and remove it',{changes:{newTools:[{type:'scoreboard',connect:true}]}});
+validateExplicitSettings('Create a scoreboard in my toolbox only',{changes:{newTools:[{type:'scoreboard'}]}});
