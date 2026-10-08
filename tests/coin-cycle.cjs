@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),load=require('./load.cjs');
+const {coinCycleRequest,nextCoinPhase}=load('lib/coin-cycle.ts'),{applyBuildChanges}=load('lib/build-edits.ts'),{controlConnectionError}=load('lib/control-connections.ts');
+const p={id:'test',assets:[],overlay:{},gameTools:[{id:'coin',type:'coin-toss',name:'Coin Toss',enabled:true,inToolbox:true,config:{}}],controls:[{id:'flip',label:'Flip Coin Toss',action:'tool.coin',toolIds:['coin']},{id:'hide',label:'Hide Coin Toss',action:'result.hide.flip'}]};
+const request='i want the coin toss button to be pressed once to appear on the overlay, the button to be pressed again to flip the coin and reveal, and pressed a third time to remove the coin from the overlay';
+const response=coinCycleRequest(request,[],p);assert(response.changes.coinCycles);assert.equal(response.changes.sequences,undefined);
+const applied=applyBuildChanges(p,response.changes);assert.equal(applied.warnings.length,0);assert.equal(applied.project.controls.length,1);const control=applied.project.controls[0];assert.equal(control.id,'flip');assert.equal(control.action,'coin.cycle.coin');assert.equal(control.buttonMode,'single');assert.equal(controlConnectionError(applied.project,control),null);
+assert(coinCycleRequest('no each press should perform in order one of the three functions',[{role:'user',text:request}],p).changes.coinCycles);
+assert.equal(coinCycleRequest('Flip the coin',[],p),null);
+const other={...p,controls:[...p.controls,{id:'scores',action:'tool.scores'}]};assert.equal(coinCycleRequest(request,[],other,{kind:'control',id:'scores'}).changes.coinCycles[0].controlId,undefined);
+let phase;const phases=[];for(let i=0;i<6;i++){phase=nextCoinPhase(phase);phases.push(phase);}assert.deepEqual(phases,['show','flip','hide','show','flip','hide']);
+assert.equal(applyBuildChanges(applied.project,response.changes).project.controls.length,1);
+assert.equal(load('lib/build-controls.ts').addCreationControl(applied.project,'tool','coin').project.controls.length,1);
+console.log('PASS: exact conversational request maps to a per-press cycle; existing button updated; redundant Hide removed; unrelated selections preserved; repeat edits do not create duplicates.');

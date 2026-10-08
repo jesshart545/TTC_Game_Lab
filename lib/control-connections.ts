@@ -16,6 +16,7 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
   if (!control.action?.trim() && !control.toolIds?.length && !control.compositionId && !(control.buttonMode === 'chain' && control.chain?.length)) {
     return 'Choose an action for this dashboard button in Build Space before using it.';
   }
+  if(control.action?.startsWith('coin.cycle.'))return project.gameTools.some(tool=>tool.id===control.action.slice(11)&&tool.type==='coin-toss'&&tool.enabled)?null:'Choose an available Coin Toss tool for this button.';
   if(control.action?.startsWith('asset.show.'))return project.assets.some(a=>(a.storageKey||a.name)===control.action.slice(11)&&a.url)?null:'Choose an available media file for this control.';
   if(control.action?.startsWith('result.hide.'))return project.controls.some(c=>c.id===control.action.slice(12))?null:'The display control for this Hide button is missing.';
   if(control.action==='sequence'){try{for(const step of sequenceControls(project,control)){const error=controlConnectionError(project,step.control);if(error)return error;}return null;}catch(error){return error instanceof Error?error.message:'Check the sequence actions.';}}
@@ -36,7 +37,7 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
 
 export function assignControlAction(project: Project, control: ProjectEvent, action: string): ProjectEvent {
   const card = cardControl(action);
-  const tool = project.gameTools.find(t => t.id === card?.toolId || action === `tool.${t.id}`);
+  const tool = project.gameTools.find(t => t.id === card?.toolId || action === `tool.${t.id}` || action === `coin.cycle.${t.id}`);
   const composition = project.compositions?.find(c => action === `composition.play.${c.id}`);
   return {...control, action, toolIds: tool ? [tool.id] : [], compositionId: composition?.id,
     detail: card && tool ? `${card.action}: ${tool.name}` : tool ? `Open ${tool.name}` : composition ? `Play ${composition.name}` : action.startsWith('background.show.') ? 'Change background' : 'Unassigned dashboard button'};

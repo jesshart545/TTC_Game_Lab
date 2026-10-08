@@ -13,6 +13,7 @@ export function addCreationControl(project:Project,kind:'asset'|'tool'|'composit
  const tool=kind==='tool'?project.gameTools.find(t=>t.id===id&&t.enabled):undefined;
  const composition=kind==='composition'?project.compositions?.find(c=>c.id===id):undefined;
  if(!asset&&!tool&&!composition)throw new Error('This creation is unavailable.');
+ if(tool?.type==='coin-toss'){const cycle=project.controls.find(control=>control.action===`coin.cycle.${id}`);if(cycle)return {project:{...project,gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true}:item)},controlId:cycle.id};}
  if(tool&&(tool.type==='random-picker'||['scoreboard','prize-list','game-tool-list'].includes(tool.type))){
   const action=`cards.toggle.${id}`,noun=tool.type==='random-picker'?(tool.config.source==='images'?'image':'card'):tool.name;
   let controls=project.controls.filter(c=>!(tool.type==='random-picker'&&c.action===`cards.clear.${id}`)).map(c=>c.action===`cards.draw.${id}`||c.action===`tool.${id}`?{...c,action,toolIds:[id],label:tool.type==='random-picker'?`Draw random ${noun}: ${tool.name}`:`Show ${tool.name}`,detail:'Press once to show; press the same button again to remove'}:c);

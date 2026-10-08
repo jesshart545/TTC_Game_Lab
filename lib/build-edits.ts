@@ -21,6 +21,19 @@ export function applyBuildChanges(project:Project,input:unknown){
   else if(!item.id&&typeof item.name==='string'&&item.name.trim()){next.assetPools.push({id:crypto.randomUUID(),name:item.name.trim().slice(0,80),assetKeys:[...new Set<string>(keys||[])]});extra++;}
   else warnings.push('The requested asset pool could not be found.');
  }
+ for(const raw of Array.isArray(changes.coinCycles)?changes.coinCycles:[]){
+  const item=record(raw),coin=next.gameTools.find(tool=>tool.id===item.toolId&&tool.type==='coin-toss'&&tool.enabled);
+  if(!coin){warnings.push('Choose an existing Coin Toss tool for this three-press button.');continue;}
+  const existing=item.controlId?next.controls.find(control=>control.id===item.controlId):next.controls.find(control=>control.action===`tool.${coin.id}`||control.action===`coin.cycle.${coin.id}`);
+  if(item.controlId&&!existing){warnings.push('The coin button could not be found.');continue;}
+  const linked=existing?{project:{...next,gameTools:next.gameTools.map(tool=>tool.id===coin.id?{...tool,inToolbox:true,inOverlayBuild:true,config:{...tool.config,triggerOnly:true}}:tool)},controlId:existing.id}:addCreationControl(next,'tool',coin.id);next={...linked.project,assetPools:next.assetPools};
+  const target=existing||next.controls.find(control=>control.id===linked.controlId)!;
+  const cycle={...target,action:`coin.cycle.${coin.id}`,toolIds:[coin.id],buttonMode:'single' as const,chain:undefined,compositionId:undefined,label:typeof item.label==='string'?item.label.slice(0,80):target.label===`Flip ${coin.name}`?coin.name:target.label,detail:'Press once to show the coin; again to flip and reveal; a third time to remove. Then repeat.'};
+  next.controls=next.controls.map(control=>control.id===target.id?cycle:control).filter(control=>{
+   if(control.action!==`result.hide.${target.id}`&&!(target.id!==linked.controlId&&control.id===linked.controlId))return true;
+   return next.controls.some(other=>other.chain?.some(step=>step.refId===control.id));
+  });extra++;
+ }
  const result=applyDraftChanges(next,changes);next={...result.project,assetPools:next.assetPools};
  for(const item of [...created.map(id=>({kind:'tool',id})),...(Array.isArray(changes.connections)?changes.connections:[])]){
   if(!['asset','tool','composition'].includes(item?.kind)||typeof item?.id!=='string'){warnings.push('A requested connection was missing its saved item.');continue;}

@@ -6,6 +6,7 @@ import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/proje
 import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
 import {WheelDisplay,DiceDisplay,CoinDisplay} from "./ChanceTools";
+import {nextCoinPhase,type CoinPhase} from "../lib/coin-cycle";
 import {coinOutcome} from "../lib/coin-toss";
 import {BoardSurface} from "./BoardDesigner";
 import QuestionCards from './QuestionCards';
@@ -13,7 +14,7 @@ import {cardControl,cardTransition,freshCardState,type CardState,type CardAction
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
-type Run = { exitingAt?:number; id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
+type Run = { coinPhase?:CoinPhase; exitingAt?:number; id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
 export function useRuntimeActions(project: Project | null,onCardStates?:(states:Record<string,CardState>)=>void) {
   const savedCallback=useRef(onCardStates);savedCallback.current=onCardStates;
   const initialized=useRef<string|null>(null);
@@ -28,12 +29,13 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   useEffect(()=>()=>sequence.current?.abort(),[]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
+  const coinPhases=useRef<Record<string,CoinPhase>>({});
   const [runs, setRuns] = useState<Run[]>([]);
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
-  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[]}>) {
+  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[];phase?:CoinPhase}>) {
     const p = latest.current; if (!p) return;
     if(control.action==='sequence'){
       const error=controlConnectionError(p,control);if(error)throw new Error(error);
@@ -55,6 +57,13 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
       setRuns(items => [...items.filter(item => entry.tool ? item.tool?.id !== entry.tool.id : entry.asset ? (item.asset?.storageKey || item.asset?.name) !== (entry.asset.storageKey || entry.asset.name) : true), { ...entry, id, at: Date.now(), control }]);
       if(Number.isFinite(seconds))later(() => remove(id), Math.max(1, seconds) * 1000);
     };
+    if(control.action.startsWith('coin.cycle.')){
+      const id=control.action.slice(11),tool=p.gameTools.find(tool=>tool.id===id&&tool.type==='coin-toss'&&tool.enabled);if(!tool)return;
+      const phase=outcomes?.[id]?.phase||nextCoinPhase(coinPhases.current[id]);coinPhases.current[id]=phase;
+      if(phase==='hide'){setRuns(items=>items.filter(item=>item.tool?.id!==id));return;}
+      const result=phase==='flip'?(outcomes?.[id]?.result||coinOutcome(crypto.getRandomValues(new Uint32Array(1))[0])):'';
+      add({tool,result,coinPhase:phase},Infinity);return;
+    }
     if(control.action.startsWith('asset.show.')){const asset=p.assets.find(a=>(a.storageKey||a.name)===control.action.slice(11));if(asset)add({asset},Infinity);return;}
     const playTool = (id: string) => {
       const storedTool = latest.current?.gameTools.find(t => t.id === id && t.enabled && t.inToolbox);
@@ -148,7 +157,7 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
     {tool.type === "wheel" && <WheelDisplay colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} entries={(Array.isArray(config.segments)?config.segments:[]).map(String)} result={run.result||""} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "random-picker" && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "countdown" && <strong role="timer">{remaining === 0 ? "Time's up!" : remaining}</strong>}
-    {tool.type === "coin-toss" && <CoinDisplay result={run.result} elapsed={now-run.at} preview={run.id===0} faceColor={String(config.faceColor||"#ffd166")} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#382608")}/>}
+    {tool.type === "coin-toss" && <CoinDisplay result={run.result} elapsed={now-run.at} preview={run.id===0} ready={run.coinPhase==='show'} faceColor={String(config.faceColor||"#ffd166")} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#382608")}/>}
     {tool.type === "dice" && <DiceDisplay faceColor={String(config.faceColor||"#f5faff")} pipColor={String(config.pipColor||"#102132")} result={Number(run.result)||1} sides={Math.min(100,Math.max(2,Math.floor(Number(config.sides)||6)))} elapsed={now-run.at} preview={run.id===0}/>}
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
     {tool.type === "trivia-board" && <div className="runtime-jeopardy-grid">{(Array.isArray(config.categories)?config.categories:[]).map((category:any,i:number)=><div key={i}><strong>{String(category.name)}</strong>{(Array.isArray(category.questions)?category.questions:[]).map((q:any,j:number)=><p key={j}>{q.used?'USED':String(q.value)}</p>)}</div>)}</div>}

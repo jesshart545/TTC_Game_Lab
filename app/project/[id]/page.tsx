@@ -776,8 +776,8 @@ export default function ProjectWorkspace() {
       const result = applyBuildChanges(baseProject, data.changes);
       const steps = Array.isArray(data.manualSteps) ? data.manualSteps.filter((step: unknown) => typeof step === "string") : [];
       const unapplied = Object.keys(data.changes || {}).length > 0 && !result.applied && !data.action;
-      const createdControls=result.project.controls.filter(control=>!baseProject.controls.some(existing=>existing.id===control.id));
-      const controlsSummary=createdControls.length?`Added draft dashboard ${createdControls.length===1?"button":"buttons"}: ${createdControls.map(control=>control.label).join(", ")}. You can review them in Build Space and try them in Test.`:"";
+      const affectedControls=result.project.controls.filter(control=>{const existing=baseProject.controls.find(item=>item.id===control.id);return !existing||JSON.stringify(existing)!==JSON.stringify(control);});
+      const controlsSummary=affectedControls.length?`Updated draft dashboard ${affectedControls.length===1?"button":"buttons"}: ${affectedControls.map(control=>control.label).join(", ")}. You can review them in Build Space and try them in Test.`:"";
       const reply = [unapplied ? "I could not apply the requested changes. Your draft has not been changed." : data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), controlsSummary, result.warnings.length?result.warnings.join("\n"):"", steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
       if (data.action) {
         const action = data.action;
@@ -812,7 +812,7 @@ export default function ProjectWorkspace() {
       } else {
         persist({ ...result.project, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: reply }] });
         if(result.applied)setAiUndo(baseProject);
-        if(workflowStep===1&&createdControls.length){const focus=createdControls.find(control=>control.action==='sequence')||createdControls[0];setAiControlFocus({id:focus.id,request:Date.now()});}
+        if(workflowStep===1&&affectedControls.length){const focus=affectedControls.find(control=>control.action.startsWith('coin.cycle.'))||affectedControls.find(control=>control.action==='sequence')||affectedControls[0];setAiControlFocus({id:focus.id,request:Date.now()});}
       }
     } catch (error) {
       persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: error instanceof Error ? `${error.message} Your request is in this chat; no draft edit was applied.` : "AI editing is unavailable. No draft edit was applied." }] });
