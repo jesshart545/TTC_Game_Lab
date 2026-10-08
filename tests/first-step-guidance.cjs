@@ -70,8 +70,11 @@ const byText = text => [...document.querySelectorAll('button')].find(button => b
     assert.equal(entries, 1);
     assert.equal(document.querySelector('[data-entry-phase]').getAttribute('data-entry-phase'), 'next');
     assert(document.querySelector('[aria-label="What next actions"]'));
+    assert.equal(document.querySelector('.entry-guide-options').open, false);
+    assert.equal(document.querySelectorAll('[data-entry-phase] .build-btn').length, 1, 'There is exactly one visually primary follow-up action.');
     await React.act(async () => byText('Create a background').click());
     assert.equal(choices, 1, 'Follow-up choices must invoke actual supplied action callbacks.');
+    await React.act(async () => { document.querySelector('.entry-guide-options').open = true; });
     await React.act(async () => byText('Show the first step').click());
     assert(!document.querySelector('[aria-label="What next actions"]'));
     assert.equal(entries, 1, 'Replaying the guide must not automatically perform any action.');

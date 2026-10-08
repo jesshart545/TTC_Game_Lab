@@ -181,19 +181,26 @@
 .workflow-layout .chat-panel .composer textarea{min-height:56px;max-height:160px;resize:vertical}
 @media(max-width:700px){.workflow-layout .chat-panel{min-height:0}.compact-messages{max-height:180px}}
 
-/* One obvious first action; subsequent questions are revealed only after entry. */
-.workflow-entry-guide{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:18px 0;padding:22px;border:1px solid #43d4e2;border-left:5px solid #43d4e2;border-radius:12px;background:#0b2631;box-shadow:0 6px 24px #0002}
+/* A single compact task, after stable section navigation. */
+.workflow-entry-guide{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:14px 0;padding:16px 18px;border:1px solid #43d4e2;border-left:4px solid #43d4e2;border-radius:10px;background:#0b2631}
 .entry-guide-copy{min-width:0;flex:1}
-.workflow-entry-guide .entry-guide-kicker{display:block;color:#8ff6ff;font-size:13px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
-.workflow-entry-guide h2{margin:8px 0;font-size:clamp(23px,2.2vw,30px);line-height:1.2;color:#effcff}
-.workflow-entry-guide p{margin:0;color:#c4dbe4;font-size:15px;line-height:1.6;max-width:760px}
-.entry-guide-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;flex:0 1 280px;min-width:200px}
-.workflow-entry-guide .entry-guide-actions button{min-height:48px;padding:12px 16px;font-size:15px;font-weight:700;line-height:1.4}
+.workflow-entry-guide .entry-guide-kicker{display:block;color:#8ff6ff;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.workflow-entry-guide h2{margin:6px 0;font-size:clamp(20px,1.8vw,25px);line-height:1.25;color:#effcff}
+.workflow-entry-guide p{margin:0;color:#c4dbe4;font-size:14px;line-height:1.5;max-width:760px}
+.entry-guide-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;flex:0 0 240px;min-width:0}
+.workflow-entry-guide .entry-guide-actions button{min-height:42px;padding:10px 14px;font-size:14px;font-weight:700;line-height:1.4}
 .workflow-entry-guide .entry-guide-note{color:#abc5d3;font-size:12px;line-height:1.45;text-align:center}
-.workflow-entry-guide.entry-started{flex-wrap:wrap;background:#101e2b;border-color:#355468;border-left-color:#61adbc;box-shadow:none}
-.entry-started .entry-guide-copy{flex:1 1 460px}
-.entry-started .entry-guide-actions{flex:1 1 260px}
-.workflow-entry-guide .entry-guide-replay{flex:0 0 100%;padding:2px 0;min-height:30px;border:0;background:transparent;color:#a5d2df;text-decoration:underline;text-align:left;font-size:13px;cursor:pointer}
+.workflow-entry-guide.entry-started{background:#101e2b;border-color:#355468;border-left-color:#61adbc}
+.entry-guide-options{font-size:13px;color:#bcdce5}
+.entry-guide-options summary{cursor:pointer;padding:6px 0;text-align:center}
+.entry-guide-options[open]{padding:8px;border:1px solid #355468;border-radius:8px}
+.entry-guide-options button{display:block;width:100%;margin-top:6px}
+.workflow-entry-guide .entry-guide-replay{padding:6px;min-height:32px;border:0;background:transparent;color:#a5d2df;text-decoration:underline;text-align:left;font-size:13px;cursor:pointer}
 .workflow-entry-guide button:focus-visible{outline:3px solid #f77bed;outline-offset:3px}
-.workshop-next[hidden],.workshop-progress[hidden]{display:none!important}
-@media(max-width:700px){.workflow-entry-guide{flex-direction:column;align-items:stretch;gap:16px;padding:18px}.entry-guide-actions,.entry-started .entry-guide-actions,.entry-started .entry-guide-copy{flex:auto;min-width:0}.workflow-entry-guide h2{font-size:23px}.workflow-entry-guide .entry-guide-replay{flex:auto}}
+.entry-guide-options summary:focus-visible{outline:3px solid #f77bed;outline-offset:3px}
+.workspace-page [hidden]{display:none!important}
+.workflow-local-navigation{margin-top:14px}
+.workflow-layout[data-workshop-section="0"]>.chat-panel{grid-column:1 / -1;max-width:900px}
+.workflow-layout[data-workshop-section="2"]>.assets-panel>:not(.assets-head):not(#workshop-scenes){display:none}
+.publish-review-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:16px}
+@media(max-width:700px){.workflow-entry-guide{flex-direction:column;align-items:stretch;gap:12px;padding:16px}.entry-guide-actions{flex:auto}.workflow-entry-guide h2{font-size:21px}.publish-review-actions>*{flex:1 1 180px}}

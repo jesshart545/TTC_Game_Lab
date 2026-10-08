@@ -32,7 +32,6 @@ export default function ProjectWorkflowNav({ stage, workshopSection, onStageChan
       <p className="workflow-navigation-note">
         Move between stages whenever you need. Your draft stays separate from your published game.
       </p>
-      {entryGuide}
       {stage === 0 && (
         <div className="workflow-local-navigation">
           <span className="workflow-section-label">Workshop sections</span>
@@ -51,6 +50,7 @@ export default function ProjectWorkflowNav({ stage, workshopSection, onStageChan
           </nav>
         </div>
       )}
+      {entryGuide}
     </>
   );
 }
