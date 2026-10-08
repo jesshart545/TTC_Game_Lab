@@ -1,0 +1,10 @@
+"use client";
+import {useEffect,useRef,useState} from 'react';
+type Message={role:string;text:string};
+export default function CompactConversation({messages,busy=false}:{messages:Message[];busy?:boolean}){
+ const [hidden,setHidden]=useState(false),[history,setHistory]=useState(false),[expanded,setExpanded]=useState<Record<number,boolean>>({});
+ const viewport=useRef<HTMLDivElement>(null),nearBottom=useRef(true);
+ const start=history?0:Math.max(0,messages.length-4);
+ useEffect(()=>{const node=viewport.current;if(node&&!hidden&&(!history||nearBottom.current))node.scrollTop=node.scrollHeight;},[messages.length,messages.at(-1)?.text,busy,hidden,history]);
+ return <section className="compact-conversation" aria-label="AI conversation"><div className="conversation-toolbar"><span>{messages.length?`${messages.length} messages`:'Conversation'}</span><button type="button" aria-expanded={!hidden} onClick={()=>setHidden(value=>!value)}>{hidden?'Show conversation':'Hide conversation'}</button></div>{!hidden&&<><div className="conversation-history-controls">{messages.length>4&&<button type="button" aria-expanded={history} onClick={()=>{setHistory(value=>!value);nearBottom.current=false;}}>{history?'Show recent messages':`Show ${messages.length-4} earlier messages`}</button>}</div><div ref={viewport} className="compact-messages" role="log" aria-label="Conversation messages" aria-live="polite" onScroll={()=>{const node=viewport.current;if(node)nearBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<80;}}>{messages.slice(start).map((message,offset)=>{const index=start+offset,long=message.text.length>600,full=expanded[index];return <div className={`compact-message ${message.role}`} key={index}><strong>{message.role==='assistant'?'TTCGameLab AI':'You'}</strong><p>{long&&!full?message.text.slice(0,600)+'…':message.text}</p>{long&&<button type="button" aria-expanded={!!full} onClick={()=>setExpanded(value=>({...value,[index]:!value[index]}))}>{full?'Show less':'Read full response'}</button>}</div>;})}{busy&&<p role="status" className="compact-chat-working">Working on your request…</p>}</div></>}</section>;
+}
