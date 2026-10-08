@@ -76,7 +76,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     if(control.action.startsWith('asset.show.')){const asset=p.assets.find(a=>(a.storageKey||a.name)===control.action.slice(11));if(asset)add({asset},Infinity);return;}
     const playTool = (id: string) => {
       const storedTool = latest.current?.gameTools.find(t => t.id === id && t.enabled && t.inToolbox);
-      if (!storedTool) return;
+      if (!storedTool || storedTool.type==='youtube') return;
       const chosen=outcomes?.[id];
       const tool=chosen?.segments?{...storedTool,config:{...storedTool.config,segments:chosen.segments}}:storedTool;
       if(tool.type==='random-picker'){cardCommand(id,'draw');return;}
