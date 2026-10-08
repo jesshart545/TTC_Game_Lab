@@ -44,7 +44,11 @@ function component(file, dependencies = {}) {
 }
 
 const Nav = component('components/ProjectWorkflowNav.tsx').default;
+const Folder = component('components/CollapsibleFolder.tsx').default;
+const MediaFolders = component('components/AssetFolders.tsx', { './CollapsibleFolder': { default: Folder } }).default;
+const Backgrounds = component('components/BackgroundBrowser.tsx', { './CollapsibleFolder': { default: Folder } }).default;
 const BuildSpace = component('components/BuildSpace.tsx', {
+  './BackgroundBrowser': { default: Backgrounds },
   './CompositionPlayer': { defaultOverlayResult: { x: 15, y: 20, width: 70, height: 60 } },
   './RuntimeActionLayers': { ControlAppearancePreview: () => null }
 }).default;
@@ -68,6 +72,8 @@ const Workspace = component('app/project/[id]/page.tsx', {
   },
   '../../../lib/asset-store': { hydrateProjectAssets: async project => project },
   '../../../components/ProjectWorkflowNav': { default: Nav },
+  '../../../components/CollapsibleFolder': { default: Folder },
+  '../../../components/AssetFolders': { default: MediaFolders },
   '../../../components/BuildSpace': { default: BuildSpace },
   '../../../components/RuntimeActionLayers': { default: () => null, useRuntimeActions: () => runtime },
   '../../../components/CompositionPlayer': { default: () => null, defaultOverlayResult: { x: 15, y: 20, width: 70, height: 60 } }
@@ -80,7 +86,7 @@ function savePreview(name) {
   const directory = process.env.TTC_PREVIEW_DIR;
   if (!directory) return;
   fs.mkdirSync(directory, { recursive: true });
-  const styles = ['app/globals.css', 'app/feature.css', 'app/project/[id]/workflow.css', 'app/controls.css'].map(file => fs.readFileSync(file, 'utf8')).join('\n');
+  const styles = ['app/globals.css', 'app/feature.css', 'app/project/[id]/workflow.css', 'app/controls.css', 'app/folders.css'].map(file => fs.readFileSync(file, 'utf8')).join('\n');
   const navigation = ['workshop', 'build', 'publish'].map(page => `<a href="${page}.html">${page}</a>`).join(' · ');
   fs.writeFileSync(path.join(directory, `${name}.html`), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TTCGameLab — design review</title><style>${styles}</style></head><body><div style="padding:16px;background:#112232;color:#dffaff;font-size:14px">Design review with sample data. Editing buttons are illustrative. ${navigation}</div>${document.getElementById('root').innerHTML}</body></html>`);
 }
@@ -103,6 +109,16 @@ async function click(text) {
     assert(document.getElementById('game-rules'));
     await click('Assets & tools');
     for (const label of ['Create background artwork', 'Upload background image', 'Upload other assets', 'Generate media', 'Generate trivia', 'Create an interactive game board', 'Create game tools', 'Create list and cards', 'Organize assets & pools', 'Asset Composer']) assert(byText(label), `Preserve editing capability: ${label}`);
+    const creationFolder = document.querySelector('[data-folder-title="Creation tools"] > button');
+    assert.equal(creationFolder.getAttribute('aria-expanded'), 'true');
+    const savedBeforeFolderToggle = saves.length;
+    await React.act(async () => creationFolder.click());
+    assert.equal(creationFolder.getAttribute('aria-expanded'), 'false');
+    assert(byText('Generate media'), 'Keep editing controls mounted while hidden.');
+    await React.act(async () => creationFolder.click());
+    assert.equal(creationFolder.getAttribute('aria-expanded'), 'true');
+    assert.equal(saves.length, savedBeforeFolderToggle, 'Folder toggles must not save or modify project data.');
+    assert.equal(document.querySelector('[data-folder-title="Game tools & cards"] > button').getAttribute('aria-expanded'), 'false');
     savePreview('workshop');
     await click('2Build Space');
     assert.equal(document.querySelector('.workshop-flow h1').textContent, 'Build & implement');

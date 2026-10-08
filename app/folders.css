@@ -1,0 +1,50 @@
+/* Progressive disclosure for studio assets; never applied to audience artwork. */
+:where(.workspace-page,.shell) .asset-folders{display:grid;gap:10px;min-width:0}
+:where(.shell) .asset-library-folders{display:grid;gap:12px;min-width:0}
+:where(.workspace-page,.shell) .asset-folder{min-width:0;margin:0;border:1px solid #30465b;border-radius:10px;background:#0c1420;overflow:hidden}
+:where(.workspace-page,.shell) .asset-folder.is-open{border-color:#3a677a}
+:where(.workspace-page,.shell) .asset-folder-toggle{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:12px 14px;margin:0;border:0;border-radius:0;background:#111e2d;color:#e5f3fa;text-align:left;font-size:14px;line-height:1.4;box-shadow:none;cursor:pointer}
+:where(.workspace-page,.shell) .asset-folder-toggle:hover{background:#152b38}
+:where(.workspace-page,.shell) .asset-folder-toggle:focus-visible{outline:3px solid #50e2ed;outline-offset:-3px}
+:where(.workspace-page,.shell) .asset-folder-toggle[aria-expanded=true]{background:#12303b;color:#dffcff}
+.asset-folder-chevron,.asset-folder-icon{flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.asset-folder-chevron{width:16px;height:16px;transition:transform .15s ease}
+.asset-folder-icon{width:22px;height:22px;color:#67e0ed}
+.asset-folder-toggle[aria-expanded=true] .asset-folder-chevron{transform:rotate(90deg)}
+.asset-folder-label{display:grid;gap:3px;flex:1;min-width:0}
+:where(.workspace-page,.shell) .asset-folder-label strong{font-size:14px;font-weight:700;overflow-wrap:anywhere}
+:where(.workspace-page,.shell) .asset-folder-label small{color:#a7bbcf;font-size:12px;line-height:1.4;text-transform:none;letter-spacing:0}
+:where(.workspace-page,.shell) .asset-folder-count{display:inline-grid;place-items:center;flex-shrink:0;min-width:28px;padding:3px 8px;background:#21394a;color:#d2eff5;border-radius:100px;font-size:12px;font-weight:700}
+:where(.workspace-page,.shell) .asset-folder-contents{padding:14px;min-width:0;border-top:1px solid #294253}
+.asset-folder-contents[hidden]{display:none!important}
+:where(.workspace-page,.shell) .asset-folder-contents>.asset-folders{gap:8px}
+:where(.workspace-page,.shell) .asset-folder-contents>.detail-block{padding:0;margin:0;border:0}
+:where(.workspace-page,.shell) .asset-folder-contents .asset-folder{margin-top:8px}
+:where(.workspace-page,.shell) .asset-folder-contents .asset-folder-toggle{padding:10px 12px;min-height:44px}
+:where(.workspace-page,.shell) .folder-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 12px;min-width:0}
+:where(.workspace-page,.shell) .folder-toolbar>span{flex:1;min-width:100px;color:#aabed0;font-size:13px}
+:where(.workspace-page,.shell) .folder-toolbar button{min-height:36px;padding:8px 10px;font-size:12px;color:#d0edf4;border:1px solid #3a5268;border-radius:7px;background:#142031}
+.workspace-page .assets-panel>.asset-folder{margin:12px 16px}
+.workspace-page .asset-folder .tool-config-list{margin:0}
+.workspace-page .asset-folder .tool-config{margin:0;border:0;padding:0}
+.workspace-page .asset-folder .saved-composition{padding:12px 0;margin:0}
+.workspace-page .asset-folder .detail-block>span:first-child{display:block;margin-bottom:10px}
+.workspace-page .creation-tools-folder{margin:20px 0}
+.workspace-page .creation-tools-folder .workshop-tools{margin:0}
+.workspace-page .creation-tools-folder .asset-folder-toggle{font-size:15px}
+.workspace-page .build-background-browser{margin:20px 0;padding:18px;border:1px solid #30465b;border-radius:12px;background:#0c1420}
+.workspace-page .build-background-browser>h3{margin:0 0 10px;font-size:18px}
+.workspace-page .build-background-browser label{display:grid;gap:7px;margin-bottom:16px;font-size:14px;color:#c5d5e5}
+.workspace-page .build-background-browser input{width:100%;padding:11px 12px;border:1px solid #40586c;border-radius:8px;background:#080f18;color:#eef7ff;font-size:15px}
+.workspace-page .build-background-browser .creation-tray{display:flex;flex-wrap:wrap;gap:12px;margin:0;padding:0;border:0;background:transparent}
+.workspace-page .build-background-browser>.outline-btn{margin-top:14px}
+.workspace-page .workflow-quick-help{margin:12px 0;color:#a9bfce;font-size:13px;line-height:1.5}
+@media(max-width:640px){
+ :where(.workspace-page,.shell) .asset-folder-toggle{padding:11px 12px}
+ :where(.workspace-page,.shell) .asset-folder-contents{padding:10px}
+ :where(.workspace-page,.shell) .folder-toolbar>span{flex-basis:100%}
+ :where(.workspace-page,.shell) .folder-toolbar button{flex:1 1 120px;min-height:42px;font-size:13px}
+ .workspace-page .assets-panel>.asset-folder{margin:10px}
+ .workspace-page .build-background-browser{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){.asset-folder-chevron{transition:none}}
