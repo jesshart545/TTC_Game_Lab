@@ -28,7 +28,7 @@ export function FittedCard({project,tool,text,answer=false,phase='question',show
    if(needed.height>maxH||needed.width>maxW+1){let lo=.05,hi=font;for(let n=0;n<24;n++){const mid=(lo+hi)/2,m=measure(mid,width);if(m.height<=height+1&&m.width<=width+1)lo=mid;else hi=mid;}font=lo;}
    const x=Math.max(left,Math.min(w-right-width,bounded(cfg.x,17.5,0,100)*w/100)),y=Math.max(top,Math.min(h-bottom-height,bounded(cfg.y,30,0,100)*h/100));
    setBox({x,y,width,height,font,padding:pad});
-  };fit();const resize=new ResizeObserver(fit);resize.observe(host);let cancelled=false;void document.fonts.ready.then(()=>{if(!cancelled)fit();});return()=>{cancelled=true;resize.disconnect();};
+  };fit();const resize=new ResizeObserver(fit);resize.observe(host);let cancelled=false;void document.fonts.load(`${bounded(cfg.fontSize,48,12,160)}px ${String(cfg.fontFamily||'Arial, sans-serif')}`,text).then(()=>{if(!cancelled)fit();}).catch(()=>{if(!cancelled)fit();});return()=>{cancelled=true;resize.disconnect();};
  },[text,JSON.stringify(cfg)]);
  const asset=project.assets.find(a=>(a.storageKey||a.name)===cfg.backgroundKey);
  const duration=bounded(phase==='exit'?cfg.exitSeconds:cfg.entranceSeconds,.5,0,5),effect=String(phase==='exit'?cfg.exit:cfg.entrance||'fade');

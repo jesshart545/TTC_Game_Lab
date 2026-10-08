@@ -12,7 +12,7 @@ export async function proxy(request: NextRequest) {
     if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
       const path = request.nextUrl.pathname;
       if ((path === "/api/web-search" || path.startsWith("/api/live/") || path.startsWith("/api/published/"))) return NextResponse.next();
-      if (path.startsWith("/_next/") || path === "/favicon.ico") return NextResponse.next();
+      if (path.startsWith("/_next/") || path.startsWith("/fonts/") || path === "/favicon.ico") return NextResponse.next();
       if (path !== "/" && path !== "/overlay") return NextResponse.rewrite(new URL("/404", request.url));
       const destination = request.nextUrl.clone();
       destination.pathname = `/published/${slug}${path === "/overlay" ? "/overlay" : ""}`;
@@ -21,7 +21,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
-  if (path === "/api/web-search" || ["/practice-circle.svg","/practice-star.svg"].includes(path) || path === "/reference" || path === "/api/reference" || path.startsWith("/published/") || (path.startsWith("/api/live/") || path.startsWith("/api/published/")) || path.startsWith("/api/auth/") || path.startsWith("/auth/")) return NextResponse.next();
+  if (path.startsWith("/fonts/") || path === "/api/web-search" || ["/practice-circle.svg","/practice-star.svg"].includes(path) || path === "/reference" || path === "/api/reference" || path.startsWith("/published/") || (path.startsWith("/api/live/") || path.startsWith("/api/published/")) || path.startsWith("/api/auth/") || path.startsWith("/auth/")) return NextResponse.next();
   return protectCreator(request);
 }
 export const config = { matcher: ["/((?!_next/static|_next/image).*)"] };

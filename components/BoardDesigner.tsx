@@ -1,4 +1,6 @@
 "use client";
+import FontPicker from './FontPicker';
+import {resolveFont} from '../lib/fonts';
 import {useEditableTool} from "./useEditableTool";
 import {useState} from 'react';
 import type {GameTool,Project} from '../lib/project';
@@ -13,7 +15,7 @@ export function BoardArtwork({tool,project}:{tool:GameTool;project:Pick<Project,
 }
 export function BoardSurface({tool,project}:{tool:GameTool;project:Pick<Project,'assets'>}){
  const appearance=(tool.config.appearance||{}) as Record<string,unknown>;
- return <div className="board-surface" style={{color:String(appearance.textColor||'#fff')}}><BoardArtwork tool={tool} project={project}/>{tool.config.showTitle===true&&<h3 className="board-title">{String(tool.config.title||tool.name)}</h3>}</div>;
+ return <div className="board-surface" style={{color:String(appearance.textColor||'#fff'),fontFamily:resolveFont(appearance.fontFamily)}}><BoardArtwork tool={tool} project={project}/>{tool.config.showTitle===true&&<h3 className="board-title">{String(tool.config.title||tool.name)}</h3>}</div>;
 }
 export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwork}:{project:Project;tool:GameTool;onSave:(tool:GameTool)=>void;onClose:()=>void;onCreateArtwork:()=>void}){
  const {draft,commit,patchConfig,patchAppearance,patchTool}=useEditableTool(tool,onSave);
@@ -32,7 +34,7 @@ export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwo
  <label>Background animation<select value={String(draft.config.backgroundMotion||'none')} onChange={e=>patch({backgroundMotion:e.target.value})}><option value="none">Use artwork as supplied</option><option value="pulse">Gentle zoom</option><option value="float">Gentle movement</option></select></label>
  <label><input type="checkbox" checked={draft.config.backgroundLoop!==false} onChange={e=>patch({backgroundLoop:e.target.checked})}/>Loop video background</label>
  <p>Video artwork plays silently as the board background. Animation does not trigger game actions.</p>
- {['backgroundColor','textColor','accentColor'].map((key,i)=><label key={key}>{['Board color','Text color','Accent color'][i]}<input type="color" value={String(appearance[key]||['#101827','#ffffff','#20e8ff'][i])} onChange={e=>patchAppearance({[key]:e.target.value})}/></label>)}
+ <FontPicker label="Board heading font" value={String(appearance.fontFamily||'Arial, sans-serif')} onChange={fontFamily=>patchAppearance({fontFamily})}/>{['backgroundColor','textColor','accentColor'].map((key,i)=><label key={key}>{['Board color','Text color','Accent color'][i]}<input type="color" value={String(appearance[key]||['#101827','#ffffff','#20e8ff'][i])} onChange={e=>patchAppearance({[key]:e.target.value})}/></label>)}
  </aside><div><button type="button" onClick={()=>setPreview(!preview)}>{preview?'Pause artwork preview':'Play artwork preview'}</button><div className="board-design-canvas" aria-label="Board design canvas">
  {preview?<BoardSurface tool={draft} project={project}/>:<div className="board-preview-paused">Artwork preview paused</div>}
  </div><p>Start with your own artwork, or create new artwork from your description. No game spaces or grid are added to your design.</p>{tool.type==='trivia-board'&&<p>Your saved trivia categories and questions are preserved. This designer edits the board artwork without changing the saved questions.</p>}</div></div>

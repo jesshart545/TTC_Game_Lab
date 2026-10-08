@@ -1,0 +1,26 @@
+/* Fonts distributed under the SIL Open Font License; licenses are in public/fonts. */
+@font-face{font-family:"Inter";src:url("/fonts/inter.woff") format("woff");font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:"Roboto";src:url("/fonts/roboto.woff") format("woff");font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:"Montserrat";src:url("/fonts/montserrat.woff") format("woff");font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:"Poppins";src:url("/fonts/poppins.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Nunito";src:url("/fonts/nunito.woff") format("woff");font-style:normal;font-weight:200 1000;font-display:swap}
+@font-face{font-family:"Open Sans";src:url("/fonts/opensans.woff") format("woff");font-style:normal;font-weight:300 800;font-display:swap}
+@font-face{font-family:"Lato";src:url("/fonts/lato.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway.woff") format("woff");font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:"Oswald";src:url("/fonts/oswald.woff") format("woff");font-style:normal;font-weight:200 700;font-display:swap}
+@font-face{font-family:"Barlow";src:url("/fonts/barlow.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Merriweather";src:url("/fonts/merriweather.woff") format("woff");font-style:normal;font-weight:300 900;font-display:swap}
+@font-face{font-family:"Playfair Display";src:url("/fonts/playfairdisplay.woff") format("woff");font-style:normal;font-weight:400 900;font-display:swap}
+@font-face{font-family:"Lora";src:url("/fonts/lora.woff") format("woff");font-style:normal;font-weight:400 700;font-display:swap}
+@font-face{font-family:"Cinzel";src:url("/fonts/cinzel.woff") format("woff");font-style:normal;font-weight:400 900;font-display:swap}
+@font-face{font-family:"Bangers";src:url("/fonts/bangers.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Bebas Neue";src:url("/fonts/bebasneue.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Anton";src:url("/fonts/anton.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Orbitron";src:url("/fonts/orbitron.woff") format("woff");font-style:normal;font-weight:400 900;font-display:swap}
+@font-face{font-family:"Press Start 2P";src:url("/fonts/pressstart2p.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Pacifico";src:url("/fonts/pacifico.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Dancing Script";src:url("/fonts/dancingscript.woff") format("woff");font-style:normal;font-weight:400 700;font-display:swap}
+@font-face{font-family:"Caveat";src:url("/fonts/caveat.woff") format("woff");font-style:normal;font-weight:400 700;font-display:swap}
+@font-face{font-family:"Lobster";src:url("/fonts/lobster.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Space Mono";src:url("/fonts/spacemono.woff") format("woff");font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:"Roboto Mono";src:url("/fonts/robotomono.woff") format("woff");font-style:normal;font-weight:100 700;font-display:swap}

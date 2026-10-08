@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./fonts.css";
 import "./feature.css";
 import HelpLink from '../components/HelpLink';
 

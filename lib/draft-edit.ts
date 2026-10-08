@@ -1,3 +1,4 @@
+import {isSupportedFont,resolveFont} from './fonts';
 import {assignControlAction,controlConnectionError} from "./control-connections";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
@@ -68,7 +69,7 @@ export function applyDraftChanges(project: Project, input: unknown) {
   if (Array.isArray(changes.controls)) for (const raw of changes.controls) {
     const edit = object(raw), control = next.controls.find(c => c.id === edit.id); if (!control) continue;
     if(typeof edit.action==='string'){const assigned=assignControlAction(next,control,edit.action);if(!controlConnectionError(next,assigned)){Object.assign(control,assigned);applied++;}}
-    const appearance=object(edit.appearance);if(Object.keys(appearance).length){const style={...control.appearance};for(const key of ['backgroundColor','color'] as const)if(/^#[0-9a-f]{6}$/i.test(String(appearance[key])))style[key]=String(appearance[key]);if(['Arial, sans-serif','Georgia, serif','Verdana, sans-serif','Trebuchet MS, sans-serif','monospace'].includes(String(appearance.fontFamily)))style.fontFamily=String(appearance.fontFamily);for(const key of ['fontSize','borderRadius'] as const){const n=number(appearance[key],key==='fontSize'?12:0,64);if(n!==undefined)style[key]=n;}control.appearance=style;applied++;}
+    const appearance=object(edit.appearance);if(Object.keys(appearance).length){const style={...control.appearance};for(const key of ['backgroundColor','color'] as const)if(/^#[0-9a-f]{6}$/i.test(String(appearance[key])))style[key]=String(appearance[key]);if(isSupportedFont(appearance.fontFamily))style.fontFamily=resolveFont(appearance.fontFamily);for(const key of ['fontSize','borderRadius'] as const){const n=number(appearance[key],key==='fontSize'?12:0,64);if(n!==undefined)style[key]=n;}control.appearance=style;applied++;}
     const label = text(edit.label, 80); if (label) { control.label = label; applied++; }
     if (typeof edit.compositionId === "string" && next.compositions?.some(c => c.id === edit.compositionId && c.inProject)) { control.compositionId = edit.compositionId; applied++; }
     const result = object(edit.overlayResult);

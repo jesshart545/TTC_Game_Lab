@@ -1,0 +1,202 @@
+[
+  {
+    "name": "Inter",
+    "slug": "inter",
+    "group": "Modern",
+    "weight": "100 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/inter/Inter[opsz,wght].ttf",
+    "bytes": 457780
+  },
+  {
+    "name": "Roboto",
+    "slug": "roboto",
+    "group": "Modern",
+    "weight": "100 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/roboto/Roboto[wdth,wght].ttf",
+    "bytes": 280272
+  },
+  {
+    "name": "Montserrat",
+    "slug": "montserrat",
+    "group": "Modern",
+    "weight": "100 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/montserrat/Montserrat[wght].ttf",
+    "bytes": 295412
+  },
+  {
+    "name": "Poppins",
+    "slug": "poppins",
+    "group": "Modern",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/poppins/Poppins-Regular.ttf",
+    "bytes": 71852
+  },
+  {
+    "name": "Nunito",
+    "slug": "nunito",
+    "group": "Modern",
+    "weight": "200 1000",
+    "source": "https://github.com/google/fonts/blob/main/ofl/nunito/Nunito[wght].ttf",
+    "bytes": 127260
+  },
+  {
+    "name": "Open Sans",
+    "slug": "opensans",
+    "group": "Modern",
+    "weight": "300 800",
+    "source": "https://github.com/google/fonts/blob/main/ofl/opensans/OpenSans[wdth,wght].ttf",
+    "bytes": 346192
+  },
+  {
+    "name": "Lato",
+    "slug": "lato",
+    "group": "Modern",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/lato/Lato-Regular.ttf",
+    "bytes": 335304
+  },
+  {
+    "name": "Raleway",
+    "slug": "raleway",
+    "group": "Modern",
+    "weight": "100 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/raleway/Raleway[wght].ttf",
+    "bytes": 166356
+  },
+  {
+    "name": "Oswald",
+    "slug": "oswald",
+    "group": "Modern",
+    "weight": "200 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/oswald/Oswald[wght].ttf",
+    "bytes": 90548
+  },
+  {
+    "name": "Barlow",
+    "slug": "barlow",
+    "group": "Modern",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/barlow/Barlow-Regular.ttf",
+    "bytes": 50540
+  },
+  {
+    "name": "Merriweather",
+    "slug": "merriweather",
+    "group": "Classic",
+    "weight": "300 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/merriweather/Merriweather[opsz,wdth,wght].ttf",
+    "bytes": 3209288
+  },
+  {
+    "name": "Playfair Display",
+    "slug": "playfairdisplay",
+    "group": "Classic",
+    "weight": "400 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/playfairdisplay/PlayfairDisplay[wght].ttf",
+    "bytes": 134796
+  },
+  {
+    "name": "Lora",
+    "slug": "lora",
+    "group": "Classic",
+    "weight": "400 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/lora/Lora[wght].ttf",
+    "bytes": 106808
+  },
+  {
+    "name": "Cinzel",
+    "slug": "cinzel",
+    "group": "Classic",
+    "weight": "400 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/cinzel/Cinzel[wght].ttf",
+    "bytes": 59460
+  },
+  {
+    "name": "Bangers",
+    "slug": "bangers",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/bangers/Bangers-Regular.ttf",
+    "bytes": 46448
+  },
+  {
+    "name": "Bebas Neue",
+    "slug": "bebasneue",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/bebasneue/BebasNeue-Regular.ttf",
+    "bytes": 28552
+  },
+  {
+    "name": "Anton",
+    "slug": "anton",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/anton/Anton-Regular.ttf",
+    "bytes": 79848
+  },
+  {
+    "name": "Orbitron",
+    "slug": "orbitron",
+    "group": "Bold & game show",
+    "weight": "400 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/orbitron/Orbitron[wght].ttf",
+    "bytes": 20224
+  },
+  {
+    "name": "Press Start 2P",
+    "slug": "pressstart2p",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/pressstart2p/PressStart2P-Regular.ttf",
+    "bytes": 39388
+  },
+  {
+    "name": "Pacifico",
+    "slug": "pacifico",
+    "group": "Handwritten",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/pacifico/Pacifico-Regular.ttf",
+    "bytes": 144056
+  },
+  {
+    "name": "Dancing Script",
+    "slug": "dancingscript",
+    "group": "Handwritten",
+    "weight": "400 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/dancingscript/DancingScript[wght].ttf",
+    "bytes": 73896
+  },
+  {
+    "name": "Caveat",
+    "slug": "caveat",
+    "group": "Handwritten",
+    "weight": "400 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/caveat/Caveat[wght].ttf",
+    "bytes": 216872
+  },
+  {
+    "name": "Lobster",
+    "slug": "lobster",
+    "group": "Handwritten",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/lobster/Lobster-Regular.ttf",
+    "bytes": 147188
+  },
+  {
+    "name": "Space Mono",
+    "slug": "spacemono",
+    "group": "Monospace",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/spacemono/SpaceMono-Regular.ttf",
+    "bytes": 45956
+  },
+  {
+    "name": "Roboto Mono",
+    "slug": "robotomono",
+    "group": "Monospace",
+    "weight": "100 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/robotomono/RobotoMono[wght].ttf",
+    "bytes": 128684
+  }
+]
