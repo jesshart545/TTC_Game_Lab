@@ -1,5 +1,9 @@
 "use client";
 
+import { useSupportBridge, requestResearchOpen, type SupportTurn, type SupportTaskResult } from "../../../lib/support-client";
+import { checkedAssistantMediaAction } from "../../../lib/assistant-media-actions";
+import { backgroundContext, wantsBackgroundMatch } from "../../../lib/ai-background-context";
+
 import CompactConversation from "../../../components/CompactConversation";
 import BoardDesigner, { BoardArtwork } from "../../../components/BoardDesigner";
 import {mediaKind} from "../../../lib/board-design";
@@ -176,6 +180,15 @@ export default function ProjectWorkspace() {
   const [renamingProject, setRenamingProject] = useState(false);
   const [projectTitleDraft, setProjectTitleDraft] = useState("");
   const [building, setBuilding] = useState(false);
+  const taskRunning = useRef(false);
+  const taskProgress = useRef<((text: string) => void) | null>(null);
+  const workspaceMounted = useRef(true);
+  useEffect(() => { workspaceMounted.current = true; return () => { workspaceMounted.current = false; }; }, []);
+  const taskSaveError = useRef("");
+  const [mediaPlayback, setMediaPlayback] = useState<{start: () => void} | null>(null);
+  const activeProjectId = useRef(params.id);
+  activeProjectId.current = params.id;
+
   const [aiUndo,setAiUndo]=useState<Project|null>(null);
   const [aiControlFocus,setAiControlFocus]=useState<{id:string;request:number}|null>(null);
   const [buildSelection,setBuildSelection]=useState<{kind:string;id:string}|null>(null);
@@ -223,6 +236,7 @@ export default function ProjectWorkspace() {
   const [videoReferenceKey, setVideoReferenceKey] = useState("");
   const [assetBusy, setAssetBusy] = useState(false);
   const [assetStatus, setAssetStatus] = useState("");
+  useEffect(() => { if (assetStatus) taskProgress.current?.(assetStatus); }, [assetStatus]);
   const [boardDesignerId,setBoardDesignerId]=useState("");
   const [backgroundDestinationKey,setBackgroundDestinationKey]=useState("");
   const [triviaConfig, setTriviaConfig] = useState<any>(null);
@@ -528,7 +542,7 @@ export default function ProjectWorkspace() {
     };
     projectRef.current = next;
     setProject(next);
-    saveQueue.current = saveQueue.current.then(() => saveProjectToServer(storedNext)).then(() => { if(revision===saveRevision.current)setSaveStatus("Changes saved."); }).catch(error => { if(revision===saveRevision.current)setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
+    saveQueue.current = saveQueue.current.then(() => saveProjectToServer(storedNext)).then(() => { if(revision===saveRevision.current)setSaveStatus("Changes saved."); }).catch(error => { if(taskRunning.current)taskSaveError.current = error instanceof Error ? error.message : "Save failed"; if(revision===saveRevision.current)setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
   }
 
   function saveProjectTitle(event: FormEvent<HTMLFormElement>) {
@@ -586,6 +600,7 @@ export default function ProjectWorkspace() {
       const hydratedUploaded = (await Promise.all(uploaded.map(asset => hydrateAsset(asset)))).map(asset => backgroundIntent && isImage(asset) ? { ...asset, role: "background" as const, inProject: false } : asset);
       const latest = project;
       const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" };
+      projectRef.current = savedProject;
       setProject(savedProject);
       await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
       if (backgroundIntent && hydratedUploaded.length === 1 && (isImage(hydratedUploaded[0])||isVideo(hydratedUploaded[0]))) setBackgroundDestinationKey(hydratedUploaded[0].storageKey||hydratedUploaded[0].name);
@@ -600,6 +615,8 @@ export default function ProjectWorkspace() {
 
   async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; aspectRatio?: string }) {
     if (!project || assetBusy) return;
+    const origin = project.id;
+    const checkGenerationScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin) throw new Error("The generation finished after you left its project. Return to that project; do not submit duplicate generations."); };
     let promptImage = "";
     const referenceKey = options ? options.sourceKey : type === "video" ? videoReferenceKey : "";
     if ((type === "video" || type === "image") && referenceKey) {
@@ -655,14 +672,18 @@ export default function ProjectWorkspace() {
       }
       if (!url) throw new Error(`${type} generation returned no asset output.`);
 
+      checkGenerationScope();
       const latest = projectRef.current || options?.baseProject || project;
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url, ...(type === "music" ? { durationSeconds: data.durationSeconds } : {}) };
 
       const storedAsset = await storeGeneratedAsset(project.id, generatedAsset);
+      checkGenerationScope();
       const asset: ProjectAsset = !options && backgroundIntent && (type === "image"||type === "video") ? { ...storedAsset, role: "background", inProject: false } : storedAsset;
 
-      const savedProject = { ...latest, assets: [...latest.assets, asset], updatedAt: "just now" };
+      const currentAfterStore = projectRef.current || latest;
+      const savedProject = { ...currentAfterStore, assets: [...currentAfterStore.assets, asset], updatedAt: "just now" };
+      projectRef.current = savedProject;
       setProject(savedProject);
       await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
       if (backgroundIntent && (type === "image"||type === "video")) setBackgroundDestinationKey(asset.storageKey||asset.name);
@@ -729,9 +750,12 @@ export default function ProjectWorkspace() {
   }
 
   async function saveAssetAsNew(nextAsset: ProjectAsset) {
-    if (!project || !nextAsset.url) return;
+    if (!project || !nextAsset.url) throw new Error("The media source is unavailable.");
+    const origin = project.id;
+    const checkCopyScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin || activeProjectId.current !== params.id) throw new Error("Return to the original project to finish this copy. No other project was changed."); };
     if (!nextAsset.edits) {
       const stored=await storeGeneratedAsset(project.id,{name:nextAsset.name,type:nextAsset.type,url:nextAsset.url});
+      checkCopyScope();
       const latest=projectRef.current || project;
       persist({...latest,assets:[...latest.assets,stored],updatedAt:"just now"});
       setAssetStatus(nextAsset.name+" saved as a new asset.");
@@ -743,13 +767,24 @@ export default function ProjectWorkspace() {
       const source=document.createElement("video");
       source.crossOrigin="anonymous"; source.preload="auto"; source.src=renderUrl;
       setAssetStatus("Preparing trimmed video…");
-      await new Promise<void>((resolve,reject)=>{source.onloadedmetadata=()=>resolve();source.onerror=()=>reject(new Error("Could not load video for trimming."));});
+      await new Promise<void>((resolve,reject)=>{const timeout=window.setTimeout(()=>reject(new Error("Video loading timed out.")),30000);source.onloadedmetadata=()=>{window.clearTimeout(timeout);resolve();};source.onerror=()=>{window.clearTimeout(timeout);reject(new Error("Could not load video for trimming."));};});
       const end=Math.min(nextAsset.edits?.trimEnd||source.duration,source.duration);
       if(!Number.isFinite(end)||end<=start+.05) throw new Error("Choose a valid video trim range.");
       const capture=(source as HTMLVideoElement & {captureStream?:()=>MediaStream}).captureStream;
       if(!capture||typeof MediaRecorder==="undefined") throw new Error("Video trimming requires a browser with MediaRecorder support.");
-      await new Promise<void>(resolve=>{if(Math.abs(source.currentTime-start)<.05)return resolve();source.onseeked=()=>resolve();source.currentTime=start;});
-      await source.play();
+      await new Promise<void>((resolve,reject)=>{if(Math.abs(source.currentTime-start)<.05)return resolve();const timeout=window.setTimeout(()=>reject(new Error("Video seeking timed out.")),30000);source.onseeked=()=>{window.clearTimeout(timeout);resolve();};source.currentTime=start;});
+      setAssetStatus("Video trim is ready. Click Start video trim to begin rendering with audio.");
+      await new Promise<void>((resolve, reject) => {
+        let clicked = false;
+        const timeout = window.setTimeout(() => { setMediaPlayback(null); reject(new Error("Video trim was not started within five minutes. Your original is unchanged.")); }, 300000);
+        setMediaPlayback({ start: () => {
+          if (clicked) return;
+          clicked = true;
+          window.clearTimeout(timeout);
+          source.play().then(resolve, reject);
+          setMediaPlayback(null);
+        }});
+      });
       const stream=capture.call(source);
       const preferred=["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"].find(t=>MediaRecorder.isTypeSupported(t))||"";
       const recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);
@@ -758,11 +793,25 @@ export default function ProjectWorkspace() {
       const finished=new Promise<Blob>((resolve,reject)=>{recorder.onerror=()=>reject(new Error("Video trim recording failed."));recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType||"video/webm"}));});
       recorder.start(250);
       setAssetStatus(`Trimming video from ${start.toFixed(1)}s to ${end.toFixed(1)}s…`);
-      await new Promise<void>(resolve=>{const watch=()=>{if(source.currentTime>=end||source.ended){source.pause();resolve();return}requestAnimationFrame(watch)};watch()});
-      recorder.stop(); const blob=await finished; stream.getTracks().forEach(track=>track.stop());
+      let blob: Blob;
+      try {
+        await Promise.race([
+          new Promise<void>((resolve,reject)=>{
+            const timeout=window.setTimeout(()=>reject(new Error("Video rendering stalled.")),Math.min(36000000,Math.max(30000,(end-start)*2000+15000)));
+            const watch=()=>{try { checkCopyScope(); } catch(error) {window.clearTimeout(timeout);reject(error);return;}
+              if(source.currentTime>=end||source.ended){window.clearTimeout(timeout);source.pause();resolve();return;}requestAnimationFrame(watch);};watch();
+          }),
+          finished.then(()=>{throw new Error("Video recording stopped before the trim finished.");}),
+        ]);
+        recorder.stop(); blob=await finished;
+      } finally {
+        source.pause(); if(recorder.state!=="inactive")recorder.stop(); stream.getTracks().forEach(track=>track.stop());
+      }
       const file=new File([blob],(nextAsset.name.replace(/\.[^.]+$/,"")||"trimmed-video")+"-trimmed.webm",{type:blob.type||"video/webm"});
+      checkCopyScope();
       const stored=await storeUploadedAsset(project.id,file);
-      const latest=project;
+      checkCopyScope();
+      const latest=projectRef.current || project;
       persist({...latest,assets:[...latest.assets,{...stored,name:file.name,edits:undefined}],updatedAt:"just now"});
       setAssetStatus(file.name+" saved as a new permanent video asset.");
       return;
@@ -771,7 +820,7 @@ export default function ProjectWorkspace() {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.src = renderUrl;
-    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("Could not load image for editing.")); });
+    await new Promise<void>((resolve, reject) => { const timeout=window.setTimeout(()=>reject(new Error("Image loading timed out.")),30000);image.onload = () => {window.clearTimeout(timeout);resolve();}; image.onerror = () => {window.clearTimeout(timeout);reject(new Error("Could not load image for editing."));}; });
     const e = nextAsset.edits || {};
     const ratio = e.crop === "square" ? 1 : e.crop === "portrait" ? 9/16 : e.crop === "landscape" ? 16/9 : image.naturalWidth/image.naturalHeight;
     let w = e.width || image.naturalWidth;
@@ -789,8 +838,10 @@ export default function ProjectWorkspace() {
     ctx.drawImage(image,-image.naturalWidth*scale/2,-image.naturalHeight*scale/2,image.naturalWidth*scale,image.naturalHeight*scale);
     const blob = await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not render edited image.")),"image/png",.95));
     const file = new File([blob], (nextAsset.name.replace(/\.[^.]+$/,"") || "edited-image") + "-edited.png", { type:"image/png" });
+    checkCopyScope();
     const stored = await storeUploadedAsset(project.id,file);
-    const latest = project;
+    checkCopyScope();
+    const latest = projectRef.current || project;
     persist({ ...latest, assets:[...latest.assets,{...stored,name:file.name}], updatedAt:"just now" });
     setAssetStatus(file.name + " saved as a new permanent asset.");
   }
@@ -800,39 +851,61 @@ export default function ProjectWorkspace() {
     if (current) persist({ ...current, assetPools, updatedAt: "just now" });
   }
 
-  async function sendMessage(e: FormEvent) {
-    e.preventDefault();
-    if (!project || !draft.trim() || building) return;
-    const text = draft.trim();
+  async function runAssistantTask(text: string, supportHistory?: SupportTurn[], progress?: (text: string) => void): Promise<SupportTaskResult> {
+    const current = projectRef.current;
+    if (!current || !text.trim()) return { reply: "Open your editable project first.", status: "failed" };
+    if (taskRunning.current || assetBusy || triviaListBusy) return { reply: "Another task is already running. Wait for it to finish before starting this one.", status: "failed" };
+    const originId = current.id;
+    const originRoute = activeProjectId.current;
+    const guard = () => { if (!workspaceMounted.current || activeProjectId.current !== originRoute || projectRef.current?.id !== originId) throw new Error("The project changed while this task was running. Return to the original project to review it."); };
+    taskRunning.current = true;
+    taskSaveError.current = "";
+    taskProgress.current = progress || null;
+    const project = current;
+    const taskHistory = supportHistory?.map(({role,text}) => ({role,text})) || [...project.messages, {role: "user" as const,text}].slice(-30);
+    let outcome: SupportTaskResult = {reply: "The task did not complete.", status: "failed"};
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
-    setDraft(""); setBuilding(true);
+    setBuilding(true);
+    progress?.("Preparing the requested draft task…");
+    const complete = (reply: string, changed = true, status: SupportTaskResult["status"] = "complete") => { outcome = { reply, changed, status }; return outcome; };
     try {
+      const backgroundVisual = wantsBackgroundMatch(text) ? await backgroundContext(project, hydrateAsset) : undefined;
+      guard();
       const context = { ...updated, messages:undefined, assets: updated.assets.map(({ url, ...asset }) => asset), publishedSnapshot: undefined };
-      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, history: updated.messages.slice(-30), project: context, selectedImageKey: videoReferenceKey || null, workspaceStage: workflowStep===1?"build":"workshop", selectedItem:buildSelection }) });
+      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: text, backgroundVisual, history: taskHistory, project: context, selectedImageKey: videoReferenceKey || (selectedAssetKey && project.assets.some(a => (a.storageKey || a.name) === selectedAssetKey && isImage(a)) ? selectedAssetKey : null), selectedAssetKey: selectedAssetKey || videoReferenceKey || null, workspaceStage: workflowStep===1?"build":"workshop", selectedItem:buildSelection }) });
       let data = await response.json();
       if (!response.ok) throw new Error(data.error || "AI editing is unavailable right now.");
       if(data.action?.type==='search'){
         const search=await fetch('/api/web-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:data.action.query})});
         const evidence=await search.json();if(!search.ok)throw new Error(evidence.error||'Web search is unavailable. No pool was created.');
         if(!evidence.results?.length)throw new Error('No search results were found. Try a more specific topic.');
-        const followup=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'draft-edit',request:text,history:updated.messages.slice(-30),project:context,workspaceStage:workflowStep===1?'build':'workshop',selectedItem:buildSelection,searchEvidence:evidence.results})});
+        const followup=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'draft-edit',request:text,backgroundVisual,history:taskHistory,project:context,workspaceStage:workflowStep===1?'build':'workshop',selectedItem:buildSelection,selectedAssetKey:selectedAssetKey || videoReferenceKey || null,searchEvidence:evidence.results})});
         data=await followup.json();if(!followup.ok)throw new Error(data.error||'The search results could not be turned into a pool.');
         if(data.action?.type==='search')throw new Error('The search completed, but a pool could not be created from these results.');
       }
+      guard();
       const baseProject={...(projectRef.current||updated),messages:updated.messages};
       const result = applyBuildChanges(baseProject, data.changes);
       const steps = Array.isArray(data.manualSteps) ? data.manualSteps.filter((step: unknown) => typeof step === "string") : [];
       const unapplied = Object.keys(data.changes || {}).length > 0 && !result.applied && !data.action;
       const affectedControls=result.project.controls.filter(control=>{const existing=baseProject.controls.find(item=>item.id===control.id);return !existing||JSON.stringify(existing)!==JSON.stringify(control);});
+      const sequenceSummary = affectedControls.filter(control=>control.action==="sequence").map(control=>`${control.label}: ${(control.chain||[]).map(step=>{const target=result.project.controls.find(c=>c.id===step.refId);return `${step.timing.mode==="delay"&&Number(step.timing.seconds)>0?`wait ${step.timing.seconds}s, then `:""}${target?.label||step.label}`;}).join(" → ")}. Saved as a draft button; it has not been run.`).join("\n");
+      const changedTools=result.project.gameTools.filter(tool=>JSON.stringify(tool)!==JSON.stringify(baseProject.gameTools.find(t=>t.id===tool.id)));
+      const toolSummary=changedTools.length?`Updated draft tools: ${changedTools.map(tool=>tool.name).join(", ")}.`:"";
       const controlsSummary=affectedControls.length?`Updated draft dashboard ${affectedControls.length===1?"button":"buttons"}: ${affectedControls.map(control=>control.label).join(", ")}. You can review them in Build Space and try them in Test.`:"";
-      const reply = [unapplied ? "I could not apply the requested changes. Your draft has not been changed." : result.warnings.length&&result.applied?"I applied part of your request, but could not complete every change. The remaining issues are listed below.": data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), controlsSummary, result.warnings.length?result.warnings.join("\n"):"", steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
+      const reply = [unapplied ? "I could not apply the requested changes. Your draft has not been changed." : result.warnings.length&&result.applied?"I applied part of your request, but could not complete every change. The remaining issues are listed below.": data.reply || (result.applied ? "I updated the draft." : "I could not apply that change."), controlsSummary, toolSummary, sequenceSummary, result.warnings.length?result.warnings.join("\n"):"", steps.length ? `How to do it manually:\n${steps.map((step: string, i: number) => `${i + 1}. ${step}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
       if (data.action) {
+        // Commit independently valid requested edits before asynchronous media/trivia work.
+        // Helpers then start from the same current project and failures keep completed work.
+        if (result.applied) persist(result.project);
         const action = data.action;
         if (action.type === "trivia") {
           const generated = await generateTriviaList({count:action.count,categories:action.categories,baseProject:result.project});
+          guard();
           if (!generated) throw new Error("Trivia generation is already running.");
           persist({...generated.project,messages:[...updated.messages,{role:"assistant",text:generated.summary}]});
-          return;
+          setAiUndo(baseProject);
+          return complete(generated.summary);
         }
         if (action.type === "tool") {
           const info = [...BOARD_LIBRARY,...TOOL_LIBRARY].find(t=>t.type===action.toolType);
@@ -842,28 +915,98 @@ export default function ProjectWorkspace() {
           if(workflowStep===1)next=addCreationControl(next,'tool',tool.id).project;
           persist({...next,messages:[...updated.messages,{role:"assistant",text:tool.name+(workflowStep===1?" is connected in your draft. Try its controls in Test.":" is saved in Workshop. Customize its entries and appearance, then add it in Build Space.")} ]});
           setAiUndo(baseProject);
-          return;
+          return complete(tool.name + " was created in your draft. Its live version has not changed.");
+        }
+        if (action.type === "edit-video" || action.type === "render-copy") {
+          const checked = checkedAssistantMediaAction(action, baseProject.assets);
+          if (!checked) throw new Error("That media operation could not be validated.");
+          const source = baseProject.assets.find(asset => (asset.storageKey || asset.name) === checked.sourceKey);
+          if (!source) throw new Error("Choose the saved asset you want to edit.");
+          const hydrated = await hydrateAsset(source);
+          guard();
+          if (checked.type === "edit-video") {
+            progress?.("Editing the selected video. Waiting for a real result…");
+            const response = await fetch("/api/edit-video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: checked.prompt, videoUrl: hydrated.url }) });
+            const output = await response.json();
+            if (!response.ok || !output.url) throw new Error(output.error || "Video editing returned no output.");
+            guard();
+            await saveAssetAsNew({ ...hydrated, name: source.name.replace(/\.[^.]+$/, "") + "-edited.mp4", type: "video/mp4", url: output.url, storageKey: undefined, edits: undefined });
+          } else {
+            progress?.("Rendering a new media copy. Your original stays unchanged…");
+            await saveAssetAsNew({ ...hydrated, edits: checked.edits });
+          }
+          guard();
+          const reply = "The edited copy is now in your draft assets. Your original and published live version are unchanged.";
+          const latest = projectRef.current || baseProject;
+          persist({ ...latest, messages: [...updated.messages, { role: "assistant", text: reply }] });
+          setAiUndo(baseProject);
+          return complete(reply);
         }
         if (!["image","video","voice","music","sfx"].includes(action.type) || !action.prompt?.trim()) throw new Error("That generation request could not be understood.");
         if (action.sourceKey && !updated.assets.some(asset => asset.storageKey === action.sourceKey && isImage(asset))) throw new Error("Please identify an existing image for that request.");
         if (action.type === "voice" && !action.voice) {
-          persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: "What kind of voice would you like—female or male?" }] });
-          return;
+          persist({ ...(projectRef.current || updated), messages: [...updated.messages, { role: "assistant", text: "What kind of voice would you like—female or male?" }] });
+          return complete("What kind of voice would you like—female or male?", false, "clarification");
         }
-        const working = { ...result.project, messages: [...updated.messages, { role: "assistant" as const, text: "Generating your requested " + action.type + "…" }] };
+        const working = { ...(projectRef.current || result.project), messages: [...updated.messages, { role: "assistant" as const, text: "Generating your requested " + action.type + "…" }] };
         persist(working);
         await saveQueue.current;
         const generated = await generateAsset(action.type as GeneratorType, action.prompt, { sourceKey: action.sourceKey, voice: action.voice, baseProject: working, durationSeconds: action.durationSeconds, lyrics: action.lyrics });
         if (!generated) throw new Error("Generation could not start. Check whether another generation is already running.");
-        persist({ ...generated.project, messages: [...updated.messages, { role: "assistant", text: generated.name + " is generated and saved in your assets for review." }] });
+        guard();
+        const finished = generated.name + " is generated and saved in your assets for review.";
+        persist({ ...generated.project, messages: [...updated.messages, { role: "assistant", text: finished }] });
+        setAiUndo(baseProject);
+        complete(finished);
       } else {
         persist({ ...result.project, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: reply }] });
         if(result.applied)setAiUndo(baseProject);
+        complete(reply, Boolean(result.applied), unapplied ? "failed" : data.needsClarification === true ? "clarification" : "complete");
         if(workflowStep===1&&affectedControls.length){const focus=affectedControls.find(control=>control.action.startsWith('coin.cycle.'))||affectedControls.find(control=>control.action==='sequence')||affectedControls[0];setAiControlFocus({id:focus.id,request:Date.now()});}
       }
     } catch (error) {
-      persist({ ...updated, messages: [...updated.messages, { role: "assistant", text: error instanceof Error ? `${error.message} Your request is in this chat; no draft edit was applied.` : "AI editing is unavailable. No draft edit was applied." }] });
-    } finally { setBuilding(false); }
+      const reply = (error instanceof Error ? error.message : "The task could not complete.") + " Review your current draft; completed steps and originals have been kept. Your live version has not been published.";
+      if (workspaceMounted.current && activeProjectId.current === originRoute && projectRef.current?.id === originId) {
+        const latest = projectRef.current;
+        persist({ ...latest, messages: [...updated.messages, { role: "assistant", text: reply }] });
+      }
+      complete(reply, false, "failed");
+    } finally {
+      await saveQueue.current;
+      if (taskSaveError.current) {
+        outcome.reply += "\n\nThe server save failed. Your changes are still in this browser draft; use Save progress to retry before closing.";
+        outcome.status = "failed";
+      }
+      taskRunning.current = false; taskProgress.current = null;
+      if (workspaceMounted.current) setBuilding(false);
+    }
+    return outcome;
+  }
+  async function sendMessage(e: FormEvent) {
+    e.preventDefault();
+    if (!draft.trim()) return;
+    const text = draft.trim(); setDraft("");
+    await runAssistantTask(text);
+  }
+  async function undoAssistantEdit() {
+    const latest = projectRef.current;
+    if (!aiUndo || !latest || taskRunning.current) return "There is no AI draft edit available to undo right now.";
+    const restored = { ...aiUndo, workflow: latest.workflow, publishedSnapshot: latest.publishedSnapshot, status: latest.status, messages: [...latest.messages, { role: "assistant" as const, text: "Undo requested for the last AI draft edit." }] };
+    await saveQueue.current;
+    if (!workspaceMounted.current || projectRef.current?.id !== latest.id) return "Return to the original project to undo its draft change.";
+    projectRef.current = restored;
+    setProject(restored);
+    setAiUndo(null);
+    setSaveStatus("Saving undo…");
+    try {
+      // The existing queue intentionally swallows failures; confirm this particular undo save.
+      await saveProjectToServer({ ...restored, assets: restored.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
+      setSaveStatus("Changes saved.");
+      return "The last AI draft edit has been undone and saved. Your published game is unchanged. Generated media files remain in storage; no original was deleted.";
+    } catch {
+      setSaveStatus("Save failed. Use Save progress to retry.");
+      return "Undo is applied in this browser draft, but the server save failed. Use Save progress to retry before closing. Your published game is unchanged.";
+    }
   }
 
   function trigger(control: Project["controls"][number]) {
@@ -948,6 +1091,37 @@ export default function ProjectWorkspace() {
   }
   async function beginBlank() { const p = createProject("Create a new interactive TikTok LIVE experience"); try { await saveProjectToServer(p); window.location.href = `/project/${p.id}`; } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Project could not be created."); } }
 
+  useSupportBridge({
+    context: { scope: `project:${params.id}`, page: "project", stage: ["Workshop", "Build Space", "Publish"][workflowStep], section: workflowStep === 0 ? ["Game plan", "Assets & tools", "Scenes & effects"][workshopStep] : undefined, assetCount: project?.assets.length || 0, toolCount: project?.gameTools.length || 0, controlCount: project?.controls.length || 0, selection: selectedAssetKey ? project?.assets.find(a => (a.storageKey || a.name) === selectedAssetKey)?.name : undefined, status: assetStatus || saveStatus, busy: building || assetBusy },
+    execute: project ? runAssistantTask : undefined,
+    undo: aiUndo ? undoAssistantEdit : undefined,
+    resumeMedia: mediaPlayback?.start,
+    navigate: target => {
+      if (!project) return false;
+      if (target === "game-plan") { openGamePlanEntry(); return true; }
+      if (target === "materials") { openSavedWorkshop(1); return true; }
+      if (target === "scenes") { openSavedWorkshop(2); return true; }
+      if (target === "background") { requestBuildEntry("background"); return true; }
+      if (target === "add-items") { requestBuildEntry("add"); return true; }
+      if (target === "test") { requestBuildEntry("test"); return true; }
+      if (target === "publish-review") { chooseWorkflowStep(2); return true; }
+      if (target === "media-generator") { openWorkshopTool("media"); return true; }
+      if (target === "game-tools") { openWorkshopTool("tools"); return true; }
+      if (target === "web-research") {
+        requestBuildEntry("test");
+        requestAnimationFrame(() => { requestResearchOpen(); document.querySelector('.web-research-search input')?.scrollIntoView({ block: "center" }); (document.querySelector('.web-research-search input') as HTMLInputElement | null)?.focus(); });
+        return true;
+      }
+      if (target === "media-editor") {
+        openSavedWorkshop(1);
+        const index = selectedAssetKey ? project.assets.findIndex(a => (a.storageKey || a.name) === selectedAssetKey) : -1;
+        if (index >= 0) setEditingAssetIndex(index);
+        else setAssetStatus("Select the image or video you want to edit from your media library.");
+        return true;
+      }
+      return false;
+    },
+  });
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   const firstActionTaken = entryStages[workflowStep] ?? hasExistingEntryAction(project, workflowStep);
   const backgroundChosen = hasExistingEntryAction(project, 1);
@@ -1024,7 +1198,7 @@ export default function ProjectWorkspace() {
         <div><small>{workflowStep === 0 ? workshopTask.stage : ["Workshop", "Build Space", "Publish"][workflowStep]}</small><h1>{["Brainstorm & create", "Build & implement", "Review & publish"][workflowStep]}</h1></div>
         <Link href="/guide" target="_blank" rel="noreferrer" className="outline-btn">How to use TTCGameLab</Link>
       </div>
-      <ProjectWorkflowNav stage={workflowStep} workshopSection={workshopStep} onStageChange={chooseWorkflowStep}
+{mediaPlayback && <div role="status" className="media-playback-ready"><p>Your video is ready to trim. Start rendering with audio.</p><button type="button" className="build-btn" onClick={mediaPlayback.start}>Start video trim</button></div>}      <ProjectWorkflowNav stage={workflowStep} workshopSection={workshopStep} onStageChange={chooseWorkflowStep}
         entryGuide={<WorkflowEntryGuide {...entryCopy} started={firstActionTaken}
           firstAction={{ ...entryCopy.firstAction, onClick: () => { markEntryStage(workflowStep, true); entryCopy.firstAction.onClick(); } }}
           onShowFirst={() => markEntryStage(workflowStep, false)} />} />

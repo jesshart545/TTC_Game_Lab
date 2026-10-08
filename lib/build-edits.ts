@@ -1,13 +1,13 @@
 import {controlConnectionError} from './control-connections';
 import type {ProjectEvent} from './project';
 import type {Project,GameToolType} from './project';
-import {applyDraftChanges} from './draft-edit';
+import {applyDraftChanges,normalizeDraftChanges} from './draft-edit';
 import {addCreationControl} from './build-controls';
 import {toolDefaults} from './game-tools';
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
 export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','blank-board','youtube','scoreboard','prize-list','game-tool-list','card-list'];
 export function applyBuildChanges(project:Project,input:unknown){
- const changes=record(input),warnings:string[]=[];let extra=0;
+ const changes=normalizeDraftChanges(input),warnings:string[]=[];let extra=0;
  let next={...project,gameTools:[...project.gameTools],assetPools:(project.assetPools||[]).map(p=>({...p,assetKeys:[...p.assetKeys]}))};
  const created:string[]=[];
  for(const raw of Array.isArray(changes.newTools)?changes.newTools:[]){
@@ -53,7 +53,7 @@ export function applyBuildChanges(project:Project,input:unknown){
  }
  for(const raw of Array.isArray(changes.sequences)?changes.sequences:[]){
   const item=record(raw),old=next.controls.find(c=>c.id===item.id&&c.action==='sequence');
-  if(item.id&&!old){warnings.push('The sequence could not be found.');continue;}
+  if(item.id&&!old){warnings.push('The supplied id is not a saved sequence. Omit id for a new sequence; only reuse an existing sequence ID when editing.');continue;}
   let candidate:Project={...next,controls:[...next.controls]};
   let steps:NonNullable<ProjectEvent['chain']>;
   try{steps=(Array.isArray(item.steps)?item.steps:[]).map((raw:any)=>{

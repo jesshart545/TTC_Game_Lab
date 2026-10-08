@@ -6,10 +6,44 @@ const object = (value: unknown): Record<string, unknown> => value && typeof valu
 const text = (value: unknown, limit = 120) => typeof value === "string" ? value.trim().slice(0, limit) : undefined;
 const number = (value: unknown, min: number, max: number) => typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined;
 
+/** Canonicalize common model design aliases; explicit config values take precedence. */
+export function normalizeDraftChanges(input: unknown) {
+  const changes = { ...object(input) };
+  for (const collection of ["gameTools", "newTools"]) {
+    if (!Array.isArray(changes[collection])) continue;
+    changes[collection] = (changes[collection] as unknown[]).map(raw => {
+      const edit = { ...object(raw) }, config = { ...object(edit.config) };
+      for (const key of ["appearance", "placement", "questionCard", "answerCard"]) {
+        for (const [source, value] of [[key, edit[key]], ["config." + key, config[key]]] as const) {
+          if (value !== undefined && (!value || typeof value !== "object" || Array.isArray(value))) {
+            throw new Error(`Tool ${source} must be an object containing supported design fields.`);
+          }
+        }
+        if (Object.keys(object(edit[key])).length || Object.keys(object(config[key])).length) {
+          config[key] = { ...object(edit[key]), ...object(config[key]) };
+        }
+        delete edit[key];
+      }
+      if (edit.config !== undefined || Object.keys(config).length) edit.config = config;
+      return edit;
+    });
+  }
+  return changes;
+}
+
 export function applyDraftChanges(project: Project, input: unknown) {
-  const changes = object(input);
+  const changes = normalizeDraftChanges(input);
   let applied = 0;
   const next: Project = { ...project, overlay: { ...project.overlay }, assets: project.assets.map(asset => ({ ...asset })), compositions: (project.compositions || []).map(c => ({ ...c, clips: c.clips.map(clip => ({ ...clip })) })), controls: project.controls.map(c => ({ ...c })), gameTools: (project.gameTools || []).map(tool => ({ ...tool, config: { ...tool.config } })) };
+  const name = text(changes.name, 120);
+  if (name && name !== next.name) { next.name = name; applied++; }
+  const plan = object(changes.gamePlan);
+  for (const key of ["theme", "loop", "rules", "rewards", "extras"]) {
+    const value = text(plan[key], 5000);
+    if (value !== undefined && value !== next.gamePlan?.[key]) {
+      next.gamePlan = { ...next.gamePlan, [key]: value }; applied++;
+    }
+  }
   if (["cyan", "purple", "pink"].includes(String(changes.theme)) && next.theme !== changes.theme) { next.theme = changes.theme as Project["theme"]; applied++; }
   const overlay = object(changes.overlay);
   for (const key of ["title", "subtitle"] as const) { const value = text(overlay[key]); if (value !== undefined && value !== next.overlay[key]) { next.overlay[key] = value; applied++; } }
@@ -81,4 +115,3 @@ export function applyDraftChanges(project: Project, input: unknown) {
   }
   return { project: next, applied };
 }
-
