@@ -5,17 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { deleteStoredAsset, hydrateProjectAssets, storeUploadedAsset } from "../../lib/asset-store";
 import MediaEditor from "../../components/MediaEditor";
 import { Project, ProjectAsset, saveProjectToServer } from "../../lib/project";
+import AssetFolders from "../../components/AssetFolders";
+import CollapsibleFolder, { rememberFolderState, type FolderBulkAction } from "../../components/CollapsibleFolder";
+import { assetCategory, mediaFolders } from "../../lib/asset-folders";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string; assetIndex: number };
-type Filter = "all" | "image" | "video" | "audio";
-
-function kind(asset: ProjectAsset): Exclude<Filter,"all"> | "other" {
-  const t=(asset.type+" "+asset.name).toLowerCase();
-  if(t.includes("image")||/\.(png|jpe?g|webp|gif)$/i.test(asset.name)) return "image";
-  if(t.includes("video")||/\.(mp4|webm|mov|m4v)$/i.test(asset.name)) return "video";
-  if(t.includes("audio")||/\.(mp3|wav|m4a|ogg)$/i.test(asset.name)||t.includes("voice")||t.includes("music")) return "audio";
-  return "other";
-}
+type Filter = "all" | "image" | "video" | "audio" | "other";
 
 export default function AssetLibraryPage() {
   const [assets,setAssets]=useState<LibraryAsset[]>([]);
@@ -24,6 +19,7 @@ export default function AssetLibraryPage() {
   const [filter,setFilter]=useState<Filter>("all");
   const [status,setStatus]=useState("");
   const [editing,setEditing]=useState<LibraryAsset|null>(null);
+  const [folderAction,setFolderAction]=useState<FolderBulkAction>({open:false,sequence:0});
 
   async function refreshAssets() {
     const response=await fetch("/api/projects",{cache:"no-store"});
@@ -62,7 +58,7 @@ export default function AssetLibraryPage() {
     const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
     const current=project.assets[asset.assetIndex]; const adding=!current.inProject;
     let role=current.role;
-    if(adding&&!role){const k=kind(current);role=k==="image"?(project.assets.some(a=>a.inProject&&a.role==="background")?"layer":"background"):k==="video"?"video":"audio"}
+    if(adding&&!role){const k=assetCategory(current);role=k==="image"?(project.assets.some(a=>a.inProject&&a.role==="background")?"layer":"background"):k==="video"?"video":"audio"}
     const next={...project,assets:project.assets.map((a,i)=>i===asset.assetIndex?{...a,inProject:adding,role}:a),updatedAt:"just now"};
     await persistProject(next); setStatus(adding?"Added to project preview.":"Removed from project preview.");
   }
@@ -96,25 +92,49 @@ export default function AssetLibraryPage() {
 
   const filtered=useMemo(()=>assets.filter(a=>{
     const q=query.trim().toLowerCase(); const matches=!q||(a.name+" "+a.type+" "+a.projectName).toLowerCase().includes(q);
-    return matches&&(filter==="all"||kind(a)===filter);
+    return matches&&(filter==="all"||assetCategory(a)===filter);
   }),[assets,query,filter]);
+
+  const projectFolders=useMemo(()=>projects.map(project=>({
+    project,
+    assets:filtered.filter(asset=>asset.projectId===project.id),
+  })).filter(folder=>folder.assets.length>0),[projects,filtered]);
+  const folderSearchKey=query.trim()||filter!=="all"?`${query.trim()}|${filter}`:"";
+
+  function setAllFolders(open: boolean) {
+    for (const {project} of projectFolders) {
+      rememberFolderState(`library:${project.id}`, open);
+      for (const folder of mediaFolders) rememberFolderState(`library:${project.id}:media:${folder.kind}`, open);
+    }
+    setFolderAction(action=>({open,sequence:action.sequence+1}));
+  }
+
+  function renderLibraryAsset(asset:LibraryAsset) {
+    const category=assetCategory(asset);
+    return <article className="library-card" key={`${asset.projectId}:${asset.assetIndex}:${asset.storageKey||asset.name}`}>
+      <div className="library-preview">
+        {asset.url&&category==="image"&&<img src={asset.url} alt={asset.name}/>}
+        {asset.url&&category==="video"&&<video src={asset.url} controls preload="metadata"/>}
+        {asset.url&&category==="audio"&&<audio src={asset.url} controls/>}
+        {(!asset.url||category==="other")&&<div className="library-no-preview">No preview available for this file</div>}
+      </div>
+      <div className="library-body"><strong>{asset.name}</strong><span>{category.toUpperCase()} · {asset.projectName}</span>
+        <div className="library-action-grid"><button className="outline-btn" onClick={()=>void toggleInProject(asset)}>{asset.inProject?"✓ In Project":"+ Add to Project"}</button><button className="outline-btn" onClick={()=>void rename(asset)}>Rename</button>{category==="image"&&<button className="outline-btn library-edit-btn" onClick={()=>setEditing(asset)}>✦ Edit / AI Edit</button>}</div>
+        <select className="library-project-select" defaultValue="" onChange={e=>{void copyToProject(asset,e.target.value);e.currentTarget.value=""}}><option value="">Copy to another project…</option>{projects.filter(p=>p.id!==asset.projectId).map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select>
+        <Link href={"/project/"+asset.projectId} className="outline-btn library-open-btn">{category==="image"?"Open project to edit":"Open project"}</Link>
+        <button type="button" className="danger-btn" onClick={()=>void handleDelete(asset)}>Delete asset</button>
+      </div>
+    </article>;
+  }
 
   return <main className="shell"><aside className="sidebar"><div className="brand"><div className="brand-mark"><span>TT</span></div><div><strong>TTCGameLab</strong><small>LIVE CREATIVE STUDIO</small></div></div><Link href="/project/new" className="new-project"><span>＋</span> New Project</Link><nav><div className="nav-label">WORKSPACE</div><Link href="/" className="nav-item"><span>⌂</span> Home</Link><Link href="/projects" className="nav-item"><span>▣</span> My Projects</Link><Link href="/assets" className="nav-item active"><span>✦</span> Asset Library</Link></nav></aside>
   <section className="main"><header className="topbar"><div className="crumb"><span>Workspace</span><em>/</em><strong>Asset Library</strong></div></header><div className="content">
-    <div className="section-head"><div><h2>Asset Library</h2><p>Manage generated and uploaded media across your projects.</p></div><input className="asset-library-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search assets or projects..." /></div>
-    <div className="asset-library-toolbar"><div className="asset-filter-tabs">{(["all","image","video","audio"] as Filter[]).map(x=><button key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{x==="all"?"All":x[0].toUpperCase()+x.slice(1)}</button>)}</div><span>{filtered.length} asset{filtered.length===1?"":"s"}</span></div>
+    <div className="section-head"><div><h2>Asset Library</h2><p>Manage generated and uploaded media across your projects.</p></div><input type="search" aria-label="Search assets or projects" className="asset-library-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search assets or projects..." /></div>
+    <div className="asset-library-toolbar"><div className="asset-filter-tabs">{(["all","image","video","audio","other"] as Filter[]).map(x=><button key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{x==="all"?"All":x==="other"?"Other files":x[0].toUpperCase()+x.slice(1)}</button>)}</div><span>{filtered.length} asset{filtered.length===1?"":"s"}</span></div>
     {status&&<div className="asset-library-status">{status}</div>}
-    {filtered.length===0?<div className="asset-library-empty"><strong>No matching assets.</strong><span>Generate or upload media in a project and it will appear here.</span><Link href="/project/new" className="build-btn">Create a project →</Link></div>:
-    <div className="asset-library-grid">{filtered.map(asset=><article className="library-card" key={asset.projectId+(asset.storageKey||asset.name)+asset.assetIndex}><div className="library-preview">
-      {asset.url&&kind(asset)==="image"&&<img src={asset.url} alt={asset.name}/>}
-      {asset.url&&kind(asset)==="video"&&<video src={asset.url} controls preload="metadata"/>}
-      {asset.url&&kind(asset)==="audio"&&<audio src={asset.url} controls/>}
-      {!asset.url&&<div className="library-no-preview">No preview</div>}</div>
-      <div className="library-body"><strong>{asset.name}</strong><span>{kind(asset).toUpperCase()} · {asset.projectName}</span>
-        <div className="library-action-grid"><button className="outline-btn" onClick={()=>void toggleInProject(asset)}>{asset.inProject?"✓ In Project":"+ Add to Project"}</button><button className="outline-btn" onClick={()=>void rename(asset)}>Rename</button>{kind(asset)==="image"&&<button className="outline-btn library-edit-btn" onClick={()=>setEditing(asset)}>✦ Edit / AI Edit</button>}</div>
-        <select className="library-project-select" defaultValue="" onChange={e=>{void copyToProject(asset,e.target.value);e.currentTarget.value=""}}><option value="">Copy to another project…</option>{projects.filter(p=>p.id!==asset.projectId).map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select>
-        <Link href={"/project/"+asset.projectId} className="outline-btn library-open-btn">{kind(asset)==="image"?"Open project to edit":"Open project"}</Link>
-        <button type="button" className="danger-btn" onClick={()=>void handleDelete(asset)}>Delete asset</button>
-      </div></article>)}</div>}
+    {assets.length===0?<div className="asset-library-empty"><strong>No saved assets yet.</strong><span>Generate or upload media in a project and it will appear here.</span><Link href="/project/new" className="build-btn">Create a project →</Link></div>:filtered.length===0?<div className="asset-library-empty"><strong>No matching assets.</strong><span>Try another search or media filter, or generate or upload new media in a project.</span></div>:<>
+      <div className="folder-toolbar" role="group" aria-label="Asset library folder controls"><button type="button" onClick={()=>setAllFolders(true)}>Expand all folders</button><button type="button" onClick={()=>setAllFolders(false)}>Collapse all folders</button></div>
+      <div className="asset-library-folders">{projectFolders.map(({project,assets:projectAssets})=><CollapsibleFolder key={project.id} title={project.name} count={projectAssets.length} description="Project assets" storageKey={`library:${project.id}`} defaultOpen={false} expandKey={folderSearchKey?`search:${folderSearchKey}`:""} bulkAction={folderAction}><AssetFolders assets={projectAssets} scope={`library:${project.id}`} renderAsset={renderLibraryAsset} gridClassName="asset-library-grid" searchKey={folderSearchKey} bulkAction={folderAction} showControls={false}/></CollapsibleFolder>)}</div>
+    </>}
   </div></section>{editing&&<MediaEditor asset={editing} onClose={()=>setEditing(null)} onSave={next=>void saveEdits(editing,next)} onSaveAsNew={next=>saveAsNew(editing,next)}/>}</main>;
 }
