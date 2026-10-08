@@ -1,3 +1,4 @@
+import { normalizeDraftChanges } from "../../../lib/draft-edit";
 import { assistantProvider } from "../../../lib/assistant-provider";
 import { checkedAssistantMediaAction } from "../../../lib/assistant-media-actions";
 import { adviceOnlyRequest } from "../../../lib/assistant-intent";
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
       const clean = first >= 0 && last > first ? stripped.slice(first,last+1) : stripped;
       const parsed = JSON.parse(clean);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Return one JSON object, not a list or text.");
-      if (!parsed.changes || typeof parsed.changes !== "object") parsed.changes = {};
+      parsed.changes = normalizeDraftChanges(parsed.changes);
       validateExplicitSettings(String(body.request||""),parsed);
       validateSavedReferences(body.project, parsed.changes);
       validateRequestedAutomation(String(body.request||""), parsed.changes);
@@ -118,7 +119,16 @@ export async function POST(request: Request) {
         if(checked.warnings.length)throw new Error(checked.warnings.join(' '));
         if(!checked.applied)throw new Error('No requested edit could be applied. Use the exact saved item IDs and the documented changes fields, or ask for the missing information.');
       }
-      const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+      let reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+      const internalRepair = /^(?:corrected (?:the )?(?:json|structure)|gameTools is now|I'll fix this by using the proper|I will fix this by using the proper|I'll fix the control reference)/i;
+      if ((action || Object.keys(parsed.changes).length || parsed.needsClarification === true) && internalRepair.test(reply)) {
+        // Drop the repair preamble, not a legitimate explanation of JSON or app internals.
+        const userFacing = reply.replace(/^[^.!?\n—]*[.—]\s*/, "").replace(/^(?:gameTools is now|using the proper)[^.!?\n]*[.!]\s*/i, "");
+        const question = parsed.needsClarification === true ? userFacing.match(/[^.!?\n]*\?/)?.[0]?.trim() : undefined;
+        reply = action ? "I will carry out the requested task using the existing project tools." : Object.keys(parsed.changes).length ? "The requested draft changes are prepared; the editor will apply them." : "No draft change has been prepared.";
+        if (question && !internalRepair.test(question)) reply += "\n\n" + question;
+        else if (parsed.needsClarification === true) throw new Error("Ask the actual missing user-facing task question, without JSON or internal repair details.");
+      }
       if (!reply && !action && !Object.keys(parsed.changes).length) throw new Error("Return the requested pool edit and a nonempty reply; the previous response contained neither.");
       const outcome = action ? "action" : Object.keys(parsed.changes).length ? "edit" : parsed.needsClarification === true ? "clarification" : parsed.outcome === "unsupported" ? "unsupported" : "answer";
       return NextResponse.json({ configured: true, outcome, action, reply, needsClarification: parsed.needsClarification === true, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
@@ -131,7 +141,7 @@ export async function POST(request: Request) {
               {role:"system",content:DRAFT_SYSTEM},
               {role:"user",content:JSON.stringify(draftContext)},
               {role:'assistant',content:String(message)},
-              {role:"user",content:(validationError instanceof Error?'Correct this missing setting: '+validationError.message+' ':'')+'Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories.'}
+              {role:"user",content:(validationError instanceof Error?'Correct this missing setting: '+validationError.message+' ':'')+'Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. Describe the final proposal in plain language, never the validation repair or JSON correction. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories.'}
             ]}),signal:AbortSignal.timeout(60000)
           });
           const data=await retry.json();

@@ -1,7 +1,7 @@
 import { adviceOnlyRequest } from "../../../lib/assistant-intent";
 import { assistantProvider } from "../../../lib/assistant-provider";
 import { NextResponse } from "next/server";
-import { checkedSupportContext, checkedSupportHistory, checkedSupportReply, checkedSupportText, SUPPORT_CATALOG, SUPPORT_TARGETS } from "../../../lib/site-support";
+import { checkedSupportContext, checkedSupportHistory, checkedSupportReply, checkedSupportText, SUPPORT_TARGETS, supportCatalogExcerpts } from "../../../lib/site-support";
 import { researchAccess } from "../../../lib/web-research-server";
 
 export const runtime = "nodejs";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: configured && !configured.startsWith("cpk-") ? configured : "agnes-2.5-flash", temperature: 0.2, max_tokens: 2000, response_format: { type: "json_object" }, messages: [
         { role: "system", content: SYSTEM },
-        { role: "user", content: JSON.stringify({ request: text, history, context, allowTask, pendingTask: body.pendingTask === true, catalog: SUPPORT_CATALOG, targets: SUPPORT_TARGETS }) },
+        { role: "user", content: JSON.stringify({ request: text, history, context, allowTask, pendingTask: body.pendingTask === true, catalog: supportCatalogExcerpts(text, context), targets: SUPPORT_TARGETS }) },
       ] }), signal: AbortSignal.timeout(45000), cache: "no-store",
     });
     if (!response.ok) throw new Error("Provider unavailable");

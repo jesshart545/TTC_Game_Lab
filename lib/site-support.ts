@@ -153,7 +153,7 @@ export const SUPPORT_CATALOG: readonly SupportCatalogEntry[] = [
     id: "countdown",
     title: "Answer timers and countdowns",
     terms: ["answer timer", "countdown", "timer", "auto hide", "timer colors"],
-    excerpt: "Countdowns support numbers, bar, circle, numbers-bar and numbers-circle displays; background/text/accent colors, supported fonts, font size, shape, border visibility, transparency and placement. Connected control transitions support none, fade, slide or zoom for appearance/removal. Show-only, start/pause, reset and hide are distinct operations. An existing fresh Start and Hide control can be combined into an additional sequence button only when the user asks for automation. Matching a background can use sampled colors, not full artwork understanding. The timer editor supports custom minutes/seconds and duration preset buttons. A duration popup on the live trigger button is not available. Countdown color-phase changes, automatic ticking/warning sounds, player-answer submission feedback and automatic fastest-answer scoring are not implemented countdown features. Do not recommend them as settings the user can switch on. Suggest one supported improvement, and leave implementation to the user's request.",
+    excerpt: "Countdowns support numbers, bar, circle, numbers-bar and numbers-circle displays; background/text/accent colors, supported fonts, font size, shape, border visibility, transparency and placement. Connected control transitions support none, fade, slide or zoom for appearance/removal. Show-only, start/pause, reset and hide are distinct operations. An existing fresh Start and Hide control can be combined into an additional sequence button only when the user asks for automation. Matching a background can use sampled colors, not full artwork understanding. The timer editor supports custom minutes/seconds and fixed preset buttons for 15 seconds, 30 seconds, 1 minute and 5 minutes. Creating additional saved custom preset buttons is not implemented. A duration popup on the live trigger button is not available. Countdown color-phase changes, automatic ticking/warning sounds, player-answer submission feedback and automatic fastest-answer scoring are not implemented countdown features. Do not recommend them as settings the user can switch on. Suggest one supported improvement, and leave implementation to the user's request.",
     targets: ["game-tools", "test"],
   },
   {
@@ -355,4 +355,14 @@ export function fallbackSupport(text: string, context: SupportContext): SupportR
 export function supportCatalogExcerpt(text: string, context: SupportContext) {
   const entry = selectedCatalog(text, context);
   return { title: entry.title, excerpt: entry.excerpt, targets: [...entry.targets] };
+}
+
+/** Keep relevant multi-feature help grounded without sending an entire project/catalog. */
+export function supportCatalogExcerpts(text: string, context: SupportContext): SupportCatalogEntry[] {
+  const request = text.toLowerCase();
+  const ranked = SUPPORT_CATALOG.map((entry, index) => ({ entry, index, score: entry.terms.reduce((score, term) => score + (request.includes(term) ? term.includes(" ") ? 3 : 1 : 0), 0) }))
+    .filter(item => item.score > 0).sort((a, b) => b.score - a.score || a.index - b.index);
+  const preferred = selectedCatalog(text, context);
+  const result = [preferred, ...ranked.map(item => item.entry)];
+  return result.filter((entry, index) => result.findIndex(other => other.id === entry.id) === index).slice(0, 4);
 }
