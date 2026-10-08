@@ -16,3 +16,8 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run build
+        env:
+          # Non-secret placeholders for compilation only; CI does not deploy or run the app.
+          # Vercel continues to use its own real authentication configuration.
+          NEON_AUTH_BASE_URL: https://example.test
+          NEON_AUTH_COOKIE_SECRET: ci-build-only-not-production-secret-0000

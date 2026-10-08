@@ -109,3 +109,53 @@
 .asset-details-dialog{box-sizing:border-box;width:min(620px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:88dvh;padding:0;border:1px solid #426077;border-radius:14px;background:#0c131d;color:#eef4fb;overflow:auto}.asset-details-dialog::backdrop{background:#02060cbb}.asset-details-dialog .asset-detail-panel{margin:0;padding:18px;border:0;background:transparent}.asset-details-dialog .asset-detail-panel>header{position:sticky;top:-18px;z-index:1;display:flex;align-items:center;gap:12px;padding:12px 0;background:#0c131d}.asset-details-dialog header>.workshop-asset-preview{flex:0 0 100px;width:100px;height:60px}.asset-details-dialog header>div{min-width:0;flex:1}.asset-details-dialog header h3{overflow-wrap:anywhere}.asset-details-dialog .asset-detail-close{flex:0 0 auto}.asset-details-dialog .asset-detail-pools{margin-top:8px}.asset-details-dialog .asset-detail-actions{margin-top:15px}@media(max-width:480px){.asset-details-dialog header>.workshop-asset-preview{flex-basis:70px;width:70px;height:45px}}
 
 .workshop-asset-preview img,.workshop-asset-preview video{object-fit:contain}
+
+/* One project-stage track, with quieter local tasks underneath. */
+.workspace-topbar{height:auto;min-height:88px;gap:16px;flex-wrap:wrap;padding:16px 24px}
+.workspace-title{flex:1;min-width:0;font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+.workspace-actions{flex-wrap:wrap;gap:12px;align-items:flex-start}
+.workspace-save-group{display:grid;gap:6px;max-width:300px}
+.workspace-save-group small{font-size:12px;line-height:1.4;color:#aebed0}
+.workspace-save-group .build-btn{justify-self:start}
+.workshop-flow-heading{align-items:flex-start}
+.workshop-flow-heading h1{letter-spacing:-.8px;margin-bottom:8px}
+.workflow-navigation-note{margin:0 0 20px;color:#afc1d4;font-size:14px;line-height:1.5}
+.workflow-section-label{display:block;margin-bottom:10px;color:#a8bbcf;font-size:12px;font-weight:700;letter-spacing:.04em}
+.workshop-substeps{margin:0 0 20px;gap:8px}
+.workshop-substeps button{min-height:42px;padding:10px 16px;background:#101b2a;border-color:#34465b;font-size:14px}
+.workshop-substeps button.active{background:#12313c;border-color:#48dce8}
+.build-local-navigation{margin:20px 0;padding-bottom:16px;border-bottom:1px solid #30465a}
+.build-steps{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+.build-steps button{justify-content:center;min-height:42px;font-size:14px;background:#101b2a;border-color:#34465b;padding:10px 18px}
+.build-steps button[aria-pressed=true]{color:#dffcff;background:#12313c;border-color:#48dce8;box-shadow:0 0 0 1px #48dce840}
+.publish-review{margin-top:20px;padding:20px;border:1px solid #354660;border-radius:12px;background:#101b2a}
+.publish-review h3{margin:0 0 10px;font-size:18px}
+.publish-review p{max-width:850px;color:#c0ccdc;font-size:15px;line-height:1.6}
+.publish-review .outline-btn{margin-top:8px}
+.workshop-progress{align-items:center}
+.workshop-progress span{font-size:13px;line-height:1.5}
+@media(max-width:760px){
+ .workspace-topbar{align-items:flex-start;padding:16px;gap:12px}
+ .workspace-topbar>.back{width:100%}
+ .workspace-title{flex-basis:100%;font-size:16px}
+ .workspace-actions{width:100%;justify-content:space-between}
+ .workspace-save-group{flex:1;max-width:none}
+ .workshop-flow-heading{gap:12px}
+ .workshop-flow-heading>.outline-btn{align-self:flex-start}
+ .workflow-navigation-note{font-size:13px}
+ .workshop-substeps button{width:auto;flex:1 1 140px;text-align:center}
+ .build-steps button{flex:1 1 110px}
+ .workshop-progress>button{flex:1 1 150px}
+ .publish-review{padding:16px}
+}
+
+/* Explicitly finish compact legacy editor actions, not the audience artwork. */
+.workspace-page .composer-bottom .send{min-height:42px;padding:10px 16px;font-size:14px;font-weight:700;border-radius:8px;color:#dffcff}
+.workspace-page .workspace-actions :is(.build-btn,.danger-btn),.workspace-page .workshop-flow :is(.build-btn,.outline-btn){min-height:42px;font-size:14px;padding:10px 16px}
+.workspace-title>span{font-size:11px;padding:4px 9px;color:#b8c8d9;text-transform:capitalize}
+.workflow-layout .preview-head button,.workflow-layout .assets-head button{font-size:13px;min-height:38px}
+.workflow-layout .assets-head small,.workflow-layout .panel-heading small{font-size:11px;color:#98adbf}
+.workspace-page .idea-card button:disabled{opacity:.5}
+
+.publish-review ol{padding-left:24px;margin:14px 0;color:#c0ccdc;font-size:15px;line-height:1.6}
+.publish-review li+li{margin-top:10px}

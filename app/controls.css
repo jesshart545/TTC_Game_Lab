@@ -1,0 +1,438 @@
+/* Shared control finish: low-specificity defaults that component styles can refine. */
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) {
+  --control-surface: #101722;
+  --control-surface-hover: #162231;
+  --control-border: #34465c;
+  --control-border-strong: rgba(32, 232, 255, .62);
+  --control-text: #eaf6ff;
+  --control-placeholder: #718195;
+  color-scheme: dark;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(button:not(.timeline-clip)) {
+  appearance: none;
+  min-block-size: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--control-surface);
+  color: var(--control-text);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: .01em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035), 0 1px 0 rgba(0, 0, 0, .2);
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(button:not(.timeline-clip)):not(:disabled):hover {
+  border-color: var(--control-border-strong);
+  background: var(--control-surface-hover);
+  color: #f4fdff;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(
+  button,
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+  select,
+  textarea
+) {
+  font: inherit;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+  select,
+  textarea
+) {
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: #0c121c;
+  color: var(--control-text);
+  caret-color: var(--cyan);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 1px 0 rgba(0, 0, 0, .18);
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+
+/* Match the legacy bare textarea selector without changing any editor's dimensions. */
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) textarea {
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: #0c121c;
+  color: var(--control-text);
+  caret-color: var(--cyan);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 1px 0 rgba(0, 0, 0, .18);
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+  textarea
+)::placeholder {
+  color: var(--control-placeholder);
+  opacity: 1;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) textarea::placeholder {
+  color: var(--control-placeholder);
+  opacity: 1;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+  select,
+  textarea
+):hover {
+  border-color: #4a617a;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(
+  button,
+  input,
+  select,
+  textarea
+):focus-visible {
+  outline: 3px solid rgba(32, 232, 255, .88);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(155, 92, 255, .18);
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: .5;
+  filter: saturate(.55);
+}
+
+/* Preserve native input affordances without turning checkboxes into large controls. */
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(input[type=checkbox], input[type=radio], input[type=range]) {
+  accent-color: var(--cyan);
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) :where(input[type=checkbox], input[type=radio]) {
+  cursor: pointer;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) input[type=range] {
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+:where(
+  .shell,
+  .projects-page,
+  .workspace-page,
+  .loading-page,
+  .guide-page,
+  .reference-page,
+  .help-page,
+  .published-dashboard,
+  .media-editor-modal,
+  .asset-composer,
+  .card-creation-dialog,
+  .board-designer,
+  .auth-page
+) input[type=color] {
+  min-block-size: 0;
+  min-inline-size: 2.75rem;
+  block-size: 2.4rem;
+  padding: 3px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: #0c121c;
+  cursor: pointer;
+}
+
+/* Studio action controls were previously too small to scan or tap confidently. */
+:where(.workspace-page, .projects-page, .shell, .asset-composer, .media-editor-modal, .card-creation-dialog) :is(.outline-btn, .build-btn, .danger-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-block-size: 36px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+:where(.workspace-page, .projects-page, .shell) .outline-btn {
+  border-style: solid;
+  border-color: #3b5268;
+  color: #cce9f1;
+}
+
+:where(.workspace-page, .projects-page, .shell) .outline-btn:not(:disabled):hover {
+  border-color: rgba(32, 232, 255, .68);
+  background: rgba(32, 232, 255, .08);
+  color: #ecfdff;
+}
+
+:where(.workspace-page, .projects-page, .shell) .build-btn {
+  box-shadow: 0 8px 22px rgba(32, 232, 255, .12), inset 0 1px 0 rgba(255, 255, 255, .22);
+}
+
+:where(.workspace-page, .projects-page, .shell) .build-btn:not(:disabled):hover {
+  border-color: rgba(202, 177, 255, .9);
+  box-shadow: 0 10px 26px rgba(155, 92, 255, .24), inset 0 1px 0 rgba(255, 255, 255, .26);
+  transform: translateY(-1px);
+}
+
+:where(.workspace-page, .projects-page, .shell) .danger-btn {
+  border-color: rgba(255, 112, 142, .58);
+  font-weight: 700;
+}
+
+:where(.shell) .asset-filter-tabs button,
+:where(.shell) .library-action-grid .outline-btn,
+:where(.shell) .library-project-select {
+  min-block-size: 36px;
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+:where(.shell) .asset-library-search,
+:where(.workspace-page) .wheel-input,
+:where(.workspace-page) .workspace-title input {
+  min-block-size: 38px;
+  padding: 9px 11px;
+  font-size: 13px;
+}
+
+/* Placement handles and timeline clips keep their precise canvas geometry. */
+.stage button[aria-label^="Move "],
+.stage button[aria-label^="Resize "],
+.board-design-canvas button[aria-label^="Move "],
+.board-design-canvas button[aria-label^="Resize "] {
+  min-block-size: 0;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    .shell,
+    .projects-page,
+    .workspace-page,
+    .loading-page,
+    .guide-page,
+    .reference-page,
+    .help-page,
+    .published-dashboard,
+    .media-editor-modal,
+    .asset-composer,
+    .card-creation-dialog,
+    .board-designer,
+    .auth-page
+  ) :where(button, input, select, textarea) {
+    transition: none;
+  }
+}
+
+/* Account access uses the same readable control system as the editor. */
+.auth-page .auth-tabs{display:flex;gap:8px;margin:24px 0}
+.auth-page .auth-tabs button{flex:1;min-height:44px;font-size:14px}
+.auth-page .auth-tabs button[aria-pressed=true]{border-color:var(--cyan);background:#12313c;color:#dffcff}
+.auth-page label{display:grid;gap:8px;color:#c5d4e3;font-size:14px;font-weight:600}
+.auth-page input{width:100%;min-width:0;min-height:44px;padding:11px 12px;font-size:16px}
+.auth-page .auth-submit{min-height:44px;margin-top:4px;background:linear-gradient(135deg,#1ce3f7,#9a58ff);color:#040507;font-size:15px;font-weight:800}
+.auth-page .auth-submit:not(:disabled):hover{background:linear-gradient(135deg,#50eafa,#ae7cff);color:#040507}
