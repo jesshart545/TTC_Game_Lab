@@ -4,6 +4,7 @@ import "./fonts.css";
 import "./feature.css";
 import "./controls.css";
 import "./folders.css";
+import "./research.css";
 import HelpLink from '../components/HelpLink';
 
 export const metadata: Metadata = {
