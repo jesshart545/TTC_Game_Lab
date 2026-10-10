@@ -95,3 +95,29 @@ test('Runway validation errors name the rejected field', async () => {
   const response = await route.POST(new Request('https://test/api/generate-asset', { method: 'POST', body: JSON.stringify({ type: 'video', prompt: 'Neon music notes', durationSeconds: 5 }) }));
   assert.equal((await response.json()).error, 'promptText: Too long');
 });
+
+test('an explicitly credit-rejected Runway task falls back once to Fal at the same length', async () => {
+  for (const status of [400, 402]) {
+    const calls = [];
+    const route = load('app/api/generate-asset/route.ts', { fetch: async (url, options) => {
+      calls.push({url, input: JSON.parse(options.body)});
+      if (url.includes('runwayml')) return Response.json({error:'You do not have enough credits to run this task.'}, {status});
+      return Response.json({request_id:'fallback-job', status_url:'https://queue.fal.run/alibaba/wan-3.0/requests/fallback-job/status',response_url:'https://queue.fal.run/alibaba/wan-3.0/requests/fallback-job'});
+    } });
+    const response = await route.POST(new Request('https://test/api/generate-asset', {method:'POST', body:JSON.stringify({type:'video',prompt:'Neon music notes',durationSeconds:2})}));
+    const data = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(data.provider, 'fal');
+    assert.equal(data.durationSeconds, 2);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].input.duration, 2);
+    assert.ok(calls[1].url.endsWith('/alibaba/wan-3.0/text-to-video'));
+  }
+});
+test('ambiguous Runway server failures do not submit a duplicate job to another provider', async () => {
+  let calls = 0;
+  const route = load('app/api/generate-asset/route.ts', {fetch:async () => {calls++;return Response.json({error:'Server unavailable'},{status:503});}});
+  const response = await route.POST(new Request('https://test/api/generate-asset', {method:'POST',body:JSON.stringify({type:'video',prompt:'Neon music notes',durationSeconds:2})}));
+  assert.equal(response.status, 503);
+  assert.equal(calls, 1);
+});
