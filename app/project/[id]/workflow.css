@@ -206,3 +206,83 @@
 @media(max-width:700px){.workflow-entry-guide{flex-direction:column;align-items:stretch;gap:12px;padding:16px}.entry-guide-actions{flex:auto}.workflow-entry-guide h2{font-size:21px}.publish-review-actions>*{flex:1 1 180px}}
 
 .dashboard-button-review{padding:16px;border:1px solid #20e8ff66;border-radius:12px;background:#101827;margin:12px 0}.dashboard-button-choice{padding:12px;border-bottom:1px solid #344657}.dashboard-button-choice label{display:flex;gap:8px;align-items:center;margin:8px 0}.dashboard-button-choice input[type=checkbox]{width:auto}.dashboard-button-choice input:not([type=checkbox]){flex:1;min-width:0}.dashboard-button-review>button{margin:10px 8px 0 0}
+
+/* Build Space keeps browsing and editing beside both live-sized previews. */
+.workflow-layout.workflow-stage-1>.chat-panel[hidden]{display:none!important}
+.build-space-compact{scroll-margin-top:12px;box-sizing:border-box;padding:12px}
+.build-space-compact .build-space-toolbar h2{font-size:20px}
+.build-space-compact .build-space-toolbar p{font-size:14px;margin:5px 0}
+.build-workspace-actions{display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0}
+.build-space-compact .build-local-navigation{margin:8px 0}
+.build-space-compact .build-steps{margin:5px 0;gap:6px}
+.build-space-compact .workflow-section-label{font-size:12px}
+.build-space-compact>[role=status]{font-size:13px;overflow-wrap:anywhere;max-height:44px;overflow:auto}
+.build-work-area{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px;min-width:0}
+.build-inspector{min-width:0;padding:12px;border:1px solid #30465a;border-radius:10px;background:#101a28}
+.build-inspector>*,.build-inspector :is(input,select,textarea,fieldset){box-sizing:border-box;max-width:100%;min-width:0}
+.build-inspector :is(input,select,textarea){font:inherit;font-size:14px}
+.build-inspector select,.build-item-type{display:block;width:100%}
+.build-item-type{font-size:14px;line-height:1.5}
+.build-item-type select{margin-top:6px;padding:8px;background:#102132;color:#edf6ff;border:1px solid #49677c;border-radius:6px}
+.build-inspector :is(h3,h4){font-size:16px;margin:8px 0}
+.build-inspector p{font-size:14px;line-height:1.5}
+.build-inspector .build-guidance{margin:0 0 10px;padding:10px;font-size:14px}
+.build-inspector summary{cursor:pointer;font-weight:600;line-height:1.5}
+.build-inspector .addition-guide{padding:0;border:0;background:transparent;margin:0}
+.build-inspector .creation-tray{padding:0;border:0;margin:10px 0;gap:8px;align-items:stretch}
+.build-inspector .creation-tray article{flex:1 1 125px;min-width:0;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;padding:8px}
+.build-inspector .creation-tray strong{font-size:13px}
+.build-inspector .creation-tray button{font-size:13px;padding:7px}
+.build-inspector .addition-actions{gap:6px;margin:10px 0}
+.build-inspector .addition-actions button{flex:1 1 130px;font-size:13px}
+.build-inspector .assembly-settings{display:flex;flex-direction:column;align-items:stretch;margin:0;padding:0;border:0;gap:10px}
+.build-inspector .assembly-settings :is(label,details,section){width:100%;min-width:0}
+.build-inspector .assembly-settings input:not([type=checkbox]):not([type=color]),.build-inspector .assembly-settings select{width:100%}
+.build-inspector .build-setting-group{padding:10px;border:1px solid #345064;border-radius:8px;background:#0b1320}
+.build-inspector .dashboard-action-picker{display:grid;gap:9px;padding-top:8px}
+.build-inspector .dashboard-action-picker label{display:grid;gap:5px}
+.build-inspector .dashboard-action-picker ol{padding-left:22px;margin:0}
+.build-inspector .dashboard-action-picker li{margin:8px 0;overflow-wrap:anywhere}
+.build-inspector .dashboard-action-picker li button{font-size:12px;padding:6px 8px;margin:4px 4px 0 0}
+.build-inspector .build-sequence-summary{padding:10px;border:1px solid #345064;border-radius:8px}
+.build-space-compact .paired-canvases{min-width:0;gap:12px;margin:0}
+.build-space-compact .assembly-canvas{min-width:0;box-sizing:border-box;padding:10px;border:1px solid #30465a;border-radius:10px;background:#090f1b}
+.build-space-compact .assembly-canvas h3{font-size:16px;margin:0 0 10px}
+.build-space-compact .assembly-canvas>.stage{position:relative;top:auto;min-width:0;min-height:0;width:100%;height:auto;aspect-ratio:16/9;overflow:hidden}
+.build-space-compact .dashboard-canvas{min-width:0;min-height:0;padding:8px;max-height:none}
+.build-space-compact .dashboard-preview-buttons{display:grid;gap:8px}
+.build-space-compact .dashboard-preview-buttons button{width:100%;min-width:0;overflow-wrap:anywhere}
+.build-space-compact .dashboard-preview-buttons small{max-width:none;font-size:12px}
+.build-space-compact .placed-items{gap:6px}
+.build-space-compact .placed-items button{font-size:12px;padding:7px}
+.build-space-compact :is(.youtube-host-panel,.youtube-draft-testing,.youtube-placement-preview,.card-host,.simple-tool-editor){min-width:0;max-width:100%;box-sizing:border-box}
+.build-space-compact .youtube-host-panel :is(input,select,iframe){max-width:100%;min-width:0;box-sizing:border-box}
+@media(min-width:1000px){
+ .build-space-compact{height:calc(100dvh - 24px);min-height:540px;display:flex;flex-direction:column;overflow:hidden}
+ .build-space-compact .build-work-area{flex:1;min-height:0;overflow:hidden}
+ .build-space-compact .build-inspector{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+ .build-space-compact .paired-canvases{height:100%;min-height:0}
+ .build-space-compact .assembly-canvas{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+ .build-space-compact .assembly-canvas:nth-child(2){display:flex;flex-direction:column;overflow:hidden}
+ .build-space-compact .dashboard-canvas{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+}
+@media(min-width:1000px) and (max-width:1199px){
+ .build-work-area{grid-template-columns:310px minmax(0,1fr)}
+ .build-space-compact .paired-canvases{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
+ .build-space-compact .assembly-canvas>.stage{width:min(100%,calc(32dvh * 16 / 9));margin:0 auto}
+}
+@media(max-width:999px){
+ .build-work-area{grid-template-columns:1fr}
+ .build-space-compact .paired-canvases{grid-row:1}
+ .build-space-compact .build-inspector{max-height:55dvh;overflow-y:auto;overscroll-behavior:contain}
+ .build-space-compact .dashboard-canvas{max-height:42dvh;overflow-y:auto}
+ .build-space-compact .build-space-toolbar{flex-wrap:wrap}
+}
+@media(max-width:760px){
+ .build-space-compact .paired-canvases{grid-template-columns:1fr}
+ .build-space-compact .assembly-canvas>.stage{width:min(100%,calc(35dvh * 16 / 9));margin:0 auto}
+ .build-space-compact .build-steps{grid-template-columns:repeat(5,minmax(0,1fr))}
+ .build-space-compact .build-steps button{font-size:12px;padding:7px 4px;justify-content:center}
+}
+.build-overlay-preview-frame{position:absolute;inset:0;overflow:hidden;pointer-events:auto}
+.build-overlay-preview-native{position:relative;width:1920px;height:1080px;transform-origin:top left;overflow:hidden}
