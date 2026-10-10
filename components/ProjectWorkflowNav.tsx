@@ -3,7 +3,11 @@
 import type { ReactNode } from "react";
 
 const projectStages = ["Workshop", "Build Space", "Publish"];
-const workshopSections = ["Game plan", "Assets & tools", "Scenes & effects"];
+const workshopSections = [
+  { label: "Game plan", hint: "Name and describe the game" },
+  { label: "Assets & tools", hint: "Media, cards, boards, tools" },
+  { label: "Scenes & effects", hint: "Optional timed sequences" },
+];
 
 type Props = {
   stage: number;
@@ -30,21 +34,23 @@ export default function ProjectWorkflowNav({ stage, workshopSection, onStageChan
         ))}
       </nav>
       <p className="workflow-navigation-note">
-        Move between stages whenever you need. Your draft stays separate from your published game.
+        Workshop is for creating materials. Build Space assembles the overlay and host dashboard. Publish only when you choose to.
       </p>
       {stage === 0 && (
         <div className="workflow-local-navigation">
-          <span className="workflow-section-label">Workshop sections</span>
+          <span className="workflow-section-label">Workshop · create materials</span>
           <nav className="workshop-substeps" aria-label="Workshop sections">
-            {workshopSections.map((label, index) => (
+            {workshopSections.map((section, index) => (
               <button
-                key={label}
+                key={section.label}
                 type="button"
                 aria-pressed={workshopSection === index}
+                title={section.hint}
                 className={workshopSection === index ? "active" : ""}
                 onClick={() => onStageChange(0, index)}
               >
-                {label}
+                <span className="workshop-substep-label">{section.label}</span>
+                <small className="workshop-substep-hint">{section.hint}</small>
               </button>
             ))}
           </nav>
