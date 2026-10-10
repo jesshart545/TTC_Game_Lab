@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       for (const value of [task.status, task.result]) {
         const endpoint = new URL(value);
         if (endpoint.origin !== "https://queue.fal.run" || endpoint.username || endpoint.password
-          || !endpoint.pathname.startsWith("/fal-ai/wan/")
+          || !(endpoint.pathname.startsWith("/fal-ai/wan/") || endpoint.pathname.startsWith("/alibaba/wan-3.0/"))
           || !endpoint.pathname.includes(`/requests/${task.id}`)) throw new Error();
       }
     } catch { return NextResponse.json({ error: "Invalid animation task." }, { status: 400 }); }
