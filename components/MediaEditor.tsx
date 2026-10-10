@@ -1,6 +1,5 @@
 "use client";
 
-import { REDESIGN_OVERLAY_PROMPT } from "../lib/overlay-media";
 import { useState } from "react";
 import { ProjectAsset, ProjectAssetEdits } from "../lib/project";
 
@@ -23,26 +22,26 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
 
-  async function editMedia(redesignOverlay=false) {
-    if (!asset.url || (!redesignOverlay && !prompt.trim()) || working) return;
+  async function editMedia() {
+    if (!asset.url || !prompt.trim() || working) return;
     setWorking(true);
     setError("");
     try {
       const response = await fetch(video ? "/api/edit-video" : "/api/edit-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: redesignOverlay ? REDESIGN_OVERLAY_PROMPT : prompt.trim(), imageUrl: asset.url, ...(redesignOverlay ? { aspectRatio: "16:9", resolution: "2K" } : {}) }),
+        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: prompt.trim(), imageUrl: asset.url }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
       if (!data.url) throw new Error("The image editor returned no image.");
       const next: ProjectAsset = {
         ...asset,
-        name: (asset.name.replace(/\.[^.]+$/, "") || (video ? "video" : "image")) + (video ? "-edited.mp4" : redesignOverlay ? "-overlay-redesign.png" : "-edited.png"),
+        name: (asset.name.replace(/\.[^.]+$/, "") || (video ? "video" : "image")) + (video ? "-edited.mp4" : "-edited.png"),
         type: video ? "video/mp4" : "image/png",
         url: data.url,
         storageKey: undefined,
-        edits: redesignOverlay ? { fit: "fill", width: 1920, height: 1080 } : undefined,
+        edits: undefined,
       };
       if (!onSaveAsNew) throw new Error("This project cannot save edited assets yet.");
       await onSaveAsNew(next);
@@ -73,7 +72,6 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
           {video ? <video src={asset.url} controls style={style} onLoadedMetadata={e=>{setDuration(e.currentTarget.duration);if(e.currentTarget.videoWidth&&e.currentTarget.videoHeight)setOriginalRatio(e.currentTarget.videoWidth/e.currentTarget.videoHeight);}} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : <img src={asset.url} alt={asset.name} style={style} onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight)setOriginalRatio(image.naturalWidth/image.naturalHeight);}}/>}
         </div>
       </div>
-      {!video&&<section className="media-editor-view-options" aria-label="Fit image to overlay"><button type="button" disabled={working} onClick={()=>void editMedia(true)}>{working?"Redesigning image…":"Redesign for overlay · AI"}</button><p>Rearranges your image’s text, pictures and design into a complete 1920 × 1080 layout. Uses image-generation credits and saves a new copy. Review the wording and design before using it.</p></section>}
       {!video&&<div className="media-editor-view-options"><button type="button" disabled={working} onClick={()=>update({crop:"original",zoom:1,rotation:0,offsetX:0,offsetY:0})}>Show full image</button><p>{cropped?"Crop preview: parts outside this shape will be removed in the edited copy.":"Original shape: the whole image fits in the preview. Zoom and position changes may move parts outside it."}</p></div>}
       <div className="media-editor-fields">
         <fieldset disabled={working} style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,padding:16}}>
