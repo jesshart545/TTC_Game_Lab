@@ -6,6 +6,7 @@ import "./controls.css";
 import "./folders.css";
 import "./research.css";
 import "./support.css";
+import "./project/[id]/shell.css";
 import HelpLink from '../components/HelpLink';
 
 export const metadata: Metadata = {
