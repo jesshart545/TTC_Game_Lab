@@ -11,25 +11,27 @@ export default function OverlayAsset({asset,background=false,className,playing=f
  const kind=(asset.type+" "+asset.name+" "+(asset.url||"").split("?")[0]).toLowerCase();
  const video=kind.includes("video") || /\.(mp4|webm|mov)(?:$|\s)/.test(kind),audio=kind.includes("audio") || /\.(mp3|wav|ogg)(?:$|\s)/.test(kind);
  const e=asset.edits||{};
+ // Never autoplay by default. Callers pass playing for intentional playback (host trigger / explicit preview).
+ const shouldPlay=playing;
  useEffect(()=>{
   const element=media.current;
   if(!element)return;
   element.volume=Math.max(0,Math.min(100,e.volume??80))/100;
   element.muted=!(e.sound??true);
   setFailed(false);
-  if(playing){
+  if(shouldPlay){
    void element.play().then(()=>setBlocked(false)).catch(()=>setBlocked(true));
   }else{
    element.pause();
    try{element.currentTime=0;}catch{}
    setBlocked(false);
   }
- },[e.volume,e.sound,asset.url,playing]);
+ },[e.volume,e.sound,asset.url,shouldPlay]);
  const enable=()=>{void media.current?.play().then(()=>setBlocked(false)).catch(()=>setBlocked(true));};
- const notice=<>{playing&&blocked&&!failed&&<button type="button" onClick={enable} style={{position:'absolute',left:'35%',top:'85%',zIndex:60}}>Enable audio for {asset.name}</button>}{failed&&<p role="alert">Unable to load {asset.name}. Check this media in Workshop.</p>}</>;
+ const notice=<>{shouldPlay&&blocked&&!failed&&<button type="button" onClick={enable} style={{position:'absolute',left:'35%',top:'85%',zIndex:60}}>Enable audio for {asset.name}</button>}{failed&&<p role="alert">Unable to load {asset.name}. Check this media in Workshop.</p>}</>;
 
  const style=overlayAssetStyle(asset,background);
- if(video)return <><video ref={media} aria-label={asset.name} src={asset.url} className={className} style={style} autoPlay={playing} playsInline loop={e.loop??background} muted={!(e.sound??true)} preload={playing?"auto":"metadata"} onError={()=>setFailed(true)}/>{notice}</>;
- if(audio)return <><audio ref={media} aria-label={asset.name} src={asset.url} autoPlay={playing} loop={e.loop??false} muted={!(e.sound??true)} preload={playing?"auto":"metadata"} onError={()=>setFailed(true)}/>{notice}</>;
+ if(video)return <><video ref={media} aria-label={asset.name} src={asset.url} className={className} style={style} autoPlay={shouldPlay} playsInline loop={e.loop??background} muted={!(e.sound??true)} preload={shouldPlay?"auto":"metadata"} onError={()=>setFailed(true)}/>{notice}</>;
+ if(audio)return <><audio ref={media} aria-label={asset.name} src={asset.url} autoPlay={shouldPlay} loop={e.loop??false} muted={!(e.sound??true)} preload={shouldPlay?"auto":"metadata"} onError={()=>setFailed(true)}/>{notice}</>;
  return <img src={asset.url} alt={asset.name} className={className} style={style}/>;
 }
