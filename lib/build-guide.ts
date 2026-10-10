@@ -2,22 +2,22 @@ import type { Project, ProjectEvent } from './project';
 import { mediaKind } from './board-design';
 
 export const additionTypes = [
-  { id: 'image', label: 'Images & logos', help: 'Choose an image, position it on the overlay, then name its Show and Hide buttons.' },
-  { id: 'video', label: 'Video & animation', help: 'Choose a clip, set its size and playback, then connect Play and Stop buttons.' },
-  { id: 'audio', label: 'Music, voices & sounds', help: 'Choose audio, set its volume and looping, then connect Play and Stop buttons. Audio has no visible overlay item.' },
-  { id: 'question-card', label: 'Question & answer cards', help: 'Choose cards and their question pool, design both faces, then connect Show Question, Reveal Answer and Clear. Answers are revealed by the host.' },
-  { id: 'blank-card', label: 'Text cards', help: 'Choose a card, set its text and appearance, then connect Show and Clear buttons.' },
-  { id: 'wheel', label: 'Wheels', help: 'Choose a wheel, review its choices and placement, then connect Spin and Hide buttons.' },
-  { id: 'random-picker', label: 'Random pickers', help: 'Choose an image pool or a saved card list. One button draws an unused item at random, then removes it. No repeats during a game.' },
-  { id: 'coin-toss', label: 'Coin Toss', help: 'Choose a coin, customize its look and placement, then use Flip and Hide. Each flip randomly lands on Heads or Tails.' },
-  { id: 'dice', label: 'Dice', help: 'Choose dice, review the settings and placement, then connect Roll and Hide buttons.' },
-  { id: 'countdown', label: 'Timers', help: 'Choose a standalone timer, set its duration and look, then connect its host controls.' },
-  { id: 'poll', label: 'Polls', help: 'Choose a poll, review its options and placement, then connect Show and Hide buttons.' },
-  {id:'scoreboard',label:'Scoreboard',help:'Add players or teams, choose a look, then test showing the scores and changing points.'},
-  {id:'prize-list',label:'Prize list',help:'Add prizes, choose a look, then test showing the list and marking prizes awarded.'},
-  {id:'game-tool-list',label:'TikTok gift guide',help:'Add gift names or pictures and explain each game action. This guide displays the rules; the host performs the action.'},
-  { id: 'youtube', label: 'YouTube search', help: 'Add a private YouTube search panel to your host dashboard. Search for videos during the game, choose a clip, then send it to the overlay when you are ready. Only the chosen video appears on the overlay; search stays private.' },
-  { id: 'composition', label: 'Composed scenes', help: 'Choose a scene made in Asset Composer, set its placement, then connect Play and Stop buttons.' },
+  { id: 'image', label: 'Images & logos', help: 'Pick a saved image, place it on the overlay, then use Show and Hide from the host dashboard.' },
+  { id: 'video', label: 'Video & animation', help: 'Pick a saved clip, set size and playback, then Play and Stop from the host dashboard.' },
+  { id: 'audio', label: 'Music, voices & sounds', help: 'Pick saved audio, set volume and loop, then Play and Stop. Audio has no visible overlay piece.' },
+  { id: 'question-card', label: 'Question & answer cards', help: 'Link a question pool, design both faces, then Show Question, Reveal Answer, and Clear from the host dashboard.' },
+  { id: 'blank-card', label: 'Text cards', help: 'Set the card text and look, then Show and Clear from the host dashboard.' },
+  { id: 'wheel', label: 'Wheels', help: 'Edit the wheel choices and look, place it on the overlay, then Spin and Hide from the host dashboard.' },
+  { id: 'random-picker', label: 'Random pickers', help: 'Link an image pool or card list. One button draws an unused item, then removes it. No repeats in the same game.' },
+  { id: 'coin-toss', label: 'Coin Toss', help: 'Customize the coin, place it, then Flip and Hide — or one Show → Flip → Remove cycle button.' },
+  { id: 'dice', label: 'Dice', help: 'Choose sides and colors, place the die, then Roll and Hide from the host dashboard.' },
+  { id: 'countdown', label: 'Timers', help: 'Set duration and look, then Show, Start/pause, Reset, and Hide from the host dashboard.' },
+  { id: 'poll', label: 'Polls', help: 'Write the question and options, place the poll, then Show and Hide from the host dashboard.' },
+  { id: 'scoreboard', label: 'Scoreboard', help: 'Add teams or players, choose points or strikes, then show the board and adjust scores live.' },
+  { id: 'prize-list', label: 'Prize list', help: 'Add prizes and a look, then show the list and mark prizes awarded from the host dashboard.' },
+  { id: 'game-tool-list', label: 'TikTok gift guide', help: 'List gift names and what each does in your game. The guide is display-only; the host runs the actions.' },
+  { id: 'youtube', label: 'YouTube search', help: 'Private host search only. Search and preview stay on the dashboard; the audience sees a video only after Play on overlay.' },
+  { id: 'composition', label: 'Composed scenes', help: 'Pick a scene from Asset Composer, place it, then Play and Stop from the host dashboard.' },
 ] as const;
 export type AdditionType = typeof additionTypes[number]['id'];
 export type BuildCreation = { kind: 'asset'|'tool'|'composition'; id: string; name: string };
