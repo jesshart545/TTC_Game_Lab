@@ -10,7 +10,7 @@ function jsonError(message: unknown, status = 500) {
     if (Array.isArray(value)) return value.map(format).filter(Boolean).join(" | ");
     if (value && typeof value === "object") {
       const item = value as Record<string, unknown>;
-      const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+      const location = Array.isArray(item.loc) ? item.loc.join(".") : Array.isArray(item.path) ? item.path.join(".") : "";
       const detail = typeof item.msg === "string" ? item.msg : typeof item.message === "string" ? item.message : "";
       if (detail) return location ? `${location}: ${detail}` : detail;
       try { return JSON.stringify(value); } catch { return "Unknown API error"; }
@@ -105,8 +105,9 @@ export async function POST(request: Request) {
     }
     const runwayKey = readSecret("RUNWAYML_API_SECRET");
     if (!runwayKey) return jsonError("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
+    if (prompt.length > 1000) return jsonError("Keep the short text-to-video description to 1,000 characters or fewer.", 400);
     const model = "gen4.5";
-    const response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+    const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${runwayKey}`,
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       return jsonError(
-        typeof payload?.error === "string" ? payload.error : payload?.error?.message || payload?.message || payload?.detail || (payload?.errors ? JSON.stringify(payload.errors) : "") || "Runway video generation failed.",
+        payload?.issues || payload?.errors || payload?.detail || (typeof payload?.error === "string" ? payload.error : payload?.error?.message || payload?.message) || "Runway video generation failed.",
         response.status,
       );
     }

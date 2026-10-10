@@ -42,7 +42,7 @@ for (const reference of [false, true]) {
       assert.equal(calls.length, 1);
       const { url, input } = calls[0];
       if (reference && duration === 5) assert.ok(url.endsWith('v2.2-a14b/image-to-video/turbo'));
-      else if (!reference && duration <= 10) { assert.ok(url.includes('api.dev.runwayml.com')); assert.equal(input.duration, duration); }
+      else if (!reference && duration <= 10) { assert.equal(url, 'https://api.dev.runwayml.com/v1/text_to_video'); assert.equal(input.promptImage, undefined); assert.equal(input.duration, duration); }
       else { assert.ok(url.endsWith(`wan-3.0/${reference ? 'image' : 'text'}-to-video`)); assert.equal(Number(input.duration), duration); assert.equal(input.enable_safety_checker, true); assert.equal(input.enable_prompt_expansion, false); }
       assert.equal(input.start_image_url || input.image_url || input.promptImage || '', reference ? 'https://test/image.png' : '');
     });
@@ -81,4 +81,17 @@ test('unapproved fal task endpoints are rejected before fetching',async()=>{
     assert.equal((await route.GET(new Request(`https://test?id=${id}&provider=fal`))).status,400);
   }
   assert.equal(calls,0);
+});
+
+test('short text-video limits reject oversized descriptions before a paid request', async () => {
+  let submitted = false;
+  const route = load('app/api/generate-asset/route.ts', { fetch: async () => { submitted = true; } });
+  const response = await route.POST(new Request('https://test/api/generate-asset', { method: 'POST', body: JSON.stringify({ type: 'video', prompt: 'x'.repeat(1001), durationSeconds: 5 }) }));
+  assert.equal(response.status, 400);
+  assert.equal(submitted, false);
+});
+test('Runway validation errors name the rejected field', async () => {
+  const route = load('app/api/generate-asset/route.ts', { fetch: async () => Response.json({ error: 'Validation of body failed', issues: [{ path: ['promptText'], message: 'Too long' }] }, { status: 400 }) });
+  const response = await route.POST(new Request('https://test/api/generate-asset', { method: 'POST', body: JSON.stringify({ type: 'video', prompt: 'Neon music notes', durationSeconds: 5 }) }));
+  assert.equal((await response.json()).error, 'promptText: Too long');
 });
