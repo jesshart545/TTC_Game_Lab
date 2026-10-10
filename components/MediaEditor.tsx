@@ -38,7 +38,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
       if (!data.url) throw new Error("The image editor returned no image.");
       const next: ProjectAsset = {
         ...asset,
-        name: (asset.name.replace(/\.[^.]+$/, "") || (video ? "video" : "image")) + (video ? "-edited.mp4" : "-edited.png"),
+        name: (asset.name.replace(/\.[^.]+$/, "") || (video ? "video" : "image")) + (video ? "-edited.mp4" : redesignOverlay ? "-overlay-redesign.png" : "-edited.png"),
         type: video ? "video/mp4" : "image/png",
         url: data.url,
         storageKey: undefined,
