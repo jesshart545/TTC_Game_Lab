@@ -42,7 +42,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
         type: video ? "video/mp4" : "image/png",
         url: data.url,
         storageKey: undefined,
-        edits: extendOverlay ? { fit: "contain" } : undefined,
+        edits: extendOverlay ? { fit: "fill", width: 1920, height: 1080 } : undefined,
       };
       if (!onSaveAsNew) throw new Error("This project cannot save edited assets yet.");
       await onSaveAsNew(next);
