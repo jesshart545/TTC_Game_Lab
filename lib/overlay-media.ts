@@ -1,12 +1,9 @@
-export const EXTEND_OVERLAY_PROMPT = "Extend this image into a horizontal 16:9 composition for a 1920 by 1080 livestream overlay. Preserve the entire original image, all subjects, lettering, and important details without cropping, distortion, or stretching. Outpaint additional matching artwork and scenery around it to fill the wider canvas seamlessly. Do not add black bars, blank padding, borders, or new text.";
+export const REDESIGN_OVERLAY_PROMPT = "Redesign the supplied artwork as a complete horizontal 16:9 livestream overlay for a 1920 by 1080 canvas. Recompose the actual layout: rearrange and proportionally resize the existing text blocks, characters, logos, panels and decorative elements across the whole widescreen canvas with balanced spacing and readable text. Use the original artwork as design and content reference, not as a narrow poster pasted into a wider scene. Preserve all original wording verbatim, numbers, rules, names, meaningful images, visual identity and information; do not invent, omit or repeat content. Keep all essential content within safe margins. Make the design itself occupy the full canvas. Do not extend scenery at the sides, add filler panels, blank padding or black bars, stretch the original poster, or crop away any content.";
 
-/** Extend mismatched animation inputs with matching artwork, rather than center cropping. */
+/** Animation uses a reviewed landscape design; it must not silently redesign an image. */
 export async function landscapeAnimationReference(url:string):Promise<string> {
   const image=new Image();
   await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error("The animation reference could not be loaded. Try uploading the image into Workshop again."));image.src=url;});
   if(Math.abs(image.naturalWidth/image.naturalHeight-16/9)<0.02)return url;
-  const response=await fetch("/api/edit-image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({imageUrl:url,prompt:EXTEND_OVERLAY_PROMPT,aspectRatio:"16:9"})});
-  const data=await response.json();
-  if(!response.ok||!data.url)throw new Error(data.error||"Unable to extend the reference image for the overlay.");
-  return data.url;
+  throw new Error("This image needs a widescreen layout before animation. In Workshop, choose Edit image → Redesign for overlay, review the new copy, then select that copy as the animation reference.");
 }
