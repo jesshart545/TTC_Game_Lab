@@ -19,7 +19,7 @@ export function BoardSurface({tool,project,playing=false}:{tool:GameTool;project
 }
 export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwork}:{project:Project;tool:GameTool;onSave:(tool:GameTool)=>void;onClose:()=>void;onCreateArtwork:()=>void}){
  const {draft,commit,patchConfig,patchAppearance,patchTool}=useEditableTool(tool,onSave);
- const [saved,setSaved]=useState(false),[preview,setPreview]=useState(true);
+ const [saved,setSaved]=useState(false),[preview,setPreview]=useState(false);
  const appearance=(draft.config.appearance||{}) as Record<string,unknown>;
  const patch=(values:Record<string,unknown>)=>{patchConfig(values);setSaved(true);};
  const media=project.assets.filter(a=>a.url&&['image','video'].includes(mediaKind(a)));
