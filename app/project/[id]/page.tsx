@@ -261,6 +261,7 @@ export default function ProjectWorkspace() {
   const placementPointer = useRef<{ id: string; clientX: number; clientY: number; x: number; y: number; width: number; height: number; resize: boolean; stageWidth: number; stageHeight: number } | null>(null);
   const saveQueue = useRef(Promise.resolve());
   const saveRevision=useRef(0);
+  const queuedSaveRevisions=useRef(new Map<string,number>());
 
   useEffect(() => {
     let cancelled = false;
@@ -540,6 +541,7 @@ export default function ProjectWorkspace() {
 
   function persist(next: Project) {
     const revision=++saveRevision.current;
+    queuedSaveRevisions.current.set(next.id,revision);
     setAiUndo(null);
     setSaveStatus("Saving changes…");
     const storedNext: Project = {
@@ -548,7 +550,7 @@ export default function ProjectWorkspace() {
     };
     projectRef.current = next;
     setProject(next);
-    saveQueue.current = saveQueue.current.then(() => saveProjectToServer(storedNext)).then(() => { if(revision===saveRevision.current)setSaveStatus("Changes saved."); }).catch(error => { if(taskRunning.current)taskSaveError.current = error instanceof Error ? error.message : "Save failed"; if(revision===saveRevision.current)setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
+    saveQueue.current = saveQueue.current.then(() => { if(queuedSaveRevisions.current.get(next.id)!==revision)return; return saveProjectToServer(storedNext); }).then(() => { if(revision===saveRevision.current)setSaveStatus("Changes saved."); }).catch(error => { if(revision!==saveRevision.current)return; if(taskRunning.current)taskSaveError.current = error instanceof Error ? error.message : "Save failed"; if(revision===saveRevision.current)setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
   }
 
   function saveProjectTitle(event: FormEvent<HTMLFormElement>) {
