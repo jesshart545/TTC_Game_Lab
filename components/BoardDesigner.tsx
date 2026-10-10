@@ -15,7 +15,7 @@ export function BoardArtwork({tool,project,playing=false}:{tool:GameTool;project
 }
 export function BoardSurface({tool,project,playing=false}:{tool:GameTool;project:Pick<Project,'assets'>;playing?:boolean}){
  const appearance=(tool.config.appearance||{}) as Record<string,unknown>;
- return <div className="board-surface" style={{color:String(appearance.textColor||'#fff'),fontFamily:resolveFont(appearance.fontFamily)}}><BoardArtwork tool={tool} project={project} playing={playing}/>{tool.config.showTitle===true&&<h3 className="board-title">{String(tool.config.title||tool.name)}</h3></div>;
+ return <div className="board-surface" style={{color:String(appearance.textColor||'#fff'),fontFamily:resolveFont(appearance.fontFamily)}}><BoardArtwork tool={tool} project={project} playing={playing}/>{tool.config.showTitle===true&&<h3 className="board-title">{String(tool.config.title||tool.name)}</h3>}</div>;
 }
 export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwork}:{project:Project;tool:GameTool;onSave:(tool:GameTool)=>void;onClose:()=>void;onCreateArtwork:()=>void}){
  const {draft,commit,patchConfig,patchAppearance,patchTool}=useEditableTool(tool,onSave);
