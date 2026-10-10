@@ -41,6 +41,7 @@ export type GameWheel = { enabled: boolean; title: string; segments: string[]; s
 export type GameToolType = "wheel" | "random-picker" | "card-list" | "countdown" | "poll" | "dice" | "coin-toss" | "trivia-board" | "blank-board" | "trivia-list" | "youtube" | "question-card" | "blank-card" | "scoreboard" | "prize-list" | "game-tool-list";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown>; inToolbox?: boolean; inOverlayBuild?: boolean };
 export type Project = {
+  pendingVideos?: { videoId: string; model: string; prompt: string; durationSeconds?: number }[];
   id: string;
   name: string;
   slug: string;
