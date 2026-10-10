@@ -204,3 +204,5 @@
 .workflow-layout[data-workshop-section="2"]>.assets-panel>:not(.assets-head):not(#workshop-scenes){display:none}
 .publish-review-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:16px}
 @media(max-width:700px){.workflow-entry-guide{flex-direction:column;align-items:stretch;gap:12px;padding:16px}.entry-guide-actions{flex:auto}.workflow-entry-guide h2{font-size:21px}.publish-review-actions>*{flex:1 1 180px}}
+
+.dashboard-button-review{padding:16px;border:1px solid #20e8ff66;border-radius:12px;background:#101827;margin:12px 0}.dashboard-button-choice{padding:12px;border-bottom:1px solid #344657}.dashboard-button-choice label{display:flex;gap:8px;align-items:center;margin:8px 0}.dashboard-button-choice input[type=checkbox]{width:auto}.dashboard-button-choice input:not([type=checkbox]){flex:1;min-width:0}.dashboard-button-review>button{margin:10px 8px 0 0}

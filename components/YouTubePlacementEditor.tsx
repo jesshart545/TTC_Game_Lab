@@ -2,7 +2,7 @@
 import { useRef, useState, type PointerEvent } from "react";
 import {normalizePlacement,movePlacement,resizePlacement} from '../lib/overlay-placement';
 import { safeYoutubePlacement, type YouTubePlacement } from "../lib/youtube";
-export default function YouTubePlacementEditor({placement,onChange,label="YouTube",top=8}:{placement:YouTubePlacement;onChange:(value:YouTubePlacement)=>void;label?:string;top?:number}) {
+export default function YouTubePlacementEditor({placement,onChange,onPreviewChange,label="YouTube",top=8}:{placement:YouTubePlacement;onChange:(value:YouTubePlacement)=>void;onPreviewChange?:(value:YouTubePlacement|null)=>void;label?:string;top?:number}) {
   const [sizing,setSizing]=useState(false), [draft,setDraft]=useState<YouTubePlacement|null>(null);
   const drag=useRef<{x:number;y:number;width:number;height:number;placement:YouTubePlacement;resize:boolean}|null>(null);
   const pending=useRef<YouTubePlacement|null>(null);
@@ -19,10 +19,10 @@ export default function YouTubePlacementEditor({placement,onChange,label="YouTub
     const current=drag.current;if(!current)return;
     const dx=(event.clientX-current.x)/current.width*100,dy=(event.clientY-current.y)/current.height*100;
     const next=normalize(current.resize?resizePlacement(current.placement,dx,dy):movePlacement(current.placement,dx,dy));
-    pending.current=next;setDraft(next);
+    pending.current=next;setDraft(next);onPreviewChange?.(next);
   }
-  function finish(){if(drag.current){drag.current=null;const next=pending.current;pending.current=null;if(next)onChange(next);setDraft(null);}}
-  function cancel(){drag.current=null;pending.current=null;setDraft(null);}
+  function finish(){if(drag.current){drag.current=null;const next=pending.current;pending.current=null;if(next)onChange(next);setDraft(null);onPreviewChange?.(null);}}
+  function cancel(){drag.current=null;pending.current=null;setDraft(null);onPreviewChange?.(null);}
 
   const canvas={width:1920,height:1080};
   const setSize=(width:number,height:number)=>onChange(normalize({...value,width:width/canvas.width*100,height:height/canvas.height*100,x:(100-width/canvas.width*100)/2,y:(100-height/canvas.height*100)/2}));

@@ -24,3 +24,11 @@
 
 .youtube-dashboard-monitor {position:relative;aspect-ratio:16/9;background:#000;border-radius:8px;margin:16px 0 30px;}
 .youtube-monitor-label {position:absolute;bottom:-24px;left:0;font-size:12px;color:#93bdcc;}
+.youtube-placement-preview{margin:16px 0;padding:14px;border:1px solid #344657;border-radius:10px;}
+.youtube-placement-preview h4{margin:0;color:#8fe7ef;}
+.youtube-placement-canvas{position:relative;aspect-ratio:16/9;isolation:isolate;background-color:#080e19;background-image:linear-gradient(#34465755 1px,transparent 1px),linear-gradient(90deg,#34465755 1px,transparent 1px);background-size:10% 10%;border:1px solid #50627e;}
+.youtube-placement-canvas-label{position:absolute;bottom:6px;left:8px;font-size:12px;color:#b9c7d9;}
+.youtube-placement-thumbnail{position:absolute;background:#000;pointer-events:none;}
+.youtube-placement-thumbnail img{width:100%;height:100%;object-fit:contain;display:block;}
+.youtube-placement-canvas .overlay-size-panel{max-width:calc(100% - 16px);box-sizing:border-box;}
+.youtube-placement-dimensions{font-size:13px;color:#b9c7d9;}

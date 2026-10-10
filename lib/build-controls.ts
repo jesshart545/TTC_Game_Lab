@@ -18,7 +18,16 @@ export function addCreationControl(project:Project,kind:'asset'|'tool'|'composit
   const control:ProjectEvent=existing?{...existing,toolIds:[id]}:{id:crypto.randomUUID(),label:'Open YouTube search',action:`tool.${id}`,toolIds:[id],detail:'Open private YouTube search on the host dashboard. Videos appear on the overlay only after Play on overlay.'};
   return {project:{...project,controls:existing?project.controls.map(c=>c.id===existing.id?control:c):[...project.controls,control],gameTools:project.gameTools.map(t=>t.id===id?{...t,inToolbox:true,inOverlayBuild:false,config:{...t.config,triggerOnly:true}}:t)},controlId:control.id};
  }
- if(tool?.type==='countdown'){const show=project.controls.find(c=>c.action===`timer.show.${id}`);if(show)return {project:{...project,gameTools:project.gameTools.map(t=>t.id===id?{...t,inToolbox:true,inOverlayBuild:true}:t)},controlId:show.id};}
+ if(tool?.type==='countdown'){
+  const controls=[...project.controls];
+  for(const [operation,label,detail] of [
+   ['show','Show','Show the timer without starting or resetting it.'],
+   ['toggle','Start / pause','Start the countdown; press again to pause it.'],
+   ['reset','Reset','Restore the saved duration and stop counting.'],
+   ['hide','Hide','Remove the timer from the overlay and stop counting.'],
+  ]){const action=`timer.${operation}.${id}`;if(!controls.some(c=>c.action===action))controls.push({id:crypto.randomUUID(),label:`${label} ${tool.name}`,action,detail,toolIds:[id]});}
+  return {project:{...project,controls,gameTools:project.gameTools.map(t=>t.id===id?{...t,inToolbox:true,inOverlayBuild:true}:t)},controlId:controls.find(c=>c.action===`timer.show.${id}`)!.id};
+ }
  if(tool?.type==='coin-toss'){const cycle=project.controls.find(control=>control.action===`coin.cycle.${id}`);if(cycle)return {project:{...project,gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true}:item)},controlId:cycle.id};}
  if(tool&&(tool.type==='random-picker'||['scoreboard','prize-list','game-tool-list'].includes(tool.type))){
   const action=`cards.toggle.${id}`,noun=tool.type==='random-picker'?(tool.config.source==='images'?'image':'card'):tool.name;
@@ -34,7 +43,7 @@ export function addCreationControl(project:Project,kind:'asset'|'tool'|'composit
  const action=asset?`asset.show.${id}`:composition?`composition.play.${id}`:tool?.type==='blank-card'?`cards.blank.${id}`:`tool.${id}`;
  const name=(asset||tool||composition)!.name;
  const playsMedia=!!composition||!!asset&&["audio","video"].includes(mediaKind(asset));
- const verb=playsMedia?"Play ":tool?.type==="wheel"?"Spin ":tool?.type==="dice"?"Roll ":tool?.type==="coin-toss"?"Flip ":tool?.type==="countdown"?"Start ":"Show ";
+ const verb=playsMedia?"Play ":tool?.type==="wheel"?"Spin ":tool?.type==="dice"?"Roll ":tool?.type==="coin-toss"?"Flip ":"Show ";
  let control=project.controls.find(c=>c.action===action);
  if(!control)control={id:crypto.randomUUID(),label:verb+name,action,detail:`${verb}${name} only when pressed`,toolIds:tool?[id]:[],compositionId:composition?.id,overlayResult:{...initialResult}};
  next={...project,assets:project.assets.map(a=>a===asset?{...a,inProject:false,edits:{...a.edits,loop:a.edits?.loop??false,sound:a.edits?.sound??['audio','video'].includes(mediaKind(a)),volume:a.edits?.volume??80}}:a),gameTools:project.gameTools.map(t=>t===tool?{...t,inToolbox:true,inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t),compositions:project.compositions?.map(c=>c===composition?{...c,inProject:true}:c),controls:project.controls.some(c=>c.id===control!.id)?project.controls:[...project.controls,control]};
