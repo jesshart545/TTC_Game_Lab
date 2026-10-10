@@ -50,8 +50,8 @@
 
 /* Keep assistance available without moving the dashboard and overlay. */
 .workspace-page .workflow-layout.workflow-stage-1.general-build-space>.chat-panel.build-space-chat{
-  position:fixed;z-index:90;top:76px;right:16px;bottom:16px;
-  width:min(420px,calc(100vw - 32px));height:auto;max-height:calc(100dvh - 92px);
+  position:fixed;z-index:90;top:76px;left:16px;right:auto;bottom:16px;
+  width:min(360px,calc(100vw - 32px));height:auto;max-height:calc(100dvh - 92px);
   margin:0;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;
   background:#0a111b;box-shadow:0 16px 60px #000b;
 }
