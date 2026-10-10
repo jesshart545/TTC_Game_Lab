@@ -32,3 +32,17 @@
 .workspace-page .media-playback-ready p{margin:0;flex:1;min-width:160px;font-size:13px;color:#c5dbe4;line-height:1.4}
 @media(max-width:900px){.workspace-page>.workspace-topbar{position:sticky;padding:10px 14px}.workspace-page>.workshop-flow{margin:10px 12px 0;padding:12px}.workspace-page>.workshop-flow .workshop-steps{grid-template-columns:1fr}.workspace-page>.workshop-flow .workshop-steps button{width:100%}.workspace-page>.workshop-flow .workshop-substeps button{flex:1 1 140px}.workspace-page>.workshop-flow .workflow-entry-guide{flex-direction:column;align-items:stretch}.workspace-page>.workshop-flow .entry-guide-actions{flex:auto;width:100%}.workspace-page>.workspace-grid.workflow-layout{margin:10px 12px 14px;display:flex;flex-direction:column;height:auto}}
 @media(max-width:700px){.workspace-page>.workspace-topbar{flex-wrap:wrap}.workspace-page>.workspace-topbar .workspace-actions{width:100%;margin-left:0;justify-content:space-between}.workspace-page>.workspace-topbar .workspace-save-group{max-width:none;flex:1}}
+
+/* Workshop streamline: section hints + hide Build Space actions in Workshop */
+.workspace-page>.workshop-flow .workshop-substeps button{
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:2px;text-align:left;line-height:1.25;
+}
+.workspace-page>.workshop-flow .workshop-substep-label{font-weight:650}
+.workspace-page>.workshop-flow .workshop-substep-hint{
+  font-size:11px;font-weight:500;color:#8fa3b8;letter-spacing:0;
+}
+.workspace-page .workflow-stage-0 .build-only{display:none !important}
+.workspace-page .workflow-stage-0 #workshop-scenes .empty-note{
+  margin-bottom:10px;
+}
