@@ -10,7 +10,7 @@ import {coinCycleRequest} from "../../../lib/coin-cycle";
 import {creatableTools,applyBuildChanges} from "../../../lib/build-edits";
 import { musicDuration } from "../../../lib/music-duration";
 import {groundedResearchCards} from "../../../lib/research-cards";
-import {validateExplicitSettings, validateSavedReferences, validateCompletionClaim, validateSequenceBehavior, validateRequestedAutomation, validateSequenceAdditions} from "../../../lib/ai-edit-validation";
+import {validateExplicitSettings, validateSavedReferences, validateCompletionClaim, validateSequenceBehavior, validateRequestedAutomation, validateSequenceAdditions, validateRequestedTargets} from "../../../lib/ai-edit-validation";
 import { NextResponse } from "next/server";
 
 const SYSTEM = `You are TTCGameLab AI, a creative director and application builder for interactive TikTok LIVE experiences. Do not merely return a specification. Interpret the creator's request and propose concrete changes to the project's dashboard, overlay, scenes, controls, assets, and interactions. Keep the existing project context intact and make incremental edits when the user asks for changes.`;
@@ -102,6 +102,7 @@ export async function POST(request: Request) {
       parsed.changes = normalizeDraftChanges(parsed.changes);
       validateExplicitSettings(String(body.request||""),parsed);
       validateSavedReferences(body.project, parsed.changes);
+      validateRequestedTargets(String(body.request||""),body.project,parsed.changes);
       validateRequestedAutomation(String(body.request||""), parsed.changes);
       validateSequenceAdditions(String(body.request||""), parsed.changes, parsed.action);
       validateCompletionClaim(parsed);

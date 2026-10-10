@@ -1,8 +1,14 @@
 const assert=require('node:assert/strict'),load=require('./load.cjs');
-const {applyBuildChanges}=load('lib/build-edits.ts'),{runSequence}=load('lib/sequences.ts'),{validateExplicitSettings}=load('lib/ai-edit-validation.ts');
+const {applyBuildChanges}=load('lib/build-edits.ts'),{runSequence}=load('lib/sequences.ts'),{validateExplicitSettings,validateRequestedTargets,validateSavedReferences}=load('lib/ai-edit-validation.ts');
 const project={id:'test',assets:[{storageKey:'image',name:'Image.png',type:'image/png',url:'https://example.test/image.png'}],controls:[],gameTools:[],overlay:{},compositions:[]};
 const changes={sequences:[{name:'Image switch',sequenceMode:'per-press',steps:[{kind:'asset',refId:'image',operation:'show',overlayResult:{entrance:'slide',exit:'fade',entranceSeconds:.7,exitSeconds:.4,x:10,y:20,width:40,height:30}},{kind:'asset',refId:'image',operation:'hide'}]}]};
-validateExplicitSettings('Create one button; each press runs the next action', {changes});
+validateExplicitSettings('Create one button; each press runs the next action; slide in and fade out', {changes});
+assert.throws(()=>validateExplicitSettings('slide in the image',{changes:{sequences:[{steps:[{overlayResult:{entrance:'fade'}}]}]}}),/slide in/);
+const namedProject={...project,assets:[...project.assets,{name:'Wrong.png',storageKey:'wrong'}],controls:[{id:'saved-button',label:'Image cycle verification',action:'sequence',chain:[]},{id:'wrong-show',action:'asset.show.wrong'}]};
+assert.throws(()=>validateRequestedTargets('Update existing Image cycle verification with Image.png',namedProject,{sequences:[{name:'New',steps:[]}]}),/existing named button/);
+assert.throws(()=>validateRequestedTargets('Show Image.png',namedProject,{sequences:[{steps:[{controlId:'wrong-show'}]}]}),/explicitly named media/);
+validateRequestedTargets('Update existing Image cycle verification with Image.png',namedProject,{sequences:[{id:'saved-button',steps:[{kind:'asset',refId:'image',operation:'show'}]}]});
+assert.throws(()=>validateSavedReferences(namedProject,{sequences:[{steps:[{overlayResult:{entrance:'bounce'}}]}]}),/supported entrance/);
 assert.throws(()=>validateExplicitSettings('Create one button; each press runs the next action',{changes:{sequences:[{...changes.sequences[0],sequenceMode:'all'}]}}),/per-press/);
 const result=applyBuildChanges(project,changes);assert.equal(result.warnings.length,0);const button=result.project.controls.find(c=>c.action==='sequence');assert(button);assert.equal(button.sequenceMode,'per-press');assert.equal(result.project.controls.filter(c=>!c.sequenceOnly).length,1);const show=result.project.controls.find(c=>c.action==='asset.show.image');assert.equal(show.overlayResult.entrance,'slide');assert.equal(show.overlayResult.exit,'fade');assert.equal(show.overlayResult.width,40);
 (async()=>{const actions=[],progress={};for(let i=0;i<4;i++){await runSequence(result.project,button,async c=>actions.push(c.action),new AbortController().signal,progress);assert.equal(actions.length,i+1);}assert.deepEqual(actions,[show.action,`result.hide.${show.id}`,show.action,`result.hide.${show.id}`]);

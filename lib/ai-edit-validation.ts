@@ -27,7 +27,7 @@ export function validateExplicitSettings(request:string,response:unknown){
  if (/\b(?:connect|link|wire)\b[^.\n]{0,90}\b(?:dashboard|controls?|buttons?)\b/i.test(request) && Array.isArray(changes.newTools) && changes.newTools.some((tool:any)=>tool.connect!==true)) throw new Error('The user requested new tools connected to dashboard controls. Include connect:true for the requested newTools; creating an unconnected tool does not fulfill that request.');
  const controls=Array.isArray(changes.controls)?changes.controls:[],assets=Array.isArray(changes.assets)?changes.assets:[];
  if(!tools.length&&!controls.length&&!assets.length)return;
- const placements=[...tools.flatMap(t=>[record(t.config).placement,record(t.config).questionCard,record(t.config).answerCard]),...controls.map(c=>c.overlayResult),...assets.map(a=>record(a.edits).placement)].map(record);
+ const placements=[...tools.flatMap(t=>[record(t.config).placement,record(t.config).questionCard,record(t.config).answerCard]),...controls.map(c=>c.overlayResult),...assets.map(a=>record(a.edits).placement),...(draftChanges.sequences||[]).flatMap((s:any)=>(s.steps||[]).map((step:any)=>step.overlayResult))].map(record);
  for(const field of ['x','y','width','height']){
   const match=request.match(new RegExp('\\b'+field+'\\s*(?:to|of|at|=|:)??\\s*(\\d+(?:\\.\\d+)?)\\s*(%|pixels?|px)?','i'));
   if(!match)continue;
@@ -136,4 +136,26 @@ export function validateSequenceAdditions(request:string,input:unknown,action?:u
   const tool=record(raw),pattern=mentions[String(tool.type)];
   if(pattern&&!pattern.test(request))throw new Error(`A new ${String(tool.type)} is unrelated to this sequence request. changes.sequences creates its own dashboard button; omit placeholder or unrelated newTools. Add a separate tool only when that tool is part of the user's request.`);
  }
+}
+
+/** Saved IDs can be valid and still identify the wrong item explicitly named by the user. */
+export function validateRequestedTargets(request:string,project:any,input:unknown){
+ const changes=record(input),text=request.toLowerCase();
+ const named=(name:unknown)=>typeof name==='string'&&name.length>=4&&text.includes(name.toLowerCase());
+ const controls=Array.isArray(project?.controls)?project.controls:[],assets=Array.isArray(project?.assets)?project.assets:[];
+ const namedSequences=controls.filter((c:any)=>c.action==='sequence'&&named(c.label));
+ if(/\b(?:update|edit|change|modify|adjust|existing)\b/i.test(request)&&namedSequences.length){
+  for(const raw of changes.sequences||[])if(!namedSequences.some((c:any)=>c.id===raw.id))throw new Error('Update the existing named button using its saved sequence ID; do not create a replacement or edit another button. Named sequence IDs: '+namedSequences.map((c:any)=>c.label+' = '+c.id).join(', '));
+ }
+ const namedAssets=assets.filter((a:any)=>named(a.name));
+ if(!namedAssets.length)return;
+ const allowed=new Set(namedAssets.map((a:any)=>a.storageKey||a.name));
+ const assetForControl=(id:string):string|undefined=>{
+  const c=controls.find((c:any)=>c.id===id);if(!c)return;
+  if(c.action.startsWith('asset.show.'))return c.action.slice(11);
+  if(c.action.startsWith('background.show.'))return c.action.slice(16);
+  if(c.action.startsWith('result.hide.')){const shown=controls.find((other:any)=>other.id===c.action.slice(12));if(shown?.action?.startsWith('asset.show.'))return shown.action.slice(11);}
+ };
+ const referenced=[...(changes.assets||[]).filter((a:any)=>a.inProject!==false).map((a:any)=>a.storageKey),...(changes.connections||[]).filter((c:any)=>c.kind==='asset').map((c:any)=>c.id),...(changes.sequences||[]).flatMap((s:any)=>(s.steps||[]).map((step:any)=>step.kind==='asset'?step.refId:assetForControl(step.controlId))),...(changes.controls||[]).map((c:any)=>assetForControl(c.id))].filter(Boolean);
+ for(const key of referenced)if(!allowed.has(key))throw new Error('Use the explicitly named media, not a different selected image. Named media IDs: '+namedAssets.map((a:any)=>a.name+' = '+(a.storageKey||a.name)).join(', '));
 }
