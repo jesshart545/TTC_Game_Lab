@@ -13,20 +13,22 @@ export function timerTransition(previous:TimerState|undefined,operation:string,s
 export function timerShowOnlyIntent(text:string){
  return /\b(?:timer|countdown)\b/i.test(text)&&/\b(?:add|show|display|place|put)\b/i.test(text)&&/\b(?:overlay|screen|button)\b/i.test(text)&&(/\b(?:only|just)\b/i.test(text)||/\b(?:don.t|do not|without|shouldn.t|mustn.t|not)\b[^.\n]{0,35}\bstart/i.test(text)||/\b(?:separate|another|different)\s+button\b[^.\n]{0,40}\bstart/i.test(text));
 }
-/** Start + auto-hide (or streamline start/removal) without inventing sequence IDs. */
+/** Automatic removal requires an explicit request, not a general styling request. */
 export function timerLifecycleIntent(text:string){
- if(timerShowOnlyIntent(text))return false;
- const mentionsTimer=/\b(?:timer|countdown|answer\s*timer)\b/i.test(text);
- if(!mentionsTimer)return false;
- const wantsStart=/\b(?:start|begin|run|trigger|press)\b/i.test(text)||/\bstreamline\b/i.test(text);
- const wantsHide=/\b(?:hide|remove|clear|dismiss|auto[- ]?hide|disappear)\b/i.test(text)||/\bwhen\b[^.\n]{0,80}\b(?:ends?|finishes?|expires?|zero|0)\b/i.test(text)||/\bafter\b[^.\n]{0,40}\b(?:seconds?|countdown|timer)\b/i.test(text)||/\bstreamline\b/i.test(text);
- return wantsStart&&wantsHide;
+ if(timerShowOnlyIntent(text)||/\b(?:don.t|do not|never|without|no)\b[^.\n]{0,45}\b(?:hide|remove|clear|dismiss|auto[- ]?hide)\b/i.test(text))return false;
+ if(!/\b(?:timer|countdown)\b/i.test(text))return false;
+ return /\b(?:hide|remove|clear|dismiss|disappear)\b[^.\n]{0,80}\b(?:automatically|when|after|once|zero|ends?|finishes?|expires?)\b/i.test(text)
+  || /\b(?:automatically|auto[- ]?hide)\b[^.\n]{0,80}\b(?:timer|countdown|hide|remove|clear|dismiss)\b/i.test(text)
+  || /\b(?:when|after|once)\b[^.\n]{0,80}\b(?:ends?|finishes?|expires?|zero)\b[^.\n]{0,80}\b(?:hide|remove|clear|dismiss)\b/i.test(text);
 }
 export function timerControlRequest(request:string,history:unknown,project:Project,selection?:{kind?:string;id?:string}|null){
  const recent=Array.isArray(history)?history.filter(item=>item?.role==='user').slice(-3).map(item=>String(item.text||'')).join('\n'):'';
  const correction=/^(?:no\b|that isn't|that isnt)/i.test(request.trim());
  const specific=/\b(?:timer|countdown)\b/i.test(request)&&/\b(?:add|show|display|place|put|start|stop|reset|update|change)\b/i.test(request);
- const text=correction&&!specific?recent.split('\n').reverse().find(line=>/\b(?:timer|countdown)\b/i.test(line))||request:request;
+ if(correction&&!specific&&/\b(?:timer|countdown)\b/i.test(recent))return {reply:'What should the timer button do instead? I have not changed it.',changes:{},manualSteps:[],action:null,needsClarification:true};
+ const text=request;
+ // Let the model carry out every part of compound edits, including duration changes.
+ if(/\b(?:style|restyle|aesthetic|appearance|colou?r|font|match|size|resize|position|move|background|transparent|duration|seconds?|minutes?|blue|red|green|yellow|purple|pink|orange|black|white|gold|silver|cyan)\b/i.test(text))return null;
  if(timerLifecycleIntent(text)){
   const tools=project.gameTools.filter(t=>t.type==='countdown'&&t.enabled),selected=project.controls.find(c=>selection?.kind==='control'&&c.id===selection.id);
   const tool=tools.find(t=>selection?.kind==='tool'&&t.id===selection.id||selected?.toolIds?.includes(t.id))||(tools.length===1?tools[0]:undefined);
@@ -40,3 +42,4 @@ export function timerControlRequest(request:string,history:unknown,project:Proje
  if(!tool)return {reply:'Which timer should this button show? Select the timer in Build Space, then ask again.',changes:{},manualSteps:[],action:null};
  return {reply:'The Show Timer button will display the timer without starting or resetting it. A separate Start / Stop Timer button controls the countdown. Your saved duration stays unchanged.',changes:{timerControls:[{toolId:tool.id,...(selected?.toolIds?.includes(tool.id)?{controlId:selected.id}:{})}]},manualSteps:[],action:null};
 }
+
