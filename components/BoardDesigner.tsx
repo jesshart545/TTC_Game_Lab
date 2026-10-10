@@ -7,19 +7,19 @@ import type {GameTool,Project} from '../lib/project';
 import {mediaKind} from '../lib/board-design';
 import './board-designer.css';
 
-export function BoardArtwork({tool,project}:{tool:GameTool;project:Pick<Project,'assets'>}){
+export function BoardArtwork({tool,project,playing=false}:{tool:GameTool;project:Pick<Project,'assets'>;playing?:boolean}){
  const appearance=(tool.config.appearance||{}) as Record<string,unknown>;
  const asset=project.assets.find(a=>(a.storageKey||a.name)===(tool.config.backgroundAssetKey||appearance.imageKey));
  const motion=['pulse','float'].includes(String(tool.config.backgroundMotion))?String(tool.config.backgroundMotion):'none';
- return <div className={'board-artwork board-motion-'+motion} style={{background:appearance.transparentBackground===true?'transparent':String(appearance.backgroundColor||'#101827')}}>{appearance.transparentBackground!==true&&asset?.url&&(mediaKind(asset)==='video'?<video aria-label={asset.name} src={asset.url} autoPlay muted loop={tool.config.backgroundLoop!==false} playsInline/>:<img src={asset.url} alt={asset.name}/>)}</div>;
+ return <div className={'board-artwork board-motion-'+motion} style={{background:appearance.transparentBackground===true?'transparent':String(appearance.backgroundColor||'#101827')}}>{appearance.transparentBackground!==true&&asset?.url&&(mediaKind(asset)==='video'?<video aria-label={asset.name} src={asset.url} autoPlay={playing} muted loop={tool.config.backgroundLoop!==false} playsInline preload={playing?"auto":"metadata"}/>:<img src={asset.url} alt={asset.name}/>)}</div>;
 }
-export function BoardSurface({tool,project}:{tool:GameTool;project:Pick<Project,'assets'>}){
+export function BoardSurface({tool,project,playing=false}:{tool:GameTool;project:Pick<Project,'assets'>;playing?:boolean}){
  const appearance=(tool.config.appearance||{}) as Record<string,unknown>;
- return <div className="board-surface" style={{color:String(appearance.textColor||'#fff'),fontFamily:resolveFont(appearance.fontFamily)}}><BoardArtwork tool={tool} project={project}/>{tool.config.showTitle===true&&<h3 className="board-title">{String(tool.config.title||tool.name)}</h3>}</div>;
+ return <div className="board-surface" style={{color:String(appearance.textColor||'#fff'),fontFamily:resolveFont(appearance.fontFamily)}}><BoardArtwork tool={tool} project={project} playing={playing}/>{tool.config.showTitle===true&&<h3 className="board-title">{String(tool.config.title||tool.name)}</h3>}</div>;
 }
 export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwork}:{project:Project;tool:GameTool;onSave:(tool:GameTool)=>void;onClose:()=>void;onCreateArtwork:()=>void}){
  const {draft,commit,patchConfig,patchAppearance,patchTool}=useEditableTool(tool,onSave);
- const [saved,setSaved]=useState(false),[preview,setPreview]=useState(true);
+ const [saved,setSaved]=useState(false),[preview,setPreview]=useState(false);
  const appearance=(draft.config.appearance||{}) as Record<string,unknown>;
  const patch=(values:Record<string,unknown>)=>{patchConfig(values);setSaved(true);};
  const media=project.assets.filter(a=>a.url&&['image','video'].includes(mediaKind(a)));
@@ -34,10 +34,10 @@ export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwo
  <button type="button" onClick={()=>{onSave(draft);onCreateArtwork();}}>Save board & create artwork</button>
  <label>Background animation<select value={String(draft.config.backgroundMotion||'none')} onChange={e=>patch({backgroundMotion:e.target.value})}><option value="none">Use artwork as supplied</option><option value="pulse">Gentle zoom</option><option value="float">Gentle movement</option></select></label>
  <label><input type="checkbox" checked={draft.config.backgroundLoop!==false} onChange={e=>patch({backgroundLoop:e.target.checked})}/>Loop video background</label>
- <p>Video artwork plays silently as the board background. Animation does not trigger game actions.</p>
+ <p>Video artwork plays only when you choose Play artwork preview. Animation does not trigger game actions.</p>
  <FontPicker label="Board heading font" value={String(appearance.fontFamily||'Arial, sans-serif')} onChange={fontFamily=>patchAppearance({fontFamily})}/>{['backgroundColor','textColor','accentColor'].map((key,i)=><label key={key}>{['Board color','Text color','Accent color'][i]}<input type="color" value={String(appearance[key]||['#101827','#ffffff','#20e8ff'][i])} onChange={e=>patchAppearance({[key]:e.target.value})}/></label>)}
  </aside><div><button type="button" onClick={()=>setPreview(!preview)}>{preview?'Pause artwork preview':'Play artwork preview'}</button><div className="board-design-canvas" aria-label="Board design canvas">
- {preview?<BoardSurface tool={draft} project={project}/>:<div className="board-preview-paused">Artwork preview paused</div>}
+ {preview?<BoardSurface tool={draft} project={project} playing/>:<div className="board-preview-paused">Artwork preview paused</div>}
  </div><p>Start with your own artwork, or create new artwork from your description. No game spaces or grid are added to your design.</p>{tool.type==='trivia-board'&&<p>Your saved trivia categories and questions are preserved. This designer edits the board artwork without changing the saved questions.</p>}</div></div>
  <footer><button type="button" onClick={()=>{commit(draft);setSaved(true);}}>Save board design</button><span role="status">{saved?'Board design saved to draft.':''}</span><p>Your design saves as you edit. Build Space connects dashboard controls to the finished board.</p></footer>
  </section>;
