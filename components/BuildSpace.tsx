@@ -4,7 +4,7 @@ import DashboardSequenceEditor from "./DashboardSequenceEditor";
 import {normalizePlacement,toolShapePlacement} from '../lib/overlay-placement';
 import FontPicker from './FontPicker';
 import CountdownDuration from "./CountdownDuration";
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import type { Project, ProjectEvent, ProjectAsset, GameTool } from "../lib/project";
 import {controlLabel,controlButtonStyle,toolDefaults,infoTypes} from "../lib/game-tools";
 import type {CardState} from "../lib/question-cards";
@@ -58,8 +58,10 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
  const [activeCreation,setActiveCreation]=useState<BuildCreation|null>(null);
  const [pendingAddition,setPendingAddition]=useState<{creation:BuildCreation;controls:ProjectEvent[];newTool?:GameTool}|null>(null);
  const guide=additionTypes.find(item=>item.id===additionType)!;
- const choices=creationsForType(project,additionType);
- const connected=activeCreation?creationControls(project,activeCreation):[];
+ const creations=useMemo(()=>Object.fromEntries(additionTypes.map(item=>[item.id,creationsForType(project,item.id)])) as Record<AdditionType,BuildCreation[]>,[project.assets,project.gameTools,project.compositions]);
+ const choices=creations[additionType];
+ const choiceConnections=useMemo(()=>new Map(choices.map(item=>[item.id,creationControls(project,item)])),[choices,project.controls]);
+ const connected=useMemo(()=>activeCreation?creationControls(project,activeCreation):[],[activeCreation,project.controls]);
  const hasBackground=project.assets.some(a=>a.inProject&&a.role==="background")||project.gameTools.some(t=>t.enabled&&t.inOverlayBuild&&(t.type==="blank-board"||t.type==="trivia-board"));
  function nextType(){setActiveCreation(null);setSelection(null);setPendingAddition(null);goStep(3);}
  const settings=useRef<HTMLElement>(null);
@@ -80,13 +82,13 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
   target?.focus({preventScroll:true});
   onEntryHandled?.(entryRequest.request);
  },[step,entryRequest,onEntryHandled]);
- const issues=buildReadiness(project);
+ const issues=useMemo(()=>step===4?buildReadiness(project):[],[step,project]);
  function goStep(next:number){setStep(next);setTesting(next===3);if(next!==2&&next!==3)setSelection(null);}
  const key=(asset:ProjectAsset)=>asset.storageKey||asset.name;
- const assetsByKey=new Map(project.assets.map(a=>[key(a),a]));
- const asset=project.assets.find(a=>selection?.kind==="asset"?key(a)===selection.id:selection?.kind==="control"?project.controls.find(c=>c.id===selection.id)?.action===`asset.show.${key(a)}`:false);
- const tool=project.gameTools.find(t=>selection?.kind==="tool"?t.id===selection.id:selection?.kind==="control"?project.controls.find(c=>c.id===selection.id)?.toolIds?.includes(t.id):false);
+ const assetsByKey=useMemo(()=>new Map(project.assets.map(a=>[key(a),a])),[project.assets]);
  const control=selection?.kind==="control"?project.controls.find(c=>c.id===selection.id):undefined;
+ const asset=selection?.kind==="asset"?assetsByKey.get(selection.id):control?.action.startsWith("asset.show.")?assetsByKey.get(control.action.slice(11)):undefined;
+ const tool=project.gameTools.find(t=>selection?.kind==="tool"?t.id===selection.id:control?.toolIds?.includes(t.id));
  const hasVisualResult=control?.action!=='sequence'&&!!control&&tool?.type!=='youtube'&&!control.action.startsWith("result.hide.")&&(!asset||mediaKind(asset)!=="audio");
  const youtube=project.gameTools.find(t=>t.type==="youtube"&&t.enabled);
  function saveTool(next:GameTool){
@@ -123,10 +125,10 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
   {step===4&&<section className="build-readiness" aria-label="Game readiness"><h3>{issues.length?`${issues.length} connection issues to fix`:'No connection issues detected'}</h3>{issues.length?issues.map(issue=><div key={issue.id}><p>{issue.message}</p><button type="button" onClick={()=>{goStep(2);setSelection({kind:issue.kind,id:issue.targetId});}}>Fix connection</button></div>):<p>Check your game's rules, media playback, and complete round in rehearsal before publishing.</p>}<button type="button" onClick={()=>goStep(3)}>Rehearse game</button><button type="button" disabled={issues.length>0} onClick={onPublishStep}>Continue to Publish</button></section>}
   {!testing&&(step===1||step===2&&!selection)&&<section className="addition-guide" aria-label="Additions guide">
 
-   <label className="build-item-type">What would you like to add?<select aria-label="Addition type" value={additionType} onChange={e=>{setAdditionType(e.target.value as AdditionType);setStep(1);setSelection(null);setActiveCreation(null);}}>{additionTypes.map(item=><option key={item.id} value={item.id}>{item.label} · {creationsForType(project,item.id).length} available</option>)}</select></label>
+   <label className="build-item-type">What would you like to add?<select aria-label="Addition type" value={additionType} onChange={e=>{setAdditionType(e.target.value as AdditionType);setStep(1);setSelection(null);setActiveCreation(null);}}>{additionTypes.map(item=><option key={item.id} value={item.id}>{item.label} · {creations[item.id].length} available</option>)}</select></label>
    <h4>{guide.label}</h4><p>{guide.help}</p>
 
-   {!pendingAddition&&(step===1||!selection)&&<div className="creation-tray" aria-label="Workshop creations">{choices.map(c=><article key={c.id}>{c.kind==='asset'&&<BuildAssetThumbnail asset={assetsByKey.get(c.id)} label={`Set up ${c.name}`} onSelect={()=>creationControls(project,c).length?chooseCreation(c.kind,c.id):reviewCreation(c.kind,c.id)}/>}<strong>{c.name}</strong><small>{additionType==='youtube'?(creationControls(project,c).length?'YouTube search connected to dashboard':'Private YouTube search panel'):creationControls(project,c).length?'Controls connected':'Ready to set up'}</small><button type="button" onClick={()=>creationControls(project,c).length?chooseCreation(c.kind,c.id):reviewCreation(c.kind,c.id)}>{additionType==='youtube'?(creationControls(project,c).length?'Set up YouTube search':'Add YouTube search to dashboard'):creationControls(project,c).length?'Set up this item':'Use this in my game'}</button></article>)}{!choices.length&&<p>No {guide.label.toLowerCase()} saved yet.</p>}{!['image','video','audio','composition','question-card','blank-card'].includes(additionType)&&<button type="button" onClick={()=>{const id=crypto.randomUUID(),t:GameTool={id,type:additionType as GameTool['type'],name:guide.label,enabled:true,inToolbox:true,config:toolDefaults(additionType as GameTool['type'])};reviewCreation('tool',id,t);}}>{additionType==='youtube'?'Add YouTube search to dashboard':`Create ${guide.label.toLowerCase()}`}</button>}</div>}
+   {!pendingAddition&&(step===1||!selection)&&<div className="creation-tray" aria-label="Workshop creations">{choices.map(c=><article key={c.id}>{c.kind==='asset'&&<BuildAssetThumbnail asset={assetsByKey.get(c.id)} label={`Set up ${c.name}`} onSelect={()=>(choiceConnections.get(c.id)?.length||0)?chooseCreation(c.kind,c.id):reviewCreation(c.kind,c.id)}/>}<strong>{c.name}</strong><small>{additionType==='youtube'?((choiceConnections.get(c.id)?.length||0)?'YouTube search connected to dashboard':'Private YouTube search panel'):(choiceConnections.get(c.id)?.length||0)?'Controls connected':'Ready to set up'}</small><button type="button" onClick={()=>(choiceConnections.get(c.id)?.length||0)?chooseCreation(c.kind,c.id):reviewCreation(c.kind,c.id)}>{additionType==='youtube'?((choiceConnections.get(c.id)?.length||0)?'Set up YouTube search':'Add YouTube search to dashboard'):(choiceConnections.get(c.id)?.length||0)?'Set up this item':'Use this in my game'}</button></article>)}{!choices.length&&<p>No {guide.label.toLowerCase()} saved yet.</p>}{!['image','video','audio','composition','question-card','blank-card'].includes(additionType)&&<button type="button" onClick={()=>{const id=crypto.randomUUID(),t:GameTool={id,type:additionType as GameTool['type'],name:guide.label,enabled:true,inToolbox:true,config:toolDefaults(additionType as GameTool['type'])};reviewCreation('tool',id,t);}}>{additionType==='youtube'?'Add YouTube search to dashboard':`Create ${guide.label.toLowerCase()}`}</button>}</div>}
    {pendingAddition&&<DashboardButtonReview key={pendingAddition.creation.id} name={pendingAddition.creation.name} controls={pendingAddition.controls} existingIds={new Set(project.controls.map(c=>c.id))} onAdd={confirmButtons} onCancel={()=>setPendingAddition(null)}/> }
    {step===2&&activeCreation&&<section aria-label="Connected dashboard buttons"><h4>{activeCreation.name}</h4><p>The controls are connected. Choose a button to customize its name, look, or overlay result.</p><div className="placed-items">{connected.filter(c=>!c.sequenceOnly).map(c=><button type="button" key={c.id} aria-pressed={control?.id===c.id} onClick={()=>setSelection({kind:'control',id:c.id})}>{c.label}</button>)}</div></section>}
    <div className="addition-actions"><button type="button" onClick={onWorkshop}>Create in Workshop</button>{step===2&&<><button type="button" onClick={()=>goStep(3)}>Test this addition</button><button type="button" onClick={()=>{setStep(1);setSelection(null);}}>Add another {guide.label.toLowerCase()}</button></>}<button type="button" onClick={nextType}>Finish adding — test dashboard</button><button type="button" onClick={()=>{setActiveCreation(null);goStep(3);}}>Review the whole game</button></div>
