@@ -8,8 +8,8 @@ const result=applyDraftChanges(project,{assets:[{storageKey:asset.storageKey,edi
 assert(result.applied>0);const saved=JSON.parse(JSON.stringify(result.project.assets[0]));const style=overlayAssetStyle(saved,true);
 assert.equal(style.objectFit,'contain');assert.equal(style.width,'100%');assert.equal(style.height,'100%');assert.equal(style.left,'0%');assert.match(style.transform,/scale\(1\) rotate\(0deg\)/);assert.equal(saved.edits.sound,true);assert.equal(asset.edits.zoom,2);
 assert.equal(overlayAssetStyle({...saved,edits:{placement:{x:10,y:15,width:80,height:70}}},true).width,'80%');
-assert.equal(overlayAssetStyle({...saved,edits:{}} ,true).objectFit,'cover');
+assert.equal(overlayAssetStyle({...saved,edits:{}} ,true).objectFit,'contain');
 assert.equal(overlayAssetStyle({...saved,edits:{fit:'fill'}},true).objectFit,'fill');
 assert.equal(overlayAssetStyle({...saved,edits:{}},false).objectFit,'contain');
 assert.equal(applyDraftChanges(project,{assets:[{storageKey:asset.storageKey,edits:{fit:'invalid'}}]}).applied,0);
-console.log('PASS: background fit survives saved edits; background placement honored; transforms reset; audio and other assets preserved; legacy cover and layer contain defaults retained.');
+console.log('PASS: background fit survives saved edits; background placement honored; transforms reset; audio and other assets preserved; uncropped background and layer defaults retained.');

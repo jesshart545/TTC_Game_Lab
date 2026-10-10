@@ -1,5 +1,6 @@
 "use client";
 
+import { EXTEND_OVERLAY_PROMPT } from "../lib/overlay-media";
 import { useState } from "react";
 import { ProjectAsset, ProjectAssetEdits } from "../lib/project";
 
@@ -22,15 +23,15 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
 
-  async function editMedia() {
-    if (!asset.url || !prompt.trim() || working) return;
+  async function editMedia(extendOverlay=false) {
+    if (!asset.url || (!extendOverlay && !prompt.trim()) || working) return;
     setWorking(true);
     setError("");
     try {
       const response = await fetch(video ? "/api/edit-video" : "/api/edit-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: prompt.trim(), imageUrl: asset.url }),
+        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: extendOverlay ? EXTEND_OVERLAY_PROMPT : prompt.trim(), imageUrl: asset.url, ...(extendOverlay ? { aspectRatio: "16:9" } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
@@ -41,7 +42,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
         type: video ? "video/mp4" : "image/png",
         url: data.url,
         storageKey: undefined,
-        edits: undefined,
+        edits: extendOverlay ? { fit: "contain" } : undefined,
       };
       if (!onSaveAsNew) throw new Error("This project cannot save edited assets yet.");
       await onSaveAsNew(next);
@@ -72,6 +73,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
           {video ? <video src={asset.url} controls style={style} onLoadedMetadata={e=>{setDuration(e.currentTarget.duration);if(e.currentTarget.videoWidth&&e.currentTarget.videoHeight)setOriginalRatio(e.currentTarget.videoWidth/e.currentTarget.videoHeight);}} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : <img src={asset.url} alt={asset.name} style={style} onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight)setOriginalRatio(image.naturalWidth/image.naturalHeight);}}/>}
         </div>
       </div>
+      {!video&&<section className="media-editor-view-options" aria-label="Fit image to overlay"><button type="button" disabled={working} onClick={()=>void editMedia(true)}>{working?"Extending image…":"Extend to fit overlay · AI"}</button><p>Adds matching artwork around your image to fill the horizontal 16:9 overlay without black bars or cropping. Uses image-generation credits and saves a new copy for you to review.</p></section>}
       {!video&&<div className="media-editor-view-options"><button type="button" disabled={working} onClick={()=>update({crop:"original",zoom:1,rotation:0,offsetX:0,offsetY:0})}>Show full image</button><p>{cropped?"Crop preview: parts outside this shape will be removed in the edited copy.":"Original shape: the whole image fits in the preview. Zoom and position changes may move parts outside it."}</p></div>}
       <div className="media-editor-fields">
         <fieldset disabled={working} style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,padding:16}}>

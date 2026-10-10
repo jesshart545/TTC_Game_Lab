@@ -51,7 +51,7 @@ export async function POST(request: Request) {
         prompt,
         ...(referenceImage ? { image_urls: [referenceImage] } : {}),
         num_images: 1,
-        aspect_ratio: body?.aspectRatio || "auto",
+        aspect_ratio: body?.aspectRatio || "16:9",
         output_format: "png",
         resolution: body?.resolution || "1K",
         limit_generations: true,
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         method: "POST",
         headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          image_url: promptImage, prompt, resolution: "720p", aspect_ratio: "auto",
+          image_url: promptImage, prompt, resolution: "720p", aspect_ratio: "16:9",
           enable_safety_checker: true, enable_output_safety_checker: true,
           enable_prompt_expansion: false,
         }),
