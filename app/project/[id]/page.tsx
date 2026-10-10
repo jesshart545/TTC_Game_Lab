@@ -92,7 +92,7 @@ export default function ProjectWorkspace() {
   const params = useParams<{ id: string }>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project | null>(null);
-  const runtime = useRuntimeActions(project,states=>{if(project)persist({...project,cardPreviewStates:states});});
+  const runtime = useRuntimeActions(project,states=>{if(project)persist({...project,cardPreviewStates:states});},()=>{setYoutubeToolOpen(true);setSideBySideTesting(true);});
   const projectRef = useRef<Project | null>(null);
   projectRef.current = project;
   const [draft, setDraft] = useState("");

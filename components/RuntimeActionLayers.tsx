@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {overlayAssetStyle} from "./OverlayAsset";
-import {runSequence} from "../lib/sequences";
+import {runSequence,type SequenceProgress} from "../lib/sequences";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
 import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
@@ -19,7 +19,8 @@ import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
 type Run = { timerState?:TimerState; coinPhase?:CoinPhase; exitingAt?:number; id: number; at: number; control: ProjectEvent; tool?: GameTool; asset?: ProjectAsset; compositionId?: string; message?: string; result?: string; question?: Record<string, unknown>; reveal?: boolean };
-export function useRuntimeActions(project: Project | null,onCardStates?:(states:Record<string,CardState>)=>void) {
+export function useRuntimeActions(project: Project | null,onCardStates?:(states:Record<string,CardState>)=>void,onDashboardAction?:(control:ProjectEvent)=>void) {
+  const dashboardCallback=useRef(onDashboardAction);dashboardCallback.current=onDashboardAction;
   const savedCallback=useRef(onCardStates);savedCallback.current=onCardStates;
   const initialized=useRef<string|null>(null);
   const cardRef=useRef<Record<string,CardState>>({});
@@ -28,6 +29,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const latest = useRef(project); latest.current = project;
   useEffect(()=>{if(project&&initialized.current!==project.id){initialized.current=project.id;cardRef.current=project.cardPreviewStates||{};setCardStates(cardRef.current);}},[project?.id]);
   const sequence=useRef<AbortController|null>(null);
+  const sequenceProgress=useRef<SequenceProgress>({});
   const [sequenceRunning,setSequenceRunning]=useState(false),[sequenceError,setSequenceError]=useState("");
   const stopSequence=useCallback(()=>{sequence.current?.abort();setSequenceRunning(false);},[]);
   useEffect(()=>()=>sequence.current?.abort(),[]);
@@ -44,9 +46,11 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     const p = latest.current; if (!p) return;
     if(control.action==='sequence'){
       const error=controlConnectionError(p,control);if(error)throw new Error(error);
-      sequence.current?.abort();const controller=new AbortController();sequence.current=controller;setSequenceRunning(true);setSequenceError('');
-      void runSequence(p,control,async target=>{fire(target);},controller.signal).catch(e=>setSequenceError(e instanceof Error?e.message:'Sequence stopped.')).finally(()=>{if(sequence.current===controller)setSequenceRunning(false);});return;
+      if(sequence.current&&!sequence.current.signal.aborted)return;
+      const controller=new AbortController();sequence.current=controller;setSequenceRunning(true);setSequenceError('');
+      void runSequence(p,control,async target=>{fire(target);},controller.signal,sequenceProgress.current).catch(e=>setSequenceError(e instanceof Error?e.message:'Sequence stopped.')).finally(()=>{if(sequence.current===controller){sequence.current=null;setSequenceRunning(false);}});return;
     }
+    if(p.gameTools.some(t=>t.type==='youtube'&&t.enabled&&control.action===`tool.${t.id}`)){dashboardCallback.current?.(control);return;}
     if(control.action.startsWith("result.hide.")){
       const target=control.action.slice(12);
       setRuns(items=>items.map(item=>item.control.id===target?{...item,exitingAt:Date.now()}:item));

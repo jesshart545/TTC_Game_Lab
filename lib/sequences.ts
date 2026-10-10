@@ -13,8 +13,11 @@ export function sequenceControls(project:Project,control:ProjectEvent){
   return {control:action,delayMs:seconds*1000};
  });
 }
-export async function runSequence(project:Project,control:ProjectEvent,execute:(control:ProjectEvent)=>Promise<void>,signal:AbortSignal){
- for(const step of sequenceControls(project,control)){
+export type SequenceProgress = Record<string,{signature:string;next:number}>;
+export async function runSequence(project:Project,control:ProjectEvent,execute:(control:ProjectEvent)=>Promise<void>,signal:AbortSignal,progress:SequenceProgress={}){
+ const steps=sequenceControls(project,control),signature=JSON.stringify([project.id,control.chain]);
+ const saved=progress[control.id],index=saved?.signature===signature?saved.next:0;
+ for(const step of control.sequenceMode==='per-press'?[steps[index%steps.length]]:steps){
   if(signal.aborted)return;
   if(step.delayMs)await new Promise<void>(resolve=>{
    const cancel=()=>{clearTimeout(timer);resolve();};
@@ -23,5 +26,6 @@ export async function runSequence(project:Project,control:ProjectEvent,execute:(
   });
   if(signal.aborted)return;
   await execute(step.control);
+  if(control.sequenceMode==='per-press'&&!signal.aborted)progress[control.id]={signature,next:(index+1)%steps.length};
  }
 }

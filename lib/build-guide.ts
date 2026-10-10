@@ -29,9 +29,11 @@ export function creationsForType(project: Project, type: AdditionType): BuildCre
   return project.gameTools.filter(t => t.enabled && t.type === type).map(t => ({ kind: 'tool', id: t.id, name: t.name }));
 }
 export function creationControls(project: Project, creation: BuildCreation): ProjectEvent[] {
-  const primary = project.controls.filter(c => creation.kind === 'asset' ? c.action === `asset.show.${creation.id}`
+  const matches=(c:ProjectEvent)=>creation.kind === 'asset' ? c.action === `asset.show.${creation.id}`
     : creation.kind === 'composition' ? c.action === `composition.play.${creation.id}`
-    : c.toolIds?.includes(creation.id) || c.action === `tool.${creation.id}` || c.action.startsWith('cards.') && c.action.endsWith(`.${creation.id}`));
+    : c.toolIds?.includes(creation.id) || c.action === `tool.${creation.id}` || c.action.startsWith('cards.') && c.action.endsWith(`.${creation.id}`);
+  const visible=project.controls.filter(c=>!c.sequenceOnly);
+  const primary = visible.filter(c=>matches(c)||c.action==='sequence'&&c.chain?.some(step=>{const action=project.controls.find(item=>item.id===step.refId);return !!action&&matches(action);}));
   const ids = new Set(primary.map(c => c.id));
-  return project.controls.filter(c => ids.has(c.id) || c.action.startsWith('result.hide.') && ids.has(c.action.slice(12)));
+  return visible.filter(c => ids.has(c.id) || c.action.startsWith('result.hide.') && ids.has(c.action.slice(12)));
 }
