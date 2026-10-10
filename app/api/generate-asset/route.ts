@@ -1,3 +1,4 @@
+import { videoDuration } from "../../../lib/video-duration";
 import { musicDuration } from "../../../lib/music-duration";
 import { NextResponse } from "next/server";
 
@@ -70,29 +71,37 @@ export async function POST(request: Request) {
     if (promptImage && !/^https:\/\//i.test(promptImage) && !/^data:image\//i.test(promptImage)) {
       return jsonError("Video reference image must be an HTTPS URL or image data URI.", 400);
     }
-    if (promptImage) {
+    let durationSeconds: number;
+    try { durationSeconds = videoDuration(prompt, body?.durationSeconds); }
+    catch (error) { return jsonError(error instanceof Error ? error.message : "Invalid video length.", 400); }
+    if (promptImage || durationSeconds > 10) {
       const key = readSecret("FAL_KEY");
-      if (!key) return jsonError("Image animation is unavailable because fal.ai is not configured.", 503);
-      const model = "fal-ai/wan/v2.2-a14b/image-to-video/turbo";
+      if (!key) return jsonError("Video generation at this length is unavailable because fal.ai is not configured.", 503);
+      const turbo = Boolean(promptImage) && durationSeconds === 5;
+      const model = turbo ? "fal-ai/wan/v2.2-a14b/image-to-video/turbo"
+        : `alibaba/wan-3.0/${promptImage ? "image-to-video" : "text-to-video"}`;
+      if (!turbo && prompt.length > 5000) return jsonError("Keep the video description to 5,000 characters or fewer.", 400);
       const response = await fetch(`https://queue.fal.run/${model}`, {
         method: "POST",
         headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          image_url: promptImage, prompt, resolution: "720p", aspect_ratio: "16:9",
-          enable_safety_checker: true, enable_output_safety_checker: true,
+          ...(promptImage ? turbo ? { image_url: promptImage } : { start_image_url: promptImage } : {}), prompt, resolution: "720p",
+          aspect_ratio: "16:9",
+          ...(turbo ? { enable_output_safety_checker: true } : { duration: durationSeconds, audio: false }),
+          enable_safety_checker: true,
           enable_prompt_expansion: false,
         }),
         cache: "no-store",
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) return jsonError(response.status === 402
-        ? "fal.ai has insufficient credits for image animation. The site administrator needs to add fal.ai credits."
+        ? "fal.ai has insufficient credits for video generation. The site administrator needs to add fal.ai credits."
         : payload?.detail || payload?.error || payload?.message || "Image animation failed.", response.status);
       if (!payload?.request_id || !payload?.status_url || !payload?.response_url) return jsonError("The animation provider returned an incomplete task.", 502);
       const videoId = Buffer.from(JSON.stringify({
         id: payload.request_id, status: payload.status_url, result: payload.response_url,
       })).toString("base64url");
-      return NextResponse.json({ type, status: "processing", videoId, model, provider: "fal" });
+      return NextResponse.json({ type, status: "processing", videoId, model, provider: "fal", durationSeconds });
     }
     const runwayKey = readSecret("RUNWAYML_API_SECRET");
     if (!runwayKey) return jsonError("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
@@ -109,7 +118,7 @@ export async function POST(request: Request) {
         promptText: prompt,
         ...(promptImage ? { promptImage } : {}),
         ratio: "1280:720",
-        duration: 5,
+        duration: durationSeconds,
       }),
       cache: "no-store",
     });
@@ -125,7 +134,7 @@ export async function POST(request: Request) {
     if (!videoId) return jsonError("Runway accepted the video request but returned no task id.", 502);
 
     const url = `/api/generate-asset/video?id=${encodeURIComponent(String(videoId))}&model=${encodeURIComponent(model)}&provider=runway`;
-    return NextResponse.json({ type, status: "processing", videoId: String(videoId), url, model, provider: "runway" });
+    return NextResponse.json({ type, status: "processing", videoId: String(videoId), url, model, provider: "runway", durationSeconds });
   }
 
   if (type === "voice") {
