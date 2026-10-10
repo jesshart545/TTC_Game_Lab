@@ -31,7 +31,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
       const response = await fetch(video ? "/api/edit-video" : "/api/edit-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: redesignOverlay ? REDESIGN_OVERLAY_PROMPT : prompt.trim(), imageUrl: asset.url, ...(redesignOverlay ? { aspectRatio: "16:9" } : {}) }),
+        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: redesignOverlay ? REDESIGN_OVERLAY_PROMPT : prompt.trim(), imageUrl: asset.url, ...(redesignOverlay ? { aspectRatio: "16:9", resolution: "2K" } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
