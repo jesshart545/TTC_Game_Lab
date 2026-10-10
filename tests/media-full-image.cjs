@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),ts=require('typescript'),assert=require('node:assert/strict'),{JSDOM}=require('jsdom');
 const dom=new JSDOM('<div id="root"></div>');global.window=dom.window;global.document=dom.window.document;global.HTMLElement=dom.window.HTMLElement;global.IS_REACT_ACT_ENVIRONMENT=true;
 let scrolled=false;dom.window.HTMLElement.prototype.scrollTo=function({top}){this.scrollTop=top;scrolled=top===0;};
-const React=require('react'),{createRoot}=require('react-dom/client'),loaded={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/MediaEditor.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports:loaded,require,fetch:()=>{throw Error('Viewing must not generate anything');}});
+const React=require('react'),{createRoot}=require('react-dom/client'),loaded={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/MediaEditor.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports:loaded,require:id=>id==='../lib/image-layout'?require('./load.cjs')('lib/image-layout.ts'):require(id),fetch:()=>{throw Error('Viewing must not generate anything');}});
 const root=createRoot(document.getElementById('root'));let saved;
 const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent===text);
 (async()=>{const edits={crop:'square',zoom:2,rotation:45,offsetX:30,offsetY:-10,opacity:0,brightness:30};await React.act(async()=>root.render(React.createElement(loaded.default,{asset:{name:'Portrait.png',url:'https://example.com/image.png',type:'image/png',edits},onSave:()=>{},onClose:()=>{},onSaveAsNew:async asset=>{saved=asset}})));

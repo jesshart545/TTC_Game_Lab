@@ -33,6 +33,7 @@ export function checkedAssistantMediaAction(raw: unknown, assets: ProjectAsset[]
     brightness: [0, 200], contrast: [0, 200], saturation: [0, 200], blur: [0, 100], offsetX: [-4096, 4096], offsetY: [-4096, 4096],
   };
   for (const [key, value] of Object.entries(source)) {
+    if (kind === "image" && key === "fit" && ["contain", "cover", "fill"].includes(String(value))) { edits.fit = value as ProjectAssetEdits["fit"]; continue; }
     if (kind === "image" && key === "crop" && ["original", "square", "landscape", "portrait"].includes(String(value))) { edits.crop = value as ProjectAssetEdits["crop"]; continue; }
     if (kind === "image" && ["flipX", "flipY"].includes(key) && typeof value === "boolean") { (edits as Record<string, unknown>)[key] = value; continue; }
     const range = ranges[key];
