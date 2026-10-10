@@ -46,3 +46,26 @@
 .workspace-page .workflow-stage-0 #workshop-scenes .empty-note{
   margin-bottom:10px;
 }
+
+
+/* Keep assistance available without moving the dashboard and overlay. */
+.workspace-page .workflow-layout.workflow-stage-1.general-build-space>.chat-panel.build-space-chat{
+  position:fixed;z-index:90;top:76px;right:16px;bottom:16px;
+  width:min(420px,calc(100vw - 32px));height:auto;max-height:calc(100dvh - 92px);
+  margin:0;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;
+  background:#0a111b;box-shadow:0 16px 60px #000b;
+}
+.workspace-page .workflow-layout.workflow-stage-1.general-build-space>.chat-panel.build-space-chat[hidden]{display:none!important}
+.workspace-page .build-space-chat>.panel-heading{position:sticky;top:0;z-index:2;background:#0a111b}
+.workspace-page .build-space-chat>.composer{position:sticky;bottom:0;z-index:2;background:#0a111b;border-top:1px solid #344657}
+.workspace-page .build-space-chat .chat-example-requests .idea-card{max-height:150px;overflow-y:auto}
+.workspace-page .workshop-assets-grid{max-height:min(50dvh,480px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:3px}
+@media(min-width:1000px){
+  .workspace-page .build-space-compact{scroll-margin-top:76px;height:calc(100dvh - 88px);min-height:0}
+  .workspace-page .workflow-layout.workflow-stage-0[data-workshop-section="1"]{grid-template-columns:minmax(280px,.7fr) minmax(0,1.3fr)}
+  .workspace-page .workflow-stage-0>.chat-panel{position:sticky;top:76px;max-height:calc(100dvh - 92px);overflow-y:auto;overscroll-behavior:contain}
+}
+@media(max-width:900px){
+  .workspace-page .workflow-stage-0[data-workshop-section="1"]>.assets-panel,.workspace-page .workflow-stage-0[data-workshop-section="2"]>.assets-panel{order:-1}
+  .workspace-page .workflow-layout.workflow-stage-1.general-build-space>.chat-panel.build-space-chat{top:100px;max-height:calc(100dvh - 116px)}
+}

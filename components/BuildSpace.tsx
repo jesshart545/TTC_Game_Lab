@@ -46,6 +46,11 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
  const save=(next:Project)=>{currentProject.current=next;onChange(next);};
  const [testing,setTesting]=useState(false),[selection,setSelection]=useState<{kind:"asset"|"tool"|"control";id:string}|null>(null);
  useEffect(()=>onSelect(selection),[selection,onSelect]);
+ useEffect(()=>{
+  if(!selection)return;
+  const exists=selection.kind==='control'?project.controls.some(c=>c.id===selection.id):selection.kind==='tool'?project.gameTools.some(t=>t.id===selection.id):project.assets.some(a=>(a.storageKey||a.name)===selection.id);
+  if(!exists)setSelection(null);
+ },[selection,project.controls,project.gameTools,project.assets]);
  const [step,setStep]=useState(0);
  const [positionYoutube,setPositionYoutube]=useState(false);
  useEffect(()=>setPositionYoutube(false),[selection?.id,testing]);
