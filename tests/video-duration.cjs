@@ -10,7 +10,7 @@ function load(file, mocks = {}) {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  vm.runInNewContext(code, { exports, Buffer, URL, process: { env: { FAL_KEY: 'test', RUNWAYML_API_SECRET: 'test' } },
+  vm.runInNewContext(code, { exports, Buffer, URL, AbortSignal, process: { env: { FAL_KEY: 'test', RUNWAYML_API_SECRET: 'test' } },
     require(name) {
       if (name === 'next/server') return { NextResponse: { json: (body, init) => Response.json(body, init) } };
       if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'), mocks);

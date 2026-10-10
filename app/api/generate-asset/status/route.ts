@@ -17,7 +17,7 @@ function extractVideoUrl(payload: any) {
   ) || null;
 }
 
-export async function GET(request: Request) {
+async function readVideoStatus(request: Request) {
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   const model = url.searchParams.get("model") || "agnes-video-2.5-flash";
@@ -40,14 +40,14 @@ export async function GET(request: Request) {
       }
     } catch { return NextResponse.json({ error: "Invalid animation task." }, { status: 400 }); }
     const headers = { Authorization: `Key ${key}` };
-    const response = await fetch(task.status, { headers, cache: "no-store", redirect: "error" });
+    const response = await fetch(task.status, { headers, cache: "no-store", signal: AbortSignal.timeout(20000), redirect: "error" });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) return NextResponse.json({ error: payload?.detail || payload?.error || "Unable to check animation progress." }, { status: response.status });
     if (payload?.error || ["FAILED", "CANCELED", "CANCELLED"].includes(payload?.status)) {
       return NextResponse.json({ status: "failed", error: payload.error || "Image animation failed." });
     }
     if (payload?.status !== "COMPLETED") return NextResponse.json({ status: "processing", progress: payload?.status === "IN_PROGRESS" ? 50 : 0 });
-    const result = await fetch(task.result, { headers, cache: "no-store", redirect: "error" });
+    const result = await fetch(task.result, { headers, cache: "no-store", signal: AbortSignal.timeout(20000), redirect: "error" });
     const output = await result.json().catch(() => ({}));
     if (!result.ok || !output?.video?.url) return NextResponse.json({ status: "failed", error: output?.detail || output?.error || "Animation finished without a video." });
     return NextResponse.json({ status: "completed", progress: 100, url: output.video.url, model, provider: "fal" });
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
         Authorization: `Bearer ${runwayKey}`,
         "X-Runway-Version": "2024-11-06",
       },
-      cache: "no-store",
+      cache: "no-store", signal: AbortSignal.timeout(20000),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) return NextResponse.json({ error: payload?.error || payload?.message || "Unable to read Runway video status." }, { status: response.status });
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
 
   const response = await fetch(`https://apihub.agnes-ai.com/agnesapi?video_id=${encodeURIComponent(id)}&model_name=${encodeURIComponent(model)}`, {
     headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+    cache: "no-store", signal: AbortSignal.timeout(20000),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) return NextResponse.json({ error: payload?.error || payload?.message || "Unable to read video generation status." }, { status: response.status });
@@ -108,4 +108,12 @@ export async function GET(request: Request) {
     videoId: payload?.video_id || id,
     model: payload?.model || model,
   });
+}
+
+export async function GET(request: Request) {
+  try { return await readVideoStatus(request); }
+  catch {
+    console.warn("Video provider status request failed or timed out.");
+    return NextResponse.json({ error: "The video provider did not respond. Use Check video result to resume the saved request without generating another copy." }, { status: 504 });
+  }
 }

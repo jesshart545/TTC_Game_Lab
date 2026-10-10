@@ -619,12 +619,12 @@ export default function ProjectWorkspace() {
     }
   }
 
-  async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; aspectRatio?: string }) {
+  async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; aspectRatio?: string; pendingVideo?: NonNullable<Project["pendingVideos"]>[number] }) {
     if (!project || assetBusy) return;
     const origin = project.id;
     const checkGenerationScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin) throw new Error("The generation finished after you left its project. Return to that project; do not submit duplicate generations."); };
     let promptImage = "";
-    const referenceKey = options?.sourceKey !== undefined ? options.sourceKey : type === "video" ? videoReferenceKey : "";
+    const referenceKey = options?.pendingVideo ? "" : options?.sourceKey !== undefined ? options.sourceKey : type === "video" ? videoReferenceKey : "";
     if ((type === "video" || type === "image") && referenceKey) {
       const selectedAsset = project.assets.find(asset => (asset.storageKey || asset.name) === referenceKey);
       if (!selectedAsset) { setAssetStatus("The selected video reference image is no longer available."); return; }
@@ -642,13 +642,17 @@ export default function ProjectWorkspace() {
 
     try {
       if (type === "video" && promptImage) { setAssetStatus("Preparing the reference for the horizontal overlay…"); promptImage = await landscapeAnimationReference(promptImage); }
+      let data: any = options?.pendingVideo;
+      if (!data) {
       const response = await fetch("/api/generate-asset", {
+        signal: AbortSignal.timeout(type === "video" ? 60000 : 180000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(type === "image" ? { aspectRatio: options?.aspectRatio || "16:9" } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(type === "video" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "music" ? { durationSeconds: options?.durationSeconds, lyrics: options?.lyrics } : {}) }),
       });
-      const data = await response.json();
+      data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
+      }
 
       let url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
       if (type === "music" && data.requestId) {
@@ -670,7 +674,13 @@ export default function ProjectWorkspace() {
         if (!completed) throw new Error("Music is still processing on fal.ai. The request may complete later; please avoid submitting duplicate generations.");
       }
       if (type === "video" && data.videoId) {
-        setAssetStatus("Video accepted. Generating frames… 0%");
+        checkGenerationScope();
+        const current = projectRef.current || project;
+        if (!current.pendingVideos?.some(job => job.videoId === String(data.videoId))) {
+          persist({ ...current, pendingVideos: [...(current.pendingVideos || []), { videoId: String(data.videoId), model: data.model, prompt: requested, durationSeconds: data.durationSeconds }] });
+          await saveQueue.current;
+        }
+        setAssetStatus("Video request saved. Waiting for the provider…");
         url = await waitForGeneratedVideo(
           String(data.videoId),
           data.model || "agnes-video-2.5-flash",
@@ -684,13 +694,14 @@ export default function ProjectWorkspace() {
       const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
       const generatedAsset = { name, type: data.model || type, url, ...(type === "music" ? { durationSeconds: data.durationSeconds } : {}) };
 
+      setAssetStatus(`Saving generated ${type} to your assets…`);
       const storedAsset = await storeGeneratedAsset(project.id, generatedAsset);
       checkGenerationScope();
       const fittedAsset: ProjectAsset = type === "image" || type === "video" ? { ...storedAsset, edits: { ...storedAsset.edits, fit: "contain" } } : storedAsset;
       const asset: ProjectAsset = !options && backgroundIntent && (type === "image"||type === "video") ? { ...fittedAsset, role: "background", inProject: false } : fittedAsset;
 
       const currentAfterStore = projectRef.current || latest;
-      const savedProject = { ...currentAfterStore, assets: [...currentAfterStore.assets, asset], updatedAt: "just now" };
+      const savedProject = { ...currentAfterStore, pendingVideos: type === "video" ? (currentAfterStore.pendingVideos || []).filter(job => job.videoId !== String(data.videoId)) : currentAfterStore.pendingVideos, assets: [...currentAfterStore.assets, asset], updatedAt: "just now" };
       projectRef.current = savedProject;
       setProject(savedProject);
       await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
@@ -1027,7 +1038,7 @@ export default function ProjectWorkspace() {
       setAssetStatus("Publish needs cloud-stored assets. Re-upload any browser-only asset before publishing.");
       return;
     }
-    const { publishedSnapshot: _previous, cardPreviewStates:_previewCards, ...draft } = project;
+    const { publishedSnapshot: _previous, cardPreviewStates:_previewCards, pendingVideos:_pendingVideos, ...draft } = project;
     const snapshot = { ...draft, gameTools:draft.gameTools.map(t=>({...t,inOverlayBuild:Boolean(t.inOverlayBuild)})), wheel:{...draft.wheel,spinning:false,visible:false}, compositions: (draft.compositions || []).filter(c => c.inProject), status: "Published" as const, updatedAt: "just now" };
     const next = { ...project, status: "Published" as const, publishedSnapshot: snapshot, updatedAt: "just now" };
     setPublishing(true);
@@ -1236,6 +1247,7 @@ export default function ProjectWorkspace() {
 
     </section>
     <div data-workshop-section={workflowStep === 0 ? workshopStep : undefined} className={"workspace-grid workflow-layout workflow-stage-" + workflowStep + (workflowStep!==0 ? " general-build-space" : "")}>
+      {Boolean(project.pendingVideos?.length) && <section aria-label="Pending video generation" className="idea-card"><strong>Video requests awaiting a result</strong><p>Check a saved request without generating or paying for another copy.</p>{project.pendingVideos?.map(job => <div key={job.videoId}><p>{job.prompt}</p><button type="button" className="outline-btn" disabled={assetBusy || building} onClick={() => void generateAsset("video", job.prompt, { pendingVideo: job }).catch(() => undefined)}>Check video result</button></div>)}</section>}
       <section hidden={workflowStep===1&&!buildAiOpen} className={"chat-panel"+(workflowStep===1?" build-space-chat":"")}><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h2>{workflowStep === 0 ? "Workshop AI" : "Build Space AI"}</h2></div><div className="ai-orb">✦</div></div>{workflowStep===1&&<button type="button" className="outline-btn" onClick={()=>{setBuildAiOpen(false);document.querySelector('.build-space')?.scrollIntoView({block:'start'});}}>Back to Build Space</button>}{workflowStep===1&&<p className="build-ai-help">Describe the change in your own words. I can connect pools and buttons, place items, change their look, and set playback. Changes apply to your draft for testing.</p>}{aiUndo&&<button type="button" className="outline-btn" disabled={building} onClick={()=>{const previous=aiUndo;persist({...previous,publishedSnapshot:project.publishedSnapshot,status:project.status,messages:[...project.messages,{role:"assistant",text:"The last AI edit has been undone."}]});setAiUndo(null);}}>Undo last AI edit</button>}<CompactConversation messages={project.messages} busy={building}/><details className="chat-example-requests"><summary>Example requests</summary><div className="idea-card"><span>TRY A REQUEST</span>{(workflowStep===1?[
  ["Connect an image pool","Connect my image pool to one random draw/remove button. Ask me which pool if needed."],
  ["Add a scoreboard","Add and connect a scoreboard. Ask me which players or teams to include."],
