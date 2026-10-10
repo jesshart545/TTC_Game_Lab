@@ -8,6 +8,7 @@ export function executionContext(project: Project) {
     sequenceContract: {
       create: "Omit id entirely for a NEW sequence. Do not put a tool ID or selected button ID in sequences.id.",
       edit: "id must be one of existingSequenceIds. An ordinary Start button is not a saved sequence.",
+      pressBehavior: "sequenceMode all runs every step on one press; per-press runs exactly one next step on each press and wraps after the last. Step overlayResult saves placement and entrance/exit none|fade|slide|zoom with entranceSeconds/exitSeconds. New internal action controls are hidden inside the combined button; existing dashboard buttons are preserved.",
       limits: "Maximum 30 steps and 300 seconds total delay. No nested sequences. No actions run while editing.",
       existingSequenceIds: controls.filter(c => c.action === "sequence").map(c => c.id),
       stepControlIds: controls.filter(c => c.action !== "sequence" && c.buttonMode !== "chain").map(c => ({ id: c.id, label: c.label, action: c.action })),

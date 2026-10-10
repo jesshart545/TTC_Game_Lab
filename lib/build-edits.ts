@@ -82,8 +82,9 @@ export function applyBuildChanges(project:Project,input:unknown){
   const item=record(raw),old=next.controls.find(c=>c.id===item.id&&c.action==='sequence');
   if(item.id&&!old){warnings.push('The supplied id is not a saved sequence. Omit id for a new sequence; only reuse an existing sequence ID when editing.');continue;}
   let candidate:Project={...next,controls:[...next.controls]};
+  if(item.sequenceMode!==undefined&&!['all','per-press'].includes(item.sequenceMode)){warnings.push('Choose all actions per press or one action per press.');continue;}
   let steps:NonNullable<ProjectEvent['chain']>;
-  try{steps=(Array.isArray(item.steps)?item.steps:[]).map((raw:any)=>{
+  try{steps=item.steps===undefined&&old?old.chain||[]:(Array.isArray(item.steps)?item.steps:[]).map((raw:any)=>{
     const s=record(raw);if(s.operation&&!['show','play','hide','stop','reveal','clear'].includes(s.operation))throw new Error('Choose Show, Play, Hide, Stop, Reveal or Clear for each sequence action.');let target=candidate.controls.find(c=>c.id===s.controlId);
     if(!target&&['asset','tool','composition'].includes(s.kind)&&typeof s.refId==='string'){
       const linked=addCreationControl(candidate,s.kind,s.refId);candidate=linked.project;
@@ -93,14 +94,18 @@ export function applyBuildChanges(project:Project,input:unknown){
       if(s.operation==='show'||s.operation==='play')target=candidate.controls.find(c=>c.action===`timer.toggle.${s.refId}`||c.action===`timer.show.${s.refId}`||c.action===`tool.${s.refId}`)||target;
     }
     if(!target)throw new Error('Choose an available item or button for each sequence step.');
+    if(s.overlayResult){candidate=applyDraftChanges(candidate,{controls:[{id:target.id,overlayResult:s.overlayResult}]}).project;target=candidate.controls.find(c=>c.id===target!.id)!;}
     return {id:crypto.randomUUID(),kind:'control' as const,refId:target.id,label:s.operation?`${s.operation}: ${target.label}`:target.label,...(/^cards\./.test(target.action)&&['clear','hide','stop','reveal'].includes(s.operation)?{cardAction:s.operation==='reveal'?'reveal' as const:'clear' as const}:{}),timing:{mode:s.delaySeconds?'delay' as const:'immediate' as const,seconds:Number(s.delaySeconds||0)}};
   });}catch(error){warnings.push(error instanceof Error?error.message:'The sequence could not be connected.');continue;}
-  const control:ProjectEvent={id:old?.id||crypto.randomUUID(),label:String(item.name||old?.label||'Run sequence').slice(0,80),action:'sequence',detail:'Run the connected actions in order',buttonMode:'chain',chain:steps};
+  const mode=item.sequenceMode||old?.sequenceMode||'all';
+  const control:ProjectEvent={...old,id:old?.id||crypto.randomUUID(),label:String(item.name||old?.label||'Run sequence').slice(0,80),action:'sequence',detail:mode==='per-press'?'Each press runs the next action; repeats after the last.':'One press runs all connected actions in order',buttonMode:'chain',sequenceMode:mode,chain:steps};
   const error=controlConnectionError(candidate,control);if(error){warnings.push(error);continue;}
-  next={...candidate,assetPools:next.assetPools};
+  const previousIds=new Set(next.controls.map(c=>c.id));
+  next={...candidate,assetPools:next.assetPools,controls:candidate.controls.map(c=>previousIds.has(c.id)?c:{...c,sequenceOnly:true})};
   next.controls=old?next.controls.map(c=>c.id===old.id?control:c):[...next.controls,control];extra++;
  }
  if(Array.isArray(changes.controlOrder)){const order=changes.controlOrder;next.controls=[...next.controls].sort((a,b)=>{const ai=order.indexOf(a.id),bi=order.indexOf(b.id);return (ai<0?order.length:ai)-(bi<0?order.length:bi);});extra++;}
  if(Array.isArray(changes.removeControls)){const ids=new Set(changes.removeControls);const count=next.controls.length;next.controls=next.controls.filter(c=>!ids.has(c.id));extra+=count-next.controls.length;}
  return {project:next,applied:result.applied+extra,warnings};
 }
+

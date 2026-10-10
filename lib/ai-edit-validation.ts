@@ -1,13 +1,23 @@
 import {assignControlAction,controlConnectionError} from './control-connections';
 import {requestedFont,resolveFont,isSupportedFont} from './fonts';
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
+
+function validateOverlayResult(value:unknown){
+ const settings=record(value);
+ for(const field of ['entrance','exit'])if(settings[field]!==undefined&&!['none','fade','slide','zoom'].includes(settings[field]))throw new Error('Use a supported '+field+' transition: none, fade, slide or zoom.');
+ for(const field of ['entranceSeconds','exitSeconds'])if(settings[field]!==undefined&&(typeof settings[field]!=='number'||!Number.isFinite(settings[field])||settings[field]<0||settings[field]>100))throw new Error('Transition durations must be numbers from 0 to 100 seconds.');
+}
+
 // Catch omitted explicit settings before the application accepts a model edit.
 export function validateExplicitSettings(request:string,response:unknown){
  const responseData=record(response),draftChanges=record(responseData.changes);
  if(/\btimer\b/i.test(request)&&/\b(?:cycle|cycles|cycling)\b/i.test(String(responseData.reply||''))&&!/\b(?:cycle|cycles|cycling)\b/i.test(request))throw new Error('The user did not request a timer press cycle. Timer show, start/pause, reset and hide are separate supported actions. Do not invent a duration editor on a button.');
  const perPress=/\b(?:each|every)\s+(?:press|click)\b|\b(?:first|second|third)\s+(?:press|click)\b/i.test(request);
  const wholeSequence=/\b(?:each|every)\s+(?:press|click)\b[^.\n]{0,45}\b(?:all|entire|whole)\b/i.test(request);
- if(perPress&&!wholeSequence&&Array.isArray(draftChanges.sequences)&&draftChanges.sequences.length)throw new Error('This request advances one step per separate press. Do not return an automatic sequence. Use coinCycles for Show / Flip / Remove on a coin, or explain a missing capability and ask for the necessary details.');
+ if(perPress&&!wholeSequence&&Array.isArray(draftChanges.sequences)&&draftChanges.sequences.some((s:any)=>s.sequenceMode!=='per-press'))throw new Error('This request advances one action per press. Set changes.sequences[].sequenceMode to per-press, or use coinCycles for a coin Show / Flip / Remove cycle.');
+ if(wholeSequence&&draftChanges.sequences?.some((s:any)=>s.sequenceMode==='per-press'))throw new Error('The user requested all actions on each press. Set sequenceMode all.');
+ const transitions=[...(Array.isArray(draftChanges.controls)?draftChanges.controls:[]).map((c:any)=>record(c.overlayResult)),...(Array.isArray(draftChanges.sequences)?draftChanges.sequences:[]).flatMap((s:any)=>(s.steps||[]).map((step:any)=>record(step.overlayResult)))];
+ for(const effect of ['fade','slide','zoom'])for(const direction of ['in','out'])if(new RegExp('\\b'+effect+'\\s+(?:it\\s+)?'+direction+'\\b','i').test(request)&&transitions.length&&!transitions.some((r:any)=>r[direction==='in'?'entrance':'exit']===effect))throw new Error('Save the requested '+effect+' '+direction+' on the shown action overlayResult.');
  const sequenceRequest=/\bsequence\b|\b(?:button|action|function)[ -](?:string|chain)\b|\b(?:string|chain|link|combine|connect)\b[^.\n]{0,70}\b(?:buttons?|actions?|functions?)\b/i.test(request);
  const promisedSequence=/\bI(?:'ll| will| have| am going to|’ll)\b[^.\n]{0,100}\b(?:set up|creat(?:e|ed)|add(?:ed)?|connect(?:ed)?|link(?:ed)?|build|built)\b/i.test(String(responseData.reply||''));
  if(sequenceRequest&&promisedSequence&&!responseData.action&&!Object.keys(draftChanges).length&&!String(responseData.reply||'').includes('?'))throw new Error('Return the actual requested changes.sequences with connected steps, or ask for missing information. Do not promise a button without saved changes.');
@@ -48,6 +58,7 @@ export function validateSavedReferences(project:any,input:unknown) {
  }
  for(const raw of changes.controls||[]) {
   const item=record(raw),control=project.controls.find((c:any)=>c.id===item.id);
+  validateOverlayResult(item.overlayResult);
   if(typeof item.action==='string') {
    const action=item.action;
    const grammar=/^(?:timer\.(?:show|toggle|reset|hide)\..+|coin\.cycle\..+|asset\.show\..+|result\.hide\..+|cards\.(?:toggle|show|draw|reveal|clear|blank|score|award|new-game)\..+|tool\..+|background\.show\..+|composition\.play\..+|alert\.[a-z0-9._-]+|effect\.trigger|wheel\.spin|sequence)$/i;
@@ -76,6 +87,8 @@ export function validateSavedReferences(project:any,input:unknown) {
  if(changes.sequences!==undefined&&!Array.isArray(changes.sequences))throw new Error('changes.sequences must be a list.');
  for(const raw of changes.sequences||[]) {
   const item=record(raw);
+  for(const step of item.steps||[])validateOverlayResult(step.overlayResult);
+  if(item.sequenceMode!==undefined&&!['all','per-press'].includes(item.sequenceMode))throw new Error('Use sequenceMode all or per-press.');
   if(item.id!==undefined&&!project?.controls?.some((c:any)=>c.id===item.id&&c.action==='sequence'))throw new Error('That id is not an existing sequence. For a NEW sequence omit id entirely; do not use the selected button or tool ID. For editing use executionGuide.sequenceContract.existingSequenceIds.');
  }
 }
