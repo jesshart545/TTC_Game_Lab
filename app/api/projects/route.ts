@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
 import { requireCreator, isAdmin } from "../../../lib/auth/server";
 import { createHash, randomBytes } from "node:crypto";
-import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay } from "../../../lib/city-crime-scene";
+import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, canUseCityCrimeScene, stripCityCrimeSceneTools } from "../../../lib/city-crime-scene";
 
 export async function GET() {
   const user = await requireCreator();
@@ -34,21 +34,25 @@ export async function POST(request: Request) {
   const status = String(body.status ?? "Draft");
   const theme = String(body.theme ?? "cyan");
   const prompt = String(body.prompt ?? "");
-  const data = JSON.stringify(body.data ?? body);
-  const saved = await db`INSERT INTO projects (id, slug, name, description, status, theme, prompt, data, owner_id, updated_at) VALUES (${id}, ${slug}, ${name}, ${description}, ${status}, ${theme}, ${prompt}, ${data}::jsonb, ${user.id}, NOW()) ON CONFLICT (id) DO UPDATE SET slug=EXCLUDED.slug, name=EXCLUDED.name, description=EXCLUDED.description, status=EXCLUDED.status, theme=EXCLUDED.theme, prompt=EXCLUDED.prompt, data=EXCLUDED.data, updated_at=NOW() WHERE projects.owner_id = ${user.id} OR ${isAdmin(user)} RETURNING id`;
-  if (!saved.length) return NextResponse.json({ error: "Project not found." }, { status: 404 });
-  if (incoming.publish === true && body.publishedSnapshot) {
+  const data = (() => {
+    // City Crime Scene is restricted to select accounts: strip it on save for everyone else.
+    const payload = canUseCityCrimeScene(user?.email) ? (body.data ?? body) : stripCityCrimeSceneTools(body.data ?? body);
     // Strip host-only City Crime Scene fields (guilt, case truth, twists, detective intel)
-    // from the published snapshot: the overlay endpoint serves it without auth.
+    // from the published snapshot BEFORE persisting: the overlay endpoint serves it without auth.
     // The host dashboard fetches the full case file via the host-key-gated live casefile endpoint.
-    const snapshot = body.publishedSnapshot as { gameTools?: Array<{ type?: string; config?: Record<string, unknown> }> };
-    if (Array.isArray(snapshot.gameTools)) {
+    const snapshot = (payload as { publishedSnapshot?: { gameTools?: Array<{ type?: string; config?: Record<string, unknown> }> } }).publishedSnapshot;
+    if (snapshot && Array.isArray(snapshot.gameTools)) {
       for (const t of snapshot.gameTools) {
         if (t?.type === "city-crime-scene" && t.config) {
           t.config = { ...t.config, mystery: sanitizeCityCrimeSceneForOverlay(readCityCrimeSceneConfig(t.config)) };
         }
       }
     }
+    return JSON.stringify(payload);
+  })();
+  const saved = await db`INSERT INTO projects (id, slug, name, description, status, theme, prompt, data, owner_id, updated_at) VALUES (${id}, ${slug}, ${name}, ${description}, ${status}, ${theme}, ${prompt}, ${data}::jsonb, ${user.id}, NOW()) ON CONFLICT (id) DO UPDATE SET slug=EXCLUDED.slug, name=EXCLUDED.name, description=EXCLUDED.description, status=EXCLUDED.status, theme=EXCLUDED.theme, prompt=EXCLUDED.prompt, data=EXCLUDED.data, updated_at=NOW() WHERE projects.owner_id = ${user.id} OR ${isAdmin(user)} RETURNING id`;
+  if (!saved.length) return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  if (incoming.publish === true && body.publishedSnapshot) {
     await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
     const existing = await db`SELECT token_hash FROM live_hosts WHERE project_id = ${id}`;
     const suppliedKey = typeof incoming.hostKey === "string" && /^[a-f0-9]{64}$/.test(incoming.hostKey) ? incoming.hostKey : "";

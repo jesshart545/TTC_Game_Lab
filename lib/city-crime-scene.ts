@@ -196,3 +196,21 @@ export function splitCourtroomEvidence(config: CityCrimeSceneConfig, revealedClu
     pointedElsewhere: revealed.filter(c => !c.relatedSuspectIds.includes(defendantId)),
   };
 }
+
+/** Accounts entitled to build with City Crime Scene. Overridable via CITY_CRIME_SCENE_EMAILS (comma-separated). */
+const DEFAULT_CITY_CRIME_SCENE_EMAILS = ["biscoe1972@gmail.com", "ladylovelace0627@gmail.com"];
+export function cityCrimeSceneEmails(): string[] {
+  const raw = typeof process !== "undefined" ? (process.env.CITY_CRIME_SCENE_EMAILS || "") : "";
+  const fromEnv = raw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  return fromEnv.length ? fromEnv : DEFAULT_CITY_CRIME_SCENE_EMAILS;
+}
+export function canUseCityCrimeScene(email: string | null | undefined): boolean {
+  return !!email && cityCrimeSceneEmails().includes(email.toLowerCase());
+}
+/** Save-time backstop: remove city-crime-scene tools from a project-shaped object for non-entitled accounts. */
+export function stripCityCrimeSceneTools<T extends { gameTools?: Array<{ type?: string }> }>(project: T): T {
+  if (!project || !Array.isArray(project.gameTools)) return project;
+  const kept = project.gameTools.filter(t => t?.type !== "city-crime-scene");
+  if (kept.length === project.gameTools.length) return project;
+  return { ...project, gameTools: kept };
+}

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { cityCrimeSceneDefaults, readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, validateCityCrimeScene, splitCourtroomEvidence } =
+const { cityCrimeSceneDefaults, readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, validateCityCrimeScene, splitCourtroomEvidence, canUseCityCrimeScene, stripCityCrimeSceneTools } =
   require('./load.cjs')('lib/city-crime-scene.ts');
 
 // 1. Sample defaults are internally consistent.
@@ -57,4 +57,21 @@ assert(split.pointingAt.every(c => sample.clues.find(x => x.id === c.id).related
 assert(split.pointedElsewhere.every(c => !sample.clues.find(x => x.id === c.id).relatedSuspectIds.includes(guiltyId)), 'pointed-elsewhere split is exact');
 assert.equal(split.pointingAt.length + split.pointedElsewhere.length, 3, 'split covers all revealed clues');
 console.log('PASS: courtroom evidence splits defendant vs elsewhere correctly.');
+
+// 5. Entitlement: only the two designated accounts can build with City Crime Scene.
+assert(canUseCityCrimeScene('biscoe1972@gmail.com'), 'biscoe1972@gmail.com entitled');
+assert(canUseCityCrimeScene('ladylovelace0627@gmail.com'), 'ladylovelace0627@gmail.com entitled');
+assert(canUseCityCrimeScene('BISCOE1972@GMAIL.COM'), 'entitlement is case-insensitive');
+assert(!canUseCityCrimeScene('someone@example.com'), 'random account not entitled');
+assert(!canUseCityCrimeScene(''), 'empty email not entitled');
+assert(!canUseCityCrimeScene(null) && !canUseCityCrimeScene(undefined), 'missing email not entitled');
+console.log('PASS: entitlement gate allows only the two designated accounts.');
+
+// 6. Save-time backstop strips the tool for non-entitled saves.
+const withTool = { gameTools: [{ id: 'a', type: 'city-crime-scene' }, { id: 'b', type: 'wheel' }] };
+const stripped = stripCityCrimeSceneTools(withTool);
+assert(stripped.gameTools.length === 1 && stripped.gameTools[0].type === 'wheel', 'tool stripped');
+assert(withTool.gameTools.length === 2, 'original untouched');
+assert(stripCityCrimeSceneTools({ gameTools: [{ id: 'b', type: 'wheel' }] }).gameTools.length === 1, 'no-op when absent');
+console.log('PASS: save-time backstop strips City Crime Scene tools.');
 console.log('ALL CITY CRIME SCENE TESTS PASSED');

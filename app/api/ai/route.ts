@@ -14,6 +14,8 @@ import {groundedResearchCards} from "../../../lib/research-cards";
 import {validateExplicitSettings, validateSavedReferences, validateCompletionClaim, validateSequenceBehavior, validateRequestedAutomation, validateSequenceAdditions, validateRequestedTargets} from "../../../lib/ai-edit-validation";
 import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
 import { NextResponse } from "next/server";
+import { requireCreator } from "../../../lib/auth/server";
+import { canUseCityCrimeScene } from "../../../lib/city-crime-scene";
 
 const SYSTEM = `You are TTCGameLab AI, a creative director and application builder for interactive TikTok LIVE experiences. Do not merely return a specification. Interpret the creator's request and propose concrete changes to the project's dashboard, overlay, scenes, controls, assets, and interactions. Keep the existing project context intact and make incremental edits when the user asks for changes.`;
 const DRAFT_SYSTEM = `You assist the creator of a TTCGameLab draft. Follow their lead and perform only the requested task. Return JSON {"reply":string,"changes":object,"manualSteps":string[],"needsClarification":boolean,"outcome":"edit"|"action"|"clarification"|"answer"|"unsupported","action":null|object}.
@@ -40,6 +42,10 @@ export async function POST(request: Request) {
   const body = await request.json();
   if(Array.isArray(body.searchEvidence))body.searchEvidence=body.searchEvidence.map((source:any,sourceId:number)=>({...source,sourceId}));
   const draftEdit = body.mode === "draft-edit";
+  // City Crime Scene is restricted to select accounts.
+  const aiUser = await requireCreator().catch(() => null);
+  const ccssEntitled = canUseCityCrimeScene(aiUser?.email);
+  const draftSystem = ccssEntitled ? DRAFT_SYSTEM : DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool. If the user asks for it, explain briefly that it is not available for their account.`;
   const draftContext = draftEdit ? {
     request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
     selectedImageKey: body.selectedImageKey, selectedAssetKey:body.selectedAssetKey, workspaceStage: body.workspaceStage,
@@ -62,7 +68,7 @@ export async function POST(request: Request) {
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: draftEdit ? [{ role: "system", content: DRAFT_SYSTEM }, { role: "user", content: JSON.stringify(draftContext) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
+      messages: draftEdit ? [{ role: "system", content: draftSystem }, { role: "user", content: JSON.stringify(draftContext) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
       ...(draftEdit ? { response_format: { type: "json_object" } } : {}),
       temperature: draftEdit ? .2 : .7,
       ...(draftEdit ? {max_tokens:12288} : {}),
@@ -109,6 +115,11 @@ export async function POST(request: Request) {
       const parsed = JSON.parse(clean);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Return one JSON object, not a list or text.");
       parsed.changes = normalizeDraftChanges(parsed.changes);
+      if (!ccssEntitled) {
+        const wantsCcss = (parsed.action?.type === "tool" && parsed.action?.toolType === "city-crime-scene")
+          || (Array.isArray(parsed.changes?.newTools) && parsed.changes.newTools.some((t: any) => t?.type === "city-crime-scene"));
+        if (wantsCcss) throw new Error("City Crime Scene is only available to select accounts and is not enabled for this account.");
+      }
       validateExplicitSettings(String(body.request||""),parsed);
       validateSavedReferences(body.project, parsed.changes);
       validateRequestedTargets(String(body.request||""),body.project,parsed.changes);

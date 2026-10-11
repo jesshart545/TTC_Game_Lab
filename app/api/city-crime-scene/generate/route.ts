@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { assistantProvider } from "../../../../lib/assistant-provider";
-import { validateCityCrimeScene, type CityCrimeSceneConfig } from "../../../../lib/city-crime-scene";
+import { validateCityCrimeScene, type CityCrimeSceneConfig, canUseCityCrimeScene } from "../../../../lib/city-crime-scene";
+import { requireCreator } from "../../../../lib/auth/server";
 
 export const maxDuration = 180;
 
@@ -29,6 +30,8 @@ function extractJson(text: string): string {
 }
 
 export async function POST(request: Request) {
+  const me = await requireCreator();
+  if (!canUseCityCrimeScene(me?.email)) return NextResponse.json({ error: "City Crime Scene is only available to select accounts." }, { status: 403 });
   const provider = assistantProvider();
   if (!provider.key) return NextResponse.json({ error: "AGNES_API_KEY is not configured." }, { status: 503 });
   const body = await request.json().catch(() => ({}));
