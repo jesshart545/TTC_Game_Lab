@@ -14,8 +14,6 @@ import {groundedResearchCards} from "../../../lib/research-cards";
 import {validateExplicitSettings, validateSavedReferences, validateCompletionClaim, validateSequenceBehavior, validateRequestedAutomation, validateSequenceAdditions, validateRequestedTargets} from "../../../lib/ai-edit-validation";
 import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
 import { getGameTemplate } from "../../../lib/game-templates";
-import { canUseCityCrimeScene } from "../../../lib/city-crime-scene";
-import { requireCreator } from "../../../lib/auth/server";
 import { NextResponse } from "next/server";
 
 const SYSTEM = `You are TTCGameLab AI, a creative director and application builder for interactive TikTok LIVE experiences. Do not merely return a specification. Interpret the creator's request and propose concrete changes to the project's dashboard, overlay, scenes, controls, assets, and interactions. Keep the existing project context intact and make incremental edits when the user asks for changes.`;
@@ -43,15 +41,9 @@ export async function POST(request: Request) {
   const body = await request.json();
   if(Array.isArray(body.searchEvidence))body.searchEvidence=body.searchEvidence.map((source:any,sourceId:number)=>({...source,sourceId}));
   const draftEdit = body.mode === "draft-edit";
-  // City Crime Scene is restricted to select accounts.
-  const aiUser = await requireCreator().catch(() => null);
-  const ccssEntitled = canUseCityCrimeScene(aiUser?.email);
-  const ccssNote = ccssEntitled
-    ? `\nCity Crime Scene (tool type "city-crime-scene") is an improv whodunnit mystery game builder available to this user. When they mention mysteries, crimes, detective games, or whodunnits — or ask what you can build — proactively offer to create a City Crime Scene game. Create it with changes.newTools [{type:"city-crime-scene",name,config:{},connect:true}]; the dedicated editor opens for full customization.`
-    : `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool. If the user asks for it, explain briefly that it is not available for their account.`;
   const templateInfo = body.project?.templateId ? getGameTemplate(body.project.templateId) : undefined;
   const templateNote = templateInfo ? `\nThis project was started from the "${templateInfo.name}" game template. ${templateInfo.description} When the user asks to customize it, help them modify the template's questions, content, styling, rules, or structure. You can edit any part of the template.` : "";
-  const systemContent = DRAFT_SYSTEM + ccssNote + templateNote;
+  const systemContent = DRAFT_SYSTEM + templateNote;
   const draftContext = draftEdit ? {
     request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
     selectedImageKey: body.selectedImageKey, selectedAssetKey:body.selectedAssetKey, workspaceStage: body.workspaceStage,
