@@ -11,7 +11,10 @@ export function toolDefaults(type:GameToolType):Record<string,unknown>{
  const defaults:Partial<Record<GameToolType,Record<string,unknown>>>={
   wheel:{title:'Game Wheel',segments:['Prize','Challenge','Bonus','Mystery']},
   'random-picker':{source:'cards',listId:'',placement:{x:15,y:20,width:70,height:60}},
-  countdown:{seconds:10},poll:{question:'Choose what happens next',options:['Option A','Option B']},dice:{sides:6},'coin-toss':{placement:{x:35,y:20,width:30,height:55}},
+  countdown:{seconds:10},poll:{question:'Choose what happens next',options:['Option A','Option B']},dice:{sides:6},'coin-toss':{placement:{x:35,y:20,width:30,height:55}},plinko:{title:'Plinko',slots:['10','50','100','500','1000','500','100','50','10'],rows:9,pegColor:'#8b9bb4',ballColor:'#ff5d5d',slotColor:'#154c69',alternateSlotColor:'#512b75'},
+  'higher-lower':{title:'Higher or Lower',cards:[{label:'4',value:4},{label:'9',value:9},{label:'2',value:2},{label:'7',value:7},{label:'K',value:13},{label:'5',value:5},{label:'A',value:1},{label:'Q',value:12},{label:'6',value:6},{label:'J',value:11}]},
+  cliffhanger:{title:'Cliffhanger',items:[{label:'Coffee maker',price:49},{label:'Bluetooth speaker',price:79},{label:'Stand mixer',price:129}],stepsToFall:25,dollarsPerStep:1},
+  'prize-wheel':{title:'Big Wheel',values:['5¢','10¢','15¢','20¢','25¢','30¢','35¢','40¢','45¢','50¢','55¢','60¢','65¢','70¢','75¢','80¢','85¢','90¢','95¢','$1.00'],slotColor:'#b3123f',alternateSlotColor:'#0f6b4f'},
   'blank-board':{title:'Custom Board',areas:[]},youtube:{placement:{x:15,y:15,width:70,height:70}},
   scoreboard:{entries:[]},'prize-list':{entries:[]},'game-tool-list':{entries:[]},
  };
