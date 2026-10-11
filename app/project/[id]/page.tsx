@@ -53,35 +53,14 @@ import { removeLegacyCardTimers } from "../../../lib/control-connections";
 import {createCardList,savedListEntries} from "../../../lib/card-lists";
 import GameToolEditor, { overlayToolPlacement } from "../../../components/GameToolEditor";
 import RuntimeActionLayers, { useRuntimeActions } from "../../../components/RuntimeActionLayers";
+import WorkshopAiPanel from "../../../components/WorkshopAiPanel";
+import WorkshopAssetsPanel from "../../../components/WorkshopAssetsPanel";
+import { GENERATORS, BOARD_LIBRARY, TOOL_LIBRARY, isImage, isVideo, isAudio, type GeneratorType, type LibraryItem } from "../../../lib/workshop-libraries";
 
-const GENERATORS = [
-  { type: "image", label: "Image · Nano Banana 2", icon: "▣" },
-  { type: "video", label: "Video", icon: "▶" },
-  { type: "voice", label: "Voice", icon: "◖" },
-  { type: "music", label: "Music", icon: "♫" },
-  { type: "sfx", label: "Sound Effect", icon: "✦" },
-] as const;
 
-type GeneratorType = (typeof GENERATORS)[number]["type"];
 
-function isImage(asset: ProjectAsset) {
-  if (!asset.url) return false;
-  const type = (asset.type || "").toLowerCase();
-  const name = (asset.name || "").toLowerCase();
-  const url = asset.url.toLowerCase().split("?")[0];
-  return type.includes("image")
-    || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(name)
-    || /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(url)
-    || name.startsWith("image");
-}
 
-function isVideo(asset: ProjectAsset) {
-  return Boolean(asset.url && mediaKind(asset)==="video");
-}
 
-function isAudio(asset: ProjectAsset) {
-  return Boolean(asset.url && (asset.type.toLowerCase().includes("audio") || asset.name.toLowerCase().startsWith("voice") || asset.name.toLowerCase().startsWith("music") || asset.name.toLowerCase().startsWith("sfx")));
-}
 
 
 
@@ -102,6 +81,16 @@ export default function ProjectWorkspace() {
   const [draft, setDraft] = useState("");
   const [workflowStep, setWorkflowStep] = useState(0);
   const [workshopStep, setWorkshopStep] = useState(0);
+  const [ccssEntitled, setCcssEntitled] = useState(false);
+
+  // Check City Crime Scene entitlement
+  useEffect(() => {
+    fetch("/api/me", {cache:"no-store"}).then(r=>r.json()).then(d=>{
+      const email = (d.email||"").toLowerCase();
+      const allowed = ["biscoe1972@gmail.com","ladylovelace0627@gmail.com"];
+      setCcssEntitled(allowed.includes(email));
+    }).catch(()=>{});
+  }, []);
   const [entryStages, setEntryStages] = useState<EntryStages>({});
   const entryStagesRef = useRef<EntryStages>({});
   const [buildEntryRequest, setBuildEntryRequest] = useState<BuildEntryRequest | null>(null);
@@ -297,10 +286,6 @@ export default function ProjectWorkspace() {
     catch { window.prompt("Copy this private dashboard link for your phone or tablet:", url); }
   }
 
-  const BOARD_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
-    { type:"trivia-board", name:"5×5 Trivia Board", description:"Start with a functional 5×5 board, then customize its content, visuals and interactive areas with chat." },
-    { type:"blank-board", name:"Blank Board", description:"Start a custom audience board and build its background and interactive areas with chat and project assets." },
-  ];
   async function previewYoutube(command: Record<string, unknown>): Promise<YouTubeState> {
     const action = command.action as YouTubeState["action"];
     let next: YouTubeState;
@@ -318,17 +303,6 @@ export default function ProjectWorkspace() {
     setYoutubeFeedback(null); setYoutubePreview(next); if(action==="play") setAssetStatus("Testing YouTube in the audience preview. Use the controls below to pause, resume or hide it before publishing.");
     return next;
   }
-  const TOOL_LIBRARY: { type: GameToolType; name: string; description: string }[] = [
-    { type:"wheel", name:"Game Wheel", description:"Spin configurable segments on the live overlay." },
-    { type:"random-picker", name:"Random Picker", description:"Randomly draw an unused image or card. The same button removes it." },
-    { type:"scoreboard",name:"Scoreboard",description:"Show players or teams and adjust their scores during the game." },
-    { type:"prize-list",name:"Prize List",description:"List prizes and mark who wins each one." },
-    { type:"game-tool-list",name:"TikTok Gift Guide",description:"Show which gifts activate steals, skips, or other host-defined actions." },
-    { type:"countdown", name:"Countdown", description:"Show a host-triggered countdown timer." },
-    { type:"poll", name:"Live Poll", description:"Show choices and a live audience poll." },
-    { type:"coin-toss", name:"Coin Toss", description:"Flip an animated coin for a random Heads or Tails result. Customize its look and connect it in Build Space." },
-    { type:"dice", name:"Dice Roll", description:"Roll animated dice for a quick game." },
-  ];
   const TRIVIA_CONFIG = { categories: [] as any[] };
   function triggerTriviaQuestion(categoryIndex:number, questionIndex:number) {
     if (!project) return;
@@ -457,6 +431,11 @@ export default function ProjectWorkspace() {
 
   async function addGameTool(type: GameToolType) {
     if (!project || triviaBusy) return;
+    // City Crime Scene is restricted to entitled accounts
+    if (type === "city-crime-scene" && !ccssEntitled) {
+      setAssetStatus("City Crime Scene is restricted to specific accounts.");
+      return;
+    }
     const latest = project;
     const existing = latest.gameTools || [];
     if (existing.some(t=>t.type===type && t.enabled)) { setAssetStatus("That template is already being customized in this project."); return; }
@@ -1250,173 +1229,130 @@ export default function ProjectWorkspace() {
     </section>
     <div data-workshop-section={workflowStep === 0 ? workshopStep : undefined} className={"workspace-grid workflow-layout workflow-stage-" + workflowStep + (workflowStep!==0 ? " general-build-space" : "")}>
       {Boolean(project.pendingVideos?.length) && <section aria-label="Pending video generation" className="idea-card"><strong>Video requests awaiting a result</strong><p>Check a saved request without generating or paying for another copy.</p>{project.pendingVideos?.map(job => <div key={job.videoId}><p>{job.prompt}</p><button type="button" className="outline-btn" disabled={assetBusy || building} onClick={() => void generateAsset("video", job.prompt, { pendingVideo: job }).catch(() => undefined)}>Check video result</button></div>)}</section>}
-      <section hidden={workflowStep===1&&!buildAiOpen} className={"chat-panel"+(workflowStep===1?" build-space-chat":"")}><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h2>{workflowStep === 0 ? "Workshop AI" : "Build Space AI"}</h2></div><div className="ai-orb">✦</div></div>{workflowStep===1&&<button type="button" className="outline-btn" onClick={()=>{setBuildAiOpen(false);document.querySelector('.build-space')?.scrollIntoView({block:'start'});}}>Back to Build Space</button>}{workflowStep===1&&<p className="build-ai-help">Describe the change in your own words. I can connect pools and buttons, place items, change their look, and set playback. Changes apply to your draft for testing.</p>}{aiUndo&&<button type="button" className="outline-btn" disabled={building} onClick={()=>{const previous=aiUndo;persist({...previous,publishedSnapshot:project.publishedSnapshot,status:project.status,messages:[...project.messages,{role:"assistant",text:"The last AI edit has been undone."}]});setAiUndo(null);}}>Undo last AI edit</button>}<CompactConversation messages={project.messages} busy={building}/><details className="chat-example-requests"><summary>Example requests</summary><div className="idea-card"><span>TRY A REQUEST</span>{(workflowStep===1?[
- ["Connect an image pool","Connect my image pool to one random draw/remove button. Ask me which pool if needed."],
- ["Add a scoreboard","Add and connect a scoreboard. Ask me which players or teams to include."],
- ["Adjust an item","Help me position and size the selected item on the overlay."]
- ]:[["Help me get started","Help me plan my game. Ask me what you need to know."],["Create media","Help me create the media my game needs."],["Customize a card","Help me customize a card for my game."]]).map(([label,prompt])=><button type="button" key={label} onClick={()=>setDraft(prompt)}>{label} <b>→</b></button>)}</div></details><form className="composer" onSubmit={sendMessage}><label className="workshop-prompt-label" htmlFor="workshop-prompt">What would you like to create or change?</label><textarea id="workshop-prompt" ref={promptRef} value={draft} onChange={e=>setDraft(e.target.value)} placeholder={workflowStep===1?"Example: Connect my Prize Images pool to a random draw button and show images in the center.":"Example: Help me create a music quiz with easy host controls."}/><div className="composer-bottom"><input ref={fileInputRef} type="file" hidden multiple accept="image/*,video/*,audio/*" onChange={handleFiles}/><button className="send" type="submit" disabled={building||!draft.trim()}>{building ? "Working…" : "Apply my request"}</button></div>{showBoardTemplates&&<div id="board-templates" hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card"><span>BOARD TEMPLATES</span>{BOARD_LIBRARY.map(item=><button key={item.type} type="button" disabled={triviaBusy} onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{showToolTemplates&&<div id="tool-templates" hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card"><span>TOOL TEMPLATES</span>{TOOL_LIBRARY.map(item=><button key={item.type} type="button" onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{showTriviaListGenerator&&<div hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card generator-panel"><span>GENERATE TRIVIA</span><small>Choose how many questions you want. Categories are optional — type one or several separated by commas, or leave them blank and TTCGameLab will choose them.</small><label>NUMBER OF QUESTIONS<input id="trivia-list-count" type="number" min="1" max="500" value={triviaListCount} onChange={e=>setTriviaListCount(Math.max(1,Math.min(500,Number(e.target.value)||1)))}/></label><label>CATEGORIES (OPTIONAL)<textarea value={triviaListCategories} onChange={e=>setTriviaListCategories(e.target.value)} placeholder="Example: 90s music, science, horror movies, world history"/></label><button className="build-btn" type="button" disabled={triviaListBusy} onClick={()=>void generateTriviaList()}>{triviaListBusy ? "Generating & verifying…" : `Generate ${triviaListCount} Questions →`}</button>{triviaListQuestions.length>0&&<><small>{triviaListQuestions.length} questions ready; starred items need review.</small><div style={{maxHeight:320,overflow:"auto"}}>{triviaListQuestions.map((q:any,i:number)=><div key={`${q.question}-${i}`} style={{padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.12)"}}><strong>{i+1}. {q.question}{q.verificationStatus==="needs-review" ? " * Needs verification" : " ✓ Verified"}</strong><div>Answer: {q.answer}</div><small>{q.category} · <a href={q.sourceUrl} target="_blank" rel="noreferrer">{q.source}</a></small></div>)}</div><button type="button" onClick={()=>void downloadTriviaPdf()}>Download PDF</button><small>Saved in your toolbox. Connect it to a dashboard button in Build Space when needed.</small></>}</div>}{showGenerator&&<div hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card generator-panel"><span>{backgroundIntent ? "CREATE OVERLAY BACKGROUND" : "GENERATE ASSET"}</span><small>Choose a media type, describe it here, then generate it directly.</small><div className="generator-types">{GENERATORS.map(item=><button key={item.type} type="button" className={generatorType===item.type?"active":""} disabled={assetBusy} onClick={()=>setGeneratorType(item.type)}>{item.icon} {item.label}</button>)}</div><textarea id="generator-prompt" aria-label="Describe the media to generate" value={generatorPrompt} disabled={assetBusy} onChange={e=>setGeneratorPrompt(e.target.value)} placeholder={`Describe the ${generatorType} you want to generate…`}/>{generatorType==="image"&&<label>Image shape<select value={imageShape} disabled={assetBusy} onChange={e=>setImageShape(e.target.value)}><option value="16:9">Full overlay · landscape 16:9</option><option value="9:16">Portrait · 9:16</option><option value="1:1">Square · 1:1</option><option value="4:3">Landscape · 4:3</option><option value="3:4">Portrait · 3:4</option></select><small>Choose the shape for the intended overlay area. Edit the result to set exact pixel dimensions.</small></label>}{(generatorType==="image"||generatorType==="video")&&<small className="generator-format-note">Horizontal TikTok Studio overlay · 1920 × 1080 canvas. Images use your selected shape and fit without stretching. Video is generated at 720p and scales to the overlay.</small>}{generatorType==="video"&&<label>Video length<select value={videoLength} disabled={assetBusy} onChange={e=>setVideoLength(e.target.value)}><option value="auto">Use the length in my description (default 5 seconds)</option>{VIDEO_DURATIONS.map(seconds=><option key={seconds} value={String(seconds)}>{seconds} seconds</option>)}</select><small>Generate a single clip up to 30 seconds. Longer clips can use a different model and cost more. Combine clips in the Asset Composer for longer videos.</small></label>}{generatorType==="video"&&<label>Reference image (optional)<small>Choose a widescreen image you have reviewed. For a portrait or square design, create or upload a horizontal version first; animation will not add filler or change its layout automatically.</small><select value={videoReferenceKey} disabled={assetBusy} onChange={e=>setVideoReferenceKey(e.target.value)}><option value="">Text-to-video</option>{project.assets.filter(isImage).map((asset,i)=><option key={(asset.storageKey||asset.name)+i} value={asset.storageKey||asset.name}>{asset.name}</option>)}</select></label>}{generatorType==="music"&&<><label>Song length<select value={musicLengthMode} disabled={assetBusy} onChange={e=>setMusicLengthMode(e.target.value)}><option value="auto">Use the length in my description</option><option value="short">Short intro / custom length</option><option value="full">Full song</option></select></label>{musicLengthMode==="short"&&<label>Length in seconds<input type="number" min="3" max="120" step="1" value={musicDuration} disabled={assetBusy} onChange={e=>setMusicDuration(Number(e.target.value))}/></label>}<label>Lyrics (optional)<textarea value={musicLyrics} disabled={assetBusy} onChange={e=>setMusicLyrics(e.target.value)} placeholder="Paste the words you want sung, one lyric line per line."/></label><small>For a short intro, choose 20–25 seconds and use a few lyric lines so they fit. Short tracks use MiniMax Music 3; about $0.04–$0.05 for 20–25 seconds. Paste lyrics for vocals, or describe instrumental music. The model may finish before the selected length.</small></>}<button className="build-btn" type="button" disabled={assetBusy || !generatorPrompt.trim()} onClick={()=>void generateAsset(generatorType, generatorPrompt, generatorType === "music" ? { durationSeconds: musicLengthMode === "short" ? musicDuration : musicLengthMode === "full" ? 0 : undefined, lyrics: musicLyrics } : generatorType === "image" ? { aspectRatio: imageShape } : generatorType === "video" ? { durationSeconds: videoLength === "auto" ? undefined : Number(videoLength) } : undefined)}>{assetBusy ? "Generating media…" : `Generate ${generatorType} →`}</button></div>}{assetStatus&&<div className="asset-empty">{assetStatus}</div>}</form></section>
+      <WorkshopAiPanel
+        workflowStep={workflowStep}
+        workshopStep={workshopStep}
+        buildAiOpen={buildAiOpen}
+        setBuildAiOpen={setBuildAiOpen}
+        building={building}
+        draft={draft}
+        setDraft={setDraft}
+        sendMessage={sendMessage}
+        promptRef={promptRef}
+        fileInputRef={fileInputRef}
+        handleFiles={handleFiles}
+        project={project}
+        aiUndo={aiUndo}
+        showBoardTemplates={showBoardTemplates}
+        showToolTemplates={showToolTemplates}
+        showTriviaListGenerator={showTriviaListGenerator}
+        showGenerator={showGenerator}
+        triviaBusy={triviaBusy}
+        addGameTool={addGameTool}
+        triviaListCount={triviaListCount}
+        setTriviaListCount={setTriviaListCount}
+        triviaListCategories={triviaListCategories}
+        setTriviaListCategories={setTriviaListCategories}
+        triviaListBusy={triviaListBusy}
+        generateTriviaList={generateTriviaList}
+        triviaListQuestions={triviaListQuestions}
+        downloadTriviaPdf={downloadTriviaPdf}
+        backgroundIntent={backgroundIntent}
+        generatorType={generatorType}
+        setGeneratorType={setGeneratorType}
+        assetBusy={assetBusy}
+        generatorPrompt={generatorPrompt}
+        setGeneratorPrompt={setGeneratorPrompt}
+        imageShape={imageShape}
+        setImageShape={setImageShape}
+        videoLength={videoLength}
+        setVideoLength={setVideoLength}
+        videoReferenceKey={videoReferenceKey}
+        setVideoReferenceKey={setVideoReferenceKey}
+        musicLengthMode={musicLengthMode}
+        setMusicLengthMode={setMusicLengthMode}
+        musicDuration={musicDuration}
+        setMusicDuration={setMusicDuration}
+        musicLyrics={musicLyrics}
+        setMusicLyrics={setMusicLyrics}
+        generateAsset={generateAsset}
+        assetStatus={assetStatus}
+        persist={persist}
+        setAiUndo={setAiUndo}
+        ccssEntitled={ccssEntitled}
+      />
       {backgroundDestinationKey&&(()=>{const asset=project.assets.find(a=>(a.storageKey||a.name)===backgroundDestinationKey);return asset?<section><BackgroundDestination project={project} asset={asset} onChange={persist}/><button type="button" onClick={()=>setBackgroundDestinationKey("")}>Done choosing background destination</button></section>:null;})()}
       {workflowStep===1 && <BuildSpace onAskAi={()=>{setBuildAiOpen(true);requestAnimationFrame(()=>{promptRef.current?.scrollIntoView({block:'center'});promptRef.current?.focus({preventScroll:true});});}} entryRequest={buildEntryRequest} onEntryHandled={finishBuildEntry} showNextGuidance={firstActionTaken} focusControl={aiControlFocus} onSelect={setBuildSelection} cardStates={runtime.cardStates} onPublishStep={()=>chooseWorkflowStep(2)} feedback={eventLog[0]} project={project} onChange={persist} overlay={draftOverlay} onTrigger={trigger} onWorkshop={()=>chooseWorkflowStep(0,1)} youtubeOpen={youtubeToolOpen} onOpenYoutube={()=>setYoutubeToolOpen(true)} onCloseYoutube={()=>setYoutubeToolOpen(false)} onYoutubeCommand={previewYoutube} youtubeState={youtubePreview} youtubeFeedback={youtubeFeedback} sequenceRunning={runtime.sequenceRunning} onStopSequence={runtime.stopSequence} sequenceError={runtime.sequenceError} dashboardExtras={toolId=><>{!toolId&&<GoogleSearch projectId={project.id} onSavePool={(name,results)=>{const current=projectRef.current||project;const pool={...createCardList(),name,config:{entries:results.map(result=>({id:crypto.randomUUID(),text:result.summary||result.title,sourceUrl:result.url,sourceTitle:result.title})),cards:[]}};persist({...current,gameTools:[...current.gameTools,pool]});}}/>}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)&&(!toolId||t.id===toolId)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker"&&(!toolId||t.id===toolId)).map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&(t.type==="question-card"||t.type==="blank-card")&&(!toolId||t.id===toolId)).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}</>}/>}
       {workflowStep===0 && <section className="preview-panel"><div className="preview-head"><div><small>FULL LIVESTREAM PREVIEW</small><h2>{project.name}</h2></div><div className="preview-switch"><button type="button" aria-pressed={sideBySideTesting} onClick={()=>setSideBySideTesting(!sideBySideTesting)}>{sideBySideTesting ? "Exit side-by-side test" : "Test side by side"}</button><button className={previewMode==="overlay"?"active":""} onClick={()=>setPreviewMode("overlay")}>Audience Overlay</button><button className={previewMode==="dashboard"?"active":""} onClick={()=>setPreviewMode("dashboard")}>Host Dashboard</button><span className="preview-mode-badge">DRAFT PREVIEW</span></div></div><div className="stage" style={{display:sideBySideTesting || previewMode==="overlay" ? undefined : "none"}}>{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <><div className="stage-scan"/>{bg && <OverlayAsset asset={bg} background className="builder-preview-background"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div><div className="overlay-demo"><div className="overlay-live">● PREVIEW</div><div className="overlay-headline">{project.overlay.title === "YOUR LIVESTREAM" ? project.name : project.overlay.title}</div><div className="overlay-sub">{project.overlay.subtitle === "YOUR LIVE EXPERIENCE" ? "" : project.overlay.subtitle}</div></div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">${q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}<div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></>; })()}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId&&c.compositionId);if(!control)return null;const r=dragPlacement?.id===control.id?dragPlacement:control.overlayResult||defaultOverlayResult;return <div className="overlay-placement-marker" style={{left:`${r.x}%`,top:`${r.y}%`,width:`${r.width}%`,height:`${r.height}%`}} onPointerDown={e=>startPlacement(e,control,e.target instanceof HTMLElement&&e.target.dataset.resize==="true")} onPointerMove={movePlacement} onPointerUp={endPlacement}><span>{control.label} · drag to position</span><i data-resize="true" title="Drag to resize"/></div>})()}<RuntimeActionLayers runtime={runtime} project={project}/>{(()=>{const asset=project.assets.find(a=>(a.storageKey||a.name)===positionAssetKey&&a.inProject&&a.role!=="background");return asset?<YouTubePlacementEditor label={asset.name} top={44} placement={asset.edits?.placement||{x:0,y:0,width:100,height:100}} onChange={placement=>persist({...project,assets:project.assets.map(a=>a===asset?{...a,edits:{...a.edits,placement}}:a)})}/>:null;})()}{selectedControlId&&project.controls.some(c=>c.id===selectedControlId&&c.toolIds?.some(id=>project.gameTools.some(t=>t.id===id&&t.type==="youtube"))) && <YouTubePlacementEditor placement={safeYoutubePlacement(project.gameTools.find(t=>t.type==="youtube")?.config.placement)} onChange={placement=>{persist({...project,gameTools:project.gameTools.map(t=>t.type==="youtube"?{...t,config:{...t.config,placement}}:t)});setYoutubePreview(current=>current?{...current,placement}:current);}}/>}<YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</div><div className="dashboard-preview" style={{display:sideBySideTesting || previewMode==="dashboard" ? undefined : "none"}}><h3>{project.name} · Draft dashboard</h3><p>Build the dashboard with blank trigger buttons. Choose the Workshop creations you want here, then choose what each control does. Test these controls alongside the draft overlay before publishing.</p><div className="dashboard-toolbox"><small>CUSTOMIZED TOOLBOX</small>{(project.gameTools||[]).filter(tool=>tool.enabled && tool.type!=="trivia-board" && tool.inToolbox).map(tool=>{const selected=project.controls.find(control=>control.id===selectedControlId);const assigned=Boolean(selected?.toolIds?.includes(tool.id));return <div className="tool-library-row" key={tool.id}><div><b>{tool.name}</b><small>Customized workspace tool</small></div><button className="outline-btn" disabled={!selected||assigned} onClick={()=>selected&&assignToolToButton(selected.id,tool)}>{assigned?"✓ Assigned":selected?"+ Assign to selected button":"Select a dashboard button"}</button></div>})}</div><div className="dashboard-preview-buttons">{project.controls.filter(c=>!c.toolIds?.some(id=>project.gameTools.find(t=>t.id===id)?.type==="youtube")).map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div></div><div className="preview-foot"><span>Dashboard <b>/</b> Overlay <b>/</b> Events</span><span>{project.status} · {project.updatedAt}</span></div><CollapsibleFolder title="Quick rehearsal controls" count={project.controls.length} storageKey={`${project.id}:quick-rehearsal`} keepMounted><div className="control-strip"><div><small>HOST CONTROLS</small><strong>Trigger your generated experience</strong></div><div className="control-buttons">{project.controls.filter(c=>!c.toolIds?.some(id=>project.gameTools.find(t=>t.id===id)?.type==="youtube")).map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div>{eventLog.length>0&&<div className="event-log">{eventLog.map((x,i)=><span key={i}>✓ {x}</span>)}</div>}</div></CollapsibleFolder><CollapsibleFolder title="Advanced dashboard editing" count={project.controls.length} storageKey={`${project.id}:advanced-dashboard`} keepMounted><div className="dashboard-action-editor"><h3>Dashboard buttons</h3>{project.controls.map(control=><div className="dashboard-action-row" key={control.id}><button className="outline-btn" onClick={()=>{setSelectedControlId(control.id);setPreviewMode("overlay")}}>{control.label} · Edit Overlay Result</button>{control.compositionId&&<small>{project.compositions?.find(c=>c.id===control.compositionId)?.name||"Missing composition"}</small>}</div>)}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId);if(!control)return null;const result=control.overlayResult||defaultOverlayResult;return <div className="overlay-result-editor"><h4>Configure Dashboard Button · {control.label}</h4><label>Button label<input value={control.label} onChange={e=>updateControl(control.id,{label:e.target.value})}/></label><label>Background action<select value={control.action.startsWith("background.show.")?control.action:""} onChange={e=>updateControl(control.id,{action:e.target.value || "unassigned",toolIds:[],compositionId:undefined,detail:e.target.value?"Show chosen background":"Unassigned dashboard button"})}><option value="">No background change</option>{project.assets.filter(a=>isImage(a)||isVideo(a)).map((asset,i)=><option key={(asset.storageKey||asset.name)+i} value={"background.show."+(asset.storageKey||asset.name)}>{asset.name}</option>)}</select></label><label>Button type<select value={control.buttonMode||"single"} onChange={e=>updateControl(control.id,{buttonMode:e.target.value as "single"|"chain"})}><option value="single">Single Action</option><option value="chain">Multi-Link Chain Command</option></select></label><div className="tool-config-list"><small>PRIMARY TOOLS · {(control.toolIds||[]).length}/2</small>{(control.toolIds||[]).map(id=>{const tool=(project.gameTools||[]).find(t=>t.id===id);return tool?<div className="tool-config" key={id}><b>{tool.name}</b><button className="danger-btn" onClick={()=>updateControl(control.id,{toolIds:(control.toolIds||[]).filter(x=>x!==id),action:control.action===`tool.${id}`?"":control.action})}>Remove</button></div>:null})}</div>{control.buttonMode==="chain"&&<div className="tool-config-list"><strong>CHAIN SUPPORTING ACTIONS</strong><small>Add media/effects to this button. Steps run in order. Each timed delay is measured after the previous step.</small><div className="trivia-actions">{project.assets.filter(a=>a.inProject).map((asset,i)=><button className="outline-btn" key={(asset.storageKey||asset.name)+i} onClick={()=>addChainStep(control.id,"asset",asset.storageKey||asset.name,asset.name)}>＋ {asset.name}</button>)}{(project.compositions||[]).filter(x=>x.inProject).map(comp=><button className="outline-btn" key={comp.id} onClick={()=>addChainStep(control.id,"composition",comp.id,comp.name)}>＋ {comp.name}</button>)}</div>{(control.chain||[]).map((step,index)=><div className="tool-config" key={step.id}><b>{index+1}. {step.label}</b><label>Timing<select value={step.timing.mode} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{...s.timing,mode:e.target.value as "immediate"|"delay"}}:s)})}><option value="immediate">Immediately</option><option value="delay">Timed delay</option></select></label>{step.timing.mode==="delay"&&<label>Seconds<input type="number" min="0" step=".1" value={step.timing.seconds||0} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{mode:"delay",seconds:Math.max(0,+e.target.value||0)}}:s)})}/></label>}<button className="danger-btn" onClick={()=>updateControl(control.id,{chain:(control.chain||[]).filter(s=>s.id!==step.id)})}>Remove</button></div>)}</div>}<button className="build-btn" onClick={()=>trigger(control)}>Test button</button>{control.compositionId&&<><label>Composition<select value={control.compositionId} onChange={e=>updateControl(control.id,{compositionId:e.target.value})}>{(project.compositions||[]).filter(c=>c.inProject).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>{(["x","y","width","height","layer","entranceSeconds","exitSeconds"] as const).map(key=><label key={key}>{key}<input type="number" value={result[key]} min={key==="width"||key==="height"?1:0} max={key==="layer"?100:100} step={key.endsWith("Seconds")?.1:1} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:+e.target.value}})}/></label>)}{(["entrance","exit"] as const).map(key=><label key={key}>{key}<select value={result[key]} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:e.target.value as typeof result[typeof key]}})}>{["none","fade","slide","zoom"].map(option=><option key={option}>{option}</option>)}</select></label>)}<button className="build-btn" onClick={()=>trigger(control)}>Test Trigger</button></>}<button className="danger-btn" onClick={()=>{persist({...project,controls:project.controls.filter(c=>c.id!==control.id)});setSelectedControlId(null)}}>Remove button</button></div>})()}</div></CollapsibleFolder></section>}
-      <aside className="assets-panel" hidden={workflowStep === 0 && workshopStep === 0}>
-        <div className="assets-head">
-          <div>
-            <small>PROJECT</small>
-            <h2>{workshopStep === 2 ? "Scenes & effects" : "Your assets & tools"}</h2>
-          </div>
-          <button type="button" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => fileInputRef.current?.click()}>＋</button>
-        </div>
-      {workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={10 - (primaryWorkshopIntent === "media" ? 1 : 0) - (primaryWorkshopIntent === "tools" ? 1 : 0)} description="All creation options: uploads, media, cards, boards and tools" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools"><strong>CREATE IN WORKSHOP</strong>
-        {primaryWorkshopIntent !== "media" && <button type="button" onClick={() => openWorkshopTool("media",true)}>Create background artwork</button>}
-        <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload background image</button>
-        <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload other assets</button>
-        <button type="button" onClick={() => openWorkshopTool("media")}>Generate media</button>
-        <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
-        <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>
-        {primaryWorkshopIntent !== "tools" && <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button>}<button type="button" onClick={openNewList}>Create list and cards</button>
-        <button type="button" onClick={() => {setSideBySideTesting(false);requestAnimationFrame(()=>document.getElementById("workshop-assets")?.scrollIntoView({behavior:"smooth",block:"start"}));}}>Organize assets &amp; pools</button>
-        <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
-      </div></CollapsibleFolder></div>}
-      {workflowStep === 0 && showBoardGuide && <section hidden={workshopStep !== 1} className="workshop-help" aria-label="Artwork and interactive board guide">
-        <button type="button" className="outline-btn" aria-expanded={showBoardGuide} onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(!showBoardGuide);}}>Combine artwork with an interactive board</button>
-        {showBoardGuide && <div className="workshop-help-grid">
-          <article><h3>1. Choose how your board works</h3><p>Artwork gives your board its look. The interactive board supplies selectable areas and reveal behavior. Both are saved in this project.</p><button type="button" className="outline-btn" onClick={() => openWorkshopTool("boards")}>Choose a board template</button><button type="button" className="outline-btn" onClick={() => void addGameTool("blank-board")}>Create a custom board</button></article>
-          <article><h3>2. Create or upload the artwork</h3><p>Generate a new image, upload your own, or use an image already saved below.</p><button type="button" className="outline-btn" onClick={() => openWorkshopTool("media",true)}>Generate board artwork</button><button type="button" className="outline-btn" onClick={() => {setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload board artwork</button></article>
-          <article><h3>3. Connect artwork to your custom board</h3><p>Choose the custom board, then an image. This saves the image as that board’s background; your other images remain available.</p><label htmlFor="guide-board">Custom board<select id="guide-board" value={guideBoardId} onChange={event => setGuideBoardId(event.target.value)}><option value="">Choose a custom board</option>{(project.gameTools || []).filter(tool => tool.type === "blank-board").map(tool => <option key={tool.id} value={tool.id}>{tool.name}</option>)}</select></label>
-          {!(project.gameTools || []).some(tool => tool.type === "blank-board") && <p>Create a custom board in step 1 to connect your artwork.</p>}
-          {project.assets.filter(isImage).length === 0 && <p>Create or upload an image in step 2 to continue.</p>}
-          {project.assets.filter(isImage).map((asset,index) => <button key={(asset.storageKey || asset.name)+index} type="button" className="outline-btn" disabled={!guideBoardId} onClick={() => {const assetKey=asset.storageKey || asset.name;persist({...project,gameTools:(project.gameTools || []).map(tool => tool.id === guideBoardId ? {...tool,config:{...tool.config,backgroundAssetKey:assetKey,backgroundAssetKeys:Array.from(new Set([...(Array.isArray(tool.config?.backgroundAssetKeys) ? tool.config.backgroundAssetKeys : []),assetKey]))}} : tool),updatedAt:"just now"});setAssetStatus("Board artwork connected and saved. Use Build Space to position the board and wire its controls.");}}>Use {asset.name} as board artwork{(project.gameTools || []).find(tool => tool.id === guideBoardId)?.config?.backgroundAssetKey === (asset.storageKey || asset.name) ? " ✓" : ""}</button>)}</article>
-          <article><h3>4. Assemble and test</h3><p>In Build Space, add the board to the overlay, position its interactive areas, and connect host controls. Preview the artwork and behavior together before publishing.</p><button type="button" className="build-btn" onClick={() => chooseWorkflowStep(1)}>Continue to Build Space</button></article>
-        </div>}
-      </section>}
-        <div className="detail-block" id="workshop-assets" hidden={workflowStep === 0 && workshopStep !== 1}>
-          <h3>Media library</h3>
-          <p className="asset-library-help">Open a media folder to find your assets. Select an item to edit, place it on the overlay, or add it to a game pool.</p>
-          <CollapsibleFolder title="Asset pools" count={(project.assetPools || []).length} description="Named groups used by your game controls" storageKey={`${project.id}:pools`} keepMounted><AssetPoolManager pools={project.assetPools || []} assets={project.assets} onChange={saveAssetPools} saveStatus={saveStatus} /></CollapsibleFolder>
-          <div className="workshop-assets-toolbar">
-            <label className="workshop-assets-search">Find an asset<input type="search" value={assetSearch} onChange={event => setAssetSearch(event.target.value)} placeholder="Search by name" /></label>
-            <label className="workshop-assets-filter">Show<select value={assetKindFilter} onChange={event => setAssetKindFilter(event.target.value as typeof assetKindFilter)}><option value="all">All media</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="other">Other files</option></select></label>
-          </div>
-          {visibleAssets.length > 0 ? <AssetFolders
-            assets={visibleAssets} scope={`workshop:${project.id}`} selectedAssetKey={selectedAssetKey}
-            searchKey={assetSearch.trim() || (assetKindFilter !== "all" ? `filter:${assetKindFilter}` : "")}
-            renderAsset={asset => {
-              const key=asset.storageKey||asset.name,kind=assetCategory(asset),selected=key===selectedAssetKey;
-              return <button type="button" key={key} className={`workshop-asset-tile${selected?" selected":""}`} aria-pressed={selected} aria-label={`Select ${asset.name}, ${kind}`} onClick={()=>setSelectedAssetKey(key)}>
-                <AssetThumbnail key={asset.url||key} asset={asset} kind={kind}/>
-                <span className="workshop-asset-name">{asset.name}</span><small>{kind==="audio"?"Audio":kind==="other"?asset.type:kind[0].toUpperCase()+kind.slice(1)}</small>
-              </button>;
-            }}
-          /> : <p className="empty-note">{project.assets.length===0?"Your saved assets will appear here. Create or upload something to get started.":"No assets match that search. Try a different name or media type."}</p>}
-          {selectedAsset && <AssetDetailsDialog key={selectedAsset.storageKey||selectedAsset.name} label={`Actions for ${selectedAsset.name}`} onClose={()=>setSelectedAssetKey(null)}><section className="asset-detail-panel">
-            <header><AssetThumbnail key={selectedAsset.url||selectedAsset.name} asset={selectedAsset} kind={assetCategory(selectedAsset)}/><div><h3>{selectedAsset.name}</h3><p>{selectedAsset.type} · {selectedAsset.inProject?"On the overlay":"In your library"}</p></div><button type="button" className="asset-detail-close" aria-label="Close asset details" onClick={()=>setSelectedAssetKey(null)}>×</button></header>
-            <AssetPoolAssignment key={selectedAsset.storageKey||selectedAsset.name} asset={selectedAsset} pools={project.assetPools||[]} onChange={saveAssetPools}/>
-            <p role="status">{saveStatus}</p>
-            <div className="asset-detail-actions">
-              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<button type="button" className="build-btn" onClick={()=>{setSelectedAssetKey(null);setEditingAssetIndex(selectedAssetIndex);}}>Edit {isImage(selectedAsset)?"image":"video"}</button>}
-              {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"background");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"layer");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
-              {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
-              {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);setSelectedAssetKey(null);}}>Position and size on overlay</button>}
-            </div>
-            {(isVideo(selectedAsset)||isAudio(selectedAsset))&&<details className="asset-playback-options"><summary>Playback options</summary><label>Repeat this media<input type="checkbox" checked={selectedAsset.edits?.loop??isVideo(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,loop:event.target.checked}}:asset)})}/></label><label>Play sound<input type="checkbox" checked={selectedAsset.edits?.sound??isAudio(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,sound:event.target.checked}}:asset)})}/></label><label>Volume <span>{selectedAsset.edits?.volume??80}%</span><input type="range" min="0" max="100" value={selectedAsset.edits?.volume??80} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,volume:+event.target.value}}:asset)})}/></label></details>}
-            {(isImage(selectedAsset)||isVideo(selectedAsset))&&<details className="asset-more-options"><summary>Other ways to use this</summary><BackgroundDestination project={project} asset={selectedAsset} onChange={persist}/>{(project.gameTools||[]).some(tool=>tool.type==="blank-board"&&tool.enabled)&&<button type="button" className="outline-btn" onClick={()=>useImageAsBlankBoardBackground(selectedAssetIndex)}>Use as board background</button>}</details>}
-            <button type="button" className="danger-btn asset-detail-delete" onClick={()=>handleDeleteAsset(selectedAsset)}>Delete asset</button>
-          </section></AssetDetailsDialog>}
-        </div>
-        <CollapsibleFolder title="Published links & sharing" storageKey={`${project.id}:sharing`} keepMounted><div className="detail-block">
-          <span>PROJECT URL</span>
-          <code>{projectUrl}</code>
-          <Link href={privateDashboardUrl}>Open project ↗</Link>
-          <button className="outline-btn" onClick={copyDashboardLink}>Copy Dashboard Link for Phone</button>
-          {dashboardLinkStatus && <small role="status">{dashboardLinkStatus}</small>}
-        </div></CollapsibleFolder>
-        <div id="workshop-scenes" hidden={workflowStep === 0 && workshopStep !== 2}><CollapsibleFolder title="Scenes & effects" count={(project.compositions || []).length} description="Open Asset Composer or edit a saved scene" storageKey={`${project.id}:scenes`} expandKey={workshopStep === 2 ? "scenes-section" : ""} keepMounted><div className="detail-block asset-composer-launch">
-          <span>ASSET COMPOSER</span>
-          <p className="empty-note">Combine video, voice, music, SFX, text and effects on a synchronized multi-track timeline.</p>
-          {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="outline-btn build-only" onClick={()=>toggleComposition(comp.id)}>{comp.inProject?"✓ In Preview":"+ Add to Preview"}</button><button className="outline-btn" onClick={()=>{setEditingComposition(comp);setShowAssetComposer(true)}}>Edit</button><button className="build-btn build-only" disabled={!comp.inProject} onClick={()=>addCompositionControl(comp)}>Assign button</button><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
-        </div></CollapsibleFolder></div>
-        <div id="workshop-tools" hidden={workflowStep === 0 && workshopStep !== 1}><CollapsibleFolder title="Game tools & cards" count={project.gameTools.filter(tool => tool.type !== "youtube").length} description="Cards, boards, questions and customized tools" storageKey={`${project.id}:tools`} keepMounted><div className="detail-block">
-          <span>WORKSPACE CREATIONS</span>
-          <p className="empty-note">Choose templates from Creation Tools above. Edit appearance and settings below, or customize them in chat, then add finished boards to the overlay and finished tools to the dashboard toolbox.</p>
-          <div className="tool-config-list">
-            <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={openNewList}>Create list and cards</button><button type="button" onClick={()=>createWorkshopCard("question")}>Create question and answer cards</button><button type="button" onClick={()=>createWorkshopCard("blank")}>Create blank card</button></div>{(project.gameTools || []).filter(tool => tool.type !== "youtube").map(tool => (
-              <CollapsibleFolder key={tool.id} title={tool.name} description={tool.type.replace(/-/g," ")} storageKey={`${project.id}:tool:${tool.id}`} keepMounted><div className="tool-config">
-                <div>
-                  <b>{tool.name}</b>
-                  <em>{tool.type}</em>{(tool.type==="blank-board"||tool.type==="trivia-board")&&<button type="button" onClick={()=>setBoardDesignerId(tool.id)}>Open board designer</button>}
-                  {tool.type==="trivia-list" && <button type="button" onClick={()=>{setTriviaListQuestions(Array.isArray(tool.config.questions)?tool.config.questions:[]);setTriviaListCount(Number(tool.config.requestedCount)||10);setTriviaListCategories(Array.isArray(tool.config.suggestedCategories)?tool.config.suggestedCategories.join(", "):"");setShowTriviaListGenerator(true);promptRef.current?.scrollIntoView({behavior:"smooth",block:"center"});}}>Review saved questions</button>}
-                  {tool.type==="card-list"?<><p>{savedListEntries(tool).length} pool entries · {Array.isArray(tool.config.cards)?tool.config.cards.length:0} cards</p><button type="button" onClick={()=>setListEditorId(tool.id)}>Open pool and card designer</button></>: (tool.type==="question-card"||tool.type==="blank-card")?<button type="button" onClick={()=>setNewCardEditorId(tool.id)}>Customize cards</button>:<GameToolEditor key={tool.id} tool={tool} project={project} assets={project.assets} onSave={next=>persist({...project,gameTools:(project.gameTools||[]).map(x=>x.id===next.id?next:x),updatedAt:"just now"})}/>}
-                </div>
-                <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small>{(tool.type === "trivia-board" || tool.type === "blank-board") ? <button className="build-btn build-only" disabled={tool.inOverlayBuild} onClick={()=>pushWorkspaceCreation(tool)}>{tool.inOverlayBuild ? "Added to Overlay Build" : "Add to Overlay Build"}</button> : <small>{tool.type === "youtube" ? "Connected to dashboard and overlay · test in the preview before publishing" : "Saved in Toolbox · connect to a button in Build Space when needed"}</small>}
-              </div></CollapsibleFolder>
-            ))}
-          </div>
-          {(project.gameTools || []).some(t => t.name === "Trivia Board") && (
-            <div className="trivia-dashboard">
-              <strong>TRIVIA BOARD</strong>
-              <small>Choose a question to fill the live overlay. Every question is source-backed; regenerate topics or questions whenever you want.</small>
-              <div className="trivia-actions">
-                <button className="outline-btn" disabled={triviaBusy} onClick={() => regenerateTrivia("generate")}>↻ Regenerate sourced board</button>
-                <button className="outline-btn" disabled={triviaBusy} onClick={() => regenerateTrivia("source")}>↻ Refresh sources</button>
-              </div>
-              <div className="trivia-topic-editor">
-                <small>TOPICS</small>
-                {(triviaConfig || TRIVIA_CONFIG).categories.map((cat: any, i: number) => (
-                  <input
-                    key={i}
-                    value={triviaTopics[i] ?? cat.name}
-                    onChange={e => setTriviaTopics(v => v.map((x, idx) => idx === i ? e.target.value : x))}
-                    placeholder={`Category ${i + 1}`}
-                  />
-                ))}
-              </div>
-              <div className="trivia-grid">
-                {(triviaConfig || TRIVIA_CONFIG).categories.map((cat: any, ci: number) => (
-                  <div className="trivia-column" key={cat.name}>
-                    <div className="trivia-column-head">
-                      <b>{cat.name}</b>
-                      <button onClick={() => regenerateTrivia("generate", cat.name)} disabled={triviaBusy}>↻</button>
-                    </div>
-                    {cat.questions.map((q: any, qi: number) => (
-                      <div className="trivia-cell" key={q.value}>
-                        <button
-                          className={q.used ? "trivia-used" : ""}
-                          disabled={q.used}
-                          onClick={() => triggerTriviaQuestion(ci, qi)}
-                        >
-                          {q.used ? "USED" : `${q.value}`}
-                        </button>
-                        {activeTrivia === `${ci}:${qi}` && (
-                          <button className="trivia-reveal-btn" onClick={() => revealTriviaAnswer(ci, qi)}>
-                            Reveal
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-              <button className="outline-btn" onClick={closeTriviaQuestion}>Close current clue</button>
-            </div>
-          )}
-        </div></CollapsibleFolder></div>
-        <CollapsibleFolder title="Wheel settings" storageKey={`${project.id}:wheel`} keepMounted><div className="detail-block">
-          <span>WHEEL SETTINGS</span>
-          {project.wheel?.enabled ? (
-            <>
-              <input className="wheel-input" value={project.wheel.title} onChange={e => updateWheelField("title", e.target.value)} placeholder="Wheel title" />
-              <input className="wheel-input" value={project.wheel.segments.join(", ")} onChange={e => updateWheelField("segments", e.target.value)} placeholder="Prize, Challenge, Bonus" />
-              <button className="outline-btn" onClick={spinWheel}>↻ Trigger wheel</button>
-            </>
-          ) : (
-            <p className="empty-note">Add the Game Wheel from the library when you need it.</p>
-          )}
-        </div></CollapsibleFolder>
-        <div className="detail-block">
-          <span>NEW PROJECT</span>
-          <button className="outline-btn" onClick={beginBlank}>＋ Start fresh</button>
-        </div>
-      </aside>
+      <WorkshopAssetsPanel
+        workflowStep={workflowStep}
+        workshopStep={workshopStep}
+        project={project}
+        persist={persist}
+        assetSearch={assetSearch}
+        assetKindFilter={assetKindFilter}
+        visibleAssets={visibleAssets}
+        selectedAssetKey={selectedAssetKey}
+        setSelectedAssetKey={setSelectedAssetKey}
+        selectedAsset={selectedAsset}
+        showBoardGuide={showBoardGuide}
+        triviaBusy={triviaBusy}
+        triviaTopics={triviaTopics}
+        guideBoardId={guideBoardId}
+        activeTrivia={activeTrivia}
+        primaryWorkshopIntent={primaryWorkshopIntent}
+        saveStatus={saveStatus}
+        dashboardLinkStatus={dashboardLinkStatus}
+        privateDashboardUrl={privateDashboardUrl}
+        projectUrl={projectUrl}
+        chooseWorkflowStep={chooseWorkflowStep}
+        openNewList={openNewList}
+        copyDashboardLink={copyDashboardLink}
+        closeTriviaQuestion={closeTriviaQuestion}
+        placeSceneImage={placeSceneImage}
+        saveAssetPools={saveAssetPools}
+        beginBlank={beginBlank}
+        spinWheel={spinWheel}
+        setBackgroundIntent={setBackgroundIntent}
+        setEditingComposition={setEditingComposition}
+        setPositionAssetKey={setPositionAssetKey}
+        setSideBySideTesting={setSideBySideTesting}
+        setTriviaListQuestions={setTriviaListQuestions}
+        setListEditorId={setListEditorId}
+        setNewCardEditorId={setNewCardEditorId}
+        fileInputRef={fileInputRef}
+        openWorkshopTool={openWorkshopTool}
+        setShowBoardGuide={setShowBoardGuide}
+        setShowAssetComposer={setShowAssetComposer}
+        setAssetKindFilter={setAssetKindFilter}
+        setAssetSearch={setAssetSearch}
+        setAssetStatus={setAssetStatus}
+        setBoardDesignerId={setBoardDesignerId}
+        setEditingAssetIndex={setEditingAssetIndex}
+        setGuideBoardId={setGuideBoardId}
+        setShowTriviaListGenerator={setShowTriviaListGenerator}
+        setTriviaListCategories={setTriviaListCategories}
+        setTriviaListCount={setTriviaListCount}
+        setTriviaTopics={setTriviaTopics}
+        addGameTool={addGameTool}
+        createWorkshopCard={createWorkshopCard}
+        deleteComposition={deleteComposition}
+        handleDeleteAsset={handleDeleteAsset}
+        pushWorkspaceCreation={pushWorkspaceCreation}
+        regenerateTrivia={regenerateTrivia}
+        revealTriviaAnswer={revealTriviaAnswer}
+        toggleAssetInProject={toggleAssetInProject}
+        toggleComposition={toggleComposition}
+        triggerTriviaQuestion={triggerTriviaQuestion}
+        updateWheelField={updateWheelField}
+        useImageAsBlankBoardBackground={useImageAsBlankBoardBackground}
+        addCompositionControl={addCompositionControl}
+        TRIVIA_CONFIG={TRIVIA_CONFIG}
+        triviaConfig={triviaConfig}
+        selectedAssetIndex={selectedAssetIndex}
+        promptRef={promptRef}
+        BackgroundDestination={BackgroundDestination}
+      />
     </div>
       {workflowStep !== 2 && <details className="workshop-help"><summary>Guide: backgrounds, layers, tools, scenes and buttons</summary><div className="workshop-help-grid">
         <article><h3>Create a background</h3><p>In Workshop, generate or upload your background image. Use Edit / Crop to crop it and change its size, position or appearance. Ask AI about the edit for requested changes. Save it before assembly.</p></article>
