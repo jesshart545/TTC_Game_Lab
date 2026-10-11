@@ -111,6 +111,31 @@ export async function POST(request: Request, context: Context) {
     return NextResponse.json({ok:true,segments});
   }
 
+  // ---- Cliffhanger: price guess from host panel (no controlId, like wheelSlots) ----
+  if(body.cliffGuess){
+    const toolId=String(body.cliffGuess.toolId||'');
+    const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='cliffhanger'&&t.enabled&&t.inToolbox);
+    const guess=Math.max(0,Math.round(Number(body.cliffGuess.guess)));
+    if(!tool||!Number.isFinite(guess))return NextResponse.json({error:"Enter a valid price guess."},{status:400});
+    const items=(Array.isArray(tool.config.items)?tool.config.items:[]).map((c:any)=>({label:String(c?.label??''),price:Math.max(0,Math.round(Number(c?.price)||0))})).filter(c=>c.label);
+    if(!items.length)return NextResponse.json({error:"Add items with prices to Cliffhanger first."},{status:400});
+    const stepsToFall=Math.max(5,Math.min(100,Math.floor(Number(tool.config.stepsToFall)||25)));
+    const dollarsPerStep=Math.max(1,Number(tool.config.dollarsPerStep)||1);
+    const last=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${tool.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
+    let prev:any={};try{prev=JSON.parse(String(last[0]?.payload?.outcomes?.[tool.id]?.result||'{}'));}catch{}
+    const itemIndex=Number.isInteger(prev.itemIndex)&&prev.itemIndex>=0?prev.itemIndex:0;
+    const item=items[itemIndex%items.length];
+    const position=Number(prev.position)||0;
+    const diff=Math.abs(guess-item.price);
+    const steps=Math.round(diff/dollarsPerStep);
+    const newPosition=position+steps;
+    const fell=newPosition>=stepsToFall;
+    const outcome={phase:'guess',item,itemIndex,guess,price:item.price,diff,steps,position:newPosition,fell,stepsToFall,dollarsPerStep};
+    const payload=JSON.stringify({outcomes:{[tool.id]:{result:JSON.stringify(outcome)}}});
+    const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${tool.id},'control',${payload}::jsonb) RETURNING id`;
+    return NextResponse.json({ok:true,id:Number(rows[0].id),outcome});
+  }
+
   if (body.youtube) {
     try {
       const action = body.youtube.action;
@@ -201,6 +226,61 @@ export async function POST(request: Request, context: Context) {
       SELECT ${live.project.id},${control.id},'control',jsonb_build_object('outcomes',jsonb_build_object(${toolId}::text,jsonb_build_object('phase',CASE phase WHEN 1 THEN 'show' WHEN 2 THEN 'flip' ELSE 'hide' END,'result',result))) FROM next_coin RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id)});
   }
+  // ---- Higher or Lower ----
+  if(control.action.startsWith('hl.')){
+    const rest=control.action.slice(3),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
+    const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='higher-lower'&&t.enabled);
+    if(!tool)return NextResponse.json({error:"Higher or Lower tool not found."},{status:400});
+    const cards=(Array.isArray(tool.config.cards)?tool.config.cards:[]).map((c:any)=>({label:String(c?.label??''),value:Number(c?.value)||0})).filter(c=>c.label);
+    if(cards.length<2)return NextResponse.json({error:"Add at least 2 cards to Higher or Lower first."},{status:400});
+    let outcome:any;
+    if(op==='draw'){
+      outcome={phase:'draw',card:cards[randomInt(cards.length)]};
+    }else if(op==='higher'||op==='lower'){
+      const last=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${tool.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
+      let prev:any=null;
+      try{prev=JSON.parse(String(last[0]?.payload?.outcomes?.[tool.id]?.result||'')).card||null;}catch{}
+      if(!prev||typeof prev.value!=='number')return NextResponse.json({error:"Draw a card first."},{status:400});
+      const next=cards[randomInt(cards.length)];
+      const correct=op==='higher'?next.value>prev.value:next.value<prev.value;
+      outcome={phase:'reveal',prev,next,guess:op,correct};
+    }else return NextResponse.json({error:"Unknown Higher or Lower action."},{status:400});
+    const payload=JSON.stringify({outcomes:{[tool.id]:{result:JSON.stringify(outcome)}}});
+    const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
+    return NextResponse.json({ok:true,id:Number(rows[0].id)});
+  }
+  // ---- Cliffhanger: next item / reset ----
+  if(control.action.startsWith('cliff.')){
+    const rest=control.action.slice(6),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
+    const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='cliffhanger'&&t.enabled);
+    if(!tool)return NextResponse.json({error:"Cliffhanger tool not found."},{status:400});
+    const items=(Array.isArray(tool.config.items)?tool.config.items:[]).map((c:any)=>({label:String(c?.label??''),price:Math.max(0,Math.round(Number(c?.price)||0))})).filter(c=>c.label);
+    if(!items.length)return NextResponse.json({error:"Add items with prices to Cliffhanger first."},{status:400});
+    const stepsToFall=Math.max(5,Math.min(100,Math.floor(Number(tool.config.stepsToFall)||25)));
+    const dollarsPerStep=Math.max(1,Number(tool.config.dollarsPerStep)||1);
+    const last=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${tool.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
+    let prev:any={};try{prev=JSON.parse(String(last[0]?.payload?.outcomes?.[tool.id]?.result||'{}'));}catch{}
+    let outcome:any;
+    if(op==='next'){
+      const itemIndex=((Number(prev.itemIndex)??-1)+1)%items.length;
+      outcome={phase:'item',item:items[itemIndex],itemIndex,position:Number(prev.position)||0,stepsToFall,dollarsPerStep};
+    }else if(op==='reset'){
+      outcome={phase:'reset',itemIndex:-1,position:0,stepsToFall,dollarsPerStep};
+    }else return NextResponse.json({error:"Unknown Cliffhanger action."},{status:400});
+    const payload=JSON.stringify({outcomes:{[tool.id]:{result:JSON.stringify(outcome)}}});
+    const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
+    return NextResponse.json({ok:true,id:Number(rows[0].id)});
+  }
+  // ---- Prize wheel: next player resets the total ----
+  if(control.action.startsWith('prizewheel.')){
+    const rest=control.action.slice(11),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
+    const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='prize-wheel'&&t.enabled);
+    if(!tool||op!=='nextplayer')return NextResponse.json({error:"Big Wheel tool not found."},{status:400});
+    const outcome={phase:'nextplayer',total:0};
+    const payload=JSON.stringify({outcomes:{[tool.id]:{result:JSON.stringify(outcome)}}});
+    const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
+    return NextResponse.json({ok:true,id:Number(rows[0].id)});
+  }
   if(control.action==='sequence')return NextResponse.json({error:"Run this sequence from the host dashboard."},{status:400});
   const outcomes:Record<string,{result:string;segments?:string[]}>= {};
   for(const tool of live.project.gameTools.filter(t=>t.enabled&&control.toolIds?.includes(t.id))){
@@ -215,6 +295,21 @@ export async function POST(request: Request, context: Context) {
     }
     if(tool.type==="coin-toss")outcomes[tool.id]={result:coinOutcome(randomInt(2))};
     if(tool.type==="dice")outcomes[tool.id]={result:String(1+randomInt(Math.min(100,Math.max(2,Math.floor(Number(tool.config.sides)||6)))))};
+    if(tool.type==="plinko"){
+      const slots=(Array.isArray(tool.config.slots)?tool.config.slots:[]).map(String).filter(Boolean);
+      if(!slots.length)return NextResponse.json({error:"Add prize slots to the Plinko board first."},{status:400});
+      outcomes[tool.id]={result:JSON.stringify({winner:randomInt(slots.length),slots})};
+    }
+    if(tool.type==="prize-wheel"){
+      const values=(Array.isArray(tool.config.values)?tool.config.values:[]).map(String).filter(Boolean);
+      if(!values.length)return NextResponse.json({error:"Add values to the Big Wheel first."},{status:400});
+      const winner=randomInt(values.length);
+      const cents=(label:string)=>{const c=label.match(/(\d+)\s*¢/);if(c)return parseInt(c[1],10);const d=label.match(/\$\s*(\d+(?:\.\d{1,2})?)/);if(d)return Math.round(parseFloat(d[1])*100);const n=label.match(/(\d+(?:\.\d{1,2})?)/);return n?Math.round(parseFloat(n[1])*100):0;};
+      const last=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${tool.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
+      let prevTotal=0;try{prevTotal=Number(JSON.parse(String(last[0]?.payload?.outcomes?.[tool.id]?.result||'{}')).total)||0;}catch{}
+      const total=prevTotal+cents(values[winner]);
+      outcomes[tool.id]={result:JSON.stringify({winner,values,total,busted:total>100})};
+    }
   }
   const payload=JSON.stringify({outcomes});
   const rows = await live.db`INSERT INTO live_events (project_id, control_id, event_type,payload) VALUES (${live.project.id}, ${control.id}, ${"control"},${payload}::jsonb) RETURNING id`;
