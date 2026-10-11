@@ -224,6 +224,7 @@ export default function ProjectWorkspace() {
   const [musicLengthMode, setMusicLengthMode] = useState("short");
   const [musicDuration, setMusicDuration] = useState(25);
   const [musicLyrics, setMusicLyrics] = useState("");
+  const [musicInstrumental, setMusicInstrumental] = useState(false);
   const [videoLength, setVideoLength] = useState("auto");
   const [imageShape,setImageShape] = useState("16:9");
   const [generatorType, setGeneratorType] = useState<GeneratorType>("image");
@@ -600,7 +601,7 @@ export default function ProjectWorkspace() {
     }
   }
 
-  async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; aspectRatio?: string; pendingVideo?: NonNullable<Project["pendingVideos"]>[number] }) {
+  async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; pendingVideo?: NonNullable<Project["pendingVideos"]>[number] }) {
     if (!project || assetBusy) return;
     const origin = project.id;
     const checkGenerationScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin) throw new Error("The generation finished after you left its project. Return to that project; do not submit duplicate generations."); };
@@ -629,7 +630,7 @@ export default function ProjectWorkspace() {
         signal: AbortSignal.timeout(type === "video" ? 60000 : 180000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(type === "image" ? { aspectRatio: options?.aspectRatio || "16:9" } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(type === "video" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "music" ? { durationSeconds: options?.durationSeconds, lyrics: options?.lyrics } : {}) }),
+        body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(type === "image" ? { aspectRatio: options?.aspectRatio || "16:9" } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(type === "video" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "music" ? { durationSeconds: options?.durationSeconds, lyrics: options?.lyrics, instrumental: options?.instrumental } : {}) }),
       });
       data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
@@ -641,7 +642,7 @@ export default function ProjectWorkspace() {
         let completed = false;
         for (let attempt = 0; attempt < 300; attempt += 1) {
           await new Promise(resolve => setTimeout(resolve, 3000));
-          const statusResponse = await fetch(`/api/generate-asset/music-status?id=${encodeURIComponent(String(data.requestId))}&statusUrl=${encodeURIComponent(data.statusUrl || "")}&responseUrl=${encodeURIComponent(data.responseUrl || "")}`, { cache: "no-store" });
+          const statusResponse = await fetch(`/api/generate-asset/music-status?id=${encodeURIComponent(String(data.requestId))}&statusUrl=${encodeURIComponent(data.statusUrl || "")}&responseUrl=${encodeURIComponent(data.responseUrl || "")}&model=${encodeURIComponent(data.model || "")}`, { cache: "no-store" });
           const statusData = await statusResponse.json().catch(() => ({}));
           if (!statusResponse.ok) throw new Error(typeof statusData.error === "string" ? statusData.error : "Unable to check music generation status.");
           if (statusData.status === "failed") throw new Error(statusData.error || "Music generation failed.");
@@ -1275,6 +1276,8 @@ export default function ProjectWorkspace() {
         setMusicDuration={setMusicDuration}
         musicLyrics={musicLyrics}
         setMusicLyrics={setMusicLyrics}
+        musicInstrumental={musicInstrumental}
+        setMusicInstrumental={setMusicInstrumental}
         generateAsset={generateAsset}
         assetStatus={assetStatus}
         persist={persist}
