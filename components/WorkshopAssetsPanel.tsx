@@ -53,6 +53,8 @@ export type WorkshopAssetsPanelProps = {
   setNewCardEditorId: Dispatch<SetStateAction<string>>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   openWorkshopTool: (tool: "media" | "trivia" | "boards" | "tools", background?: boolean) => void;
+  ccssEntitled: boolean;
+  openCityCrimeScene: () => void;
   setShowBoardGuide: Dispatch<SetStateAction<boolean>>;
   setShowAssetComposer: Dispatch<SetStateAction<boolean>>;
   setAssetKindFilter: Dispatch<SetStateAction<"all" | "image" | "video" | "audio" | "other">>;
@@ -95,7 +97,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     closeTriviaQuestion, placeSceneImage, saveAssetPools, beginBlank, spinWheel,
     setBackgroundIntent, setEditingComposition, setPositionAssetKey,
     setSideBySideTesting, setTriviaListQuestions, setListEditorId, setNewCardEditorId,
-    fileInputRef, openWorkshopTool, setShowBoardGuide, setShowAssetComposer,
+    fileInputRef, openWorkshopTool, ccssEntitled, openCityCrimeScene, setShowBoardGuide, setShowAssetComposer,
     setAssetKindFilter, setAssetSearch, setAssetStatus, setBoardDesignerId,
     setEditingAssetIndex, setGuideBoardId, setShowTriviaListGenerator,
     setTriviaListCategories, setTriviaListCount, setTriviaTopics, addGameTool,
@@ -123,6 +125,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
   <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>
   {primaryWorkshopIntent !== "tools" && <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button>}<button type="button" onClick={openNewList}>Create list and cards</button>
+  {ccssEntitled && <button type="button" onClick={openCityCrimeScene}>City Crime Scene</button>}
   <button type="button" onClick={() => {setSideBySideTesting(false);requestAnimationFrame(()=>document.getElementById("workshop-assets")?.scrollIntoView({behavior:"smooth",block:"start"}));}}>Organize assets &amp; pools</button>
   <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
 </div></CollapsibleFolder></div>}
