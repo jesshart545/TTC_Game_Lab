@@ -45,7 +45,9 @@ export async function POST(request: Request) {
   // City Crime Scene is restricted to select accounts.
   const aiUser = await requireCreator().catch(() => null);
   const ccssEntitled = canUseCityCrimeScene(aiUser?.email);
-  const draftSystem = ccssEntitled ? DRAFT_SYSTEM : DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool. If the user asks for it, explain briefly that it is not available for their account.`;
+  const draftSystem = ccssEntitled
+    ? DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is an improv whodunnit mystery game builder available to this user. When they mention mysteries, crimes, detective games, or whodunnits — or ask what you can build — proactively offer to create a City Crime Scene game. Create it with changes.newTools [{type:"city-crime-scene",name,config:{},connect:true}]; the dedicated editor opens for full customization.`
+    : DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool. If the user asks for it, explain briefly that it is not available for their account.`;
   const draftContext = draftEdit ? {
     request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
     selectedImageKey: body.selectedImageKey, selectedAssetKey:body.selectedAssetKey, workspaceStage: body.workspaceStage,
