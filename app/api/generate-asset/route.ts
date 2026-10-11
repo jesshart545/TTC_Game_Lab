@@ -218,7 +218,7 @@ export async function POST(request: Request) {
     if (lyrics.split(/\r?\n/).some(line => line.length > 200)) return jsonError("Keep each lyric line to 200 characters or fewer.", 400);
     const model = duration !== null ? "minimax/music-3" : "fal-ai/minimax-music/v2.6";
     const stylePrompt = prompt.length >= 10 ? prompt.slice(0, 2000) : `${prompt} cinematic music`;
-    const instrumental = /instrumental|no vocals?|without vocals?|no singing|no voice/i.test(prompt);
+    const instrumental = body?.instrumental === true || /instrumental|no vocals?|without vocals?|no singing|no voice/i.test(prompt);
 
     if (duration !== null && !instrumental && !lyrics) return jsonError("Paste the lyrics for your short song into the Lyrics field, or request instrumental music.", 400);
 
