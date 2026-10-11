@@ -72,3 +72,8 @@
   .workspace-page .workflow-stage-0[data-workshop-section="1"]>.assets-panel,.workspace-page .workflow-stage-0[data-workshop-section="2"]>.assets-panel{order:-1}
   .workspace-page .workflow-layout.workflow-stage-1.general-build-space>.chat-panel.build-space-chat{top:100px;max-height:calc(100dvh - 116px)}
 }
+.ccss-builder{max-width:960px;margin:0 auto;padding:28px 22px 60px}
+.ccss-builder-header{display:flex;gap:16px;align-items:flex-start;margin-bottom:20px}
+.ccss-builder-header h1{font-size:22px;margin:6px 0 4px}
+.ccss-builder-header p{font-size:12px;color:#8d95a4;margin:0;max-width:640px}
+.ccss-builder section{background:#0c0e13;border:1px solid #20242d;border-radius:12px;padding:18px;margin-bottom:14px}
