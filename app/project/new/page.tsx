@@ -22,7 +22,6 @@ export default function NewProject() {
       const template = templateId ? getGameTemplate(templateId) : undefined;
       const project = createProject("");
       if (template) {
-        // Start from a prebuilt game template.
         const draft = template.buildDraft();
         project.name = draft.name;
         project.description = draft.description;
