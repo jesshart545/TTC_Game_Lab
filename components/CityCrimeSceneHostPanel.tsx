@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { GameTool } from "../lib/project";
 import { readCityCrimeSceneConfig, type CityCrimeSceneConfig } from "../lib/city-crime-scene";
 
-type ActionKind = "briefing" | "investigate" | "revealClue" | "introduceSuspect" | "evidence" | "arrest" | "courtroom" | "unlockWitness" | "hide";
+type ActionKind = "briefing" | "investigate" | "revealClue" | "introduceSuspect" | "evidence" | "arrest" | "verdict" | "courtroom" | "unlockWitness" | "hide";
 
 function useTimer() {
   const [seconds, setSeconds] = useState(120);
@@ -61,7 +61,7 @@ export default function CityCrimeSceneHostPanel({ tool, slug, hostKey }: { tool:
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Action failed.");
-      const labels: Record<string, string> = { briefing: "Case briefing is live.", investigate: "Location is live.", revealClue: "Clue revealed.", introduceSuspect: "Suspect introduced.", evidence: "Evidence board is live.", arrest: "Arrest made — dramatic moment live.", courtroom: "Courtroom phase is live.", unlockWitness: "Witness unlocked.", hide: "Overlay cleared." };
+      const labels: Record<string, string> = { briefing: "Case briefing is live.", investigate: "Location is live.", revealClue: "Clue revealed.", introduceSuspect: "Suspect introduced.", evidence: "Evidence board is live.", arrest: "Arrest made — dramatic moment live.", verdict: "Verdict revealed to the audience.", courtroom: "Courtroom phase is live.", unlockWitness: "Witness unlocked.", hide: "Overlay cleared." };
       setStatus(labels[kind] || "Sent.");
     } catch (e) { setStatus(e instanceof Error ? e.message : "Action failed."); }
     finally { setBusy(false); }
@@ -99,15 +99,21 @@ export default function CityCrimeSceneHostPanel({ tool, slug, hostKey }: { tool:
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>{cfg.suspects.map(s => <button key={s.id} type="button" disabled={busy} onClick={() => void act("introduceSuspect", { suspectId: s.id })}>Introduce {s.name}</button>)}</div>
       <h4>Helper witnesses (detective sends a gift to unlock)</h4>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>{cfg.helperWitnesses.map(w => <button key={w.id} type="button" disabled={busy} onClick={() => void act("unlockWitness", { witnessId: w.id })} title={w.info}>Unlock {w.name} ({w.giftToUnlock})</button>)}{!cfg.helperWitnesses.length && <span>No helper witnesses in this case.</span>}</div>
-      <h4>Arrest</h4>
+      <h4>Arrest — the detective&apos;s accusation</h4>
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        <select value={arrestId} onChange={e => setArrestId(e.target.value)} aria-label="Suspect to arrest"><option value="">Choose suspect…</option>{cfg.suspects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+        <select value={arrestId} onChange={e => setArrestId(e.target.value)} aria-label="Suspect the detective accuses"><option value="">Choose suspect…</option>{cfg.suspects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <button type="button" disabled={busy || !arrestId} onClick={() => void act("arrest", { suspectId: arrestId })}>Make the arrest</button>
-        {guilty && arrestId === guilty.id && <strong style={{ color: "#7dff9a" }}>✓ Correct — continue to trial.</strong>}
-        {guilty && arrestId && arrestId !== guilty.id && <strong style={{ color: "#ff9a9a" }}>✗ Wrong suspect — the real culprit walks free (dramatic!).</strong>}
+        {guilty && arrestId === guilty.id && <strong style={{ color: "#7dff9a" }}>✓ Correct — reveal it, then continue to trial.</strong>}
+        {guilty && arrestId && arrestId !== guilty.id && <strong style={{ color: "#ff9a9a" }}>✗ Wrong suspect — no trial; the real culprit walks free (dramatic!).</strong>}
       </div>
-      <h4>Courtroom</h4>
-      <button type="button" disabled={busy} onClick={() => void act("courtroom", { suspectId: arrestId || guilty?.id || "" })}>Start trial phase</button>
+      <h4>Verdict — reveal whether the detective was right</h4>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" disabled={busy || !arrestId} onClick={() => void act("verdict", { suspectId: arrestId })}>Reveal verdict</button>
+        <small>The server judges the accusation — the audience never learns who the real culprit is from a wrong verdict.</small>
+      </div>
+      <h4>Courtroom — only if the accusation was correct</h4>
+      <button type="button" disabled={busy || !(guilty && arrestId === guilty.id)} onClick={() => void act("courtroom", { suspectId: arrestId || guilty?.id || "" })}>Start trial phase</button>
+      {guilty && arrestId && arrestId !== guilty.id && <p><small>Trial is locked — the detective accused the wrong suspect.</small></p>}
       <p role="status">{status}</p>
     </details>
 

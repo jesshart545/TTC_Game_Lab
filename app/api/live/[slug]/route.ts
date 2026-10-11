@@ -8,7 +8,7 @@ import { getDb } from "../../../../lib/db";
 import type { Project, GameTool } from "../../../../lib/project";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { randomUUID, randomInt } from "node:crypto";
-import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay } from "../../../../lib/city-crime-scene";
+import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, accusationVerdict } from "../../../../lib/city-crime-scene";
 import { verifyYoutube } from "../../../../lib/youtube-server";
 import { youtubeId, youtubePosition, safeYoutubePlacement } from "../../../../lib/youtube";
 import type { YouTubeState } from "../../../../lib/youtube";
@@ -74,6 +74,11 @@ function ccssOutcome(tool: GameTool, action: CcssAction, prev: any) {
     if (!s) return { error: "Choose a suspect to arrest." };
     return { kind: "arrest", suspect: { id: s.id, name: s.name, characterBrief: s.characterBrief } };
   }
+  if (kind === "verdict") {
+    const s = cfg.suspects.find(x => x.id === action.suspectId);
+    if (!s) return { error: "Choose a suspect for the verdict." };
+    return { kind: "verdict", suspect: { id: s.id, name: s.name }, correct: !!(action as CcssAction & { correct?: boolean }).correct };
+  }
   if (kind === "courtroom") {
     const defendant = cfg.suspects.find(x => x.id === action.suspectId) || cfg.suspects[0];
     if (!defendant) return { error: "Add suspects to City Crime Scene first." };
@@ -93,6 +98,18 @@ async function ccssAct(db: ReturnType<typeof getDb>, projectId: string, tool: Ga
   const last = await db!`SELECT payload FROM live_events WHERE project_id=${projectId} AND control_id=${tool.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
   let prev: any = {};
   try { prev = JSON.parse(String(last[0]?.payload?.outcomes?.[tool.id]?.result || "{}")); } catch {}
+  if (action.kind === "verdict") {
+    // The detective's accusation is judged server-side against the full draft config
+    // (the published snapshot is sanitized and has no isGuilty). Only correct/wrong
+    // leaves the server — never the guilty party's identity.
+    const rows = await db!`SELECT data FROM projects WHERE id=${projectId} LIMIT 1`;
+    const draft = rows[0]?.data as { gameTools?: Array<{ id?: string; type?: string; config?: Record<string, unknown> }> } | undefined;
+    const draftTool = draft?.gameTools?.find(t => t.id === tool.id && t.type === "city-crime-scene");
+    const full = readCityCrimeSceneConfig((draftTool?.config as Record<string, unknown>) || {});
+    const v = accusationVerdict(full, String(action.suspectId || ""));
+    if ("error" in v) return { error: v.error };
+    (action as CcssAction & { correct?: boolean }).correct = v.correct;
+  }
   const outcome = ccssOutcome(tool, action, prev) as { error?: string };
   if (outcome.error) return { error: outcome.error };
   const payload = JSON.stringify({ outcomes: { [tool.id]: { result: JSON.stringify(outcome) } } });

@@ -214,3 +214,11 @@ export function stripCityCrimeSceneTools<T extends { gameTools?: Array<{ type?: 
   if (kept.length === project.gameTools.length) return project;
   return { ...project, gameTools: kept };
 }
+
+/** Verdict on the detective's accusation. Pure and testable; the live route feeds it the full (draft) config server-side. */
+export function accusationVerdict(config: CityCrimeSceneConfig, suspectId: string): { accusedId: string; accusedName: string; correct: boolean } | { error: string } {
+  const accused = config.suspects.find(s => s.id === suspectId);
+  if (!accused) return { error: "Choose a suspect for the verdict." };
+  const guilty = config.suspects.find(s => s.isGuilty);
+  return { accusedId: accused.id, accusedName: accused.name, correct: !!guilty && accused.id === guilty.id };
+}

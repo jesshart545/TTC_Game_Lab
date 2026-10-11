@@ -10,7 +10,7 @@ import type { GameTool, ProjectAsset } from "../lib/project";
  */
 
 type Outcome = {
-  kind: "briefing" | "location" | "clue" | "suspect" | "evidence" | "arrest" | "courtroom" | "witness" | "hide";
+  kind: "briefing" | "location" | "clue" | "suspect" | "evidence" | "arrest" | "verdict" | "courtroom" | "witness" | "hide";
   title?: string; premise?: string; crime?: string; victim?: string;
   witnessStatements?: string[];
   location?: { id: string; name: string; description: string; imagePrompt?: string };
@@ -19,6 +19,7 @@ type Outcome = {
   suspect?: { id: string; name: string; characterBrief?: string; potentialMotive?: string; alibi?: string; guideVideoPrompt?: string; guideVideoKey?: string };
   witness?: { id: string; name: string; role?: string; description?: string; info?: string };
   defendant?: { id: string; name: string };
+  correct?: boolean;
   pointingAt?: { id: string; title: string; description?: string }[];
   pointedElsewhere?: { id: string; title: string; description?: string }[];
   courtroomSeconds?: number;
@@ -112,6 +113,12 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [] }: { t
     <div style={{ ...stamp, fontSize: "1.4rem" }}>UNDER ARREST</div>
     <p style={{ fontSize: "1.6rem", ...typewriter, color: "#ffd98a" }}>{o.suspect?.name}</p>
     <p style={{ fontStyle: "italic" }}>{o.suspect?.characterBrief}</p>
+  </Frame>;
+
+  if (o.kind === "verdict") return <Frame kicker={o.correct ? "✅ VERDICT" : "❌ VERDICT"} title={`The accusation: ${o.suspect?.name || "the accused"}`}>
+    {o.correct
+      ? <><div style={{ ...stamp, borderColor: "#7dff9a", color: "#7dff9a", fontSize: "1.5rem" }}>CORRECT</div><p style={{ ...typewriter, fontSize: "1.1rem" }}>The evidence holds. This case goes to trial.</p></>
+      : <><div style={{ ...stamp, fontSize: "1.5rem" }}>WRONG SUSPECT</div><p style={{ ...typewriter, fontSize: "1.1rem" }}>The evidence falls apart. The real culprit walks free… this time.</p></>}
   </Frame>;
 
   if (o.kind === "courtroom") return <Frame kicker="COURT IS IN SESSION" title={`The People vs. ${o.defendant?.name || "the accused"}`}>

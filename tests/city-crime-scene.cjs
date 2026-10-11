@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { cityCrimeSceneDefaults, readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, validateCityCrimeScene, splitCourtroomEvidence, canUseCityCrimeScene, stripCityCrimeSceneTools } =
+const { cityCrimeSceneDefaults, readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, validateCityCrimeScene, splitCourtroomEvidence, canUseCityCrimeScene, stripCityCrimeSceneTools, accusationVerdict } =
   require('./load.cjs')('lib/city-crime-scene.ts');
 
 // 1. Sample defaults are internally consistent.
@@ -74,4 +74,15 @@ assert(stripped.gameTools.length === 1 && stripped.gameTools[0].type === 'wheel'
 assert(withTool.gameTools.length === 2, 'original untouched');
 assert(stripCityCrimeSceneTools({ gameTools: [{ id: 'b', type: 'wheel' }] }).gameTools.length === 1, 'no-op when absent');
 console.log('PASS: save-time backstop strips City Crime Scene tools.');
+
+// 7. Accusation verdict: correct only for the true guilty party; never leaks identity on wrong.
+const guiltySuspect = sample.suspects.find(s => s.isGuilty);
+const innocent = sample.suspects.find(s => !s.isGuilty);
+const vRight = accusationVerdict(sample, guiltySuspect.id);
+assert(!('error' in vRight) && vRight.correct === true && vRight.accusedName === guiltySuspect.name, 'correct accusation verdict');
+const vWrong = accusationVerdict(sample, innocent.id);
+assert(!('error' in vWrong) && vWrong.correct === false, 'wrong accusation verdict');
+assert(!JSON.stringify(vWrong).includes(guiltySuspect.name), 'wrong verdict never names the real culprit');
+assert('error' in accusationVerdict(sample, 'nobody'), 'unknown suspect errors');
+console.log('PASS: accusation verdict judges correctly without leaking guilt.');
 console.log('ALL CITY CRIME SCENE TESTS PASSED');
