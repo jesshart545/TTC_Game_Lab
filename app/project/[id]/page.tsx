@@ -1129,6 +1129,7 @@ export default function ProjectWorkspace() {
       return false;
     },
   });
+  const ccssBuilder=useCityCrimeSceneBuilder({project,projectRef,persist,setAssetStatus,ccssEntitled,toolDefaults,toolLibrary:TOOL_LIBRARY});
   if (loadFailed) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Project not found</h1><p>This project does not exist or you do not have access to it.</p><p><a href="/projects">Return to your projects</a></p></main>;
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   const firstActionTaken = entryStages[workflowStep] ?? hasExistingEntryAction(project, workflowStep);
@@ -1197,7 +1198,6 @@ export default function ProjectWorkspace() {
   const selectedAssetIndex=project.assets.findIndex(asset=>(asset.storageKey||asset.name)===selectedAssetKey);
   const selectedAsset=selectedAssetIndex>=0?project.assets[selectedAssetIndex]:null;
   const editingBoard=project.gameTools.find(t=>t.id===boardDesignerId);
-  const ccssBuilder=useCityCrimeSceneBuilder({project,projectRef,persist,setAssetStatus,ccssEntitled,toolDefaults,toolLibrary:TOOL_LIBRARY});
   const ccssBuilderView=ccssBuilder.renderBuilder();
   if(ccssBuilderView)return ccssBuilderView;
   if(editingBoard)return <main className="workspace-page"><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t)});}} onClose={()=>setBoardDesignerId("")} onCreateArtwork={()=>{setBoardDesignerId("");setShowGenerator(true);setGeneratorType("video");setGeneratorPrompt("Create a seamless animated game board background. Keep game spaces readable. ");setBackgroundIntent(true);}}/></main>;
