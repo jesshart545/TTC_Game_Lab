@@ -1,124 +1,125 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 /* Pre-signup landing page: explain the product, show what a creator builds,
    and answer the obvious questions before asking for an account. */
 
-const page = {
+const page: CSSProperties = {
   minHeight: "100vh",
   background: "#05060a",
   color: "#eef1f6",
   fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
 };
-const wrap = { maxWidth: 1120, margin: "0 auto", padding: "0 24px" };
-const nav = { display: "flex", alignItems: "center", gap: 16, padding: "18px 0" };
-const brand = { display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit" };
-const brandMark = {
+const wrap: CSSProperties = { maxWidth: 1120, margin: "0 auto", padding: "0 24px" };
+const nav: CSSProperties = { display: "flex", alignItems: "center", gap: 16, padding: "18px 0" };
+const brand: CSSProperties = { display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit" };
+const brandMark: CSSProperties = {
   width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center",
   background: "linear-gradient(135deg,#20e8ff,#7a5cff)", color: "#04121a", fontWeight: 800,
 };
-const navLinks = { display: "flex", alignItems: "center", gap: 18, marginLeft: "auto", fontSize: 14 };
-const navLink = { color: "#9aa3b5", textDecoration: "none" };
-const primaryBtn = {
+const navLinks: CSSProperties = { display: "flex", alignItems: "center", gap: 18, marginLeft: "auto", fontSize: 14 };
+const navLink: CSSProperties = { color: "#9aa3b5", textDecoration: "none" };
+const primaryBtn: CSSProperties = {
   display: "inline-block", background: "linear-gradient(135deg,#20e8ff,#7a5cff)", color: "#04121a",
   fontWeight: 800, padding: "13px 26px", borderRadius: 12, textDecoration: "none", fontSize: 15,
 };
-const loginBtn = {
+const loginBtn: CSSProperties = {
   display: "inline-block", border: "1px solid #2a3348", color: "#eef1f6",
   padding: "9px 18px", borderRadius: 10, textDecoration: "none", fontWeight: 700, fontSize: 14,
 };
-const signupBtn = { ...primaryBtn, padding: "9px 18px", fontSize: 14 };
-const ghostBtn = {
+const signupBtn: CSSProperties = { ...primaryBtn, padding: "9px 18px", fontSize: 14 };
+const ghostBtn: CSSProperties = {
   display: "inline-block", border: "1px solid #2a3348", color: "#eef1f6",
   padding: "13px 26px", borderRadius: 12, textDecoration: "none", fontWeight: 600, fontSize: 15,
 };
-const hero = {
+const hero: CSSProperties = {
   display: "flex", gap: 48, alignItems: "center", padding: "64px 0 72px", flexWrap: "wrap",
 };
-const heroCopy = { flex: "1 1 340px", minWidth: 0 };
-const eyebrow = {
+const heroCopy: CSSProperties = { flex: "1 1 340px", minWidth: 0 };
+const eyebrow: CSSProperties = {
   display: "inline-block", fontSize: 12, letterSpacing: ".18em", color: "#20e8ff",
   border: "1px solid #1c3a44", borderRadius: 999, padding: "6px 14px", marginBottom: 20,
 };
-const h1 = { fontSize: "clamp(36px, 5vw, 60px)", lineHeight: 1.06, margin: "0 0 18px", letterSpacing: "-.02em" };
-const lede = { fontSize: 18, color: "#9aa3b5", margin: "0 0 28px", lineHeight: 1.65 };
-const ctaRow = { display: "flex", gap: 12, flexWrap: "wrap" };
-const trustLine = { color: "#7f8797", fontSize: 13, marginTop: 16 };
+const h1: CSSProperties = { fontSize: "clamp(36px, 5vw, 60px)", lineHeight: 1.06, margin: "0 0 18px", letterSpacing: "-.02em" };
+const lede: CSSProperties = { fontSize: 18, color: "#9aa3b5", margin: "0 0 28px", lineHeight: 1.65 };
+const ctaRow: CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap" };
+const trustLine: CSSProperties = { color: "#7f8797", fontSize: 13, marginTop: 16 };
 
 /* ---- Product mockup: audience overlay + host dashboard ---- */
-const mockWrap = { flex: "1 1 420px", minWidth: 0 };
-const mockCaption = { textAlign: "center", color: "#7f8797", fontSize: 12, letterSpacing: ".14em", margin: "0 0 10px" };
-const overlayMock = {
+const mockWrap: CSSProperties = { flex: "1 1 420px", minWidth: 0 };
+const mockCaption: CSSProperties = { textAlign: "center", color: "#7f8797", fontSize: 12, letterSpacing: ".14em", margin: "0 0 10px" };
+const overlayMock: CSSProperties = {
   aspectRatio: "16 / 9", borderRadius: 14, overflow: "hidden", position: "relative",
   background: "radial-gradient(circle at 70% 20%, #1b2b4a 0%, #0a0f1e 55%, #05070d 100%)",
   border: "1px solid #2a3348", boxShadow: "0 24px 70px rgba(0,0,0,.5)",
 };
-const liveBadge = {
+const liveBadge: CSSProperties = {
   position: "absolute", top: 10, left: 10, background: "#ff3b5c", color: "#fff",
   fontSize: 10, fontWeight: 800, letterSpacing: ".1em", padding: "4px 8px", borderRadius: 6,
 };
-const overlayTitle = {
+const overlayTitle: CSSProperties = {
   position: "absolute", top: 12, left: 0, right: 0, textAlign: "center",
   color: "#20e8ff", fontWeight: 900, letterSpacing: ".22em", fontSize: 13,
 };
-const triviaGrid = {
+const triviaGrid: CSSProperties = {
   position: "absolute", top: "22%", left: "8%", right: "8%", bottom: "30%",
   display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gridTemplateRows: "auto repeat(4, 1fr)", gap: 6,
 };
-const triviaCat = {
+const triviaCat: CSSProperties = {
   color: "#aeb8cc", fontSize: 9, fontWeight: 700, textAlign: "center",
   letterSpacing: ".06em", alignSelf: "end", paddingBottom: 2,
   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
 };
-const triviaTile = {
+const triviaTile: CSSProperties = {
   border: "1px solid #2e3d5c", borderRadius: 6, display: "grid", placeItems: "center",
   color: "#ffd76a", fontWeight: 800, fontSize: 12, background: "rgba(20,30,55,.75)",
 };
-const scoreStrip = {
+const scoreStrip: CSSProperties = {
   position: "absolute", left: "8%", right: "8%", bottom: "7%", display: "flex", gap: 8,
 };
-const scoreChip = {
+const scoreChip: CSSProperties = {
   flex: 1, border: "1px solid #2e3d5c", borderRadius: 8, padding: "6px 10px",
   background: "rgba(10,16,30,.8)", fontSize: 11, color: "#dfe5ee",
   display: "flex", justifyContent: "space-between", alignItems: "center",
 };
-const dashMock = {
+const dashMock: CSSProperties = {
   marginTop: 14, border: "1px solid #2a3348", borderRadius: 14, background: "#0b0d14", padding: 16,
 };
-const dashTitle = { fontSize: 11, letterSpacing: ".14em", color: "#7f8797", fontWeight: 700, marginBottom: 10 };
-const dashBtns = { display: "flex", gap: 8, flexWrap: "wrap" };
-const dashBtn = {
+const dashTitle: CSSProperties = { fontSize: 11, letterSpacing: ".14em", color: "#7f8797", fontWeight: 700, marginBottom: 10 };
+const dashBtns: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
+const dashBtn: CSSProperties = {
   border: "1px solid rgba(32,232,255,.4)", background: "rgba(32,232,255,.07)", color: "#baf8ff",
   borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700,
 };
 
-const section = { padding: "24px 0 64px" };
-const sectionTitle = { fontSize: "clamp(26px, 3.4vw, 36px)", margin: "0 0 12px", letterSpacing: "-.01em", textAlign: "center" };
-const sectionSub = { color: "#9aa3b5", textAlign: "center", maxWidth: 640, margin: "0 auto 36px", lineHeight: 1.65, fontSize: 16 };
-const cardGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 };
-const card = { border: "1px solid #20263a", borderRadius: 16, padding: 24, background: "#0b0d14" };
-const cardIcon = { fontSize: 28, marginBottom: 12 };
-const cardTitle = { fontSize: 18, margin: "0 0 8px" };
-const cardText = { color: "#9aa3b5", fontSize: 14, lineHeight: 1.65, margin: 0 };
-const stepNum = {
+const section: CSSProperties = { padding: "24px 0 64px" };
+const sectionTitle: CSSProperties = { fontSize: "clamp(26px, 3.4vw, 36px)", margin: "0 0 12px", letterSpacing: "-.01em", textAlign: "center" };
+const sectionSub: CSSProperties = { color: "#9aa3b5", textAlign: "center", maxWidth: 640, margin: "0 auto 36px", lineHeight: 1.65, fontSize: 16 };
+const cardGrid: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 };
+const card: CSSProperties = { border: "1px solid #20263a", borderRadius: 16, padding: 24, background: "#0b0d14" };
+const cardIcon: CSSProperties = { fontSize: 28, marginBottom: 12 };
+const cardTitle: CSSProperties = { fontSize: 18, margin: "0 0 8px" };
+const cardText: CSSProperties = { color: "#9aa3b5", fontSize: 14, lineHeight: 1.65, margin: 0 };
+const stepNum: CSSProperties = {
   width: 34, height: 34, borderRadius: "50%", display: "grid", placeItems: "center",
   background: "linear-gradient(135deg,#20e8ff,#7a5cff)", color: "#04121a", fontWeight: 800, marginBottom: 14,
 };
-const faqItem = {
+const faqItem: CSSProperties = {
   border: "1px solid #20263a", borderRadius: 12, background: "#0b0d14",
   padding: "16px 20px", marginBottom: 10,
 };
-const faqQ = { fontWeight: 700, fontSize: 16, cursor: "pointer", color: "#eef1f6" };
-const faqA = { color: "#9aa3b5", fontSize: 15, lineHeight: 1.7, margin: "10px 0 0" };
-const needBox = {
+const faqQ: CSSProperties = { fontWeight: 700, fontSize: 16, cursor: "pointer", color: "#eef1f6" };
+const faqA: CSSProperties = { color: "#9aa3b5", fontSize: 15, lineHeight: 1.7, margin: "10px 0 0" };
+const needBox: CSSProperties = {
   border: "1px solid #2a3a2e", borderRadius: 16, padding: 24, background: "#0c100c",
   margin: "0 0 64px",
 };
-const finalCta = {
+const finalCta: CSSProperties = {
   textAlign: "center", border: "1px solid #1c3a44", borderRadius: 20,
   background: "radial-gradient(circle at 50% 0%, rgba(32,232,255,.08), transparent 60%), #0a0d13",
   padding: "56px 24px", marginBottom: 64,
 };
-const footer = {
+const footer: CSSProperties = {
   borderTop: "1px solid #1a2030", padding: "24px 0 40px", color: "#7f8797", fontSize: 13,
   display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center",
 };
