@@ -6,6 +6,7 @@ import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/proje
 import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
 import {WheelDisplay,DiceDisplay,CoinDisplay,PlinkoDisplay,HigherLowerDisplay,CliffhangerDisplay,PrizeWheelDisplay} from "./ChanceTools";
+import CityCrimeSceneOverlay from "./CityCrimeSceneOverlay";
 import {nextCoinPhase,type CoinPhase} from "../lib/coin-cycle";
 import {timerAction,timerTransition,type TimerState} from "../lib/timer-controls";
 import {coinOutcome} from "../lib/coin-toss";
@@ -100,7 +101,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
         add({ tool, question, reveal: turn % 2 === 1 }, 60); return;
       }
       if(chosen)result=chosen.result;
-      add({ tool, result }, tool.config.triggerOnly ? Infinity : tool.type === "countdown" ? Math.max(1, Number(config.seconds) || 10) + 3 : tool.type === "poll" ? 3600 : 12);
+      add({ tool, result }, tool.config.triggerOnly ? Infinity : tool.type === "countdown" ? Math.max(1, Number(config.seconds) || 10) + 3 : tool.type === "poll" ? 3600 : tool.type === "city-crime-scene" ? Infinity : 12);
     };
     if (control.action.startsWith("background.show.")) { setBackgroundKey(control.action.slice("background.show.".length)); return; }
     if (control.action.startsWith("alert.") && p.overlay.showAlerts) add({ message: control.label }, 5);
@@ -179,6 +180,7 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
     {tool.type === "higher-lower" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}return <HigherLowerDisplay outcome={o||undefined} elapsed={now-run.at} preview={run.id===0} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")}/>})()}
     {tool.type === "cliffhanger" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}return <CliffhangerDisplay outcome={o||undefined} elapsed={now-run.at} preview={run.id===0} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")}/>})()}
     {tool.type === "prize-wheel" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}const values=Array.isArray(o?.values)?o.values.map(String):(Array.isArray(config.values)?config.values.map(String):[]);return <PrizeWheelDisplay outcome={o?{...o,values}:undefined} elapsed={now-run.at} preview={run.id===0} colors={[String(config.slotColor||"#b3123f"),String(config.alternateSlotColor||"#0f6b4f")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")}/>})()}
+    {tool.type === "city-crime-scene" && <CityCrimeSceneOverlay tool={tool} result={run.result} assets={assets}/>}
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
     {tool.type === "trivia-board" && <div className="runtime-jeopardy-grid">{(Array.isArray(config.categories)?config.categories:[]).map((category:any,i:number)=><div key={i}><strong>{String(category.name)}</strong>{(Array.isArray(category.questions)?category.questions:[]).map((q:any,j:number)=><p key={j}>{q.used?'USED':String(q.value)}</p>)}</div>)}</div>}
     {tool.type === "trivia-list" && <><p>{String(run.question?.question || run.question?.prompt || "No questions saved")}</p>{run.reveal && <strong>Answer: {String(run.question?.answer || "")}</strong>}</>}
