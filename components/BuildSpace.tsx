@@ -19,7 +19,6 @@ import GameToolEditor from "./GameToolEditor";
 import {assignControlAction} from "../lib/control-connections";
 import {addCreationControl} from "../lib/build-controls";
 import {additionTypes,creationsForType,creationControls,type AdditionType,type BuildCreation} from "../lib/build-guide";
-import {canUseCityCrimeScene} from "../lib/city-crime-scene";
 import {mediaKind} from "../lib/board-design";
 import {buildReadiness} from "../lib/build-readiness";
 import {cardControl} from "../lib/question-cards";
@@ -58,12 +57,9 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
  const [additionType,setAdditionType]=useState<AdditionType>("image");
  const [activeCreation,setActiveCreation]=useState<BuildCreation|null>(null);
  const [pendingAddition,setPendingAddition]=useState<{creation:BuildCreation;controls:ProjectEvent[];newTool?:GameTool}|null>(null);
- const [ccssEntitled,setCcssEntitled]=useState(false);
- useEffect(()=>{fetch("/api/me",{cache:"no-store"}).then(r=>r.json()).then(d=>setCcssEntitled(canUseCityCrimeScene(d?.email))).catch(()=>setCcssEntitled(false));},[]);
- const visibleAdditionTypes=useMemo(()=>additionTypes.filter(t=>t.id!=="city-crime-scene"||ccssEntitled),[ccssEntitled]);
- const guide=visibleAdditionTypes.find(item=>item.id===additionType)??additionTypes[0];
- const creations=useMemo(()=>Object.fromEntries(visibleAdditionTypes.map(item=>[item.id,creationsForType(project,item.id)])) as Record<string,BuildCreation[]>,[project.assets,project.gameTools,project.compositions,visibleAdditionTypes]);
- const choices=creations[additionType]??[];
+ const guide=additionTypes.find(item=>item.id===additionType)!;
+ const creations=useMemo(()=>Object.fromEntries(additionTypes.map(item=>[item.id,creationsForType(project,item.id)])) as Record<AdditionType,BuildCreation[]>,[project.assets,project.gameTools,project.compositions]);
+ const choices=creations[additionType];
  const choiceConnections=useMemo(()=>new Map(choices.map(item=>[item.id,creationControls(project,item)])),[choices,project.controls]);
  const connected=useMemo(()=>activeCreation?creationControls(project,activeCreation):[],[activeCreation,project.controls]);
  const hasBackground=project.assets.some(a=>a.inProject&&a.role==="background")||project.gameTools.some(t=>t.enabled&&t.inOverlayBuild&&(t.type==="blank-board"||t.type==="trivia-board"));
@@ -129,7 +125,7 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
   {step===4&&<section className="build-readiness" aria-label="Game readiness"><h3>{issues.length?`${issues.length} connection issues to fix`:'No connection issues detected'}</h3>{issues.length?issues.map(issue=><div key={issue.id}><p>{issue.message}</p><button type="button" onClick={()=>{goStep(2);setSelection({kind:issue.kind,id:issue.targetId});}}>Fix connection</button></div>):<p>Check your game's rules, media playback, and complete round in rehearsal before publishing.</p>}<button type="button" onClick={()=>goStep(3)}>Rehearse game</button><button type="button" disabled={issues.length>0} onClick={onPublishStep}>Continue to Publish</button></section>}
   {!testing&&(step===1||step===2&&!selection)&&<section className="addition-guide" aria-label="Additions guide">
 
-   <label className="build-item-type">What would you like to add?<select aria-label="Addition type" value={additionType} onChange={e=>{setAdditionType(e.target.value as AdditionType);setStep(1);setSelection(null);setActiveCreation(null);}}>{visibleAdditionTypes.map(item=><option key={item.id} value={item.id}>{item.label} · {(creations[item.id]??[]).length} available</option>)}</select></label>
+   <label className="build-item-type">What would you like to add?<select aria-label="Addition type" value={additionType} onChange={e=>{setAdditionType(e.target.value as AdditionType);setStep(1);setSelection(null);setActiveCreation(null);}}>{additionTypes.map(item=><option key={item.id} value={item.id}>{item.label} · {creations[item.id].length} available</option>)}</select></label>
    <h4>{guide.label}</h4><p>{guide.help}</p>
 
    {!pendingAddition&&(step===1||!selection)&&<div className="creation-tray" aria-label="Workshop creations">{choices.map(c=><article key={c.id}>{c.kind==='asset'&&<BuildAssetThumbnail asset={assetsByKey.get(c.id)} label={`Set up ${c.name}`} onSelect={()=>(choiceConnections.get(c.id)?.length||0)?chooseCreation(c.kind,c.id):reviewCreation(c.kind,c.id)}/>}<strong>{c.name}</strong><small>{additionType==='youtube'?((choiceConnections.get(c.id)?.length||0)?'YouTube search connected to dashboard':'Private YouTube search panel'):(choiceConnections.get(c.id)?.length||0)?'Controls connected':'Ready to set up'}</small><button type="button" onClick={()=>(choiceConnections.get(c.id)?.length||0)?chooseCreation(c.kind,c.id):reviewCreation(c.kind,c.id)}>{additionType==='youtube'?((choiceConnections.get(c.id)?.length||0)?'Set up YouTube search':'Add YouTube search to dashboard'):(choiceConnections.get(c.id)?.length||0)?'Set up this item':'Use this in my game'}</button></article>)}{!choices.length&&<p>No {guide.label.toLowerCase()} saved yet.</p>}{!['image','video','audio','composition','question-card','blank-card'].includes(additionType)&&<button type="button" onClick={()=>{const id=crypto.randomUUID(),t:GameTool={id,type:additionType as GameTool['type'],name:guide.label,enabled:true,inToolbox:true,config:toolDefaults(additionType as GameTool['type'])};reviewCreation('tool',id,t);}}>{additionType==='youtube'?'Add YouTube search to dashboard':`Create ${guide.label.toLowerCase()}`}</button>}</div>}

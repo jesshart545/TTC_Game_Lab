@@ -15,7 +15,6 @@ export const additionTypes = [
   { id: 'higher-lower', label: 'Higher or Lower', help: 'Draw cards and guess whether the next card is higher or lower. Connect Draw, Higher, Lower and Hide buttons.' },
   { id: 'cliffhanger', label: 'Cliffhanger', help: 'Price-is-Right style mountain climber. Guess item prices; each dollar off moves the climber closer to the cliff. 25 steps and he falls!' },
   { id: 'prize-wheel', label: 'Big Wheel', help: 'Price-is-Right style big wheel from 5¢ to $1.00. Spin for the closest to $1.00 without going over.' },
-  { id: 'city-crime-scene', label: 'City Crime Scene', help: 'Improv whodunnit mystery. AI drafts the case from your premise; you rewrite anything. The host runs briefing, investigation, interrogations and trial from a private panel.' },
   { id: 'countdown', label: 'Timers', help: 'Choose a standalone timer, set its duration and look, then connect its host controls.' },
   { id: 'poll', label: 'Polls', help: 'Choose a poll, review its options and placement, then connect Show and Hide buttons.' },
   {id:'scoreboard',label:'Scoreboard',help:'Add players or teams, choose a look, then test showing the scores and changing points.'},
