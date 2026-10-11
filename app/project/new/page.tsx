@@ -20,6 +20,21 @@ export default function NewProject() {
       const idea = params.get("idea")?.trim().slice(0, 12000) || "";
       const templateId = params.get("template")?.trim() || "";
       const template = templateId ? getGameTemplate(templateId) : undefined;
+      // Restricted templates (e.g. City Crime Scene): verify entitlement before creating.
+      // The save-time backstop strips restricted tools server-side, but this avoids
+      // a confusing create-then-strip for unauthorized users.
+      const checkEntitlement = (async () => {
+        if (!template || !template.restricted) return true;
+        try {
+          const res = await fetch("/api/me", { cache: "no-store" });
+          const me = await res.json();
+          const email = String(me?.email || "").toLowerCase();
+          const allowed = ["biscoe1972@gmail.com", "ladylovelace0627@gmail.com"];
+          return allowed.includes(email);
+        } catch {
+          return false;
+        }
+      })();
       const project = createProject("");
       if (template) {
         const draft = template.buildDraft();
@@ -47,7 +62,10 @@ export default function NewProject() {
           text: "Tell me what you want to create, or start with the trivia generator, board and tool templates, uploads, or Asset Composer. Your draft is ready to customize.",
         }];
       }
-      creation.current = saveProjectToServer(project).then(() => project.id);
+      creation.current = checkEntitlement.then(entitled => {
+        if (!entitled) throw new Error("This template is restricted to specific accounts.");
+        return saveProjectToServer(project);
+      }).then(() => project.id);
     }
     creation.current.then(
       id => { if (!cancelled) router.replace(`/project/${id}`); },

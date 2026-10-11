@@ -27,8 +27,9 @@ export type GameTemplate = {
   tagline: string;
   description: string;
   icon: string;
-  category: TemplateCategory;
+  category: TemplateCategory | "Restricted";
   buildDraft: () => TemplateDraft;
+  restricted?: boolean;
 };
 
 const cardSkin = (bg: string, accent: string) => ({
@@ -54,7 +55,7 @@ const triviaNight: GameTemplate = {
     gameTools: [
       {
         id: "tn-board", type: "trivia-board", name: "Trivia Board", enabled: true, inToolbox: false, inOverlayBuild: true,
-        config: {
+        config: { placement: {x:10,y:10,width:80,height:75},
           title: "Trivia Night Board",
           categories: [
             {
@@ -109,11 +110,11 @@ const triviaNight: GameTemplate = {
       },
       {
         id: "tn-card", type: "question-card", name: "Question Card", enabled: true, inToolbox: true, inOverlayBuild: true,
-        config: { poolId: "tn-pool", ...cardSkin("#101827", "#20e8ff") },
+        config: { placement: {x:20,y:20,width:60,height:55}, poolId: "tn-pool", ...cardSkin("#101827", "#20e8ff") },
       },
       {
         id: "tn-scores", type: "scoreboard", name: "Team Scores", enabled: true, inToolbox: true, inOverlayBuild: true,
-        config: {
+        config: { placement: {x:72,y:12,width:24,height:55},
           entries: [
             { id: "team-alpha", name: "Team Alpha", score: 0 },
             { id: "team-bravo", name: "Team Bravo", score: 0 },
@@ -181,7 +182,7 @@ const millionQuiz: GameTemplate = {
       gameTools: [
         {
           id: "mq-board", type: "trivia-board", name: "Money Ladder", enabled: true, inToolbox: false, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:10,y:10,width:80,height:75},
             title: "Money Ladder",
             categories: [
               {
@@ -197,15 +198,15 @@ const millionQuiz: GameTemplate = {
         },
         {
           id: "mq-card", type: "question-card", name: "Million Question Card", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: { poolId: "mq-pool", ...cardSkin("#0d1b2a", "#ffd166") },
+          config: { placement: {x:20,y:20,width:60,height:55}, poolId: "mq-pool", ...cardSkin("#0d1b2a", "#ffd166") },
         },
         {
           id: "mq-winnings", type: "scoreboard", name: "Winnings", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: { entries: [{ id: "contestant", name: "Contestant", score: 0 }] },
+          config: { placement: {x:72,y:12,width:24,height:55}, entries: [{ id: "contestant", name: "Contestant", score: 0 }] },
         },
         {
           id: "mq-lifelines", type: "game-tool-list", name: "Lifelines", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:65,y:15,width:30,height:60},
             entries: [
               { id: "fifty", name: "50:50", meaning: "Remove two wrong answers" },
               { id: "phone", name: "Phone a Friend", meaning: "Call someone for 30 seconds of help" },
@@ -249,7 +250,7 @@ const guessTheWord: GameTemplate = {
       gameTools: [
         {
           id: "gw-board", type: "blank-board", name: "Letter Board", enabled: true, inToolbox: false, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:10,y:10,width:80,height:75},
             title: "Mystery Word — 8 letters",
             areas,
             sampleWord,
@@ -258,14 +259,14 @@ const guessTheWord: GameTemplate = {
         },
         {
           id: "gw-word", type: "blank-card", name: "Word Reveal Card", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:20,y:20,width:60,height:55},
             sampleText: "_ _ _ _ _ _ _ _",
             hint: "Type the current reveal state (e.g. S _ R E A _ E R) in the card panel, then press Reveal Letters.",
           },
         },
         {
           id: "gw-scores", type: "scoreboard", name: "Word Scores", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:72,y:12,width:24,height:55},
             entries: [
               { id: "player-1", name: "Player 1", score: 0 },
               { id: "player-2", name: "Player 2", score: 0 },
@@ -310,7 +311,7 @@ const wordAssociation: GameTemplate = {
       gameTools: [
         {
           id: "wa-card", type: "blank-card", name: "Prompt Word Card", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:20,y:20,width:60,height:55},
             sampleText: "OCEAN",
             sampleAssociations: rounds[0].associations,
             hint: "Type the prompt word in the card panel and press Show Prompt. Reveal associations one per round.",
@@ -328,7 +329,7 @@ const wordAssociation: GameTemplate = {
         },
         {
           id: "wa-scores", type: "scoreboard", name: "Association Scores", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:72,y:12,width:24,height:55},
             entries: [
               { id: "player-1", name: "Player 1", score: 0 },
               { id: "player-2", name: "Player 2", score: 0 },
@@ -409,7 +410,7 @@ const guessTheLogo: GameTemplate = {
       gameTools: [
         {
           id: "gl-card", type: "blank-card", name: "Logo Reveal Card", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:20,y:20,width:60,height:55},
             sampleText: rounds[0].stages[0],
             hint: "Paste the current stage description (or upload your logo image as an overlay asset) then press Show Stage.",
           },
@@ -426,7 +427,7 @@ const guessTheLogo: GameTemplate = {
         },
         {
           id: "gl-scores", type: "scoreboard", name: "Logo Scores", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:72,y:12,width:24,height:55},
             entries: [
               { id: "player-1", name: "Player 1", score: 0 },
               { id: "player-2", name: "Player 2", score: 0 },
@@ -477,7 +478,7 @@ const pictureReveal: GameTemplate = {
       gameTools: [
         {
           id: "pr-board", type: "blank-board", name: "Reveal Grid", enabled: true, inToolbox: false, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:10,y:10,width:80,height:75},
             title: "Mystery Picture — 12 tiles",
             areas: tiles,
             hint: "Place your image behind this grid (overlay asset or board background). Remove or relabel tiles as you reveal them.",
@@ -485,14 +486,14 @@ const pictureReveal: GameTemplate = {
         },
         {
           id: "pr-tiles", type: "blank-card", name: "Tiles Removed", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:20,y:20,width:60,height:55},
             sampleText: "Tiles removed: —",
             hint: "Type the removed tile numbers (e.g. “Tiles removed: 3, 7, 11”) in the card panel, then press Update Tiles.",
           },
         },
         {
           id: "pr-scores", type: "scoreboard", name: "Reveal Scores", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:72,y:12,width:24,height:55},
             entries: [
               { id: "player-1", name: "Player 1", score: 0 },
               { id: "player-2", name: "Player 2", score: 0 },
@@ -530,7 +531,7 @@ const prizeDrawWheel: GameTemplate = {
     gameTools: [
       {
         id: "pd-wheel", type: "wheel", name: "Prize Wheel", enabled: true, inToolbox: true, inOverlayBuild: true,
-        config: {
+        config: { placement: {x:25,y:15,width:50,height:65},
           title: "Prize Wheel",
           segments: [
             "$25 Gift Card",
@@ -556,7 +557,7 @@ const prizeDrawWheel: GameTemplate = {
       },
       {
         id: "pd-prizes", type: "prize-list", name: "Prize Tracker", enabled: true, inToolbox: true, inOverlayBuild: true,
-        config: {
+        config: { placement: {x:65,y:15,width:30,height:60},
           entries: [
             { id: "pd-prize-1", name: "$25 Gift Card" },
             { id: "pd-prize-2", name: "Free Subscription" },
@@ -633,14 +634,14 @@ const playlistBingo: GameTemplate = {
         },
         {
           id: "pb-called", type: "blank-card", name: "Called Songs", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:20,y:20,width:60,height:55},
             sampleText: "Called so far: —",
             hint: "Type the called songs in the card panel (e.g. “Called: Billie Jean, Halo, …”) then press Show Called Songs.",
           },
         },
         {
           id: "pb-scores", type: "scoreboard", name: "Bingo Scores", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:72,y:12,width:24,height:55},
             entries: [
               { id: "player-1", name: "Player 1", score: 0 },
               { id: "player-2", name: "Player 2", score: 0 },
@@ -724,22 +725,22 @@ const escapeRoom: GameTemplate = {
         },
         {
           id: "er-active", type: "question-card", name: "Active Puzzle", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: { poolId: "er-pool", ...cardSkin("#141021", "#b388ff") },
+          config: { placement: {x:20,y:20,width:60,height:55}, poolId: "er-pool", ...cardSkin("#141021", "#b388ff") },
         },
         {
           id: "er-timer", type: "countdown", name: "Escape Timer", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: { seconds: 3600 },
+          config: { placement: {x:40,y:10,width:20,height:15}, seconds: 3600 },
         },
         {
           id: "er-lock", type: "blank-card", name: "Combination Lock", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: {
+          config: { placement: {x:20,y:20,width:60,height:55},
             sampleText: "LOCK 1: _ _ _",
             hint: "Type the lock state (e.g. “LOCK 1: 7 _ 9”) in the card panel, then press Show Lock.",
           },
         },
         {
           id: "er-progress", type: "scoreboard", name: "Puzzles Solved", enabled: true, inToolbox: true, inOverlayBuild: true,
-          config: { entries: [{ id: "escape-team", name: "Escape Team", score: 0 }] },
+          config: { placement: {x:72,y:12,width:24,height:55}, entries: [{ id: "escape-team", name: "Escape Team", score: 0 }] },
         },
       ],
       controls: [
@@ -759,6 +760,41 @@ const escapeRoom: GameTemplate = {
 };
 
 // ---------------------------------------------------------------------------
+// 10. City Crime Scene — restricted improv whodunnit (entitled accounts only)
+// ---------------------------------------------------------------------------
+const cityCrimeScene: GameTemplate = {
+  id: "city-crime-scene",
+  name: "City Crime Scene",
+  tagline: "Improv whodunnit mystery game — Law & Order style",
+  description:
+    "A reusable improv-style murder mystery game. The host builds a case with suspects, clues, and twists; detectives investigate, interrogate, and accuse. For entitled accounts only.",
+  icon: "🔍",
+  category: "Restricted",
+  restricted: true,
+  buildDraft: () => ({
+    name: "City Crime Scene",
+    description: "Improv whodunnit mystery game. Customize the case, suspects, and clues.",
+    overlay: {
+      title: "CITY CRIME SCENE",
+      subtitle: "A MURDER MYSTERY",
+      showChat: true,
+      showAlerts: true,
+      showCharacter: false,
+    },
+    gameTools: [
+      {
+        id: `city-crime-scene-${Date.now()}`,
+        type: "city-crime-scene" as any,
+        name: "City Crime Scene",
+        enabled: true,
+        config: {},
+      },
+    ],
+    controls: [],
+  }),
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 export const GAME_TEMPLATES: GameTemplate[] = [
@@ -771,6 +807,7 @@ export const GAME_TEMPLATES: GameTemplate[] = [
   prizeDrawWheel,
   playlistBingo,
   escapeRoom,
+  cityCrimeScene,
 ];
 
 export function getGameTemplate(id: string): GameTemplate | undefined {
