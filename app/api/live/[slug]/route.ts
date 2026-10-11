@@ -5,9 +5,10 @@ import {changeCard} from "../../../../lib/card-server";
 import {cardControl} from "../../../../lib/question-cards";
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
-import type { Project } from "../../../../lib/project";
+import type { Project, GameTool } from "../../../../lib/project";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { randomUUID, randomInt } from "node:crypto";
+import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay } from "../../../../lib/city-crime-scene";
 import { verifyYoutube } from "../../../../lib/youtube-server";
 import { youtubeId, youtubePosition, safeYoutubePlacement } from "../../../../lib/youtube";
 import type { YouTubeState } from "../../../../lib/youtube";
@@ -29,11 +30,94 @@ async function ensureLiveEvents(db: ReturnType<typeof getDb>) {
   await db`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS payload JSONB`;
 }
 
+async function hostKeyValid(db: ReturnType<typeof getDb>, projectId: string, key: string) {
+  if (!db || !/^[a-f0-9]{64}$/.test(key)) return false;
+  await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
+  const hosts = await db`SELECT token_hash FROM live_hosts WHERE project_id = ${projectId}`;
+  const expected = String(hosts[0]?.token_hash || "");
+  const actual = createHash("sha256").update(key).digest("hex");
+  return /^[a-f0-9]{64}$/.test(expected) && timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
+}
+
+type CcssAction = { toolId: string; kind: string; locationId?: string; clueId?: string; suspectId?: string; witnessId?: string };
+
+/**
+ * Build a City Crime Scene overlay outcome from PUBLIC fields only.
+ * The snapshot config is sanitized at publish; sanitize again here defensively.
+ * Guilt, case truth, twists, detective intel never leave this function.
+ */
+function ccssOutcome(tool: GameTool, action: CcssAction, prev: any) {
+  const cfg = sanitizeCityCrimeSceneForOverlay(readCityCrimeSceneConfig(tool.config as Record<string, unknown>));
+  const revealed: string[] = Array.isArray(prev?.revealedClueIds) ? prev.revealedClueIds : [];
+  const title = String(cfg.title || "City Crime Scene");
+  const kind = String(action.kind || "");
+  if (kind === "briefing") return { kind, title, premise: cfg.premise, crime: cfg.crime, victim: cfg.victim, witnessStatements: cfg.witnessStatements, locations: cfg.locations.map(l => ({ id: l.id, name: l.name, description: l.description })) };
+  if (kind === "investigate") {
+    const location = cfg.locations.find(l => l.id === action.locationId) || cfg.locations[0];
+    if (!location) return { error: "Add locations to City Crime Scene first." };
+    return { kind: "location", location: { id: location.id, name: location.name, description: location.description }, clues: cfg.clues.filter(c => c.locationId === location.id).map(c => ({ id: c.id, title: c.title, revealed: revealed.includes(c.id) })), revealedClueIds: revealed };
+  }
+  if (kind === "revealClue") {
+    const clue = cfg.clues.find(c => c.id === action.clueId);
+    if (!clue) return { error: "Clue not found." };
+    const next = revealed.includes(clue.id) ? revealed : [...revealed, clue.id];
+    return { kind: "clue", clue: { id: clue.id, title: clue.title, description: clue.description }, revealedClueIds: next };
+  }
+  if (kind === "introduceSuspect") {
+    const s = cfg.suspects.find(x => x.id === action.suspectId);
+    if (!s) return { error: "Suspect not found." };
+    return { kind: "suspect", suspect: { id: s.id, name: s.name, characterBrief: s.characterBrief, potentialMotive: s.potentialMotive, alibi: s.alibi, guideVideoKey: s.guideVideoKey } };
+  }
+  if (kind === "evidence") return { kind: "evidence", title, clues: cfg.clues.filter(c => revealed.includes(c.id)).map(c => ({ id: c.id, title: c.title, description: c.description, locationName: cfg.locations.find(l => l.id === c.locationId)?.name || "" })), revealedClueIds: revealed };
+  if (kind === "arrest") {
+    const s = cfg.suspects.find(x => x.id === action.suspectId);
+    if (!s) return { error: "Choose a suspect to arrest." };
+    return { kind: "arrest", suspect: { id: s.id, name: s.name, characterBrief: s.characterBrief } };
+  }
+  if (kind === "courtroom") {
+    const defendant = cfg.suspects.find(x => x.id === action.suspectId) || cfg.suspects[0];
+    if (!defendant) return { error: "Add suspects to City Crime Scene first." };
+    const shown = cfg.clues.filter(c => revealed.includes(c.id)).map(c => ({ id: c.id, title: c.title, description: c.description, defendant: c.relatedSuspectIds.includes(defendant.id) }));
+    return { kind: "courtroom", defendant: { id: defendant.id, name: defendant.name }, pointingAt: shown.filter(c => c.defendant), pointedElsewhere: shown.filter(c => !c.defendant), witnessStatements: cfg.witnessStatements, courtroomSeconds: cfg.courtroomSeconds };
+  }
+  if (kind === "unlockWitness") {
+    const w = cfg.helperWitnesses.find(x => x.id === action.witnessId);
+    if (!w) return { error: "Witness not found." };
+    return { kind: "witness", witness: { id: w.id, name: w.name, role: w.role, description: w.description, info: w.info } };
+  }
+  if (kind === "hide") return { kind: "hide" };
+  return { error: "Unknown City Crime Scene action." };
+}
+
+async function ccssAct(db: ReturnType<typeof getDb>, projectId: string, tool: GameTool, action: CcssAction) {
+  const last = await db!`SELECT payload FROM live_events WHERE project_id=${projectId} AND control_id=${tool.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
+  let prev: any = {};
+  try { prev = JSON.parse(String(last[0]?.payload?.outcomes?.[tool.id]?.result || "{}")); } catch {}
+  const outcome = ccssOutcome(tool, action, prev) as { error?: string };
+  if (outcome.error) return { error: outcome.error };
+  const payload = JSON.stringify({ outcomes: { [tool.id]: { result: JSON.stringify(outcome) } } });
+  const rows = await db!`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${projectId},${tool.id},'control',${payload}::jsonb) RETURNING id`;
+  return { id: Number(rows[0].id), outcome };
+}
+
 export async function GET(request: Request, context: Context) {
   const { slug } = await context.params;
   const live = await published(slug);
   if (!live) return NextResponse.json({ error: "Published project unavailable." }, { status: 404 });
   await ensureLiveEvents(live.db);
+
+  // ---- City Crime Scene: host-only full case file (host key required) ----
+  const casefileId = new URL(request.url).searchParams.get("casefile");
+  if (casefileId) {
+    const key = request.headers.get("x-host-key") || "";
+    if (!await hostKeyValid(live.db, live.project.id, key)) return NextResponse.json({ error: "Host access required. Open the dashboard from the builder." }, { status: 403 });
+    const rows = await live.db`SELECT data FROM projects WHERE slug = ${slug} LIMIT 1`;
+    const draft = rows[0]?.data as Project | undefined;
+    const tool = draft?.gameTools?.find(t => t.id === casefileId && t.type === "city-crime-scene");
+    if (!tool) return NextResponse.json({ error: "City Crime Scene tool not found." }, { status: 404 });
+    return NextResponse.json({ config: (tool.config as Record<string, unknown>)?.mystery || null }, { headers: { "Cache-Control": "no-store" } });
+  }
+
   const wheelId=new URL(request.url).searchParams.get("wheelSlots");
   if(wheelId){
     const tool=live.project.gameTools.find(t=>t.id===wheelId&&t.type==="wheel"&&t.enabled);
@@ -77,7 +161,10 @@ export async function GET(request: Request, context: Context) {
     const activeCoins=coinEvents.filter(event=>Object.values(event.payload?.outcomes||{}).some((outcome:any)=>outcome.phase==='show'||outcome.phase==='flip'));
     const timerIds=live.project.controls.filter(c=>timerAction(c.action)).map(c=>c.id);
     const activeTimers=timerIds.length?await live.db`SELECT DISTINCT ON(payload->>'timerId') id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${timerIds}) ORDER BY payload->>'timerId',id DESC`:[];
-    const events=[...activeTimers,...background,...activePolls,...activeTrivia,...youtube,...activeCoins].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
+    const ccssToolIds=live.project.gameTools.filter(t=>t.type==='city-crime-scene'&&t.enabled).map(t=>t.id);
+    const ccssEvents=ccssToolIds.length?await live.db`SELECT DISTINCT ON(control_id) id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${ccssToolIds}) ORDER BY control_id,id DESC`:[];
+    const activeCcss=ccssEvents.filter(event=>{try{return JSON.parse(String(event.payload?.outcomes?.[event.control_id]?.result||'{}')).kind!=='hide';}catch{return true;}});
+    const events=[...activeTimers,...activeCcss,...background,...activePolls,...activeTrivia,...youtube,...activeCoins].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
     return NextResponse.json({ cursor: Number(rows[0].cursor), events, usedTrivia }, { headers: { "Cache-Control": "no-store" } });
   }
   const rows = await live.db`SELECT id, control_id, event_type, payload FROM live_events WHERE project_id = ${live.project.id} AND id > ${since} ORDER BY id ASC LIMIT 100`;
@@ -134,6 +221,16 @@ export async function POST(request: Request, context: Context) {
     const payload=JSON.stringify({outcomes:{[tool.id]:{result:JSON.stringify(outcome)}}});
     const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${tool.id},'control',${payload}::jsonb) RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id),outcome});
+  }
+
+  // ---- City Crime Scene: phase actions from the host panel (no controlId, like cliffGuess) ----
+  if(body.cityCrimeSceneAction){
+    const action=body.cityCrimeSceneAction as CcssAction;
+    const tool=live.project.gameTools.find(t=>t.id===String(action.toolId||'')&&t.type==='city-crime-scene'&&t.enabled);
+    if(!tool)return NextResponse.json({error:"City Crime Scene tool not found."},{status:400});
+    const done=await ccssAct(live.db,live.project.id,tool,action);
+    if((done as {error?:string}).error)return NextResponse.json({error:(done as {error:string}).error},{status:400});
+    return NextResponse.json({ok:true,...done});
   }
 
   if (body.youtube) {
@@ -280,6 +377,16 @@ export async function POST(request: Request, context: Context) {
     const payload=JSON.stringify({outcomes:{[tool.id]:{result:JSON.stringify(outcome)}}});
     const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id)});
+  }
+  // ---- City Crime Scene: dashboard buttons (briefing / evidence / hide) ----
+  if(control.action.startsWith('ccss.')){
+    const rest=control.action.slice(5),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
+    const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='city-crime-scene'&&t.enabled);
+    const kind={briefing:'briefing',evidence:'evidence',hide:'hide'}[op];
+    if(!tool||!kind)return NextResponse.json({error:"City Crime Scene action not found."},{status:400});
+    const done=await ccssAct(live.db,live.project.id,tool,{toolId:tool.id,kind});
+    if((done as {error?:string}).error)return NextResponse.json({error:(done as {error:string}).error},{status:400});
+    return NextResponse.json({ok:true,...done});
   }
   if(control.action==='sequence')return NextResponse.json({error:"Run this sequence from the host dashboard."},{status:400});
   const outcomes:Record<string,{result:string;segments?:string[]}>= {};
