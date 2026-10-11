@@ -25,7 +25,7 @@ const chapters: Chapter[] = [
 ];
 
 export default function GuidePage() {
-  const [mode, setMode] = useState<"demo" | "site">("site");
+  const [mode, setMode] = useState<"demo" | "site">("demo");
   const [demoIndex, setDemoIndex] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -61,6 +61,9 @@ export default function GuidePage() {
     void fetch("/api/projects", { cache: "no-store" }).then(async response => {
       if (!response.ok) return;
       const data = await response.json();
+      if (!data || !Array.isArray(data.projects)) return;
+      // Signed in: show the real site screens instead of the pre-signup demo.
+      setMode("site");
       const projects: Project[] = Array.isArray(data.projects) ? data.projects.map((row: any) => row.data as Project).filter(Boolean) : [];
       if (cancelled) return;
       const editable = projects[0];

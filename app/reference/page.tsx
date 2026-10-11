@@ -24,11 +24,11 @@ function PracticePreview({project}:{project:Project}) {
   return <div className="reference-workbench">
     <section aria-label="Practice controls" className="reference-controls">
       <p role="status">{feedback}</p><h2>Dashboard buttons</h2><p>Try the saved assignments.</p>
-      {project.controls.filter(control=>!control.sequenceOnly).map(control=><button key={control.id} onClick={()=>fire(control)} style={controlButtonStyle(control)}>{controlLabel(project,control,runtime.cardStates)}<small>{control.toolIds?.map(id=>tools.find(t=>t.id===id)?.name).filter(Boolean).join(" + ") || control.detail}</small></button>)}
+      {project.controls.filter(control=>!control.sequenceOnly).map(control=><button key={control.id} onClick={()=>fire(control)} style={controlButtonStyle(control)}>{controlLabel(project,control,runtime.cardStates)}<small aria-hidden="true">{control.toolIds?.map(id=>tools.find(t=>t.id===id)?.name).filter(Boolean).join(" + ") || control.detail}</small></button>)}
       {tools.filter(t=>t.type==="random-picker").map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}
       {tools.filter(t=>infoTypes.includes(t.type)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}
       <h2>Toolbox</h2><p>Try each tool individually. The optional timer runs separately from the cards.</p>
-      {tools.filter(tool=>!["question-card","blank-card","random-picker",...infoTypes].includes(tool.type)).map(tool=><button key={tool.id} onClick={()=>tryTool(tool.id,tool.name)}>{tool.name}<small>{tool.type.replaceAll("-"," ")}</small></button>)}
+      {tools.filter(tool=>!["question-card","blank-card","random-picker",...infoTypes].includes(tool.type)).map(tool=><button key={tool.id} onClick={()=>tryTool(tool.id,tool.name)}>{tool.name}<small aria-hidden="true">{tool.type.replaceAll("-"," ")}</small></button>)}
     </section>
     <section className="reference-preview" aria-label="Audience practice preview">
       {background?.url && <img className="reference-background" src={background.url} alt={background.name}/>}

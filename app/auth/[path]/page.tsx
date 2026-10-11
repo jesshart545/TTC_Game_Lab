@@ -31,8 +31,8 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
 
   return <main className="auth-page" style={{minHeight:"100vh",display:"grid",placeItems:"center",background:"#05060a",color:"white",padding:24}}>
     <section style={{width:"min(440px,100%)",border:"1px solid #262b3b",borderRadius:20,padding:32,background:"#0b0d14"}}>
-      <div style={{fontWeight:800,fontSize:22,marginBottom:6}}>TTCGameLab</div>
-      <p style={{color:"#9aa3b5",marginTop:0}}>Private creator workspace</p>
+      <div style={{fontWeight:800,fontSize:22,marginBottom:6}}>Welcome to TTCGameLab</div>
+      <p style={{color:"#9aa3b5",marginTop:0}}>Sign in to your private creator workspace</p>
       <div className="auth-tabs" role="group" aria-label="Account access">
         <button aria-pressed={mode === "sign-in"} disabled={busy} onClick={()=>setMode("sign-in")} type="button">Sign in</button>
         <button aria-pressed={mode === "sign-up"} disabled={busy} onClick={()=>setMode("sign-up")} type="button">Create account</button>
@@ -45,7 +45,14 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
         <button className="auth-submit" disabled={busy} type="submit">{busy ? "Please wait…" : mode === "sign-up" ? "Create account" : "Sign in"}</button>
       </form>
       <p style={{color:"#7f8797",fontSize:13,marginTop:20}}>Your projects and assets belong to your account.</p>
-      <Link href="/tutorial" style={{color:"#9aa3b5",fontSize:13}}>How TTCGameLab works</Link>
+      <div style={{marginTop:16,padding:14,border:"1px solid #2a3a2e",borderRadius:12,background:"#0a0f0a"}}>
+        <p style={{color:"#dfe5ee",fontSize:13,fontWeight:700,margin:"0 0 8px"}}>🖥️ To take your overlay live you will need:</p>
+        <ul style={{color:"#9aa3b5",fontSize:13,margin:0,paddingLeft:18,lineHeight:1.8}}>
+          <li>A PC running TikTok Live Studio</li>
+          <li>The overlay added as a browser source at 1920 × 1080</li>
+        </ul>
+      </div>
+      <p style={{marginTop:16}}><Link href="/guide" style={{color:"#9aa3b5",fontSize:13}}>How TTCGameLab works — no account needed</Link></p>
     </section>
   </main>;
 }
