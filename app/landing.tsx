@@ -199,6 +199,7 @@ export default function LandingPage() {
           <div style={navLinks}>
             <Link href="/guide" style={navLink}>How it works</Link>
             <Link href="/reference" style={navLink}>Practice project</Link>
+            <Link href="/about" style={navLink}>Who we are</Link>
             <Link href="/auth/sign-in" style={loginBtn}>Log in</Link>
             <Link href="/auth/sign-up" style={signupBtn}>Create account</Link>
           </div>
@@ -300,6 +301,7 @@ export default function LandingPage() {
           <span>© TTCGameLab</span>
           <Link href="/guide" style={navLink}>How it works</Link>
           <Link href="/reference" style={navLink}>Practice project</Link>
+          <Link href="/about" style={navLink}>Who we are</Link>
           <Link href="/auth/sign-in" style={navLink}>Log in</Link>
         </footer>
       </div>
