@@ -47,14 +47,18 @@ export default function AboutPage() {
       <main style={wrap}>
         <h1 style={h1}>Who we are</h1>
         <p style={lede}>
-          TTC Game Lab is an independent project built by a creator, for creators — specifically the
-          TikTok LIVE hosts who turn an ordinary stream into something their audience remembers.
+          TTC Game Lab was inspired by a supporter who watched her creator friends give everything
+          to their streams — and wanted to help them optimize their lives around it. When
+          you&rsquo;re live every day, saturation sets in: the same formats, the same grind,
+          the same ceiling. She believed everyday creators deserved better than burnout for
+          average output.
         </p>
         <p style={lede}>
-          There&rsquo;s no big studio or investor behind this. It started from a simple idea: any host
-          should be able to run an interactive show — trivia nights, giveaways, polls, live challenges —
-          without writing code or hiring a production team. So we built the tool we wished existed:
-          describe what you want, get a host dashboard and an audience overlay, and go live.
+          Her vision was simple: studio-quality output within reach of the everyday creator —
+          no production team, no big budget, no code. So this was built for them, and for the
+          💜 TTF 💜 family on TikTok: describe the interactive show you want — trivia nights,
+          giveaways, polls, live challenges — and get a host dashboard plus an audience overlay
+          that make it real. Then go live.
         </p>
         <p style={lede}>
           The site is free to use, and we&rsquo;d like to keep it that way. If TTC Game Lab has made
