@@ -5,6 +5,9 @@
 .workspace-page>.workspace-topbar .workspace-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-left:auto}
 .workspace-page>.workspace-topbar .workspace-save-group{display:flex;flex-direction:column;gap:2px;max-width:220px}
 .workspace-page>.workspace-topbar .workspace-save-group small{font-size:11px;color:#8a96a8;line-height:1.3}
+/* Separate the destructive Delete Project action from Save progress (a confirm dialog already guards the click). */
+.workspace-page>.workspace-topbar .workspace-actions .danger-btn{position:relative;margin-left:14px}
+.workspace-page>.workspace-topbar .workspace-actions .danger-btn::before{content:"";position:absolute;left:-9px;top:6px;bottom:6px;width:1px;background:#2a3348;pointer-events:none}
 .workspace-page>.workshop-flow{flex:0 0 auto;margin:12px clamp(12px,2vw,28px) 0;padding:14px 16px 12px;border-radius:12px;border:1px solid #2a3a4e;background:#0a111b;box-shadow:none}
 .workspace-page>.workshop-flow .workshop-flow-heading{align-items:center;gap:12px;margin-bottom:4px}
 .workspace-page>.workshop-flow .workshop-flow-heading h1{font-size:clamp(18px,2vw,24px);margin:2px 0 0;letter-spacing:-.3px;line-height:1.2}
