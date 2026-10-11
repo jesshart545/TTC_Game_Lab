@@ -1,8 +1,26 @@
 import { videoDuration } from "../../../lib/video-duration";
 import { musicDuration } from "../../../lib/music-duration";
+import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+
+function providerMessage(payload: any): string {
+  return String(payload?.detail || payload?.error || payload?.message || "");
+}
+
+/**
+ * fal.ai failures: credit/quota problems go to the admin only. The creator
+ * sees a generic message and is never told about balances or top-ups.
+ */
+async function falError(source: string, status: number, payload: any, fallback: string) {
+  const message = providerMessage(payload);
+  if (isCreditError(status, message)) {
+    await notifyAdminOfCreditIssue(`generate-asset/${source}`, `fal.ai request failed (HTTP ${status}): ${message || "no detail"}`);
+    return jsonError("This generation is temporarily unavailable. The site administrator has been notified.", 502);
+  }
+  return jsonError(message || fallback, status);
+}
 
 function jsonError(message: unknown, status = 500) {
   const format = (value: unknown): string => {
@@ -60,7 +78,7 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return jsonError(payload?.detail || payload?.error || payload?.message || "Nano Banana 2 image generation failed.", response.status);
+    if (!response.ok) return falError("image", response.status, payload, "Nano Banana 2 image generation failed.");
     const url = payload?.images?.[0]?.url || "";
     if (!url) return jsonError("Nano Banana 2 returned no image output.", 502);
     return NextResponse.json({ url, type: "image", model, provider: "fal" });
@@ -94,9 +112,14 @@ export async function POST(request: Request) {
         cache: "no-store",
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) return jsonError(response.status === 402
-        ? "fal.ai has insufficient credits for video generation. The site administrator needs to add fal.ai credits."
-        : payload?.detail || payload?.error || payload?.message || "Image animation failed.", response.status);
+      if (!response.ok) {
+        const providerMessage = String(payload?.detail || payload?.error || payload?.message || "");
+        if (isCreditError(response.status, providerMessage)) {
+          await notifyAdminOfCreditIssue("generate-asset/video", `fal.ai request failed (HTTP ${response.status}): ${providerMessage || "no detail"}`);
+          return jsonError("Video generation is temporarily unavailable. The site administrator has been notified.", 502);
+        }
+        return jsonError(payload?.detail || payload?.error || payload?.message || "Image animation failed.", response.status);
+      }
       if (!payload?.request_id || !payload?.status_url || !payload?.response_url) return jsonError("The animation provider returned an incomplete task.", 502);
       const videoId = Buffer.from(JSON.stringify({
         id: payload.request_id, status: payload.status_url, result: payload.response_url,
@@ -158,7 +181,7 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return jsonError(payload?.detail || payload?.error || payload?.message || "Eleven v3 voice generation through fal failed.", response.status);
+    if (!response.ok) return falError("voice", response.status, payload, "Eleven v3 voice generation through fal failed.");
     const url = payload?.audio?.url || "";
     if (!url) return jsonError("Eleven v3 returned no audio output.", 502);
     return NextResponse.json({ type, url, voice, model, provider: "fal-elevenlabs" });
@@ -176,7 +199,7 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return jsonError(payload?.detail || payload?.error || payload?.message || "ElevenLabs sound-effect generation through fal failed.", response.status);
+    if (!response.ok) return falError("sfx", response.status, payload, "ElevenLabs sound-effect generation through fal failed.");
     const url = payload?.audio?.url || "";
     if (!url) return jsonError("ElevenLabs sound-effects returned no audio output.", 502);
     return NextResponse.json({ type: "sfx", url, model, provider: "fal-elevenlabs" });
@@ -221,17 +244,7 @@ export async function POST(request: Request) {
 
     const submitPayload = await submitResponse.json().catch(() => ({}));
     if (!submitResponse.ok) {
-      const falError =
-        typeof submitPayload?.detail === "string"
-          ? submitPayload.detail
-          : typeof submitPayload?.message === "string"
-            ? submitPayload.message
-            : typeof submitPayload?.error === "string"
-              ? submitPayload.error
-              : submitPayload?.detail || submitPayload?.error
-                ? JSON.stringify(submitPayload.detail || submitPayload.error)
-                : "fal music generation failed.";
-      return jsonError(falError, submitResponse.status);
+      return falError("music", submitResponse.status, submitPayload, "fal music generation failed.");
     }
 
     const requestId = submitPayload?.request_id;
