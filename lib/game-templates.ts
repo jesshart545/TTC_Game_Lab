@@ -342,7 +342,6 @@ const wordAssociation: GameTemplate = {
       controls: [
         { id: "wa-prompt", label: "Show Prompt Word", action: "cards.blank.wa-card", detail: "Display the prompt word — type it in the card panel first", toolIds: ["wa-card"] },
         { id: "wa-hide", label: "Hide Prompt", action: "cards.clear.wa-card", detail: "Hide the prompt word card", toolIds: ["wa-card"] },
-        { id: "wa-rounds", label: "Show Round Bank", action: "cards.toggle.wa-rounds", detail: "Show the host's round list (5 sample rounds included)", toolIds: ["wa-rounds"] },
         { id: "wa-scores", label: "Show Scores", action: "cards.toggle.wa-scores", detail: "Show or hide the scoreboard", toolIds: ["wa-scores"] },
       ],
     };
@@ -440,7 +439,6 @@ const guessTheLogo: GameTemplate = {
       controls: [
         { id: "gl-stage", label: "Show Stage", action: "cards.blank.gl-card", detail: "Display the current zoom stage — paste the stage text in the card panel first", toolIds: ["gl-card"] },
         { id: "gl-hide", label: "Hide Logo Card", action: "cards.clear.gl-card", detail: "Hide the logo card between stages", toolIds: ["gl-card"] },
-        { id: "gl-rounds", label: "Show Logo Rounds", action: "cards.toggle.gl-rounds", detail: "Show the host's round list with answers", toolIds: ["gl-rounds"] },
         { id: "gl-scores", label: "Show Scores", action: "cards.toggle.gl-scores", detail: "Show or hide the scoreboard", toolIds: ["gl-scores"] },
       ],
     };
@@ -573,7 +571,6 @@ const prizeDrawWheel: GameTemplate = {
     ],
     controls: [
       { id: "pd-spin", label: "Spin the Wheel", action: "tool.pd-wheel", detail: "Spin the prize wheel live", toolIds: ["pd-wheel"] },
-      { id: "pd-entries", label: "Show Entries", action: "cards.toggle.pd-entries", detail: "Show the draw entries list", toolIds: ["pd-entries"] },
       { id: "pd-prizes", label: "Show Prizes", action: "cards.toggle.pd-prizes", detail: "Show the prize tracker — award winners in its host panel", toolIds: ["pd-prizes"] },
       { id: "pd-hide", label: "Hide Wheel", action: "tool.pd-wheel", detail: "Remove the wheel from the overlay", toolIds: ["pd-wheel"] },
     ],
@@ -655,7 +652,6 @@ const playlistBingo: GameTemplate = {
         { id: "pb-draw", label: "Draw a Song", action: "cards.toggle.pb-picker", detail: "Draw a random unused song — no repeats this game", toolIds: ["pb-picker"] },
         { id: "pb-called", label: "Show Called Songs", action: "cards.blank.pb-called", detail: "Display the called-songs list — type it in the card panel first", toolIds: ["pb-called"] },
         { id: "pb-hide", label: "Hide Called Songs", action: "cards.clear.pb-called", detail: "Hide the called-songs card", toolIds: ["pb-called"] },
-        { id: "pb-pool", label: "Show Song Pool", action: "cards.toggle.pb-songs", detail: "Show the full 24-song pool", toolIds: ["pb-songs"] },
         { id: "pb-scores", label: "Show Scores", action: "cards.toggle.pb-scores", detail: "Show or hide the scoreboard", toolIds: ["pb-scores"] },
         { id: "pb-new", label: "New Bingo Game", action: "cards.new-game.pb-picker", detail: "Reset the draw history for a fresh game", toolIds: ["pb-picker"] },
       ],
