@@ -21,6 +21,8 @@ export async function requireCreator() {
   return { id: String(user.id), email: String(user.email || ""), role: String(user.role || "user") };
 }
 
-export function isAdmin(user: { role?: string } | null) {
-  return user?.role === "admin";
+export function isAdmin(user: { role?: string; email?: string } | null) {
+  if (user?.role === "admin") return true;
+  const emails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+  return !!user?.email && emails.includes(user.email.toLowerCase());
 }
