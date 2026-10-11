@@ -72,7 +72,13 @@ export default function PublishedProject() {
               continue;
             }
             const control = published.controls.find(item => item.id === event.controlId);
-            if (!control) continue;
+            if (!control) {
+              const ccssTool = published.gameTools.find(t => t.id === event.controlId && t.type === "city-crime-scene" && t.enabled);
+              if (ccssTool && event.payload?.outcomes?.[ccssTool.id]?.result) {
+                fireRef.current({ id: `ccss-${event.id}`, label: ccssTool.name, action: `tool.${ccssTool.id}`, detail: "City Crime Scene", toolIds: [ccssTool.id] } as ProjectEvent, event.payload.outcomes);
+              }
+              continue;
+            }
             fireRef.current(control,event.payload?.outcomes);
           }
         } catch {} finally { if (!cancelled) timer = window.setTimeout(poll, 1000); }

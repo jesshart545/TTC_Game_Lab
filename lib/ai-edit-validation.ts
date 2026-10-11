@@ -128,7 +128,7 @@ export function validateSequenceAdditions(request:string,input:unknown,action?:u
   scoreboard:/\b(?:score\s*boards?|leader\s*boards?|score\s+trackers?|team\s+scores?|strike\s+(?:tally|counter))\b/i,
   countdown:/\b(?:countdown|timer)\b/i,
   wheel:/\bwheel\b/i,'random-picker':/\b(?:picker|random\s+(?:image|card|item|choice))\b/i,
-  poll:/\b(?:poll|vote|voting)\b/i,dice:/\b(?:dice|die)\b/i,'coin-toss':/\bcoin\b/i,plinko:/\bplinko\b/i,'higher-lower':/\bhigher\s+or\s+lower\b/i,cliffhanger:/\bcliffhanger\b/i,'prize-wheel':/\b(?:big\s+wheel|price\s+is\s+right\s+wheel)\b/i,
+  poll:/\b(?:poll|vote|voting)\b/i,dice:/\b(?:dice|die)\b/i,'coin-toss':/\bcoin\b/i,plinko:/\bplinko\b/i,'higher-lower':/\bhigher\s+or\s+lower\b/i,cliffhanger:/\bcliffhanger\b/i,'prize-wheel':/\b(?:big\s+wheel|price\s+is\s+right\s+wheel)\b/i,'city-crime-scene':/\bcity\s+crime\s+scene\b/i,
   youtube:/\byoutube\b/i,'prize-list':/\bprize\b/i,'game-tool-list':/\b(?:gift|tool\s+list)\b/i,
   'card-list':/\b(?:cards?|list|pool|trivia)\b/i,
  };
