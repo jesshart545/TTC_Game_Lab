@@ -27,8 +27,9 @@ export type GameTemplate = {
   tagline: string;
   description: string;
   icon: string;
-  category: TemplateCategory;
+  category: TemplateCategory | "Restricted";
   buildDraft: () => TemplateDraft;
+  restricted?: boolean;
 };
 
 const cardSkin = (bg: string, accent: string) => ({
@@ -759,6 +760,41 @@ const escapeRoom: GameTemplate = {
 };
 
 // ---------------------------------------------------------------------------
+// 10. City Crime Scene — restricted improv whodunnit (entitled accounts only)
+// ---------------------------------------------------------------------------
+const cityCrimeScene: GameTemplate = {
+  id: "city-crime-scene",
+  name: "City Crime Scene",
+  tagline: "Improv whodunnit mystery game — Law & Order style",
+  description:
+    "A reusable improv-style murder mystery game. The host builds a case with suspects, clues, and twists; detectives investigate, interrogate, and accuse. For entitled accounts only.",
+  icon: "🔍",
+  category: "Restricted",
+  restricted: true,
+  buildDraft: () => ({
+    name: "City Crime Scene",
+    description: "Improv whodunnit mystery game. Customize the case, suspects, and clues.",
+    overlay: {
+      title: "CITY CRIME SCENE",
+      subtitle: "A MURDER MYSTERY",
+      showChat: true,
+      showAlerts: true,
+      showCharacter: false,
+    },
+    gameTools: [
+      {
+        id: `city-crime-scene-${Date.now()}`,
+        type: "city-crime-scene" as any,
+        name: "City Crime Scene",
+        enabled: true,
+        config: {},
+      },
+    ],
+    controls: [],
+  }),
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 export const GAME_TEMPLATES: GameTemplate[] = [
@@ -771,6 +807,7 @@ export const GAME_TEMPLATES: GameTemplate[] = [
   prizeDrawWheel,
   playlistBingo,
   escapeRoom,
+  cityCrimeScene,
 ];
 
 export function getGameTemplate(id: string): GameTemplate | undefined {
