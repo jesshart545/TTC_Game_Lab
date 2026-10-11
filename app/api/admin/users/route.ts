@@ -11,7 +11,8 @@ export async function GET(){
   const rows=await db`SELECT id,email,name,created_at FROM neon_auth.user ORDER BY created_at DESC LIMIT 500`;
   return NextResponse.json({users:rows.map((r:any)=>({id:String(r.id),email:String(r.email||''),name:r.name?String(r.name):null,createdAt:r.created_at?new Date(r.created_at).toISOString():null}))},{headers:{'Cache-Control':'no-store'}});
  }catch(e){
-  console.error('[admin/users] query failed:', e instanceof Error ? e.message : e);
-  return NextResponse.json({error:'User list could not be loaded.'},{status:503});
+  const detail = e instanceof Error ? e.message : String(e);
+  console.error('[admin/users] query failed:', detail);
+  return NextResponse.json({error:'User list could not be loaded.', detail},{status:503});
  }
 }
