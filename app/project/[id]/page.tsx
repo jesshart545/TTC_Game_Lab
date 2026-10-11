@@ -75,6 +75,7 @@ export default function ProjectWorkspace() {
   const params = useParams<{ id: string }>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [buildAiOpen,setBuildAiOpen]=useState(false);
   const runtime = useRuntimeActions(project,states=>{if(project)persist({...project,cardPreviewStates:states});},()=>{setYoutubeToolOpen(true);setSideBySideTesting(true);});
   const projectRef = useRef<Project | null>(null);
@@ -265,7 +266,7 @@ export default function ProjectWorkspace() {
         if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
       }
       if (!found) {
-        setAssetStatus("Project could not be loaded. Please refresh the page.");
+        setLoadFailed(true);
         return;
       }
       let hydrated = found;
@@ -1128,6 +1129,7 @@ export default function ProjectWorkspace() {
       return false;
     },
   });
+  if (loadFailed) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Project not found</h1><p>This project does not exist or you do not have access to it.</p><p><a href="/projects">Return to your projects</a></p></main>;
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   const firstActionTaken = entryStages[workflowStep] ?? hasExistingEntryAction(project, workflowStep);
   const backgroundChosen = hasExistingEntryAction(project, 1);
