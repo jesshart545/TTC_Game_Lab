@@ -5,7 +5,7 @@ import {applyDraftChanges,normalizeDraftChanges} from './draft-edit';
 import {addCreationControl} from './build-controls';
 import {toolDefaults} from './game-tools';
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
-export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','prize-wheel','blank-board','youtube','scoreboard','prize-list','game-tool-list','card-list'];
+export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','prize-wheel','blank-board','youtube','scoreboard','prize-list','game-tool-list','card-list','city-crime-scene'];
 export function applyBuildChanges(project:Project,input:unknown){
  const changes=normalizeDraftChanges(input),warnings:string[]=[];let extra=0;
  let next={...project,gameTools:[...project.gameTools],assetPools:(project.assetPools||[]).map(p=>({...p,assetKeys:[...p.assetKeys]}))};

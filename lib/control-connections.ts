@@ -39,7 +39,7 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
 
 export function assignControlAction(project: Project, control: ProjectEvent, action: string): ProjectEvent {
   const card = cardControl(action);
-  const customToolId=action.startsWith('hl.')||action.startsWith('cliff.')||action.startsWith('prizewheel.')?action.split('.').slice(2).join('.'):null;
+  const customToolId=action.startsWith('hl.')||action.startsWith('cliff.')||action.startsWith('prizewheel.')||action.startsWith('ccss.')?action.split('.').slice(2).join('.'):null;
   const tool = project.gameTools.find(t => t.id === timerAction(action)?.toolId || t.id === card?.toolId || action === `tool.${t.id}` || action === `coin.cycle.${t.id}` || (customToolId!=null&&t.id===customToolId));
   const composition = project.compositions?.find(c => action === `composition.play.${c.id}`);
   return {...control, action, toolIds: tool ? [tool.id] : [], compositionId: composition?.id,
