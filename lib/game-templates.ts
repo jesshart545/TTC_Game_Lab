@@ -743,7 +743,6 @@ const escapeRoom: GameTemplate = {
         { id: "er-show", label: "Show Active Puzzle", action: "cards.show.er-active", detail: "Draw an unsolved puzzle", toolIds: ["er-active"] },
         { id: "er-reveal", label: "Reveal Solution", action: "cards.reveal.er-active", detail: "Reveal the puzzle solution and lock code", toolIds: ["er-active"] },
         { id: "er-hide", label: "Hide Puzzle", action: "cards.clear.er-active", detail: "Hide the active puzzle", toolIds: ["er-active"] },
-        { id: "er-all", label: "Show All Puzzles", action: "cards.toggle.er-clues", detail: "Show the host's full puzzle list", toolIds: ["er-clues"] },
         { id: "er-lock-show", label: "Show Lock", action: "cards.blank.er-lock", detail: "Display the combination lock — type its state in the card panel first", toolIds: ["er-lock"] },
         { id: "er-lock-hide", label: "Hide Lock", action: "cards.clear.er-lock", detail: "Hide the combination lock", toolIds: ["er-lock"] },
         { id: "er-timer-show", label: "Show Timer", action: "timer.show.er-timer", detail: "Display the 60-minute timer without starting it", toolIds: ["er-timer"] },
