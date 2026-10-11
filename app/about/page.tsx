@@ -4,11 +4,9 @@ import Link from "next/link";
 
 /**
  * Donation link configuration.
- * Set NEXT_PUBLIC_DONATE_URL (e.g. a live Stripe payment link) to override.
- * NOTE: the fallback below is a Stripe TEST link — replace with the live
- * donation link before merging to main.
+ * Set NEXT_PUBLIC_DONATE_URL to override the built-in link.
  */
-const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL || "https://buy.stripe.com/test_bJe28rbgxaFD1yeeNsgjC00";
+const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL || "https://buy.stripe.com/8x25kwaJhdu23J95UGawo00";
 
 const shell: React.CSSProperties = {
   minHeight: "100vh", background: "radial-gradient(1200px 600px at 80% -10%, #16233d 0%, #0b0f1a 55%, #070a12 100%)",
