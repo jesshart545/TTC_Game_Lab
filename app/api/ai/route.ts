@@ -12,6 +12,7 @@ import {creatableTools,applyBuildChanges} from "../../../lib/build-edits";
 import { musicDuration } from "../../../lib/music-duration";
 import {groundedResearchCards} from "../../../lib/research-cards";
 import {validateExplicitSettings, validateSavedReferences, validateCompletionClaim, validateSequenceBehavior, validateRequestedAutomation, validateSequenceAdditions, validateRequestedTargets} from "../../../lib/ai-edit-validation";
+import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
 import { NextResponse } from "next/server";
 
 const SYSTEM = `You are TTCGameLab AI, a creative director and application builder for interactive TikTok LIVE experiences. Do not merely return a specification. Interpret the creator's request and propose concrete changes to the project's dashboard, overlay, scenes, controls, assets, and interactions. Keep the existing project context intact and make incremental edits when the user asks for changes.`;
@@ -82,6 +83,13 @@ export async function POST(request: Request) {
   if (!response?.ok) {
     if(connectionFailed && !response) return NextResponse.json({configured:true,error:"The AI service did not respond in time. No changes were made. Please try your request again."},{status:504});
     const providerMessage = payload?.error?.message || payload?.message || "Agnes request failed.";
+    if (isCreditError(response?.status, String(providerMessage))) {
+      await notifyAdminOfCreditIssue("ai/creative-director", `Agnes request failed (HTTP ${response?.status || "unknown"}, model ${lastModel}): ${providerMessage}`);
+      return NextResponse.json({
+        configured: true,
+        error: "The AI assistant is temporarily unavailable. The site administrator has been notified. No changes were made.",
+      }, { status: 502 });
+    }
     const unavailableModel = /no available channel|model.*not.*available|unsupported model/i.test(String(providerMessage));
     return NextResponse.json({
       configured: true,
