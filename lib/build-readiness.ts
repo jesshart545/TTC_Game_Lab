@@ -25,7 +25,7 @@ export function buildReadiness(project: Project): BuildIssue[] {
    const missing=ops.filter(op=>!project.controls.some(c=>{const t=timerAction(c.action||'');return t&&t.toolId===tool.id&&t.operation===op;}));
    if(missing.length)issues.push({id:'timer-controls-'+tool.id,message:tool.name+': connect Show, Start/pause, and Hide dashboard buttons so the timer can run live.',kind:'tool',targetId:tool.id,fix:'connect'});
   }
-  if(!['blank-board','trivia-board','card-list'].includes(tool.type)){
+  if(!['blank-board','trivia-board','card-list','trivia-list'].includes(tool.type)){
    const linked=project.controls.some(c=>{
     if(c.toolIds?.includes(tool.id))return true;
     if(c.action===`tool.${tool.id}`||c.action===`coin.cycle.${tool.id}`)return true;

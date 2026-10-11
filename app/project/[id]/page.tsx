@@ -257,8 +257,16 @@ export default function ProjectWorkspace() {
     let cancelled = false;
     (async () => {
       let found: Project | null = null;
-      try { found = await loadProjectFromServer(params.id); } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Could not load project."); }
-      if (!found) return;
+      // Retry loading with backoff (handles race condition when project was just created)
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try { found = await loadProjectFromServer(params.id); } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Could not load project."); }
+        if (found || cancelled) break;
+        if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
+      if (!found) {
+        setAssetStatus("Project could not be loaded. Please refresh the page.");
+        return;
+      }
       let hydrated = found;
       try {
         hydrated = await hydrateProjectAssets(found);
