@@ -61,6 +61,7 @@ export type Project = {
   gamePlan?: Record<string, string>;
   cardPreviewStates?:Record<string,CardState>;
   workflow?: { stage: number; workshopStep: number; promptDraft: string; generatorPrompt?: string };
+  templateId?: string;
   publishedSnapshot?: Omit<Project, "publishedSnapshot">;
 };
 
