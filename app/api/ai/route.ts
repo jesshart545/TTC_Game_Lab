@@ -13,6 +13,7 @@ import { musicDuration } from "../../../lib/music-duration";
 import {groundedResearchCards} from "../../../lib/research-cards";
 import {validateExplicitSettings, validateSavedReferences, validateCompletionClaim, validateSequenceBehavior, validateRequestedAutomation, validateSequenceAdditions, validateRequestedTargets} from "../../../lib/ai-edit-validation";
 import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
+import { getGameTemplate } from "../../../lib/game-templates";
 import { NextResponse } from "next/server";
 
 const SYSTEM = `You are TTCGameLab AI, a creative director and application builder for interactive TikTok LIVE experiences. Do not merely return a specification. Interpret the creator's request and propose concrete changes to the project's dashboard, overlay, scenes, controls, assets, and interactions. Keep the existing project context intact and make incremental edits when the user asks for changes.`;
@@ -40,6 +41,9 @@ export async function POST(request: Request) {
   const body = await request.json();
   if(Array.isArray(body.searchEvidence))body.searchEvidence=body.searchEvidence.map((source:any,sourceId:number)=>({...source,sourceId}));
   const draftEdit = body.mode === "draft-edit";
+  const templateInfo = body.project?.templateId ? getGameTemplate(body.project.templateId) : undefined;
+  const templateNote = templateInfo ? `\nThis project was started from the "${templateInfo.name}" game template. ${templateInfo.description} When the user asks to customize it, help them modify the template's questions, content, styling, rules, or structure. You can edit any part of the template.` : "";
+  const systemContent = DRAFT_SYSTEM + templateNote;
   const draftContext = draftEdit ? {
     request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
     selectedImageKey: body.selectedImageKey, selectedAssetKey:body.selectedAssetKey, workspaceStage: body.workspaceStage,
@@ -62,7 +66,7 @@ export async function POST(request: Request) {
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: draftEdit ? [{ role: "system", content: DRAFT_SYSTEM }, { role: "user", content: JSON.stringify(draftContext) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
+      messages: draftEdit ? [{ role: "system", content: systemContent }, { role: "user", content: JSON.stringify(draftContext) }] : [{ role: "system", content: SYSTEM }, ...(Array.isArray(body.messages) ? body.messages : [])],
       ...(draftEdit ? { response_format: { type: "json_object" } } : {}),
       temperature: draftEdit ? .2 : .7,
       ...(draftEdit ? {max_tokens:12288} : {}),
@@ -164,7 +168,7 @@ export async function POST(request: Request) {
           const retry = await fetch(provider.url, {
             method:"POST", headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},
             body:JSON.stringify({model:lastModel,response_format:{type:"json_object"},temperature:0,max_tokens:12288,messages:[
-              {role:"system",content:DRAFT_SYSTEM},
+              {role:"system",content:systemContent},
               {role:"user",content:JSON.stringify(draftContext)},
               {role:'assistant',content:String(message)},
               {role:"user",content:(validationError instanceof Error?'Correct this missing setting: '+validationError.message+' ':'')+'Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. Describe the final proposal in plain language, never the validation repair or JSON correction. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories.'}

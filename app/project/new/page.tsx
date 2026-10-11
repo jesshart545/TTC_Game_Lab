@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createProject, saveProjectToServer } from "../../../lib/project";
+import { getGameTemplate } from "../../../lib/game-templates";
 
 export default function NewProject() {
   const router = useRouter();
@@ -15,19 +16,38 @@ export default function NewProject() {
   useEffect(() => {
     let cancelled = false;
     if (!creation.current) {
-      const idea=new URLSearchParams(window.location.search).get("idea")?.trim().slice(0,12000)||"";
+      const params = new URLSearchParams(window.location.search);
+      const idea = params.get("idea")?.trim().slice(0, 12000) || "";
+      const templateId = params.get("template")?.trim() || "";
+      const template = templateId ? getGameTemplate(templateId) : undefined;
       const project = createProject("");
-      project.prompt=idea;
-      project.workflow={stage:0,workshopStep:0,promptDraft:idea};
-      if(idea)project.gamePlan={theme:idea};
-      project.name = "New Project";
-      project.description = "Your TikTok LIVE creation workspace.";
-      project.controls = [];
-      project.overlay = { ...project.overlay, title: "YOUR LIVESTREAM", showCharacter: false };
-      project.messages = [{
-        role: "assistant",
-        text: "Tell me what you want to create, or start with the trivia generator, board and tool templates, uploads, or Asset Composer. Your draft is ready to customize.",
-      }];
+      if (template) {
+        // Start from a prebuilt game template.
+        const draft = template.buildDraft();
+        project.name = draft.name;
+        project.description = draft.description;
+        project.overlay = { ...project.overlay, ...draft.overlay };
+        project.gameTools = draft.gameTools;
+        project.controls = draft.controls;
+        project.prompt = `Started from the "${template.name}" template.`;
+        project.templateId = template.id;
+        project.messages = [{
+          role: "assistant",
+          text: `Your "${template.name}" game is ready! ${template.tagline} Use "Edit with AI" below to customize anything — the questions, prizes, look, rules — or dive into the workshop and tweak it yourself.`,
+        }];
+      } else {
+        project.prompt = idea;
+        project.workflow = { stage: 0, workshopStep: 0, promptDraft: idea };
+        if (idea) project.gamePlan = { theme: idea };
+        project.name = "New Project";
+        project.description = "Your TikTok LIVE creation workspace.";
+        project.controls = [];
+        project.overlay = { ...project.overlay, title: "YOUR LIVESTREAM", showCharacter: false };
+        project.messages = [{
+          role: "assistant",
+          text: "Tell me what you want to create, or start with the trivia generator, board and tool templates, uploads, or Asset Composer. Your draft is ready to customize.",
+        }];
+      }
       creation.current = saveProjectToServer(project).then(() => project.id);
     }
     creation.current.then(
