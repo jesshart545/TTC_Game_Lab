@@ -1,1 +1,83 @@
-aW1wb3J0IHsgTmV4dFJlc3BvbnNlIH0gZnJvbSAibmV4dC9zZXJ2ZXIiOwppbXBvcnQgeyBhc3Npc3RhbnRQcm92aWRlciB9IGZyb20gIi4uLy4uLy4uLy4uL2xpYi9hc3Npc3RhbnQtcHJvdmlkZXIiOwppbXBvcnQgeyB2YWxpZGF0ZUNpdHlDcmltZVNjZW5lLCB0eXBlIENpdHlDcmltZVNjZW5lQ29uZmlnLCBjYW5Vc2VDaXR5Q3JpbWVTY2VuZSB9IGZyb20gIi4uLy4uLy4uLy4uL2xpYi9jaXR5LWNyaW1lLXNjZW5lIjsKaW1wb3J0IHsgcmVxdWlyZUNyZWF0b3IgfSBmcm9tICIuLi8uLi8uLi8uLi9saWIvYXV0aC9zZXJ2ZXIiOwoKZXhwb3J0IGNvbnN0IG1heER1cmF0aW9uID0gMTgwOwoKY29uc3QgU1lTVEVNID0gYFlvdSBhcmUgYSBMYXcgJiBPcmRlci1zdHlsZSBteXN0ZXJ5IHdyaXRlciBmb3IgYW4gaW50ZXJhY3RpdmUgbGl2ZXN0cmVhbSBpbXByb3YgZ2FtZSBjYWxsZWQgQ2l0eSBDcmltZSBTY2VuZS4gVGhlIGhvc3QgZ2l2ZXMgeW91IGEgcHJlbWlzZTsgeW91IHJldHVybiBPTkUgY29tcGxldGUsIGludGVybmFsbHkgY29uc2lzdGVudCBteXN0ZXJ5IHBhY2thZ2UgYXMgSlNPTi4KClJldHVybiBPTkxZIGEgSlNPTiBvYmplY3Qgc2hhcGVkIGV4YWN0bHkgbGlrZSB0aGlzIChubyBtYXJrZG93biBmZW5jZXMsIG5vIGNvbW1lbnRhcnkpOgp7ImNvbmZpZyI6eyJ0aXRsZSI6c3RyaW5nLCJwcmVtaXNlIjpzdHJpbmcsImRldGVjdGl2ZUNvdW50IjoxfDIsInN1c3BlY3RDb3VudCI6bnVtYmVyLCJjcmltZSI6c3RyaW5nLCJhY3R1YWxDcmltZURldGFpbHMiOnN0cmluZywidmljdGltIjpzdHJpbmcsImJhY2tzdG9yeSI6c3RyaW5nLCJwbG90IjpzdHJpbmcsImxvY2F0aW9ucyI6W3siaWQiOnN0cmluZywibmFtZSI6c3RyaW5nLCJkZXNjcmlwdGlvbiI6c3RyaW5nLCJpbWFnZVByb21wdCI6c3RyaW5nfV0sImNsdWVzIjpbeyJpZCI6c3RyaW5nLCJ0aXRsZSI6c3RyaW5nLCJkZXNjcmlwdGlvbiI6c3RyaW5nLCJsb2NhdGlvbklkIjpzdHJpbmcsImN1dFNjZW5lUHJvbXB0IjpzdHJpbmcsInJlbGF0ZWRTdXNwZWN0SWRzIjpzdHJpbmdbXX1dLCJzdXNwZWN0cyI6W3siaWQiOnN0cmluZywibmFtZSI6c3RyaW5nLCJjaGFyYWN0ZXJCcmllZiI6c3RyaW5nLCJwb3RlbnRpYWxNb3RpdmUiOnN0cmluZywiYWxpYmkiOnN0cmluZywiZGVtZWFub3IiOnN0cmluZywidGVsbHMiOnN0cmluZywiZXh0cmFJbmZvIjpzdHJpbmcsInF1ZXN0aW9ucyI6c3RyaW5nW10sImd1aWRlVmlkZW9Qcm9tcHQiOnN0cmluZywiaXNHdWlsdHkiOmJvb2xlYW59XSwid2l0bmVzc1N0YXRlbWVudHMiOnN0cmluZ1tdLCJoZWxwZXJXaXRuZXNzZXMiOlt7ImlkIjpzdHJpbmcsIm5hbWUiOnN0cmluZywicm9sZSI6c3RyaW5nLCJkZXNjcmlwdGlvbiI6c3RyaW5nLCJpbmZvIjpzdHJpbmcsImdpZnRUb1VubG9jayI6c3RyaW5nLCJwb3J0cmFpdFByb21wdCI6c3RyaW5nfV0sInRpbWVsaW5lIjpbeyJpZCI6c3RyaW5nLCJ0aW1lIjpzdHJpbmcsImV2ZW50IjpzdHJpbmd9XSwidHdpc3RzIjpbeyJpZCI6c3RyaW5nLCJ0aXRsZSI6c3RyaW5nLCJkZXNjcmlwdGlvbiI6c3RyaW5nLCJ0cmlnZ2VyTW9tZW50IjpzdHJpbmd9XSwiY2FzZUluc2lnaHRWaWRlb1Byb21wdHMiOnN0cmluZ1tdLCJpbnRlcnJvZ2F0aW9uU2Vjb25kcyI6bnVtYmVyLCJjb3VydHJvb21TZWNvbmRzIjpudW1iZXJ9fQoKSEFSRCBDT1JSRUxBVElPTiBSVUxFUyDigJQgZXZlcnkgZWxlbWVudCBtdXN0IHRlbGwgdGhlIHNhbWUgc3Rvcnk6Ci0gRXhhY3RseSB0aGUgcmVxdWVzdGVkIG51bWJlciBvZiBzdXNwZWN0cywgYW5kIEVYQUNUTFkgT05FIGhhcyBpc0d1aWx0eSB0cnVlLiBUaGUgZ3VpbHR5IHN1c3BlY3QncyBtb3RpdmUsIG1lYW5zIGFuZCBvcHBvcnR1bml0eSBtdXN0IGZpdCB0aGUgdGltZWxpbmU7IGV2ZXJ5IG90aGVyIHN1c3BlY3QncyBhbGliaSBtdXN0IGdlbnVpbmVseSBob2xkIHVwLgotIEV2ZXJ5IGNsdWUncyBsb2NhdGlvbklkIG11c3QgbWF0Y2ggYSByZWFsIGxvY2F0aW9uIGlkLCBhbmQgZXZlcnkgY2x1ZSdzIHJlbGF0ZWRTdXNwZWN0SWRzIG11c3QgYmUgbm9uLWVtcHR5IGFuZCByZWZlcmVuY2UgcmVhbCBzdXNwZWN0IGlkcy4gRXZlcnkgbG9jYXRpb24gbXVzdCBjb250YWluIGF0IGxlYXN0IG9uZSBjbHVlLgotIENsdWVzLCBiYWNrc3RvcmllcywgbW90aXZlcywgYWxpYmlzLCB3aXRuZXNzIHN0YXRlbWVudHMgYW5kIHRpbWVsaW5lIG11c3QgYWxsIGFncmVlIHdpdGggYWN0dWFsQ3JpbWVEZXRhaWxzICh0aGUgaG9zdC1vbmx5IHRydXRoKS4gTm8gcmFuZG9tIGRpc2Nvbm5lY3RlZCBjb250ZW50LiBSZWQgaGVycmluZ3MgYXJlIGFsbG93ZWQgb25seSBpZiB0aGUgdHJ1dGggZXhwbGFpbnMgdGhlbS4KLSBNb3RpdmVzIGFyZSBmcmFtZWQgYXMgUE9URU5USUFMOiBlYWNoIHN1c3BlY3QgbG9va3MgZ3VpbHR5IGZvciBhIHJlYWwgcmVhc29uLCBidXQgdGhlIGJyaWVmIG5ldmVyIGNvbmZpcm1zIGd1aWx0LgotIFBlciBzdXNwZWN0OiAzLTUgaW5kaXZpZHVhbGl6ZWQgaW50ZXJyb2dhdGlvbiBxdWVzdGlvbnMgZHJhd24gZnJvbSB0aGVpciBjaGFyYWN0ZXIgaW5mbyBhbmQgdGhlIGNhc2UgZGV0YWlsczsgZGVtZWFub3IgKGhvdyB0aGV5IGNhcnJ5IHRoZW1zZWx2ZXMpLCB0ZWxscyAod2hhdCBnaXZlcyB0aGVtIGF3YXkpLCBleHRyYUluZm8gKGJhY2tncm91bmQgdGhlIHN1c3BlY3QncyBvd24gYnJpZWYgb21pdHMpLgotIDMtNiBsb2NhdGlvbnM7IDMtNSBicm9hZCB3aXRuZXNzIHN0YXRlbWVudHMgKHN0YXRpYyBldmlkZW5jZSBmb3IgdGhlIG9wZW5pbmcgYnJpZWZpbmcpOyAyLTQgaGVscGVyLXdpdG5lc3MgY29uY2VwdHMgKG9wdGlvbmFsLCBOT1QgY3JpdGljYWwgdG8gc29sdmluZyDigJQganVzdCBleHRyYSBoZWxwKTsgNS04IHRpbWVsaW5lIGV2ZW50czsgMi0zIHByZS13b3ZlbiB0d2lzdHMgd2l0aCB0cmlnZ2VyIG1vbWVudHMgKHN1cnByaXNlcyBmb3IgdGhlIGRldGVjdGl2ZSBhbmQgc3VzcGVjdHM7IHRoZSBob3N0IGRlcGxveXMgdGhlbSk7IDItMyBjaW5lbWF0aWMgY2FzZS1pbnNpZ2h0IHZpZGVvIHByb21wdHMuCi0gaW50ZXJyb2dhdGlvblNlY29uZHMgOTAtMTgwLCBjb3VydHJvb21TZWNvbmRzIDEyMC0zMDAuCi0gUHVibGljIGZpZWxkcyAoY3JpbWUsIHZpY3RpbSwgYmFja3N0b3J5LCBwbG90LCBwcmVtaXNlKSBtdXN0IG5ldmVyIG5hbWUgb3IgaGludCBhdCB0aGUgZ3VpbHR5IHBhcnR5LiBUaGUgdHJ1dGggbGl2ZXMgT05MWSBpbiBhY3R1YWxDcmltZURldGFpbHMsIGRlbWVhbm9yL3RlbGxzL2V4dHJhSW5mbywgYW5kIHR3aXN0cy5gOwoKZnVuY3Rpb24gZXh0cmFjdEpzb24odGV4dDogc3RyaW5nKTogc3RyaW5nIHsKICBjb25zdCBmZW5jZWQgPSB0ZXh0Lm1hdGNoKC9gYGAoPzpqc29uKT9ccyooW1xzXFNdKj8pYGBgL2kpOwogIGNvbnN0IGNhbmRpZGF0ZSA9IChmZW5jZWQgPyBmZW5jZWRbMV0gOiB0ZXh0KS50cmltKCk7CiAgY29uc3Qgc3RhcnQgPSBjYW5kaWRhdGUuaW5kZXhPZigieyIpOwogIGNvbnN0IGVuZCA9IGNhbmRpZGF0ZS5sYXN0SW5kZXhPZigifSIpOwogIGlmIChzdGFydCA8IDAgfHwgZW5kIDw9IHN0YXJ0KSB0aHJvdyBuZXcgRXJyb3IoIlRoZSBBSSBkaWQgbm90IHJldHVybiBhIG15c3RlcnkgcGFja2FnZS4iKTsKICByZXR1cm4gY2FuZGlkYXRlLnNsaWNlKHN0YXJ0LCBlbmQgKyAxKTsKfQoKZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIFBPU1QocmVxdWVzdDogUmVxdWVzdCkgewogIGNvbnN0IG1lID0gYXdhaXQgcmVxdWlyZUNyZWF0b3IoKTsKICBpZiAoIWNhblVzZUNpdHlDcmltZVNjZW5lKG1lPy5lbWFpbCkpIHJldHVybiBOZXh0UmVzcG9uc2UuanNvbih7IGVycm9yOiAiQ2l0eSBDcmltZSBTY2VuZSBpcyBvbmx5IGF2YWlsYWJsZSB0byBzZWxlY3QgYWNjb3VudHMuIiB9LCB7IHN0YXR1czogNDAzIH0pOwogIGNvbnN0IHByb3ZpZGVyID0gYXNzaXN0YW50UHJvdmlkZXIoKTsKICBpZiAoIXByb3ZpZGVyLmtleSkgcmV0dXJuIE5leHRSZXNwb25zZS5qc29uKHsgZXJyb3I6ICJBR05FU19BUElfS0VZIGlzIG5vdCBjb25maWd1cmVkLiIgfSwgeyBzdGF0dXM6IDUwMyB9KTsKICBjb25zdCBib2R5ID0gYXdhaXQgcmVxdWVzdC5qc29uKCkuY2F0Y2goKCkgPT4gKHt9KSk7CiAgY29uc3QgcHJlbWlzZSA9IFN0cmluZyhib2R5LnByZW1pc2UgfHwgIiIpLnRyaW0oKTsKICBjb25zdCBkZXRlY3RpdmVDb3VudCA9IDE7IC8vIERldGVjdGl2ZXMgYXJlIG5ldmVyIGNvbmZpZ3VyZWQg4oCUIGFsd2F5cyBhIHNpbmdsZSBzaGFyZWQgZGV0ZWN0aXZlIHJvbGUuCiAgY29uc3Qgc3VzcGVjdENvdW50ID0gTWF0aC5tYXgoNCwgTWF0aC5taW4oNywgTWF0aC5mbG9vcihOdW1iZXIoYm9keS5zdXNwZWN0Q291bnQpIHx8IDQpKSk7CiAgY29uc3Qgbm90ZXMgPSBTdHJpbmcoYm9keS5ub3RlcyB8fCAiIikudHJpbSgpOwogIGlmICghcHJlbWlzZSkgcmV0dXJuIE5leHRSZXNwb25zZS5qc29uKHsgZXJyb3I6ICJEZXNjcmliZSB5b3VyIHByZW1pc2UgZmlyc3QuIiB9LCB7IHN0YXR1czogNDAwIH0pOwoKICBjb25zdCB1c2VyID0gYFdyaXRlIGEgQ2l0eSBDcmltZSBTY2VuZSBteXN0ZXJ5IHBhY2thZ2UuXG5QcmVtaXNlOiAke3ByZW1pc2V9XG5DYXN0OiAke2RldGVjdGl2ZUNvdW50fSBkZXRlY3RpdmUocyksICR7c3VzcGVjdENvdW50fSBzdXNwZWN0cyAoZXhhY3RseSBvbmUgZ3VpbHR5KS5cbiR7bm90ZXMgPyBgSG9zdCBub3RlcyAodGhlIGhvc3QncyB3b3JkIGlzIGZpbmFsIOKAlCBob25vciB0aGVzZSBleGFjdGx5KTogJHtub3Rlc31cbmAgOiAiIn1SZXR1cm4gb25seSB0aGUgSlNPTiBvYmplY3QuYDsKCiAgbGV0IGxhc3RFcnJvciA9ICIiOwogIGZvciAoY29uc3QgbW9kZWwgb2YgcHJvdmlkZXIubW9kZWxzKSB7CiAgICB0cnkgewogICAgICBjb25zdCByZXNwb25zZSA9IGF3YWl0IGZldGNoKHByb3ZpZGVyLnVybCwgewogICAgICAgIG1ldGhvZDogIlBPU1QiLAogICAgICAgIGhlYWRlcnM6IHsgQXV0aG9yaXphdGlvbjogYEJlYXJlciAke3Byb3ZpZGVyLmtleX1gLCAiQ29udGVudC1UeXBlIjogImFwcGxpY2F0aW9uL2pzb24iIH0sCiAgICAgICAgYm9keTogSlNPTi5zdHJpbmdpZnkoewogICAgICAgICAgbW9kZWwsCiAgICAgICAgICBtZXNzYWdlczogW3sgcm9sZTogInN5c3RlbSIsIGNvbnRlbnQ6IFNZU1RFTSB9LCB7IHJvbGU6ICJ1c2VyIiwgY29udGVudDogdXNlciB9XSwKICAgICAgICAgIHJlc3BvbnNlX2Zvcm1hdDogeyB0eXBlOiAianNvbl9vYmplY3QiIH0sCiAgICAgICAgICB0ZW1wZXJhdHVyZTogMC43LAogICAgICAgICAgbWF4X3Rva2VuczogMTYzODQsCiAgICAgICAgfSksCiAgICAgICAgc2lnbmFsOiBBYm9ydFNpZ25hbC50aW1lb3V0KDEyMDAwMCksCiAgICAgIH0pOwogICAgICBjb25zdCBwYXlsb2FkID0gYXdhaXQgcmVzcG9uc2UuanNvbigpLmNhdGNoKCgpID0+ICh7fSkpOwogICAgICBpZiAoIXJlc3BvbnNlLm9rKSB7CiAgICAgICAgbGFzdEVycm9yID0gU3RyaW5nKHBheWxvYWQ/LmVycm9yPy5tZXNzYWdlIHx8IHBheWxvYWQ/Lm1lc3NhZ2UgfHwgYFByb3ZpZGVyIGVycm9yICR7cmVzcG9uc2Uuc3RhdHVzfWApOwogICAgICAgIGNvbnN0IHJldHJ5YWJsZSA9IHJlc3BvbnNlLnN0YXR1cyA9PT0gNDI5IHx8IHJlc3BvbnNlLnN0YXR1cyA+PSA1MDA7CiAgICAgICAgaWYgKHJldHJ5YWJsZSkgY29udGludWU7CiAgICAgICAgcmV0dXJuIE5leHRSZXNwb25zZS5qc29uKHsgZXJyb3I6IGxhc3RFcnJvciB8fCAiVGhlIG15c3RlcnkgY291bGQgbm90IGJlIGdlbmVyYXRlZC4iIH0sIHsgc3RhdHVzOiA1MDIgfSk7CiAgICAgIH0KICAgICAgY29uc3QgdGV4dCA9IFN0cmluZyhwYXlsb2FkPy5jaG9pY2VzPy5bMF0/Lm1lc3NhZ2U/LmNvbnRlbnQgfHwgIiIpOwogICAgICBsZXQgcGFyc2VkOiB7IGNvbmZpZz86IENpdHlDcmltZVNjZW5lQ29uZmlnIH07CiAgICAgIHRyeSB7IHBhcnNlZCA9IEpTT04ucGFyc2UoZXh0cmFjdEpzb24odGV4dCkpOyB9CiAgICAgIGNhdGNoIHsgbGFzdEVycm9yID0gIlRoZSBBSSByZXR1cm5lZCBhbiB1bnJlYWRhYmxlIHBhY2thZ2UuIjsgY29udGludWU7IH0KICAgICAgY29uc3QgY29uZmlnID0gcGFyc2VkPy5jb25maWc7CiAgICAgIGlmICghY29uZmlnIHx8ICFBcnJheS5pc0FycmF5KGNvbmZpZy5zdXNwZWN0cykpIHsgbGFzdEVycm9yID0gIlRoZSBBSSByZXR1cm5lZCBhbiBpbmNvbXBsZXRlIHBhY2thZ2UuIjsgY29udGludWU7IH0KICAgICAgY29uZmlnLmRldGVjdGl2ZUNvdW50ID0gZGV0ZWN0aXZlQ291bnQ7CiAgICAgIGNvbmZpZy5zdXNwZWN0Q291bnQgPSBzdXNwZWN0Q291bnQ7CiAgICAgIGNvbnN0IHByb2JsZW1zID0gdmFsaWRhdGVDaXR5Q3JpbWVTY2VuZShjb25maWcpOwogICAgICByZXR1cm4gTmV4dFJlc3BvbnNlLmpzb24oeyBjb25maWcsIHZhbGlkYXRpb246IHByb2JsZW1zIH0pOwogICAgfSBjYXRjaCB7CiAgICAgIGxhc3RFcnJvciA9ICJDb3VsZCBub3QgcmVhY2ggdGhlIEFJIHNlcnZpY2UuIjsKICAgIH0KICB9CiAgcmV0dXJuIE5leHRSZXNwb25zZS5qc29uKHsgZXJyb3I6IGxhc3RFcnJvciB8fCAiVGhlIG15c3RlcnkgY291bGQgbm90IGJlIGdlbmVyYXRlZCByaWdodCBub3cuIiB9LCB7IHN0YXR1czogNTAyIH0pOwp9Cg==
+import { NextResponse } from "next/server";
+import { assistantProvider } from "../../../../lib/assistant-provider";
+import { validateCityCrimeScene, type CityCrimeSceneConfig, canUseCityCrimeScene } from "../../../../lib/city-crime-scene";
+import { requireCreator } from "../../../../lib/auth/server";
+
+export const maxDuration = 180;
+
+const SYSTEM = `You are a Law & Order-style mystery writer for an interactive livestream improv game called City Crime Scene. The host gives you a premise; you return ONE complete, internally consistent mystery package as JSON.
+
+Return ONLY a JSON object shaped exactly like this (no markdown fences, no commentary):
+{"config":{"title":string,"premise":string,"detectiveCount":1|2,"suspectCount":number,"crime":string,"actualCrimeDetails":string,"victim":string,"backstory":string,"plot":string,"locations":[{"id":string,"name":string,"description":string,"imagePrompt":string}],"clues":[{"id":string,"title":string,"description":string,"locationId":string,"cutScenePrompt":string,"relatedSuspectIds":string[]}],"suspects":[{"id":string,"name":string,"characterBrief":string,"potentialMotive":string,"alibi":string,"demeanor":string,"tells":string,"extraInfo":string,"questions":string[],"guideVideoPrompt":string,"isGuilty":boolean}],"witnessStatements":string[],"helperWitnesses":[{"id":string,"name":string,"role":string,"description":string,"info":string,"giftToUnlock":string,"portraitPrompt":string}],"timeline":[{"id":string,"time":string,"event":string}],"twists":[{"id":string,"title":string,"description":string,"triggerMoment":string}],"caseInsightVideoPrompts":string[],"interrogationSeconds":number,"courtroomSeconds":number}}
+
+HARD CORRELATION RULES — every element must tell the same story:
+- Exactly the requested number of suspects, and EXACTLY ONE has isGuilty true. The guilty suspect's motive, means and opportunity must fit the timeline; every other suspect's alibi must genuinely hold up.
+- Every clue's locationId must match a real location id, and every clue's relatedSuspectIds must be non-empty and reference real suspect ids. Every location must contain at least one clue.
+- Clues, backstories, motives, alibis, witness statements and timeline must all agree with actualCrimeDetails (the host-only truth). No random disconnected content. Red herrings are allowed only if the truth explains them.
+- Motives are framed as POTENTIAL: each suspect looks guilty for a real reason, but the brief never confirms guilt.
+- Per suspect: 3-5 individualized interrogation questions drawn from their character info and the case details; demeanor (how they carry themselves), tells (what gives them away), extraInfo (background the suspect's own brief omits).
+- 3-6 locations; 3-5 broad witness statements (static evidence for the opening briefing); 2-4 helper-witness concepts (optional, NOT critical to solving — just extra help); 5-8 timeline events; 2-3 pre-woven twists with trigger moments (surprises for the detective and suspects; the host deploys them); 2-3 cinematic case-insight video prompts.
+- interrogationSeconds 90-180, courtroomSeconds 120-300.
+- Public fields (crime, victim, backstory, plot, premise) must never name or hint at the guilty party. The truth lives ONLY in actualCrimeDetails, demeanor/tells/extraInfo, and twists.`;
+
+function extractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced ? fenced[1] : text).trim();
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("The AI did not return a mystery package.");
+  return candidate.slice(start, end + 1);
+}
+
+export async function POST(request: Request) {
+  const me = await requireCreator();
+  if (!canUseCityCrimeScene(me?.email)) return NextResponse.json({ error: "City Crime Scene is only available to select accounts." }, { status: 403 });
+  const provider = assistantProvider();
+  if (!provider.key) return NextResponse.json({ error: "AGNES_API_KEY is not configured." }, { status: 503 });
+  const body = await request.json().catch(() => ({}));
+  const premise = String(body.premise || "").trim();
+  const detectiveCount = 1; // Detectives are never configured — always a single shared detective role.
+  const suspectCount = Math.max(4, Math.min(7, Math.floor(Number(body.suspectCount) || 4)));
+  const notes = String(body.notes || "").trim();
+  if (!premise) return NextResponse.json({ error: "Describe your premise first." }, { status: 400 });
+
+  const user = `Write a City Crime Scene mystery package.\nPremise: ${premise}\nCast: ${detectiveCount} detective(s), ${suspectCount} suspects (exactly one guilty).\n${notes ? `Host notes (the host's word is final — honor these exactly): ${notes}\n` : ""}Return only the JSON object.`;
+
+  let lastError = "";
+  for (const model of provider.models) {
+    try {
+      const response = await fetch(provider.url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 16384,
+        }),
+        signal: AbortSignal.timeout(120000),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        lastError = String(payload?.error?.message || payload?.message || `Provider error ${response.status}`);
+        const retryable = response.status === 429 || response.status >= 500;
+        if (retryable) continue;
+        return NextResponse.json({ error: lastError || "The mystery could not be generated." }, { status: 502 });
+      }
+      const text = String(payload?.choices?.[0]?.message?.content || "");
+      let parsed: { config?: CityCrimeSceneConfig };
+      try { parsed = JSON.parse(extractJson(text)); }
+      catch { lastError = "The AI returned an unreadable package."; continue; }
+      const config = parsed?.config;
+      if (!config || !Array.isArray(config.suspects)) { lastError = "The AI returned an incomplete package."; continue; }
+      config.detectiveCount = detectiveCount;
+      config.suspectCount = suspectCount;
+      const problems = validateCityCrimeScene(config);
+      return NextResponse.json({ config, validation: problems });
+    } catch {
+      lastError = "Could not reach the AI service.";
+    }
+  }
+  return NextResponse.json({ error: lastError || "The mystery could not be generated right now." }, { status: 502 });
+}
