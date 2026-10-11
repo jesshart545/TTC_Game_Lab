@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-const MODEL = "fal-ai/minimax-music/v2.6";
+const DEFAULT_MODEL = "fal-ai/minimax-music/v2.6";
+const ALLOWED_MODELS = ["fal-ai/minimax-music/v2.6", "minimax/music-3"];
 
 function errorText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -24,8 +25,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Valid music request ID required." }, { status: 400 });
   }
 
-  const base = `https://queue.fal.run/${MODEL}/requests/${encodeURIComponent(id)}`;
   const query = new URL(request.url).searchParams;
+  const requestedModel = query.get("model") || "";
+  const model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : DEFAULT_MODEL;
+
+  const base = `https://queue.fal.run/${model}/requests/${encodeURIComponent(id)}`;
   const safeQueueUrl = (provided: string | null, fallback: string) => {
     if (!provided) return fallback;
     try {
