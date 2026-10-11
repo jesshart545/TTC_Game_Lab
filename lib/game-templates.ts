@@ -748,6 +748,7 @@ const escapeRoom: GameTemplate = {
         { id: "er-lock-hide", label: "Hide Lock", action: "cards.clear.er-lock", detail: "Hide the combination lock", toolIds: ["er-lock"] },
         { id: "er-timer-show", label: "Show Timer", action: "timer.show.er-timer", detail: "Display the 60-minute timer without starting it", toolIds: ["er-timer"] },
         { id: "er-timer-toggle", label: "Start / Pause Timer", action: "timer.toggle.er-timer", detail: "Start the countdown — press again to pause", toolIds: ["er-timer"] },
+        { id: "er-timer-hide", label: "Hide Timer", action: "timer.hide.er-timer", detail: "Hide the timer from the audience overlay", toolIds: ["er-timer"] },
         { id: "er-timer-reset", label: "Reset Timer", action: "timer.reset.er-timer", detail: "Restore 60 minutes and stop the countdown", toolIds: ["er-timer"] },
         { id: "er-progress", label: "Show Progress", action: "cards.toggle.er-progress", detail: "Show puzzles-solved progress", toolIds: ["er-progress"] },
       ],
