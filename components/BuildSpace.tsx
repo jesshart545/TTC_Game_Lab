@@ -15,7 +15,6 @@ import WheelHostPanel from "./WheelHostPanel";
 import AssetThumbnail from "./AssetThumbnail";
 import BackgroundBrowser from "./BackgroundBrowser";
 import TemplateBrowser from "./TemplateBrowser";
-import { instantiateTemplateTools } from "../lib/game-templates";
 import QuestionCardEditor from "./QuestionCardEditor";
 import GameToolEditor from "./GameToolEditor";
 import {assignControlAction} from "../lib/control-connections";
@@ -40,8 +39,8 @@ function BuildAssetThumbnail({asset,label,onSelect,selected}:{asset?:ProjectAsse
 
 export type BuildEntryRequest = { task: "background" | "add" | "test"; request: number };
 
-type Props={onAskAi?:()=>void;entryRequest?:BuildEntryRequest|null;onEntryHandled?:(request:number)=>void;showNextGuidance?:boolean;focusControl?:{id:string;request:number}|null;sequenceRunning:boolean;sequenceError:string;onStopSequence:()=>void;cardStates:Record<string,CardState>;onSelect:(selection:{kind:string;id:string}|null)=>void;project:Project;onChange:(project:Project)=>void;overlay:ReactNode;onTrigger:(control:ProjectEvent)=>void;onWorkshop:()=>void;youtubeOpen:boolean;onOpenYoutube:()=>void;onCloseYoutube:()=>void;onYoutubeCommand:(command:Record<string,unknown>)=>Promise<YouTubeState>;youtubeState:YouTubeState|null;youtubeFeedback:{playbackId:string;status:string;errorCode?:number}|null;dashboardExtras?:(toolId?:string)=>ReactNode;feedback?:string;onPublishStep:()=>void;ccssEntitled?:boolean};
-export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNextGuidance=true,focusControl,sequenceRunning,sequenceError,onStopSequence,cardStates,onSelect,project,onChange,overlay,onTrigger,onWorkshop,youtubeOpen,onOpenYoutube,onCloseYoutube,onYoutubeCommand,youtubeState,youtubeFeedback,dashboardExtras,feedback,onPublishStep,ccssEntitled=false}:Props){
+type Props={onAskAi?:()=>void;entryRequest?:BuildEntryRequest|null;onEntryHandled?:(request:number)=>void;showNextGuidance?:boolean;focusControl?:{id:string;request:number}|null;sequenceRunning:boolean;sequenceError:string;onStopSequence:()=>void;cardStates:Record<string,CardState>;onSelect:(selection:{kind:string;id:string}|null)=>void;project:Project;onChange:(project:Project)=>void;overlay:ReactNode;onTrigger:(control:ProjectEvent)=>void;onWorkshop:()=>void;youtubeOpen:boolean;onOpenYoutube:()=>void;onCloseYoutube:()=>void;onYoutubeCommand:(command:Record<string,unknown>)=>Promise<YouTubeState>;youtubeState:YouTubeState|null;youtubeFeedback:{playbackId:string;status:string;errorCode?:number}|null;dashboardExtras?:(toolId?:string)=>ReactNode;feedback?:string;onPublishStep:()=>void;ccssEntitled?:boolean;onAddTemplate:(templateId:string)=>void};
+export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNextGuidance=true,focusControl,sequenceRunning,sequenceError,onStopSequence,cardStates,onSelect,project,onChange,overlay,onTrigger,onWorkshop,youtubeOpen,onOpenYoutube,onCloseYoutube,onYoutubeCommand,youtubeState,youtubeFeedback,dashboardExtras,feedback,onPublishStep,ccssEntitled=false,onAddTemplate}:Props){
  const assemblyRef=useRef<HTMLElement>(null);
  useEffect(()=>{if(assemblyRef.current?.ownerDocument.defaultView?.matchMedia?.('(min-width: 1000px)').matches)assemblyRef.current?.scrollIntoView({block:'start'});},[]);
  const currentProject=useRef(project);currentProject.current=project;
@@ -114,11 +113,6 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
  }
  function confirmButtons(choices:{action:string;label:string}[]){if(!pendingAddition)return;const {creation,newTool}=pendingAddition;const result=addReviewedButtons(currentProject.current,creation.kind,creation.id,choices,newTool);save(result.project);setActiveCreation(creation);setStep(2);setTesting(false);setSelection({kind:'control',id:result.controlId});setPendingAddition(null);if(result.project.gameTools.some(t=>t.type==='youtube'&&t.id===creation.id))onOpenYoutube();}
  function applyBackground(id:string,board=false){onChange({...project,assets:project.assets.map(a=>({...a,inProject:board?(a.role==='background'?false:a.inProject):(key(a)===id?true:a.role==='background'?false:a.inProject),role:!board&&key(a)===id?'background':a.role})),gameTools:project.gameTools.map(t=>(t.type==='blank-board'||t.type==='trivia-board')?{...t,inOverlayBuild:board&&t.id===id,config:{...t.config,triggerOnly:false}}:t)});}
- function applyTemplate(templateId:string){
-   const added=instantiateTemplateTools(templateId,{ccssEntitled});
-   if(!added||(!added.gameTools.length&&!added.controls.length))return;
-   onChange({...project,gameTools:[...project.gameTools,...added.gameTools],controls:[...project.controls,...added.controls]});
- }
  function drop(e:React.DragEvent){e.preventDefault();try{const item=JSON.parse(e.dataTransfer.getData('application/ttc-creation'));if(['asset','tool','composition'].includes(item.kind))reviewCreation(item.kind,item.id);}catch{}}
 
  return <section ref={assemblyRef} className={"build-space build-space-compact"+(testing?" build-space-testing":"")} aria-label="Build Space assembly">
@@ -129,7 +123,7 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
   <aside className="build-inspector" aria-label="Items and editing">
   <details className="build-guidance" aria-label="Current build step"><summary>Help for this task</summary><h3>{['Set your initial background','Choose the next addition','Choose how this addition looks and works','Play a complete round','Review before publishing'][step]}</h3><p>{['Choose a still image, animated background, or a board designed in Workshop. This is the starting scene.','Choose something you made in Workshop. You’ll choose and name its dashboard buttons before adding them. You’ll then choose how it looks and try it. It stays hidden until you press its button.','The selected result is shown here only as an editing preview. Adjust its appearance and placement, name its controls, then test them.','Use the dashboard to show, reveal, play, and hide your additions. The background starts with the scene; game actions start only when you trigger them.','Fix missing connections and check a complete round before publishing.'][step]}</p>{showNextGuidance&&step<4&&step!==1&&step!==2&&<button type="button" disabled={step===0&&!hasBackground} onClick={()=>goStep(step+1)}>Next: {['Choose additions','Set up this addition','Rehearse','Ready to publish'][step]}</button>}</details>
   {step===0&&<BackgroundBrowser project={project} onChoose={applyBackground} onWorkshop={onWorkshop}/>}
-  {step===0&&<TemplateBrowser project={project} onChoose={applyTemplate} ccssEntitled={ccssEntitled}/>}
+  {step===0&&<TemplateBrowser project={project} onChoose={onAddTemplate} ccssEntitled={ccssEntitled}/>}
   {step===4&&<section className="build-readiness" aria-label="Game readiness"><h3>{issues.length?`${issues.length} connection issues to fix`:'No connection issues detected'}</h3>{issues.length?issues.map(issue=><div key={issue.id}><p>{issue.message}</p><button type="button" onClick={()=>{goStep(2);setSelection({kind:issue.kind,id:issue.targetId});}}>Fix connection</button></div>):<p>Check your game's rules, media playback, and complete round in rehearsal before publishing.</p>}<button type="button" onClick={()=>goStep(3)}>Rehearse game</button><button type="button" disabled={issues.length>0} onClick={onPublishStep}>Continue to Publish</button></section>}
   {!testing&&(step===1||step===2&&!selection)&&<section className="addition-guide" aria-label="Additions guide">
 

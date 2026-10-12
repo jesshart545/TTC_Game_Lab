@@ -65,6 +65,7 @@
 .workspace-page .workshop-assets-grid{max-height:min(50dvh,480px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:3px}
 @media(min-width:1000px){
   .workspace-page .build-space-compact{scroll-margin-top:76px;height:calc(100dvh - 88px);min-height:0}
+  .workspace-page .workflow-layout.workflow-stage-0{grid-template-columns:minmax(380px,430px) minmax(0,1fr)}
   .workspace-page .workflow-layout.workflow-stage-0[data-workshop-section="1"]{grid-template-columns:minmax(280px,.7fr) minmax(0,1.3fr)}
   .workspace-page .workflow-stage-0>.chat-panel{position:sticky;top:76px;max-height:calc(100dvh - 92px);overflow-y:auto;overscroll-behavior:contain}
 }
