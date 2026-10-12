@@ -867,10 +867,14 @@ export default function ProjectWorkspace() {
     if (current) persist({ ...current, assetPools, updatedAt: "just now" });
   }
 
+  const BUSY_NOTICE = "Another task is already running. Wait for it to finish.";
   async function runAssistantTask(text: string, supportHistory?: SupportTurn[], progress?: (text: string) => void): Promise<SupportTaskResult> {
     const current = projectRef.current;
     if (!current || !text.trim()) return { reply: "Open your editable project first.", status: "failed" };
-    if (taskRunning.current || assetBusy || triviaListBusy) return { reply: "Another task is already running. Wait for it to finish before starting this one.", status: "failed" };
+    if (taskRunning.current || assetBusy || triviaListBusy) {
+      persist({ ...current, messages: [...(current.messages || []), { role: "user" as const, text }, { role: "assistant" as const, text: BUSY_NOTICE }] });
+      return { reply: BUSY_NOTICE, status: "failed" };
+    }
     const originId = current.id;
     const originRoute = activeProjectId.current;
     const guard = () => { if (!workspaceMounted.current || activeProjectId.current !== originRoute || projectRef.current?.id !== originId) throw new Error("The project changed while this task was running. Return to the original project to review it."); };
@@ -1002,8 +1006,9 @@ export default function ProjectWorkspace() {
   async function sendMessage(e: FormEvent) {
     e.preventDefault();
     if (!draft.trim()) return;
-    const text = draft.trim(); setDraft("");
-    await runAssistantTask(text);
+    const text = draft.trim();
+    const outcome = await runAssistantTask(text);
+    setDraft(outcome.reply === BUSY_NOTICE ? text : "");
   }
   async function undoAssistantEdit() {
     const latest = projectRef.current;
