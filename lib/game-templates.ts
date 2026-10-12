@@ -54,7 +54,7 @@ const triviaNight: GameTemplate = {
     overlay: { title: "TRIVIA NIGHT", subtitle: "THINK FAST · SCORE BIG", showChat: true, showAlerts: true, showCharacter: false },
     gameTools: [
       {
-        id: "tn-board", type: "trivia-board", name: "Trivia Board", enabled: true, inToolbox: false, inOverlayBuild: true,
+        id: "tn-board", type: "trivia-board", name: "Trivia Board", enabled: true, inToolbox: true, inOverlayBuild: true,
         config: { placement: {x:10,y:10,width:80,height:75},
           title: "Trivia Night Board",
           categories: [
@@ -167,13 +167,6 @@ const millionQuiz: GameTemplate = {
       { id: "mq-winnings", label: "Show Winnings", action: "cards.toggle.mq-winnings", detail: "Show or hide the winnings tracker", toolIds: ["mq-winnings"] },
       { id: "mq-lifelines", label: "Show Lifelines", action: "cards.toggle.mq-lifelines", detail: "Show the remaining lifelines", toolIds: ["mq-lifelines"] },
       { id: "mq-new", label: "New Quiz", action: "cards.new-game.mq-card", detail: "Reset the ladder for a new contestant", toolIds: ["mq-card"] },
-      ...rungs.map((rung, i) => ({
-        id: `mq-rung-${i + 1}`,
-        label: `Play ${rung.value}`,
-        action: "cards.show.mq-card",
-        detail: `Play the ${rung.value} question`,
-        toolIds: ["mq-card"],
-      })),
     ];
     return {
       name: "Million Quiz",
@@ -181,7 +174,7 @@ const millionQuiz: GameTemplate = {
       overlay: { title: "MILLION QUIZ", subtitle: "ONE QUESTION AWAY FROM $1,000,000", showChat: true, showAlerts: true, showCharacter: false },
       gameTools: [
         {
-          id: "mq-board", type: "trivia-board", name: "Money Ladder", enabled: true, inToolbox: false, inOverlayBuild: true,
+          id: "mq-board", type: "trivia-board", name: "Money Ladder", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:10,y:10,width:80,height:75},
             title: "Money Ladder",
             categories: [
@@ -249,7 +242,7 @@ const guessTheWord: GameTemplate = {
       overlay: { title: "GUESS THE WORD", subtitle: "SHOUT YOUR GUESSES IN CHAT", showChat: true, showAlerts: true, showCharacter: false },
       gameTools: [
         {
-          id: "gw-board", type: "blank-board", name: "Letter Board", enabled: true, inToolbox: false, inOverlayBuild: true,
+          id: "gw-board", type: "blank-board", name: "Letter Board", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:10,y:10,width:80,height:75},
             title: "Mystery Word — 8 letters",
             areas,
@@ -260,6 +253,7 @@ const guessTheWord: GameTemplate = {
         {
           id: "gw-word", type: "blank-card", name: "Word Reveal Card", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:20,y:20,width:60,height:55},
+            text: "_ _ _ _ _ _ _ _",
             sampleText: "_ _ _ _ _ _ _ _",
             hint: "Type the current reveal state (e.g. S _ R E A _ E R) in the card panel, then press Reveal Letters.",
           },
@@ -312,6 +306,7 @@ const wordAssociation: GameTemplate = {
         {
           id: "wa-card", type: "blank-card", name: "Prompt Word Card", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:20,y:20,width:60,height:55},
+            text: "OCEAN",
             sampleText: "OCEAN",
             sampleAssociations: rounds[0].associations,
             hint: "Type the prompt word in the card panel and press Show Prompt. Reveal associations one per round.",
@@ -410,6 +405,7 @@ const guessTheLogo: GameTemplate = {
         {
           id: "gl-card", type: "blank-card", name: "Logo Reveal Card", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:20,y:20,width:60,height:55},
+            text: rounds[0].stages[0],
             sampleText: rounds[0].stages[0],
             hint: "Paste the current stage description (or upload your logo image as an overlay asset) then press Show Stage.",
           },
@@ -475,7 +471,7 @@ const pictureReveal: GameTemplate = {
       overlay: { title: "PICTURE REVEAL", subtitle: "GUESS THE PICTURE BEFORE IT'S FULLY REVEALED", showChat: true, showAlerts: true, showCharacter: false },
       gameTools: [
         {
-          id: "pr-board", type: "blank-board", name: "Reveal Grid", enabled: true, inToolbox: false, inOverlayBuild: true,
+          id: "pr-board", type: "blank-board", name: "Reveal Grid", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:10,y:10,width:80,height:75},
             title: "Mystery Picture — 12 tiles",
             areas: tiles,
@@ -485,6 +481,7 @@ const pictureReveal: GameTemplate = {
         {
           id: "pr-tiles", type: "blank-card", name: "Tiles Removed", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:20,y:20,width:60,height:55},
+            text: "Tiles removed: —",
             sampleText: "Tiles removed: —",
             hint: "Type the removed tile numbers (e.g. “Tiles removed: 3, 7, 11”) in the card panel, then press Update Tiles.",
           },
@@ -730,6 +727,7 @@ const escapeRoom: GameTemplate = {
         {
           id: "er-lock", type: "blank-card", name: "Combination Lock", enabled: true, inToolbox: true, inOverlayBuild: true,
           config: { placement: {x:20,y:20,width:60,height:55},
+            text: "LOCK 1: _ _ _",
             sampleText: "LOCK 1: _ _ _",
             hint: "Type the lock state (e.g. “LOCK 1: 7 _ 9”) in the card panel, then press Show Lock.",
           },
@@ -831,6 +829,7 @@ export function instantiateTemplateTools(
   const remapId = (id: string) => idMap.get(id) ?? id;
   const remapAction = (action: string): string => {
     if (action.startsWith("tool.")) return "tool." + remapId(action.slice(5));
+    if (action.startsWith("timer.")) return "timer." + remapId(action.slice(6));
     if (action.startsWith("cards.")) {
       const lastDot = action.lastIndexOf(".");
       if (lastDot > 6) {
