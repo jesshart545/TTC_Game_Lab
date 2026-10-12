@@ -809,3 +809,57 @@ export const GAME_TEMPLATES: GameTemplate[] = [
 export function getGameTemplate(id: string): GameTemplate | undefined {
   return GAME_TEMPLATES.find((template) => template.id === id);
 }
+
+// ---------------------------------------------------------------------------
+// Instantiate a template's game into an EXISTING project (additive).
+// Every tool and control id is remapped to a fresh UUID so a template can be
+// added repeatedly without collisions, and every internal reference
+// (control toolIds, action strings, chain refIds, config poolId/listId)
+// is rewritten to the new ids. Returns undefined for unknown or
+// unauthorized (restricted) templates.
+// ---------------------------------------------------------------------------
+const TEMPLATE_CONFIG_ID_KEYS = ["poolId", "listId"] as const;
+
+export function instantiateTemplateTools(
+  templateId: string,
+  opts?: { ccssEntitled?: boolean }
+): { gameTools: GameTool[]; controls: ProjectEvent[] } | undefined {
+  const template = getGameTemplate(templateId);
+  if (!template) return undefined;
+  if (template.restricted && !opts?.ccssEntitled) return undefined;
+  const draft = template.buildDraft();
+  const idMap = new Map<string, string>();
+  for (const tool of draft.gameTools) idMap.set(tool.id, crypto.randomUUID());
+  const remapId = (id: string) => idMap.get(id) ?? id;
+  const remapAction = (action: string): string => {
+    if (action.startsWith("tool.")) return "tool." + remapId(action.slice(5));
+    if (action.startsWith("cards.")) {
+      const lastDot = action.lastIndexOf(".");
+      if (lastDot > 6) {
+        const toolId = action.slice(lastDot + 1);
+        const mapped = idMap.get(toolId);
+        if (mapped) return action.slice(0, lastDot + 1) + mapped;
+      }
+    }
+    return action;
+  };
+  const gameTools: GameTool[] = draft.gameTools.map((tool) => {
+    const config: Record<string, unknown> = { ...tool.config };
+    for (const key of TEMPLATE_CONFIG_ID_KEYS) {
+      if (typeof config[key] === "string") config[key] = remapId(config[key] as string);
+    }
+    return { ...tool, id: idMap.get(tool.id)!, config: { ...config, templateId: template.id } };
+  });
+  const controls: ProjectEvent[] = draft.controls.map((control) => ({
+    ...control,
+    id: crypto.randomUUID(),
+    toolIds: (control.toolIds || []).map(remapId),
+    action: remapAction(control.action),
+    chain: (control.chain || []).map((step) => ({
+      ...step,
+      id: crypto.randomUUID(),
+      refId: step.kind === "tool" ? remapId(step.refId) : step.refId,
+    })),
+  }));
+  return { gameTools, controls };
+}
