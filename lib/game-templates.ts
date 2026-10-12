@@ -800,7 +800,6 @@ export const GAME_TEMPLATES: GameTemplate[] = [
   wordAssociation,
   guessTheLogo,
   pictureReveal,
-  prizeDrawWheel,
   escapeRoom,
   cityCrimeScene,
 ];
