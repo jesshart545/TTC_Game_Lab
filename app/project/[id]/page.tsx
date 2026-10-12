@@ -34,6 +34,8 @@ import { AssetComposition, createProject, deleteProjectFromServer, Project, Proj
 import { deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { landscapeAnimationReference } from "../../../lib/overlay-media";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
+import { useManualHistory } from "../../../lib/manual-history";
+import { pollImageGeneration } from "../../../lib/poll-image-generation";
 import MediaEditor from "../../../components/MediaEditor";
 import AssetComposer from "../../../components/AssetComposer";
 import CompositionPlayer, { defaultOverlayResult } from "../../../components/CompositionPlayer";
@@ -179,7 +181,6 @@ export default function ProjectWorkspace() {
   const taskRunning = useRef(false);
   const taskProgress = useRef<((text: string) => void) | null>(null);
   const workspaceMounted = useRef(true);
-  useEffect(() => { workspaceMounted.current = true; return () => { workspaceMounted.current = false; }; }, []);
   const taskSaveError = useRef("");
   const [mediaPlayback, setMediaPlayback] = useState<{start: () => void} | null>(null);
   const activeProjectId = useRef(params.id);
@@ -530,7 +531,10 @@ export default function ProjectWorkspace() {
 
   function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); setTimeout(()=>{ setProject(current => { if (!current?.wheel) return current; const next={ ...current, wheel:{...current.wheel, spinning:false, visible:false}, updatedAt:"just now" }; const storedNext={...next,assets:next.assets.map(asset=>asset.storageKey?.startsWith("projects/")?asset:asset.storageKey?{...asset,url:undefined}:asset)}; saveQueue.current=saveQueue.current.then(()=>saveProjectToServer(storedNext)).then(()=>undefined).catch(error=>{setAssetStatus(error instanceof Error?error.message:"Project save failed.");}); return next; }); }, 3200); }
 
+  const historyRef = useRef<ReturnType<typeof useManualHistory> | null>(null);
   function persist(next: Project) {
+    const prev = projectRef.current;
+    if (prev && prev.id === next.id) historyRef.current?.recordHistory(prev);
     const revision=++saveRevision.current;
     queuedSaveRevisions.current.set(next.id,revision);
     setAiUndo(null);
@@ -543,6 +547,9 @@ export default function ProjectWorkspace() {
     setProject(next);
     saveQueue.current = saveQueue.current.then(() => { if(queuedSaveRevisions.current.get(next.id)!==revision)return; return saveProjectToServer(storedNext); }).then(() => { if(revision===saveRevision.current)setSaveStatus("Changes saved."); }).catch(error => { if(revision!==saveRevision.current)return; if(taskRunning.current)taskSaveError.current = error instanceof Error ? error.message : "Save failed"; if(revision===saveRevision.current)setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
   }
+  const history = useManualHistory(projectRef, persist);
+  historyRef.current = history;
+  const { undo: undoManualEdit, redo: redoManualEdit, historyDepth, suppressHistory } = history;
 
   function applyTemplateToProject(templateId: string) {
     const added = instantiateTemplateTools(templateId, { ccssEntitled });
@@ -657,6 +664,9 @@ export default function ProjectWorkspace() {
       }
 
       let url = data.url || data.audio_url || data.audioUrl || data.output_url || "";
+      if (type === "image" && data.requestId) {
+        url = await pollImageGeneration(String(data.requestId), String(data.statusUrl || ""), String(data.responseUrl || ""), String(data.model || ""), setAssetStatus);
+      }
       if (type === "music" && data.requestId) {
         setAssetStatus("Music queued with fal.ai. Waiting for the finished song…");
         let completed = false;
@@ -879,6 +889,7 @@ export default function ProjectWorkspace() {
     const originRoute = activeProjectId.current;
     const guard = () => { if (!workspaceMounted.current || activeProjectId.current !== originRoute || projectRef.current?.id !== originId) throw new Error("The project changed while this task was running. Return to the original project to review it."); };
     taskRunning.current = true;
+    suppressHistory.current = true;
     taskSaveError.current = "";
     taskProgress.current = progress || null;
     const project = current;
@@ -999,6 +1010,7 @@ export default function ProjectWorkspace() {
         outcome.status = "failed";
       }
       taskRunning.current = false; taskProgress.current = null;
+      suppressHistory.current = false;
       if (workspaceMounted.current) setBuilding(false);
     }
     return outcome;
@@ -1218,7 +1230,7 @@ export default function ProjectWorkspace() {
   if(editingBoard)return <main className="workspace-page"><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t)});}} onClose={()=>setBoardDesignerId("")} onCreateArtwork={()=>{setBoardDesignerId("");setShowGenerator(true);setGeneratorType("video");setGeneratorPrompt("Create a seamless animated game board background. Keep game spaces readable. ");setBackgroundIntent(true);}}/></main>;
   const draftOverlay = <>{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <><div className="stage-scan"/>{bg && <OverlayAsset asset={bg} background className="builder-preview-background"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">${q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}<div className="stage-corner top-left"/><div className="stage-corner top-right"/><div className="stage-corner bottom-left"/><div className="stage-corner bottom-right"/></>; })()}<RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
   return <main className="workspace-page">
-    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span></div><div className="workspace-actions"><div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : "Save progress"}</button><small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small></div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
+    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span></div><div className="workspace-actions">{workflowStep===1&&<div className="workspace-history-group" role="group" aria-label="Undo and redo"><button type="button" className="outline-btn" onClick={undoManualEdit} disabled={historyDepth.undo===0} title="Undo (Ctrl+Z)">&#8617; Undo</button><button type="button" className="outline-btn" onClick={redoManualEdit} disabled={historyDepth.redo===0} title="Redo (Ctrl+Y)">&#8618; Redo</button></div>}<div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : "Save progress"}</button><small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small></div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
     <section className={"workshop-flow"+(workflowStep===1?" compact-build-heading":"")} ref={workflowRef} aria-label="Project workflow">
       <div className="workshop-flow-heading">
         <div><small>{workflowStep === 0 ? workshopTask.stage : ["Workshop", "Build Space", "Publish"][workflowStep]}</small><h1>{["Brainstorm & create", "Build & implement", "Review & publish"][workflowStep]}</h1></div>
