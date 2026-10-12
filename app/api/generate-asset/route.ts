@@ -63,7 +63,9 @@ export async function POST(request: Request) {
     const referenceImage = typeof body?.promptImage === "string" ? body.promptImage.trim() : "";
     if (referenceImage && !/^https:\/\//i.test(referenceImage) && !/^data:image\//i.test(referenceImage)) return jsonError("Image reference must be an HTTPS URL or image data URI.",400);
     const model = referenceImage ? "fal-ai/nano-banana-2/edit" : "fal-ai/nano-banana-2";
-    const response = await fetch(`https://fal.run/${model}`, {
+    // Queue the request instead of waiting synchronously: image jobs can run for
+    // minutes, and a synchronous wait hangs the UI with no progress or errors.
+    const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
       method: "POST",
       headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -77,11 +79,19 @@ export async function POST(request: Request) {
       }),
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return falError("image", response.status, payload, "Nano Banana 2 image generation failed.");
-    const url = payload?.images?.[0]?.url || "";
-    if (!url) return jsonError("Nano Banana 2 returned no image output.", 502);
-    return NextResponse.json({ url, type: "image", model, provider: "fal" });
+    const submitPayload = await submitResponse.json().catch(() => ({}));
+    if (!submitResponse.ok) return falError("image", submitResponse.status, submitPayload, "Nano Banana 2 image generation failed.");
+    const requestId = submitPayload?.request_id;
+    if (!requestId) return jsonError("fal accepted the image request but returned no request id.", 502);
+    return NextResponse.json({
+      type: "image",
+      status: "processing",
+      requestId: String(requestId),
+      statusUrl: submitPayload.status_url || "",
+      responseUrl: submitPayload.response_url || "",
+      model,
+      provider: "fal",
+    });
   }
 
   if (type === "video") {
