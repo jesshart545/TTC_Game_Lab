@@ -1398,6 +1398,7 @@ export default function ProjectWorkspace() {
         promptRef={promptRef}
         BackgroundDestination={BackgroundDestination}
         ccssEntitled={ccssEntitled}
+        onAddTemplate={applyTemplateToProject}
         openCityCrimeScene={ccssBuilder.openCityCrimeScene}
       />
     </div>
