@@ -9,6 +9,7 @@ import type { Project, ProjectAsset, AssetPool } from "../lib/project";
 import Link from "next/link";
 import CollapsibleFolder from "./CollapsibleFolder";
 import AssetFolders from "./AssetFolders";
+import TemplateBrowser from "./TemplateBrowser";
 import AssetPoolManager from "./AssetPoolManager";
 import AssetPoolAssignment from "./AssetPoolAssignment";
 import AssetDetailsDialog from "./AssetDetailsDialog";
@@ -54,6 +55,7 @@ export type WorkshopAssetsPanelProps = {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   openWorkshopTool: (tool: "media" | "trivia" | "boards" | "tools", background?: boolean) => void;
   ccssEntitled: boolean;
+  onAddTemplate: (templateId: string) => void;
   openCityCrimeScene: () => void;
   setShowBoardGuide: Dispatch<SetStateAction<boolean>>;
   setShowAssetComposer: Dispatch<SetStateAction<boolean>>;
@@ -97,7 +99,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     closeTriviaQuestion, placeSceneImage, saveAssetPools, beginBlank, spinWheel,
     setBackgroundIntent, setEditingComposition, setPositionAssetKey,
     setSideBySideTesting, setTriviaListQuestions, setListEditorId, setNewCardEditorId,
-    fileInputRef, openWorkshopTool, ccssEntitled, openCityCrimeScene, setShowBoardGuide, setShowAssetComposer,
+    fileInputRef, openWorkshopTool, ccssEntitled, onAddTemplate, openCityCrimeScene, setShowBoardGuide, setShowAssetComposer,
     setAssetKindFilter, setAssetSearch, setAssetStatus, setBoardDesignerId,
     setEditingAssetIndex, setGuideBoardId, setShowTriviaListGenerator,
     setTriviaListCategories, setTriviaListCount, setTriviaTopics, addGameTool,
@@ -141,6 +143,11 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     <article><h3>4. Assemble and test</h3><p>In Build Space, add the board to the overlay, position its interactive areas, and connect host controls. Preview the artwork and behavior together before publishing.</p><button type="button" className="build-btn" onClick={() => chooseWorkflowStep(1)}>Continue to Build Space</button></article>
   </div>}
 </section>}
+  <div className="detail-block" id="workshop-game-templates" hidden={workflowStep === 0 && workshopStep !== 1}>
+    <h3>Game Templates</h3>
+    <p className="asset-library-help">Pick a ready-made game — its tools and dashboard buttons join this project.</p>
+    <TemplateBrowser project={project} onChoose={onAddTemplate} ccssEntitled={ccssEntitled}/>
+  </div>
   <div className="detail-block" id="workshop-assets" hidden={workflowStep === 0 && workshopStep !== 1}>
     <h3>Media library</h3>
     <p className="asset-library-help">Open a media folder to find your assets. Select an item to edit, place it on the overlay, or add it to a game pool.</p>
