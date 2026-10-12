@@ -143,6 +143,12 @@ export async function POST(request: Request) {
           ? { type:"tool", toolType:raw.toolType, name:typeof raw.name === "string" ? raw.name.slice(0,80) : "", config:raw.config && typeof raw.config === "object" && !Array.isArray(raw.config) ? raw.config : {} }
           : raw && ["image","video","voice","music","sfx"].includes(raw.type) && typeof raw.prompt === "string"
             ? { type:raw.type, prompt:raw.prompt.slice(0,12000), sourceKey:typeof raw.sourceKey === "string" ? raw.sourceKey : null, voice:["Aria","Roger"].includes(raw.voice) ? raw.voice : null, ...(raw.type === "image" ? {aspectRatio:["auto","16:9","9:16","1:1","4:3","3:4","3:2","2:3","21:9"].includes(raw.aspectRatio) ? raw.aspectRatio : raw.sourceKey ? "auto" : "16:9"} : {}), ...(raw.type === "video" ? { durationSeconds: videoDuration(`${String(body.request || "")} ${raw.prompt}`, raw.durationSeconds) } : {}), ...(raw.type === "music" ? { durationSeconds: musicDuration(String(body.request || ""), raw.durationSeconds ?? musicDuration(raw.prompt)), lyrics: typeof raw.lyrics === "string" ? raw.lyrics.slice(0,3500) : "" } : {}) } : null);
+      // Safety net: the user asked for an original song but the assistant returned no music action
+      // (e.g. it deflected to the manual Lyrics field). Force a retry with explicit instructions.
+      const songRequest = /\b(theme song|jingle|anthem|generate\s+(a\s+|the\s+)?(theme\s+)?song|create\s+(a\s+|the\s+)?(theme\s+)?song|make\s+(me\s+)?(a\s+|the\s+)?(theme\s+)?song|compose\s+(a\s+)?song|write\s+(a\s+|the\s+)?song)\b/i.test(String(body.request || ""));
+      if (songRequest && (!action || (action as any).type !== "music") && !Object.keys(parsed.changes || {}).length) {
+        throw new Error("The user requested an original song. Return action {type:'music', prompt, durationSeconds, lyrics} with concise original lyrics you compose matching their request (upbeat, catchy, energetic as described). Do not ask the user to write lyrics first and never direct them to the manual Lyrics field. Only if they explicitly said they will provide their own specific lyrics and those lyrics are missing may you ask for them in chat.");
+      }
       if (action?.type === "music" && "prompt" in action && "lyrics" in action && "durationSeconds" in action) {
         const instrumental = /instrumental|no vocals?|without vocals?|no singing|no voice/i.test(action.prompt);
         if (action.durationSeconds !== null && !instrumental && !action.lyrics.trim()) {
