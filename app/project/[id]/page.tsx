@@ -974,9 +974,20 @@ export default function ProjectWorkspace() {
             progress?.("Editing the selected video. Waiting for a real result…");
             const response = await fetch("/api/edit-video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: checked.prompt, videoUrl: hydrated.url }) });
             const output = await response.json();
-            if (!response.ok || !output.url) throw new Error(output.error || "Video editing returned no output.");
+            if (!response.ok || !output.videoId) throw new Error(output.error || "Video editing returned no output.");
             guard();
-            await saveAssetAsNew({ ...hydrated, name: source.name.replace(/\.[^.]+$/, "") + "-edited.mp4", type: "video/mp4", url: output.url, storageKey: undefined, edits: undefined });
+            let editedUrl = "";
+            for (let attempt = 0; attempt < 300 && !editedUrl; attempt += 1) {
+              if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 2000));
+              const statusResponse = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(String(output.videoId))}&model=${encodeURIComponent(String(output.model || "fal-ai/wan-vace-apps/video-edit"))}&provider=fal`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
+              const statusData = await statusResponse.json().catch(() => ({}));
+              if (!statusResponse.ok) throw new Error(statusData.error || "Unable to check video editing progress.");
+              if (statusData.status === "failed" || statusData.status === "error") throw new Error(statusData.error || "Video editing failed.");
+              if (statusData.status === "completed" && statusData.url) editedUrl = String(statusData.url);
+            }
+            if (!editedUrl) throw new Error("Video editing is still processing. Please try again in a little while.");
+            guard();
+            await saveAssetAsNew({ ...hydrated, name: source.name.replace(/\.[^.]+$/, "") + "-edited.mp4", type: "video/mp4", url: editedUrl, storageKey: undefined, edits: undefined });
           } else {
             progress?.("Rendering a new media copy. Your original stays unchanged…");
             await saveAssetAsNew({ ...hydrated, edits: checked.edits });

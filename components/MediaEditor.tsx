@@ -39,12 +39,24 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
-      if (!data.url) throw new Error("The image editor returned no image.");
+      let resultUrl = typeof data.url === "string" ? data.url : "";
+      if (video && !resultUrl && data.videoId) {
+        for (let attempt = 0; attempt < 300 && !resultUrl; attempt += 1) {
+          if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 2000));
+          const statusResponse = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(String(data.videoId))}&model=${encodeURIComponent(String(data.model || "fal-ai/wan-vace-apps/video-edit"))}&provider=fal`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
+          const statusData = await statusResponse.json().catch(() => ({}));
+          if (!statusResponse.ok) throw new Error(statusData.error || "Unable to check on your edit.");
+          if (statusData.status === "failed" || statusData.status === "error") throw new Error(statusData.error || "I couldn't make that edit.");
+          if (statusData.status === "completed" && statusData.url) resultUrl = String(statusData.url);
+        }
+        if (!resultUrl) throw new Error("Your edit is still processing. Please try again in a little while.");
+      }
+      if (!resultUrl) throw new Error("The image editor returned no image.");
       const next: ProjectAsset = {
         ...asset,
         name: (asset.name.replace(/\.[^.]+$/, "") || (video ? "video" : "image")) + (video ? "-edited.mp4" : "-edited.png"),
         type: video ? "video/mp4" : "image/png",
-        url: data.url,
+        url: resultUrl,
         storageKey: undefined,
         edits: video ? undefined : {width:layout.width,height:layout.height,fit:layout.fit},
       };
