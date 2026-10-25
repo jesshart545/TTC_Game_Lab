@@ -4,6 +4,7 @@ import { imageLayout } from "../../../lib/image-layout";
 
 import { useSupportBridge, requestResearchOpen, type SupportTurn, type SupportTaskResult } from "../../../lib/support-client";
 import { checkedAssistantMediaAction } from "../../../lib/assistant-media-actions";
+import { runEditLayerChain, type EditVideoAction, type EditLayerOutcome } from "../../../lib/edit-layer-chain";
 import { backgroundContext, wantsBackgroundMatch } from "../../../lib/ai-background-context";
 
 import CompactConversation from "../../../components/CompactConversation";
@@ -971,27 +972,67 @@ export default function ProjectWorkspace() {
           const hydrated = await hydrateAsset(source);
           guard();
           if (checked.type === "edit-video") {
-            progress?.("Editing the selected video. Waiting for a real result…");
-            const response = await fetch("/api/edit-video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: checked.prompt, videoUrl: hydrated.url }) });
-            const output = await response.json();
-            if (!response.ok || !output.videoId) throw new Error(output.error || "Video editing returned no output.");
+            // Jewel layers a multi-change video edit into sequential
+            // single-change edits, each aimed at the newest saved copy (see
+            // lib/edit-layer-chain.ts). Layer 1 is this turn's action; after
+            // each layer saves, an editResult turn lets Jewel issue the next
+            // layer or close with her summary. A one-layer edit completes
+            // exactly as it did before layering existed.
+            const runLayer = async (layerAction: EditVideoAction, layerNumber: number): Promise<EditLayerOutcome> => {
+              const layerSource = layerNumber === 1 ? source : (projectRef.current || baseProject).assets.find(asset => (asset.storageKey || asset.name) === layerAction.sourceKey);
+              if (!layerSource) throw new Error("Choose the saved asset you want to edit.");
+              const layerHydrated = layerNumber === 1 ? hydrated : await hydrateAsset(layerSource);
+              guard();
+              progress?.(layerNumber === 1 ? "Editing the selected video. Waiting for a real result…" : `Step ${layerNumber}: editing the next layer of your video…`);
+              const response = await fetch("/api/edit-video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: layerAction.prompt, videoUrl: layerHydrated.url }) });
+              const output = await response.json();
+              if (!response.ok || !output.videoId) throw new Error(output.error || "Video editing returned no output.");
+              guard();
+              let editedUrl = "";
+              const deadline = Date.now() + 60 * 60 * 1000;
+              let firstCheck = true;
+              while (!editedUrl && Date.now() < deadline) {
+                if (!firstCheck) await new Promise(resolve => setTimeout(resolve, 3000));
+                firstCheck = false;
+                const statusResponse = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(String(output.videoId))}&model=${encodeURIComponent(String(output.model || "fal-ai/wan-vace-apps/video-edit"))}&provider=fal`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
+                const statusData = await statusResponse.json().catch(() => ({}));
+                if (!statusResponse.ok) throw new Error(statusData.error || "Unable to check video editing progress.");
+                if (statusData.status === "failed" || statusData.status === "error") throw new Error(statusData.error || "Video editing failed.");
+                if (statusData.status === "completed" && statusData.url) editedUrl = String(statusData.url);
+              }
+              if (!editedUrl) throw new Error("Video editing is still processing. Please try again in a little while.");
+              guard();
+              const resultName = layerSource.name.replace(/\.[^.]+$/, "") + "-edited.mp4";
+              await saveAssetAsNew({ ...layerHydrated, name: resultName, type: "video/mp4", url: editedUrl, storageKey: undefined, edits: undefined });
+              const saved = [...(projectRef.current || baseProject).assets].reverse().find(asset => asset.name === resultName);
+              return { resultKey: saved ? (saved.storageKey || saved.name) : resultName, resultName };
+            };
+            const askNext = async (completed: { action: EditVideoAction; outcome: EditLayerOutcome; layer: number }) => {
+              try {
+                const latestProject = projectRef.current || updated;
+                const chainContext = { ...latestProject, messages: undefined, assets: latestProject.assets.map(({ url, ...asset }) => asset), publishedSnapshot: undefined };
+                const turnResponse = await fetch("/api/jewel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "draft-edit", request: `Step ${completed.layer} of the video edit is finished and saved as "${completed.outcome.resultName}". Continue with the next step of my original request, or finish with a brief summary if every change is done.`, history: taskHistory, project: chainContext, selectedAssetKey: completed.outcome.resultKey, workspaceStage: workflowStep === 1 ? "build" : "workshop", selectedItem: buildSelection, editResult: { sourceKey: completed.action.sourceKey, prompt: completed.action.prompt, resultKey: completed.outcome.resultKey, resultName: completed.outcome.resultName, layer: completed.layer } }) });
+                const turnData = await turnResponse.json().catch(() => null);
+                if (!turnResponse.ok || !turnData) return null;
+                if (turnData.action?.type !== "edit-video") return { action: null, reply: typeof turnData.reply === "string" ? turnData.reply : "" };
+                let nextChecked: ReturnType<typeof checkedAssistantMediaAction> = null;
+                try { nextChecked = checkedAssistantMediaAction(turnData.action, (projectRef.current || baseProject).assets); } catch { nextChecked = null; }
+                if (!nextChecked || nextChecked.type !== "edit-video") return { action: null, reply: "" };
+                return { action: nextChecked, reply: typeof turnData.reply === "string" ? turnData.reply : "" };
+              } catch { return null; }
+            };
+            const chain = await runEditLayerChain(checked, { runLayer, askNext, onAnnounce: (line) => progress?.(line) });
             guard();
-            let editedUrl = "";
-            for (let attempt = 0; attempt < 300 && !editedUrl; attempt += 1) {
-              if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 2000));
-              const statusResponse = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(String(output.videoId))}&model=${encodeURIComponent(String(output.model || "fal-ai/wan-vace-apps/video-edit"))}&provider=fal`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
-              const statusData = await statusResponse.json().catch(() => ({}));
-              if (!statusResponse.ok) throw new Error(statusData.error || "Unable to check video editing progress.");
-              if (statusData.status === "failed" || statusData.status === "error") throw new Error(statusData.error || "Video editing failed.");
-              if (statusData.status === "completed" && statusData.url) editedUrl = String(statusData.url);
-            }
-            if (!editedUrl) throw new Error("Video editing is still processing. Please try again in a little while.");
-            guard();
-            await saveAssetAsNew({ ...hydrated, name: source.name.replace(/\.[^.]+$/, "") + "-edited.mp4", type: "video/mp4", url: editedUrl, storageKey: undefined, edits: undefined });
-          } else {
-            progress?.("Rendering a new media copy. Your original stays unchanged…");
-            await saveAssetAsNew({ ...hydrated, edits: checked.edits });
+            const reply = chain.layers > 1
+              ? chain.finalReply || `All ${chain.layers} steps are done — the finished video is saved in your draft assets as "${chain.finalName}". Your original and published live version are unchanged.`
+              : "The edited copy is now in your draft assets. Your original and published live version are unchanged.";
+            const latest = projectRef.current || baseProject;
+            persist({ ...latest, messages: [...updated.messages, { role: "assistant", text: reply }] });
+            setAiUndo(baseProject);
+            return complete(reply);
           }
+          progress?.("Rendering a new media copy. Your original stays unchanged…");
+          await saveAssetAsNew({ ...hydrated, edits: checked.edits });
           guard();
           const reply = "The edited copy is now in your draft assets. Your original and published live version are unchanged.";
           const latest = projectRef.current || baseProject;

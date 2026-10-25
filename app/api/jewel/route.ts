@@ -26,7 +26,10 @@ import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured }
  * pipeline, so responses use the identical contract and the existing client
  * executor works unchanged. The differences are the provider (Muse instead
  * of Agnes), the Jewel persona/fallback addendum appended to the system
- * prompt, and support for generationFeedback turns.
+ * prompt, and support for generationFeedback turns and editResult turns
+ * (layered video edits: Jewel splits a multi-change edit into sequential
+ * single-change edit-video actions, one per turn, each aimed at the newest
+ * saved copy — see JEWEL_LAYERING_ADDENDUM and lib/edit-layer-chain.ts).
  */
 const DRAFT_SYSTEM = `You assist the creator of a TTCGameLab draft. Follow their lead and perform only the requested task. Return JSON {"reply":string,"changes":object,"manualSteps":string[],"needsClarification":boolean,"outcome":"edit"|"action"|"clarification"|"answer"|"unsupported","action":null|object}.
 The latest request is the task; earlier conversation may contain failed proposals, not saved functions. executionGuide lists actual executable references. For a NEW sequence OMIT id entirely; selectedItem.id may be a normal button or tool, NEVER reuse it as a sequence ID unless it is in existingSequenceIds. For EDITING a sequence id must be an existing sequence ID. Use step controlId from actual single-action controls. New sequences add a separate dashboard button, preserving the existing controls. Do not claim to have converted the old button. If the user wants that replacement, ask before removing their original controls. A start/hide sequence can use the existing countdown Start control (tool.TIMER_ID) immediately and existing Hide control after the saved seconds; no generated timer function or fake tool ID. A timer.toggle pauses/resumes, never guarantee a fresh reset/start from it. Respect separate show-only behavior. Only make removal automatic if requested; if “streamline” leaves the choice unclear ask a short question while carrying out unambiguous requested styling.
@@ -53,6 +56,20 @@ GENERATION FEEDBACK — This request includes generationFeedback: a generation y
 3. If no sensible retry exists, return action null and explain in plain, friendly language what happened and what the creator could try next.
 Never mention credits, balances, billing, top-ups, or provider names. Do not claim the retry already happened — the app runs the action you return and will tell the creator the result.`;
 
+const JEWEL_LAYERING_ADDENDUM = `
+VIDEO EDIT LAYERING — One generative video edit applies ONE change well; asking it for several unrelated changes at once makes the result unreliable. When a creator asks for a video edit with MULTIPLE distinct changes (for example a color or look change AND adding or removing something AND a style or text change), layer the work into steps:
+- Split the request into one change per edit-video action, ordered foundational look changes first, then additions or removals, then finishing touches. At most 5 steps for one request; if more would be needed, plan the first 5 and, when they are done, tell the creator the rest can be added by asking again.
+- Return ONLY the first step's edit-video action in this turn, paired with at most one short plain line announcing the steps (for example "I'll do this in steps — first the black-and-white look, then the title text."). Never send a plan without its first action, never ask permission to split the work, and never give a long explanation. If you can act, act.
+- A single coherent change is ONE step: "black and white, like an old film" is one look, not two steps. Do not split it, and do not split a request that has only one change.
+- After each step the app sends an editResult turn naming the newest saved video. Answer it with the NEXT step's edit-video action aimed at that newest video, plus at most one short line — no commentary-only turns while steps remain.
+- Text alone is for the very end: when every step is done, return action null with one brief completion summary. If a step cannot be done, say plainly in that closing text which steps are done and which are not; never claim the full request finished when it did not.`;
+
+const JEWEL_EDIT_RESULT_ADDENDUM = `
+EDIT RESULT — This request includes editResult: one step of a layered video edit you planned has finished and been saved. It names the video that was edited (sourceKey), the change that was applied (prompt), the layer number, and the newest saved video (resultKey, resultName). Continue the plan:
+- If steps remain, return the NEXT step as an edit-video action whose sourceKey is exactly editResult.resultKey, with that single next change as its prompt, plus at most one short line of text. No commentary-only turns while steps remain.
+- NEVER repeat the step that just completed: an edit-video action with the same source and the same prompt as the completed step will be rejected.
+- If every planned step is done — or editResult.layer is 5, the most steps allowed for one request — return action null with one brief completion summary; if steps remain beyond the 5-step cap, say the rest can be added by asking again.`;
+
 export const maxDuration = 180;
 
 export async function GET() {
@@ -75,7 +92,11 @@ export async function POST(request: Request) {
   const generationFeedback = rawFeedback && typeof rawFeedback.kind === "string" && typeof rawFeedback.prompt === "string"
     ? { kind: rawFeedback.kind.slice(0, 40), prompt: rawFeedback.prompt.slice(0, 2000), error: typeof rawFeedback.error === "string" ? rawFeedback.error.slice(0, 500) : "" }
     : undefined;
-  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "");
+  const rawEditResult = body.editResult && typeof body.editResult === "object" ? body.editResult : null;
+  const editResult = rawEditResult && typeof rawEditResult.sourceKey === "string" && typeof rawEditResult.prompt === "string" && typeof rawEditResult.resultKey === "string"
+    ? { sourceKey: rawEditResult.sourceKey.slice(0, 300), prompt: rawEditResult.prompt.slice(0, 3000), resultKey: rawEditResult.resultKey.slice(0, 300), resultName: typeof rawEditResult.resultName === "string" && rawEditResult.resultName ? rawEditResult.resultName.slice(0, 300) : rawEditResult.resultKey.slice(0, 300), layer: Number.isInteger(rawEditResult.layer) ? Math.min(5, Math.max(1, rawEditResult.layer)) : 1 }
+    : undefined;
+  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "") + (editResult ? JEWEL_EDIT_RESULT_ADDENDUM : "");
   const draftContext = {
     request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
     selectedImageKey: body.selectedImageKey, selectedAssetKey: body.selectedAssetKey, workspaceStage: body.workspaceStage,
@@ -83,6 +104,7 @@ export async function POST(request: Request) {
     executionGuide: body.project ? executionContext(body.project) : undefined,
     backgroundVisual: checkedBackgroundContext(body.backgroundVisual),
     ...(generationFeedback ? { generationFeedback } : {}),
+    ...(editResult ? { editResult } : {}),
   };
   if (!adviceOnlyRequest(String(body.request || "")) && body.project?.gameTools && body.project?.controls) { const timer = timerControlRequest(String(body.request || ""), body.history, body.project, body.selectedItem); if (timer) return NextResponse.json({ configured: true, ...timer }); const cycle = coinCycleRequest(String(body.request || ""), body.history, body.project, body.selectedItem); if (cycle) return NextResponse.json({ configured: true, ...cycle }); }
   let message = "";
@@ -156,6 +178,17 @@ export async function POST(request: Request) {
       }
       if (raw?.type === "search" && body.searchEvidence) throw new Error("The search is already complete. Use searchEvidence to return changes for the requested pool, with action null. Do not search again.");
       if (raw && !action) throw new Error(`The action ${String(raw.type || "unknown")} is not supported in that format. Edit an existing pool using changes.gameTools with its saved ID; create a new pool using changes.newTools; return action null for these saved edits.`);
+      // Edit-layering guards: an editResult turn must move the chain forward.
+      // Repeating the step that just completed (same source, same prompt) is
+      // a validation error on the first attempt (Muse gets one chance to
+      // correct it); if it comes back identical again — or claims a step
+      // beyond the five-layer cap — the action is dropped and the chain ends
+      // with the reply instead of resubmitting the same edit forever.
+      if (editResult && action?.type === "edit-video" && "sourceKey" in action && "prompt" in action && typeof action.prompt === "string") {
+        const repeatedStep = action.sourceKey === editResult.sourceKey && action.prompt.trim() === editResult.prompt.trim();
+        if (repeatedStep && attempt === 0) throw new Error("That exact video edit step just completed and was saved. Return the NEXT distinct step as an edit-video action against editResult.resultKey, or finish with action null and a brief summary. Never resubmit the completed step.");
+        if (repeatedStep || editResult.layer >= 5) action = null;
+      }
       if (Array.isArray(parsed.changes.gameTools) && parsed.changes.gameTools.some((tool: any) => !body.project?.gameTools?.some((existing: any) => existing.id === tool.id))) throw new Error("New tools must use the tool action");
       if (body.searchEvidence) parsed.changes = groundedResearchCards(parsed.changes, body.searchEvidence, body.project?.gameTools || [], String(body.request || ""));
       if (Object.keys(parsed.changes).length && Array.isArray(body.project?.assets) && Array.isArray(body.project?.controls) && Array.isArray(body.project?.gameTools)) {
@@ -183,7 +216,7 @@ export async function POST(request: Request) {
       if (attempt === 0) {
         try {
           const retryMessage = await museChatCompletion([
-            { role: "system", content: DRAFT_SYSTEM + JEWEL_ADDENDUM },
+            { role: "system", content: DRAFT_SYSTEM + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM },
             { role: "user", content: JSON.stringify(draftContext) },
             { role: "assistant", content: String(message) },
             { role: "user", content: (validationError instanceof Error ? "Correct this missing setting: " + validationError.message + " " : "") + "Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. Describe the final proposal in plain language, never the validation repair or JSON correction. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories." },
