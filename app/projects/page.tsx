@@ -29,14 +29,14 @@ export default function ProjectsPage() {
   }, [retry]);
 
   async function handleDelete(project: Project) {
-    const confirmed = window.confirm(`Delete "${project.name}"? This permanently removes the saved project and its stored assets.`);
+    const confirmed = window.confirm(`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash, or delete it forever there.`);
     if (!confirmed) return;
     try {
       await deleteProjectFromServer(project.id);
       setProjects(current => current.filter(item => item.id !== project.id));
     } catch (error) {
       console.error("Project deletion failed:", error);
-      window.alert("The project could not be deleted. Nothing was removed from the project library.");
+      window.alert("The project could not be moved to Trash. Nothing was removed from the project library.");
     }
   }
 
@@ -45,7 +45,10 @@ export default function ProjectsPage() {
       <header className="projects-top">
         <Link href="/" className="back">← TTCGameLab</Link>
         <div><small>PROJECT LIBRARY</small><h1>My Projects</h1></div>
-        <Link href="/project/new" className="build-btn">＋ New Project</Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/projects/trash" className="outline-btn">Trash</Link>
+          <Link href="/project/new" className="build-btn">＋ New Project</Link>
+        </div>
       </header>
       {loading&&<p role="status">Loading your saved projects…</p>}{loadError&&<div role="alert"><p>{loadError}</p><button className="outline-btn" onClick={()=>setRetry(v=>v+1)}>Try again</button></div>}<div className="project-library-grid">
         <article className="library-card project-library-card">

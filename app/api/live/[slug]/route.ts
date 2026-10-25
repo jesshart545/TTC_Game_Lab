@@ -18,7 +18,8 @@ type Context = { params: Promise<{ slug: string }> };
 async function published(slug: string) {
   const db = getDb();
   if (!db) return null;
-  const rows = await db`SELECT data FROM projects WHERE slug = ${slug} LIMIT 1`;
+  await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`;
+  const rows = await db`SELECT data FROM projects WHERE slug = ${slug} AND deleted_at IS NULL LIMIT 1`;
   const project = rows[0]?.data as Project | undefined;
   return project?.publishedSnapshot ? { db, project: project.publishedSnapshot } : null;
 }
