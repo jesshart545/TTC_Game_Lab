@@ -28,7 +28,7 @@ function jsonError(message: unknown, status = 500) {
     if (Array.isArray(value)) return value.map(format).filter(Boolean).join(" | ");
     if (value && typeof value === "object") {
       const item = value as Record<string, unknown>;
-      const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+      const location = Array.isArray(item.loc) ? item.loc.join(".") : Array.isArray(item.path) ? item.path.join(".") : "";
       const detail = typeof item.msg === "string" ? item.msg : typeof item.message === "string" ? item.message : "";
       if (detail) return location ? `${location}: ${detail}` : detail;
       try { return JSON.stringify(value); } catch { return "Unknown API error"; }
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     let durationSeconds: number;
     try { durationSeconds = videoDuration(prompt, body?.durationSeconds); }
     catch (error) { return jsonError(error instanceof Error ? error.message : "Invalid video length.", 400); }
-    if (promptImage || durationSeconds > 10) {
+    async function submitFalVideo() {
       const key = readSecret("FAL_KEY");
       if (!key) return jsonError("Video generation at this length is unavailable because fal.ai is not configured.", 503);
       const turbo = Boolean(promptImage) && durationSeconds === 5;
@@ -136,8 +136,11 @@ export async function POST(request: Request) {
       })).toString("base64url");
       return NextResponse.json({ type, status: "processing", videoId, model, provider: "fal", durationSeconds });
     }
+    if (promptImage || durationSeconds > 10) return submitFalVideo();
     const runwayKey = readSecret("RUNWAYML_API_SECRET");
+    if (!runwayKey && readSecret("FAL_KEY")) return submitFalVideo();
     if (!runwayKey) return jsonError("RUNWAYML_API_SECRET is not configured in Vercel.", 503);
+    if (prompt.length > 1000) return jsonError("Keep the short text-to-video description to 1,000 characters or fewer.", 400);
     const model = "gen4.5";
     // Text-only requests must use text_to_video; image_to_video requires promptImage.
     const runwayEndpoint = promptImage ? "image_to_video" : "text_to_video";
@@ -159,8 +162,12 @@ export async function POST(request: Request) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const providerError = String(payload?.error?.message || payload?.error || payload?.message || "");
+      if ((response.status === 402 || /(?:not have enough|insufficient|not enough) credits/i.test(providerError)) && readSecret("FAL_KEY")) {
+        return submitFalVideo();
+      }
       return jsonError(
-        typeof payload?.error === "string" ? payload.error : payload?.error?.message || payload?.message || payload?.detail || (payload?.errors ? JSON.stringify(payload.errors) : "") || "Runway video generation failed.",
+        payload?.issues || payload?.errors || payload?.detail || (typeof payload?.error === "string" ? payload.error : payload?.error?.message || payload?.message) || "Runway video generation failed.",
         response.status,
       );
     }
