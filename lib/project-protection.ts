@@ -1,0 +1,194 @@
+import { getDb } from "./db";
+
+// Project deletion protection: soft-delete (trash), a deletion audit log,
+// nightly full-project backups, and restore-from-backup.
+//
+// Why this exists: on 2026-10-16 a project ("Yipee Ki Yay") vanished with no
+// delete request in the logs — the row disappeared at the database level and
+// there was no backup to restore from. These layers make a project
+// recoverable: deletes land in trash first, every destructive action is
+// audited, and every night a full snapshot of all project data is stored in
+// the `project_backups` table so any single project can be recreated.
+//
+// Schema changes follow this repo's convention: lazy, idempotent DDL executed
+// from code (CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS), the same
+// way `owner_id` and `live_cards` were introduced. There is no migration
+// runner; the first request that touches these routes applies the schema.
+
+export type Db = NonNullable<ReturnType<typeof getDb>>;
+export type ProtectionActor = { id: string; email?: string };
+export type AuditAction = "trash" | "restore" | "delete-forever" | "restore-backup";
+
+export const BACKUP_RETENTION = 14;
+
+let schema: Promise<unknown> | null = null;
+export function ensureProtectionSchema(db: Db) {
+  if (!schema) {
+    schema = (async () => {
+      await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`;
+      await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_by TEXT`;
+      await db`CREATE TABLE IF NOT EXISTS project_deletion_audit (id BIGSERIAL PRIMARY KEY, project_id TEXT NOT NULL, project_title TEXT NOT NULL DEFAULT '', owner_id TEXT, actor_id TEXT, actor_email TEXT, action TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
+      await db`CREATE INDEX IF NOT EXISTS project_deletion_audit_project_idx ON project_deletion_audit (project_id, created_at DESC)`;
+      await db`CREATE TABLE IF NOT EXISTS project_backups (id BIGSERIAL PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), project_count INTEGER NOT NULL DEFAULT 0, payload JSONB NOT NULL)`;
+    })().catch(error => { schema = null; throw error; });
+  }
+  return schema;
+}
+
+export async function recordDeletionAudit(db: Db, entry: {
+  projectId: string;
+  projectTitle?: string;
+  ownerId?: string | null;
+  actor?: ProtectionActor | null;
+  action: AuditAction;
+}) {
+  await ensureProtectionSchema(db);
+  await db`INSERT INTO project_deletion_audit (project_id, project_title, owner_id, actor_id, actor_email, action) VALUES (${entry.projectId}, ${entry.projectTitle ?? ""}, ${entry.ownerId ?? null}, ${entry.actor?.id ?? null}, ${entry.actor?.email ?? null}, ${entry.action})`;
+}
+
+export async function listDeletionAudit(db: Db, limit = 100) {
+  await ensureProtectionSchema(db);
+  return db`SELECT id, project_id, project_title, owner_id, actor_id, actor_email, action, created_at FROM project_deletion_audit ORDER BY created_at DESC, id DESC LIMIT ${limit}`;
+}
+
+// ---- Trash (soft delete) ----
+
+type ProjectRef = { id: string; name: string; owner_id?: string | null };
+
+export async function trashProject(db: Db, project: ProjectRef, actor: ProtectionActor) {
+  await ensureProtectionSchema(db);
+  const rows = await db`UPDATE projects SET deleted_at = NOW(), deleted_by = ${actor.email || actor.id} WHERE id = ${project.id} AND deleted_at IS NULL RETURNING id`;
+  if (!rows.length) return false;
+  await recordDeletionAudit(db, { projectId: project.id, projectTitle: project.name, ownerId: project.owner_id ?? null, actor, action: "trash" });
+  return true;
+}
+
+export async function restoreTrashedProject(db: Db, project: ProjectRef, actor: ProtectionActor) {
+  await ensureProtectionSchema(db);
+  const rows = await db`UPDATE projects SET deleted_at = NULL, deleted_by = NULL WHERE id = ${project.id} AND deleted_at IS NOT NULL RETURNING id`;
+  if (!rows.length) return false;
+  await recordDeletionAudit(db, { projectId: project.id, projectTitle: project.name, ownerId: project.owner_id ?? null, actor, action: "restore" });
+  return true;
+}
+
+// Database half of the permanent delete. The route deletes the project's
+// stored assets first (and aborts on failure, exactly like the old hard
+// delete); this removes the database rows the old delete removed.
+export async function deleteProjectForever(db: Db, project: ProjectRef, actor: ProtectionActor) {
+  await ensureProtectionSchema(db);
+  await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
+  await db`CREATE TABLE IF NOT EXISTS live_events (id BIGSERIAL PRIMARY KEY, project_id TEXT NOT NULL, control_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
+  await db`DELETE FROM live_hosts WHERE project_id = ${project.id}`;
+  await db`DELETE FROM live_events WHERE project_id = ${project.id}`;
+  await db`DELETE FROM projects WHERE id = ${project.id}`;
+  await recordDeletionAudit(db, { projectId: project.id, projectTitle: project.name, ownerId: project.owner_id ?? null, actor, action: "delete-forever" });
+  return true;
+}
+
+export async function listTrashedProjects(db: Db, user: { id: string; admin: boolean }) {
+  await ensureProtectionSchema(db);
+  return user.admin
+    ? db`SELECT id, slug, name, description, status, theme, updated_at, data, owner_id, deleted_at, deleted_by FROM projects WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`
+    : db`SELECT id, slug, name, description, status, theme, updated_at, data, owner_id, deleted_at, deleted_by FROM projects WHERE deleted_at IS NOT NULL AND owner_id = ${user.id} ORDER BY deleted_at DESC`;
+}
+
+// ---- Nightly backups ----
+
+// A backup captures everything needed to recreate a project as an openable,
+// publishable draft: the full project row (its `data` JSONB holds all assets
+// metadata, tools, controls and the published snapshot) plus the rows in
+// other tables that belong to the project: live_hosts (the host key hash, so
+// a restored published project keeps working for its host) and live_cards
+// (published card-system state). Asset binaries are NOT included — they live
+// in object storage under `projects/<id>/` and the rows reference them by
+// storage key. Ephemeral runtime state (live_events history, live timer/coin
+// states) is intentionally excluded: it is meaningless to restore.
+export type BackupPayload = {
+  version: 1;
+  createdAt: string;
+  projects: Array<Record<string, unknown>>;
+  liveHosts: Array<Record<string, unknown>>;
+  liveCards: Array<Record<string, unknown>>;
+};
+
+export async function buildBackupPayload(db: Db): Promise<BackupPayload> {
+  await ensureProtectionSchema(db);
+  const projects = await db`SELECT id, slug, name, description, status, theme, prompt, data, owner_id, updated_at, deleted_at, deleted_by FROM projects ORDER BY id`;
+  await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
+  const liveHosts = await db`SELECT project_id, token_hash FROM live_hosts`;
+  await db`CREATE TABLE IF NOT EXISTS live_cards (project_id TEXT NOT NULL, tool_id TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, data JSONB NOT NULL, PRIMARY KEY(project_id,tool_id))`;
+  const liveCards = await db`SELECT project_id, tool_id, version, data FROM live_cards`;
+  return {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    projects: projects as Array<Record<string, unknown>>,
+    liveHosts: liveHosts as Array<Record<string, unknown>>,
+    liveCards: liveCards as Array<Record<string, unknown>>,
+  };
+}
+
+// Prune to the newest `keep` snapshots. The DELETE only ever removes rows
+// outside the newest `keep`, so it can never remove the last remaining
+// snapshot.
+export async function pruneBackups(db: Db, keep = BACKUP_RETENTION) {
+  await ensureProtectionSchema(db);
+  const removed = await db`DELETE FROM project_backups WHERE id NOT IN (SELECT id FROM project_backups ORDER BY created_at DESC, id DESC LIMIT ${keep}) RETURNING id`;
+  return removed.length;
+}
+
+export async function createBackupSnapshot(db: Db) {
+  await ensureProtectionSchema(db);
+  const payload = await buildBackupPayload(db);
+  const rows = await db`INSERT INTO project_backups (project_count, payload) VALUES (${payload.projects.length}, ${JSON.stringify(payload)}::jsonb) RETURNING id, created_at`;
+  const pruned = await pruneBackups(db);
+  return { id: rows[0].id, createdAt: rows[0].created_at, projectCount: payload.projects.length, pruned };
+}
+
+export async function listBackupSnapshots(db: Db) {
+  await ensureProtectionSchema(db);
+  return db`SELECT id, created_at, project_count FROM project_backups ORDER BY created_at DESC, id DESC`;
+}
+
+export async function getBackupSnapshot(db: Db, id: number) {
+  await ensureProtectionSchema(db);
+  const rows = await db`SELECT id, created_at, project_count, payload FROM project_backups WHERE id = ${id} LIMIT 1`;
+  return rows[0] ?? null;
+}
+
+// Restore ONE project from a snapshot. Conflict policy (the safe option):
+// the project is recreated with its original id and slug ONLY when no row
+// with that id or slug currently exists. If one does — live or trashed —
+// nothing is overwritten and a conflict is reported; the admin can restore
+// the trashed copy from Trash, or delete it forever, and then retry.
+export async function restoreProjectFromBackup(db: Db, snapshotId: number, projectId: string, actor: ProtectionActor) {
+  await ensureProtectionSchema(db);
+  const snapshot = await getBackupSnapshot(db, snapshotId);
+  if (!snapshot) return { ok: false as const, reason: "snapshot-not-found" as const };
+  const payload = snapshot.payload as BackupPayload;
+  const entry = (payload.projects || []).find(project => project.id === projectId);
+  if (!entry) return { ok: false as const, reason: "project-not-in-backup" as const };
+  const existing = await db`SELECT id FROM projects WHERE id = ${projectId} OR slug = ${String(entry.slug)} LIMIT 1`;
+  if (existing.length) return { ok: false as const, reason: "conflict" as const };
+  await db`INSERT INTO projects (id, slug, name, description, status, theme, prompt, data, owner_id, updated_at, deleted_at, deleted_by) VALUES (${String(entry.id)}, ${String(entry.slug)}, ${String(entry.name)}, ${String(entry.description ?? "")}, ${String(entry.status ?? "Draft")}, ${String(entry.theme ?? "cyan")}, ${String(entry.prompt ?? "")}, ${JSON.stringify(entry.data ?? {})}::jsonb, ${(entry.owner_id as string | null) ?? null}, NOW(), NULL, NULL)`;
+  const host = (payload.liveHosts || []).find(row => row.project_id === projectId);
+  if (host) {
+    await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;
+    await db`INSERT INTO live_hosts (project_id, token_hash) VALUES (${projectId}, ${String(host.token_hash)}) ON CONFLICT (project_id) DO NOTHING`;
+  }
+  const cards = (payload.liveCards || []).filter(row => row.project_id === projectId);
+  if (cards.length) {
+    await db`CREATE TABLE IF NOT EXISTS live_cards (project_id TEXT NOT NULL, tool_id TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, data JSONB NOT NULL, PRIMARY KEY(project_id,tool_id))`;
+    for (const card of cards) {
+      await db`INSERT INTO live_cards (project_id, tool_id, version, data) VALUES (${projectId}, ${String(card.tool_id)}, ${Number(card.version ?? 0)}, ${JSON.stringify(card.data ?? {})}::jsonb) ON CONFLICT (project_id, tool_id) DO NOTHING`;
+    }
+  }
+  await recordDeletionAudit(db, { projectId, projectTitle: String(entry.name ?? ""), ownerId: (entry.owner_id as string | null) ?? null, actor, action: "restore-backup" });
+  return { ok: true as const, id: projectId };
+}
+
+// Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` when the CRON_SECRET
+// environment variable is set. Fail closed when no secret is configured.
+export function isCronAuthorized(authorization: string | null | undefined, secret: string | undefined = process.env.CRON_SECRET) {
+  if (!secret) return false;
+  return authorization === `Bearer ${secret}`;
+}

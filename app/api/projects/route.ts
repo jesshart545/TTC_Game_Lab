@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
 import { requireCreator, isAdmin } from "../../../lib/auth/server";
+import { ensureProtectionSchema } from "../../../lib/project-protection";
 import { createHash, randomBytes } from "node:crypto";
 import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, canUseCityCrimeScene, stripCityCrimeSceneTools } from "../../../lib/city-crime-scene";
 
@@ -12,9 +13,11 @@ export async function GET() {
   await db`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'Draft', theme TEXT NOT NULL DEFAULT 'cyan', prompt TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
   await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id TEXT`;
   await db`CREATE INDEX IF NOT EXISTS projects_owner_id_idx ON projects(owner_id)`;
+  await ensureProtectionSchema(db);
+  // Trashed (soft-deleted) projects never appear in the library.
   const rows = isAdmin(user)
-    ? await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data FROM projects ORDER BY updated_at DESC`
-    : await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data FROM projects WHERE owner_id = ${user.id} ORDER BY updated_at DESC`;
+    ? await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data FROM projects WHERE deleted_at IS NULL ORDER BY updated_at DESC`
+    : await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data FROM projects WHERE owner_id = ${user.id} AND deleted_at IS NULL ORDER BY updated_at DESC`;
   return NextResponse.json({ configured: true, projects: rows });
 }
 
@@ -27,6 +30,7 @@ export async function POST(request: Request) {
   const body = incoming.project ?? incoming;
   await db`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'Draft', theme TEXT NOT NULL DEFAULT 'cyan', prompt TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
   await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id TEXT`;
+  await ensureProtectionSchema(db);
   const id = String(body.id);
   const slug = String(body.slug);
   const name = String(body.name);
@@ -50,7 +54,7 @@ export async function POST(request: Request) {
     }
     return JSON.stringify(payload);
   })();
-  const saved = await db`INSERT INTO projects (id, slug, name, description, status, theme, prompt, data, owner_id, updated_at) VALUES (${id}, ${slug}, ${name}, ${description}, ${status}, ${theme}, ${prompt}, ${data}::jsonb, ${user.id}, NOW()) ON CONFLICT (id) DO UPDATE SET slug=EXCLUDED.slug, name=EXCLUDED.name, description=EXCLUDED.description, status=EXCLUDED.status, theme=EXCLUDED.theme, prompt=EXCLUDED.prompt, data=EXCLUDED.data, updated_at=NOW() WHERE projects.owner_id = ${user.id} OR ${isAdmin(user)} RETURNING id`;
+  const saved = await db`INSERT INTO projects (id, slug, name, description, status, theme, prompt, data, owner_id, updated_at) VALUES (${id}, ${slug}, ${name}, ${description}, ${status}, ${theme}, ${prompt}, ${data}::jsonb, ${user.id}, NOW()) ON CONFLICT (id) DO UPDATE SET slug=EXCLUDED.slug, name=EXCLUDED.name, description=EXCLUDED.description, status=EXCLUDED.status, theme=EXCLUDED.theme, prompt=EXCLUDED.prompt, data=EXCLUDED.data, updated_at=NOW() WHERE (projects.owner_id = ${user.id} OR ${isAdmin(user)}) AND projects.deleted_at IS NULL RETURNING id`;
   if (!saved.length) return NextResponse.json({ error: "Project not found." }, { status: 404 });
   if (incoming.publish === true && body.publishedSnapshot) {
     await db`CREATE TABLE IF NOT EXISTS live_hosts (project_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL)`;

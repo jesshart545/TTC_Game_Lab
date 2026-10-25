@@ -144,6 +144,40 @@ export async function deleteProjectFromServer(idOrSlug: string) {
   return response.json();
 }
 
+export type TrashedProject = {
+  id: string;
+  slug: string;
+  name: string;
+  deletedAt: string | null;
+  deletedBy: string | null;
+  project: Project | null;
+};
+
+export async function loadTrashedProjects(): Promise<TrashedProject[]> {
+  const response = await fetch("/api/projects/trash", { cache: "no-store" });
+  if (!response.ok) throw new Error("Could not load the trash.");
+  const data = await response.json();
+  const rows: any[] = Array.isArray(data.projects) ? data.projects : [];
+  return rows.map(row => ({
+    id: String(row.id),
+    slug: String(row.slug ?? ""),
+    name: String(row.name ?? row.data?.name ?? "Untitled project"),
+    deletedAt: row.deleted_at ? String(row.deleted_at) : null,
+    deletedBy: row.deleted_by ? String(row.deleted_by) : null,
+    project: (row.data as Project) ?? null,
+  }));
+}
+
+export async function trashAction(idOrSlug: string, action: "restore" | "delete-forever") {
+  const response = await fetch(`/api/projects/trash/${encodeURIComponent(idOrSlug)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+  if (!response.ok) throw new Error("That trash action could not be completed.");
+  return response.json();
+}
+
 export async function loadProjectFromServer(idOrSlug: string): Promise<Project | null> {
   const response = await fetch(`/api/projects/${encodeURIComponent(idOrSlug)}`, { cache: "no-store" });
   if (response.status === 404) return null;

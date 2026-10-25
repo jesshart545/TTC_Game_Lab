@@ -7,7 +7,10 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
   const { slug } = await context.params;
   const db = getDb();
   if (!db) return NextResponse.json({ error: "Published project unavailable." }, { status: 503 });
-  const rows = await db`SELECT data FROM projects WHERE slug = ${slug} LIMIT 1`;
+  await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`;
+  // A trashed project is unpublished while it sits in Trash; restoring it
+  // from Trash brings the published page back.
+  const rows = await db`SELECT data FROM projects WHERE slug = ${slug} AND deleted_at IS NULL LIMIT 1`;
   const snapshot = (rows[0]?.data as Project | undefined)?.publishedSnapshot;
   if (!snapshot) return NextResponse.json({ error: "Project not published." }, { status: 404 });
   const gameTools = (snapshot.gameTools || []).filter(tool => tool.enabled && (tool.inToolbox || tool.inOverlayBuild));

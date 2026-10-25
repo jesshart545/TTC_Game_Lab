@@ -22,6 +22,7 @@ export default function AdminDashboard(){
   <section><h2>Manage</h2><ul>
    <li><Link href="/admin/users">Registered users</Link> — every signup email, name, and signup date.</li>
    <li><Link href="/admin/mailbox">Support mailbox</Link> — messages sent to the admin, with review status.</li>
+   <li><Link href="/admin/protection">Project protection</Link> — nightly project backups, restore a project from a backup, and the deletion audit log.</li>
   </ul></section>
  </>}
  </main>;
