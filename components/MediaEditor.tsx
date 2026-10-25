@@ -41,8 +41,11 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
       if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
       let resultUrl = typeof data.url === "string" ? data.url : "";
       if (video && !resultUrl && data.videoId) {
-        for (let attempt = 0; attempt < 300 && !resultUrl; attempt += 1) {
-          if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 2000));
+        const deadline = Date.now() + 60 * 60 * 1000;
+        let firstCheck = true;
+        while (!resultUrl && Date.now() < deadline) {
+          if (!firstCheck) await new Promise(resolve => setTimeout(resolve, 3000));
+          firstCheck = false;
           const statusResponse = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(String(data.videoId))}&model=${encodeURIComponent(String(data.model || "fal-ai/wan-vace-apps/video-edit"))}&provider=fal`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
           const statusData = await statusResponse.json().catch(() => ({}));
           if (!statusResponse.ok) throw new Error(statusData.error || "Unable to check on your edit.");

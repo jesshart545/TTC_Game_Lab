@@ -173,3 +173,67 @@ test('a Muse credit failure alerts the admin and returns the generic unavailable
   assert.equal(stack.alerts.length, 1);
   assert.equal(stack.alerts[0].source, 'jewel/muse');
 });
+
+const layeredProject = { id: 'project-1', controls: [], gameTools: [], assets: [
+  { name: 'Intro.mp4', type: 'video/mp4', storageKey: 'intro.mp4' },
+  { name: 'Intro-edited.mp4', type: 'video/mp4', storageKey: 'intro-edited.mp4' },
+] };
+const editResultBody = (overrides = {}) => ({ mode: 'draft-edit', request: 'Step 1 of the video edit is finished and saved as "Intro-edited.mp4". Continue with the next step of my original request, or finish with a brief summary if every change is done.', history: [], project: layeredProject, selectedAssetKey: 'intro-edited.mp4', editResult: { sourceKey: 'intro.mp4', prompt: 'Make it black and white', resultKey: 'intro-edited.mp4', resultName: 'Intro-edited.mp4', layer: 1 }, ...overrides });
+
+test("Jewel's prompt carries the layering and act-don't-just-talk guidance; the shared draft prompt is untouched", async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key' } });
+  stack.respond(okMuse({ reply: 'Try the Workshop tab.', changes: {}, manualSteps: [], needsClarification: false, outcome: 'answer', action: null }));
+  const response = await post(stack.route, { mode: 'draft-edit', request: 'How do I add a logo?', history: [], project });
+  assert.equal(response.status, 200);
+  const system = JSON.parse(stack.calls[0].options.body).messages[0].content;
+  assert.match(system, /VIDEO EDIT LAYERING/);
+  assert.match(system, /At most 5 steps/, 'the five-layer cap is part of Jewel\'s instructions');
+  assert.match(system, /Never send a plan without its first action/, 'a multi-change reply must pair its plan with the first layer\'s action');
+  assert.match(system, /no commentary-only turns/i, 'mid-chain turns must carry the next action, not commentary alone');
+  assert.match(system, /If you can act, act/);
+  assert.match(system, /black and white, like an old film/, 'a single coherent change stays one layer');
+  const jewelRoute = fs.readFileSync(path.join(root, 'app/api/jewel/route.ts'), 'utf8');
+  const aiRoute = fs.readFileSync(path.join(root, 'app/api/ai/route.ts'), 'utf8');
+  assert.doesNotMatch(aiRoute, /VIDEO EDIT LAYERING|editResult|JEWEL_LAYERING/, 'the shared /api/ai route must not gain Jewel\'s layering behavior');
+  assert.match(jewelRoute, /JEWEL_EDIT_RESULT_ADDENDUM/);
+  const draftSystemOf = (source) => source.slice(source.indexOf('const DRAFT_SYSTEM = `'), source.indexOf('`;', source.indexOf('const DRAFT_SYSTEM = `')) + 2);
+  assert.equal(draftSystemOf(jewelRoute), draftSystemOf(aiRoute), 'DRAFT_SYSTEM stays byte-identical between the Jewel and AI routes');
+});
+
+test('an edit result turn returns the next layer against the newest saved video', async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key' } });
+  stack.respond(okMuse({ reply: 'Now the title text.', changes: {}, manualSteps: [], needsClarification: false, outcome: 'action', action: { type: 'edit-video', sourceKey: 'intro-edited.mp4', prompt: 'Add the title text' } }));
+  const response = await post(stack.route, editResultBody());
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.action?.type, 'edit-video');
+  assert.equal(data.action.sourceKey, 'intro-edited.mp4', 'the next layer targets the newest saved copy');
+  assert.equal(data.action.prompt, 'Add the title text');
+  const sent = JSON.parse(stack.calls[0].options.body);
+  assert.match(sent.messages[0].content, /EDIT RESULT/, 'edit result turns get the continuation addendum');
+  const context = JSON.parse(sent.messages[1].content);
+  assert.equal(context.editResult.resultKey, 'intro-edited.mp4');
+  assert.equal(context.editResult.layer, 1);
+});
+
+test('a byte-identical repeated layer is corrected once, then dropped instead of looping', async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key' } });
+  const repeat = { reply: 'Applying that step.', changes: {}, manualSteps: [], needsClarification: false, outcome: 'action', action: { type: 'edit-video', sourceKey: 'intro.mp4', prompt: 'Make it black and white' } };
+  stack.respond(queueMuse([repeat, repeat]));
+  const response = await post(stack.route, editResultBody());
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(stack.calls.length, 2, 'the first repeat is a validation error Muse gets one chance to correct');
+  assert.equal(data.action, null, 'a second identical repeat is dropped so the chain ends instead of resubmitting forever');
+  const retryMessages = JSON.parse(stack.calls[1].options.body).messages;
+  assert.match(retryMessages[3].content, /Never resubmit the completed step/);
+});
+
+test('the fifth layer is the last: a further edit action is dropped at the cap', async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key' } });
+  stack.respond(okMuse({ reply: 'One more step.', changes: {}, manualSteps: [], needsClarification: false, outcome: 'action', action: { type: 'edit-video', sourceKey: 'intro-edited.mp4', prompt: 'Add a soft glow' } }));
+  const response = await post(stack.route, editResultBody({ editResult: { sourceKey: 'intro.mp4', prompt: 'Make it black and white', resultKey: 'intro-edited.mp4', resultName: 'Intro-edited.mp4', layer: 5 } }));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.action, null, 'no sixth layer may be issued for one request');
+});

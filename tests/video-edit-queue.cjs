@@ -112,6 +112,22 @@ test('the status route still rejects fal task endpoints outside the allowlist', 
   assert.equal(calls, 0);
 });
 
+test('both video edit clients poll against a 60-minute deadline, not a 300-attempt cap', () => {
+  const editor = fs.readFileSync('components/MediaEditor.tsx', 'utf8');
+  const editFlow = editor.slice(editor.indexOf('async function editMedia'), editor.indexOf('async function saveCopy'));
+  assert.ok(editFlow.includes('Date.now() + 60 * 60 * 1000'), 'MediaEditor polls the edit against a 60-minute deadline');
+  assert.ok(!editFlow.includes('attempt < 300'), 'MediaEditor no longer caps the edit at 300 attempts');
+  assert.ok(editFlow.includes('Your edit is still processing. Please try again in a little while.'), 'MediaEditor keeps its still-processing message');
+
+  const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
+  const submitAt = page.indexOf('fetch("/api/edit-video"');
+  assert.ok(submitAt > -1, 'project page still submits video edits');
+  const editBranch = page.slice(submitAt, submitAt + 3000);
+  assert.ok(editBranch.includes('Date.now() + 60 * 60 * 1000'), 'project page polls the edit against a 60-minute deadline');
+  assert.ok(!editBranch.includes('attempt < 300'), 'project page no longer caps the edit at 300 attempts');
+  assert.ok(editBranch.includes('Video editing is still processing. Please try again in a little while.'), 'project page keeps its still-processing message');
+});
+
 test('both video edit clients submit then poll the status route', () => {
   const editor = fs.readFileSync('components/MediaEditor.tsx', 'utf8');
   const editFlow = editor.slice(editor.indexOf('async function editMedia'), editor.indexOf('async function saveCopy'));
@@ -126,4 +142,21 @@ test('both video edit clients submit then poll the status route', () => {
   assert.ok(editBranch.includes('/api/generate-asset/status'), 'project page polls the status route for the edit result');
   assert.ok(editBranch.includes('provider=fal'), 'project page polls with the fal provider');
   assert.ok(editBranch.includes('saveAssetAsNew'), 'project page still stores the finished edit as a new asset');
+});
+
+test('the project page chains layered video edits through Jewel edit result turns', () => {
+  const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
+  assert.ok(page.includes('import { runEditLayerChain, type EditVideoAction, type EditLayerOutcome } from "../../../lib/edit-layer-chain";'), 'page runs the shared edit-layer chain');
+  assert.ok(page.includes('runEditLayerChain(checked, { runLayer, askNext, onAnnounce'), 'the validated first action seeds the chain');
+  const askAt = page.indexOf('const askNext');
+  assert.ok(askAt > -1, 'page defines the result-turn step');
+  const askFlow = page.slice(askAt, askAt + 2600);
+  assert.ok(askFlow.includes('fetch("/api/jewel"'), 'the result turn goes to Jewel');
+  assert.ok(askFlow.includes('editResult: { sourceKey: completed.action.sourceKey, prompt: completed.action.prompt, resultKey: completed.outcome.resultKey, resultName: completed.outcome.resultName, layer: completed.layer }'), 'the result turn reports the finished layer and the newest saved asset');
+  assert.ok(askFlow.includes('checkedAssistantMediaAction(turnData.action, (projectRef.current || baseProject).assets)'), 'each chained action is revalidated against the current project assets');
+  assert.ok(page.includes('Step ${layerNumber}: editing the next layer of your video…'), 'each layer shows its own progress');
+  assert.ok(page.includes('chain.layers > 1'), 'the completion reply distinguishes a layered run');
+  assert.ok(page.includes('"The edited copy is now in your draft assets. Your original and published live version are unchanged."'), 'a one-layer edit keeps its exact completion reply');
+  const chain = fs.readFileSync('lib/edit-layer-chain.ts', 'utf8');
+  assert.ok(chain.includes('export const MAX_EDIT_LAYERS = 5'), 'the chain caps one request at five layers');
 });
