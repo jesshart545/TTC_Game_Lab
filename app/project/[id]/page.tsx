@@ -587,7 +587,7 @@ export default function ProjectWorkspace() {
 
   async function handleDeleteProject() {
     if (!project) return;
-    const confirmed = window.confirm(`Delete "${project.name}"? This permanently removes the project and its stored assets.`);
+    const confirmed = window.confirm(`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash in the project library, or delete it forever there.`);
     if (!confirmed) return;
     try {
       await deleteProjectFromServer(project.id);
