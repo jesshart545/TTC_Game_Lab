@@ -13,10 +13,11 @@ type Deps = {
   ccssEntitled: boolean;
   toolDefaults: (type: GameToolType) => Record<string, unknown>;
   toolLibrary: { type: string; name: string }[];
+  onAskJewel: () => void;
 };
 
 export function useCityCrimeSceneBuilder(deps: Deps) {
-  const { project, projectRef, persist, setAssetStatus, ccssEntitled, toolDefaults, toolLibrary } = deps;
+  const { project, projectRef, persist, setAssetStatus, ccssEntitled, toolDefaults, toolLibrary, onAskJewel } = deps;
   const [cityCrimeSceneId, setCityCrimeSceneId] = useState("");
 
   function openCityCrimeScene() {
@@ -44,6 +45,7 @@ export function useCityCrimeSceneBuilder(deps: Deps) {
         <div className="ccss-builder">
           <div className="ccss-builder-topbar">
             <button type="button" className="outline-btn" onClick={() => setCityCrimeSceneId("")}>← Back to Workshop</button>
+            <button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={() => { setCityCrimeSceneId(""); onAskJewel(); }}>✦ Ask Jewel</button>
           </div>
           <CityCrimeSceneEditor
             key={editingCcss.id}
