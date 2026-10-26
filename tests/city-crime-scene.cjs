@@ -600,6 +600,118 @@ assert.ok(editorSrc22.includes('value={it.name}'), 'item names are still shown a
 assert.ok(editorSrc22.includes('evidence bound — highlights in play'), 'the item rows still say which items carry evidence');
 console.log('PASS: no names over pictures — scene highlights are bare glowing areas in play and bare outlines in the builder; names live in lists and revealed content.');
 
+// 23. CHARACTER FILE IMAGES (Jessica, 2026-10-26): "the character files
+// should include images similarly to the one I uploaded to show you" — the
+// reference Suspect Clue Card carries the character's IMAGE and a KEY
+// EVIDENCE section presented as captioned PHOTO items. And: "photos should
+// be generated per host description or approved story description every
+// game" — character photos are generated fresh for each game from that
+// character's description. Helper uploads stay appearance references only
+// (unchanged — group 16c already locks mediaKey out of generation targets).
+const { ccssSuspectPortraitPrompt, ccssClueCardPhotoPrompt, ccssLocationImagePrompt } = ccssLib;
+const overlaySrc23 = fsStage.readFileSync('components/CityCrimeSceneOverlay.tsx', 'utf8');
+const editorSrc23 = fsStage.readFileSync('components/CityCrimeSceneEditor.tsx', 'utf8');
+const routeSrc23 = fsStage.readFileSync('app/api/city-crime-scene/generate/route.ts', 'utf8');
+
+// 23a. Round-trip: portrait prompt/key on suspects and card photo
+// prompt/key/caption on clues survive the reader; unwritten stays unset —
+// the derivations cover it at generation time.
+const imgCfg = readCityCrimeSceneConfig({ mystery: JSON.parse(JSON.stringify(sample)) });
+assert(imgCfg.suspects.every(s => s.portraitPrompt && s.portraitPrompt.length > 10), 'sample suspects carry portrait prompts written with the case');
+assert(imgCfg.clues.every(c => c.cardPhotoPrompt && c.cardCaption), 'sample clues carry card photo prompts and captions written with the case');
+const imgCustom = readCityCrimeSceneConfig({ mystery: { suspects: [{ id: 'sx', name: 'X', portraitKey: 'projects/p/x.jpg' }], clues: [{ id: 'cx', title: 'T', locationId: 'l', cardPhotoKey: 'projects/p/c.jpg', cardCaption: 'A caption.' }] } });
+assert.equal(imgCustom.suspects.find(s => s.id === 'sx').portraitKey, 'projects/p/x.jpg', 'a suspect portrait key round-trips');
+const cxRead = imgCustom.clues.find(c => c.id === 'cx');
+assert(cxRead.cardPhotoKey === 'projects/p/c.jpg' && cxRead.cardCaption === 'A caption.', 'a clue card photo key + caption round-trip');
+assert.equal(imgCustom.suspects.find(s => s.id === 'sx').portraitPrompt, undefined, 'an unwritten portrait prompt stays unset — the derivation covers it at generation time');
+console.log('PASS: character portrait and card-photo fields round-trip through the reader.');
+
+// 23b. Portrait derivation: the photo prompt is built from the character's
+// OWN description fields plus the case's era/setting — this game's
+// character, described this game's way. No stock faces.
+const elena23 = sample.suspects.find(s => s.id === 'sus-elena');
+const derivedPortrait = ccssSuspectPortraitPrompt(elena23, sample.premise);
+assert(derivedPortrait.includes('Elena Voss') && derivedPortrait.includes(elena23.occupation), 'the derived portrait prompt names the character and what they do');
+assert(derivedPortrait.includes(elena23.personality) && derivedPortrait.includes(elena23.knownFor), 'the derived portrait prompt carries the character description (personality, known-for)');
+assert(derivedPortrait.includes(sample.premise), 'the derived portrait prompt carries the case era/setting');
+const danny23 = sample.suspects.find(s => s.id === 'sus-danny');
+assert(ccssSuspectPortraitPrompt(danny23, sample.premise) !== derivedPortrait, 'each character derives a different photo prompt — per character, per game');
+console.log('PASS: portrait prompts derive from the character description + case setting.');
+
+// 23c. Card photo derivation + the generalized guarantee: the photo prompt
+// is built from the summary and the item the evidence sits on — NEVER from
+// the specific description — and captions hold the same line as summaries.
+const decanter23 = sample.clues.find(c => c.id === 'clue-decanter');
+const derivedPhoto = ccssClueCardPhotoPrompt(decanter23);
+assert(derivedPhoto.includes(decanter23.hotspot), 'the derived card photo shows the visible item the evidence is found on');
+assert(derivedPhoto.includes(decanter23.summary), 'the derived card photo is built from the generalized summary');
+assert(!derivedPhoto.includes('oleander') && !derivedPhoto.includes('$40,000'), 'the derived card photo never reaches the specific description');
+for (const c of sample.clues) {
+  assert(!String(c.cardCaption || '').includes('oleander') && !String(c.cardCaption || '').includes('$40,000'), 'sample card captions stay generalized: ' + c.title);
+  assert(!String(c.cardPhotoPrompt || '').includes('oleander') && !String(c.cardPhotoPrompt || '').includes('$40,000'), 'sample card photo prompts stay generalized: ' + c.title);
+}
+const genWithPhotos = generalizedKeyEvidence({ clues: sample.clues.map(c => c.id === 'clue-decanter' ? { ...c, cardPhotoKey: 'projects/p/decanter-card.jpg' } : c) }, 'sus-priya');
+const decEntry = genWithPhotos.find(g => g.clueId === 'clue-decanter');
+assert(decEntry.photoKey === 'projects/p/decanter-card.jpg' && decEntry.caption === decanter23.cardCaption, 'generalized key evidence carries the card photo + caption for the character card');
+console.log('PASS: card photos derive from the generalized layer only — captions and prompts hold the same line as summaries.');
+
+// 23d. Sanitization: portraits, card photos, and captions are brief-layer
+// and publish with the card; the master truth still never does.
+const withKeys = JSON.parse(JSON.stringify(sample));
+withKeys.suspects[0].portraitKey = 'projects/p/elena.jpg';
+withKeys.clues[0].cardPhotoKey = 'projects/p/decanter-card.jpg';
+const pubKeysDump = JSON.stringify(sanitizeCityCrimeSceneForOverlay(readCityCrimeSceneConfig({ mystery: withKeys })));
+assert(pubKeysDump.includes('projects/p/elena.jpg'), 'the sanitizer carries the suspect portrait key to the public card');
+assert(pubKeysDump.includes('projects/p/decanter-card.jpg'), 'the sanitizer carries the clue card photo key to the public card');
+assert(pubKeysDump.includes(sample.clues[0].cardCaption), 'the sanitizer carries the card caption');
+assert(!/storySignificance|trueRole|alibiReality|briefNarration/.test(pubKeysDump), 'the same payload still carries no master-truth field names');
+console.log('PASS: sanitizer publishes portraits + card photos + captions and still strips the whole truth layer.');
+
+// 23e. Attach validation grows exactly the two new image slots.
+assert.equal(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'suspect', itemId: susId, field: 'portraitKey' }, attachProject).mediaKind, 'image', 'Jewel can attach a generated portrait to a suspect');
+assert.equal(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'clue', itemId: clueId, field: 'cardPhotoKey' }, attachProject).mediaKind, 'image', 'Jewel can attach a generated card photo to a clue');
+assert.throws(() => checkedCcssAttach({ toolId: 'tool-ccs', kind: 'suspect', itemId: susId, field: 'portraitKey' }, { gameTools: [] }), /could not be found/, 'portrait attach still requires the real CCS tool');
+const photoPatch = ccssMediaAttachPatch({ toolId: 'tool-ccs', kind: 'clue', itemId: clueId, field: 'cardPhotoKey' }, 'projects/p/card.jpg');
+assert.equal(photoPatch.gameTools[0].config.mystery.clues[0].cardPhotoKey, 'projects/p/card.jpg', 'the attach patch lands the card photo on exactly the clue');
+console.log('PASS: attach validation accepts the portrait + card-photo slots and nothing beyond them.');
+
+// 23f. Presentation + builder wiring (source invariants): the opening
+// lineup/briefing cards and the suspect intro render the card WITH its
+// portrait and its captioned evidence photos; the builder generates both
+// through the existing per-slot machinery from the derived prompts.
+assert.ok(overlaySrc23.includes('function EvidencePhoto'), 'the overlay renders evidence entries as captioned photo items');
+assert.ok(overlaySrc23.includes('KEY EVIDENCE'), 'the character card carries its KEY EVIDENCE section');
+assert.ok(overlaySrc23.includes('portraitOf(s)') && overlaySrc23.includes('cardEvidenceOf(s)'), 'the lineup/briefing cards are enriched with portrait + key evidence from the brief layer');
+assert.ok(overlaySrc23.includes('generalizedKeyEvidence(pubCfg, s.id)'), 'card evidence comes from the generalized accessor over the public config');
+assert.ok(overlaySrc23.includes('character portrait'), 'the suspect intro presents the character portrait when no guide video plays');
+assert.equal((overlaySrc23.match(/onClick/g) || []).length, 3, 'still exactly three click handlers — the cards added no interactivity to the audience surface');
+assert.ok(editorSrc23.includes('sus-img-${s.id}') && editorSrc23.includes('ccssSuspectPortraitPrompt(s, m.premise)'), 'the builder generates the portrait from the description-derived prompt');
+assert.ok(editorSrc23.includes('clue-photo-${c.id}') && editorSrc23.includes('walk-photo-${c.id}'), 'the builder generates card photos in the Clues section and the guided walk');
+assert.ok(editorSrc23.includes('ccssClueCardPhotoPrompt(c)'), 'card photo generation derives from the generalized layer');
+assert.ok(routeSrc23.includes('"portraitPrompt":string') && routeSrc23.includes('"cardPhotoPrompt":string') && routeSrc23.includes('"cardCaption":string'), 'case generation writes portrait + card photo prompts/captions with the package');
+assert.ok(routeSrc23.includes('CHARACTER PHOTOS'), 'the generation rules bind photos to the character descriptions, per game');
+console.log('PASS: character cards render portraits + captioned evidence photos; the builder generates both from the descriptions.');
+
+// 23g. MAP + LOCATION IMAGES PER GAME (Jessica, 2026-10-26): "maps and
+// location images should be generated per game as well." Audit result:
+// there is no separate map image and no stock art anywhere in the feature
+// — the map's visuals ARE the game's location scene images, and each of
+// those is generated fresh for its game from the approved story: the case
+// generator writes each location's imagePrompt with the package, and the
+// builder's scene Generate composes its prompt from that case text plus
+// the place's laid-out scene items.
+const office23 = sample.locations.find(l => l.id === 'loc-office');
+assert(ccssLocationImagePrompt(office23).includes(office23.imagePrompt), "the scene-image prompt is the case's own establishing shot for the place");
+const alleyPrompt = ccssLocationImagePrompt({ imagePrompt: 'Noir alley behind a club, wet cobblestones', items: [{ name: 'The dumpster' }, { name: 'The fire escape' }] });
+assert(alleyPrompt.includes('The dumpster') && alleyPrompt.includes('The fire escape'), "the scene-image prompt names the place's visible items so the picture contains them");
+const dockPrompt = ccssLocationImagePrompt({ imagePrompt: 'Sunlit marina dock at dawn', items: [{ name: 'The mooring post' }] });
+assert(dockPrompt !== alleyPrompt && dockPrompt.includes('marina'), 'a different game derives a different scene image — nothing shared, nothing stock');
+assert.ok(editorSrc23.includes('ccssLocationImagePrompt(l)'), 'the builder generates scene images through the case-derived prompt composition');
+assert.ok(overlaySrc23.includes('const img = l.imageKey ? assets.find'), "the map cards show each location's OWN generated scene image — the map is the game's places");
+assert.ok(!/unsplash|picsum\.|placehold\.co|loremflickr/.test(overlaySrc23 + editorSrc23), 'no stock or placeholder image service appears in the CCS surfaces');
+assert.ok(routeSrc23.includes('"imagePrompt":string'), "case generation writes each location's image prompt with the package, from the story");
+console.log("PASS: map + location images are per-game — the map is the game's own places, each scene generated from its case.");
+
 // 16d. The generation runner refuses an unresolvable helper reference
 // instead of silently generating without it.
 (async () => {

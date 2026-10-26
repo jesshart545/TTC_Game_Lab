@@ -18,6 +18,14 @@ export type CityCrimeSceneSuspect = {
   alibiReality?: string;
   questions: string[];
   guideVideoPrompt: string; guideVideoKey?: string;
+  /** The character's photo on their clue card. Generated fresh for THIS
+   *  game from the host's description of the character or the approved
+   *  story's description (see ccssSuspectPortraitPrompt — derived from the
+   *  card's own description fields + the case's era/setting when the host
+   *  has not written a prompt out). No stock or cross-game photos: every
+   *  game makes its own cast. Brief-layer content — it rides the public
+   *  card exactly like the guide video key does. */
+  portraitPrompt?: string; portraitKey?: string;
   isGuilty: boolean;
 };
 export type CityCrimeSceneClue = {
@@ -27,6 +35,14 @@ export type CityCrimeSceneClue = {
   summary: string;
   locationId: string; cutScenePrompt: string; cutSceneVideoKey?: string;
   audioPrompt?: string; audioKey?: string;
+  /** The captioned PHOTO of this evidence on a suspect's character card
+   *  (the reference card's KEY EVIDENCE photo items). The prompt and the
+   *  caption are built ONLY from the generalized `summary` and the item
+   *  the evidence is found on — NEVER from `description` — so the card
+   *  stays at preview level: a first-glance photo and a caption that ties
+   *  the evidence to the suspect, with no specific detail, figure, or
+   *  forensic conclusion. */
+  cardPhotoPrompt?: string; cardPhotoKey?: string; cardCaption?: string;
   /** The clickable item/area in the place this evidence is bound to (its name). */
   hotspot: string; hotspotX?: number; hotspotY?: number;
   /** The scene item of this clue's location the evidence pertains to. When
@@ -152,6 +168,7 @@ export type PublicCityCrimeSceneSuspect = {
   knownFor: string; personality: string; quote: string;
   characterBrief: string; potentialMotive: string; alibi: string;
   guideVideoPrompt: string; guideVideoKey?: string;
+  portraitKey?: string;
 };
 export type PublicCityCrimeSceneFlashback = {
   id: string; title: string; description: string; videoPrompt: string; videoKey?: string;
@@ -190,9 +207,9 @@ export function cityCrimeSceneDefaults(): CityCrimeSceneConfig {
       { id: "loc-office", name: "Reed's Office", description: "A cramped back office. Desk, decanter, ledger books — and a locked door.", imagePrompt: "Noir detective office interior, desk with brandy decanter and ledger books, venetian blind shadows, cinematic", isCrimeScene: true, items: [] },
     ],
     clues: [
-      { id: "clue-decanter", title: "The Brandy Decanter", description: "The decanter Reed poured from smells faintly of bitter almonds — the signature of oleander. Someone dosed his after-show ritual.", summary: "Something about the drink Reed poured that night isn't right.", locationId: "loc-office", cutScenePrompt: "Extreme close-up: amber brandy swirling in a crystal decanter, a single oleander petal drifting on the surface. Low strings swell.", hotspot: "The crystal decanter on the desk", hotspotX: 62, hotspotY: 44, initiallyPresent: true, storySignificance: "The murder weapon itself: Priya dosed this decanter. It ties the crime to Reed's after-show ritual — only someone who knew the ritual, and had access to the office, could have planned it.", relatedSuspectIds: ["sus-priya", "sus-danny"] },
-      { id: "clue-ledger", title: "The Torn Ledger Page", description: "A page ripped from the club's ledger shows $40,000 in unaccounted cash over twelve months — and Reed's angry margin note: 'I KNOW.'", summary: "The club's books don't add up — money has gone missing.", locationId: "loc-office", cutScenePrompt: "A gloved hand smooths a torn ledger page under a desk lamp. The camera pushes in on the words 'I KNOW' circled in red.", hotspot: "The ledger books on the desk", hotspotX: 30, hotspotY: 58, storySignificance: "The motive, in ink: Reed discovered Priya's year-long embezzlement that afternoon and confronted her. This page is why the bookkeeper could not let him reach the morning.", unlocksSuspectId: "sus-priya", relatedSuspectIds: ["sus-priya"] },
-      { id: "clue-note", title: "The Threatening Note", description: "An angry note in block letters, found crumpled by the stage: 'YOU STOLE MY ACT — YOU'LL PAY.'", summary: "Someone left Reed a threatening note.", locationId: "loc-stage", cutScenePrompt: "Rain-streaked spotlight. A crumpled note unfolds in slow motion: 'YOU STOLE MY ACT — YOU'LL PAY.'", hotspot: "The crumpled paper by the stage", hotspotX: 48, hotspotY: 72, storySignificance: "A red herring with a real author: Reed wrote this note himself as a publicity stunt. It makes Elena and Sam look guilty — and means the loudest evidence in the case points nowhere.", unlocksSuspectId: "sus-elena", relatedSuspectIds: ["sus-elena", "sus-sam"] },
+      { id: "clue-decanter", title: "The Brandy Decanter", description: "The decanter Reed poured from smells faintly of bitter almonds — the signature of oleander. Someone dosed his after-show ritual.", summary: "Something about the drink Reed poured that night isn't right.", locationId: "loc-office", cutScenePrompt: "Extreme close-up: amber brandy swirling in a crystal decanter, a single oleander petal drifting on the surface. Low strings swell.", cardPhotoPrompt: "Evidence photograph for a detective's case file: the crystal decanter on the desk in a dark office, half full of amber brandy, desk-lamp light, noir film still — first glance only, nothing forensic.", cardCaption: "The decanter on Reed's desk — the heart of his after-show ritual, and the last drink he ever poured.", hotspot: "The crystal decanter on the desk", hotspotX: 62, hotspotY: 44, initiallyPresent: true, storySignificance: "The murder weapon itself: Priya dosed this decanter. It ties the crime to Reed's after-show ritual — only someone who knew the ritual, and had access to the office, could have planned it.", relatedSuspectIds: ["sus-priya", "sus-danny"] },
+      { id: "clue-ledger", title: "The Torn Ledger Page", description: "A page ripped from the club's ledger shows $40,000 in unaccounted cash over twelve months — and Reed's angry margin note: 'I KNOW.'", summary: "The club's books don't add up — money has gone missing.", locationId: "loc-office", cutScenePrompt: "A gloved hand smooths a torn ledger page under a desk lamp. The camera pushes in on the words 'I KNOW' circled in red.", cardPhotoPrompt: "Evidence photograph for a detective's case file: worn ledger books under a desk lamp, one page torn out, noir office light, film still — first glance only, no figures legible.", cardCaption: "The club's ledger — the books on Reed's desk, with a page missing.", hotspot: "The ledger books on the desk", hotspotX: 30, hotspotY: 58, storySignificance: "The motive, in ink: Reed discovered Priya's year-long embezzlement that afternoon and confronted her. This page is why the bookkeeper could not let him reach the morning.", unlocksSuspectId: "sus-priya", relatedSuspectIds: ["sus-priya"] },
+      { id: "clue-note", title: "The Threatening Note", description: "An angry note in block letters, found crumpled by the stage: 'YOU STOLE MY ACT — YOU'LL PAY.'", summary: "Someone left Reed a threatening note.", locationId: "loc-stage", cutScenePrompt: "Rain-streaked spotlight. A crumpled note unfolds in slow motion: 'YOU STOLE MY ACT — YOU'LL PAY.'", cardPhotoPrompt: "Evidence photograph for a detective's case file: a crumpled handwritten note on a stage floor in a pool of spotlight, noir, film still — the writing blurred past reading.", cardCaption: "The note found crumpled by the stage — angry words that seemed to point at half the room.", hotspot: "The crumpled paper by the stage", hotspotX: 48, hotspotY: 72, storySignificance: "A red herring with a real author: Reed wrote this note himself as a publicity stunt. It makes Elena and Sam look guilty — and means the loudest evidence in the case points nowhere.", unlocksSuspectId: "sus-elena", relatedSuspectIds: ["sus-elena", "sus-sam"] },
     ],
     flashbacks: [
       { id: "fb-argument", title: "9:00 PM — The Argument", description: "The office door, half open. Raised voices inside — Reed's, sharp with accusation, and a second voice answering low and steady. A ledger slams onto the desk.", videoPrompt: "Noir flashback: office door ajar, two silhouettes arguing, a ledger slammed on a desk, venetian blind shadows", relatedSuspectIds: ["sus-priya", "sus-elena"] },
@@ -200,10 +217,10 @@ export function cityCrimeSceneDefaults(): CityCrimeSceneConfig {
       { id: "fb-stage", title: "10:30 PM — The Walkout", description: "Mid-song, the music stops. A singer storms off the stage past the tables while the crowd murmurs — and across the room, a rival watches with a thin smile.", videoPrompt: "Noir flashback: jazz singer storming off a stage mid-song, murmuring crowd, a rival watching from a dark corner", relatedSuspectIds: ["sus-elena", "sus-sam", "sus-danny"] },
     ],
     suspects: [
-      { id: "sus-elena", name: "Elena Voss", occupation: "Headliner torch singer at The Velvet Note", age: "Late 30s", knownFor: "The voice of The Velvet Note — the headliner every table goes quiet for.", personality: "Fiery and theatrical; performs even in conversation, and feels everything at full volume.", quote: "I sing other people's heartbreak, detective. I don't live it.", gender: "Female", ethnicity: "", characterBrief: "The club's headliner — a torch singer with a voice like smoke and a temper like gasoline.", potentialMotive: "Reed cut her headline set short two nights running and docked her pay. She threatened him backstage, loudly, in front of witnesses.", alibi: "On stage performing until 11:55 PM — fifty witnesses in the room.", demeanor: "Fiery and theatrical; performs even in conversation.", tells: "Touches her throat when cornered; her accent thickens when she lies.", extraInfo: "She genuinely loved Reed like a father — the fight was about respect, not money. She cries when she talks about him if pressed gently.", trueRole: "No part in the crime. Her backstage threat was about her cut set — anger, in public, in front of witnesses — and she never went near the office or the brandy.", alibiReality: "It holds completely: she was on stage until 11:55 PM in front of fifty witnesses, then went straight to the green room, where Lucia saw her.", questions: ["You threatened Marcus backstage — what exactly did you say to him?", "Who was with you between your last set and midnight?", "That note by the stage — is that your handwriting?"], guideVideoPrompt: "Noir character intro: Elena Voss, torch singer, smoky spotlight, defiant gaze into camera", isGuilty: false },
-      { id: "sus-danny", name: "Danny Cole", occupation: "Bartender at The Velvet Note", age: "Early 30s", knownFor: "Knows every regular's order — and every regular's secrets.", personality: "Easygoing and quick with a joke; the smile thins when money comes up.", quote: "I pour drinks, detective. I don't pour poison.", gender: "Male", ethnicity: "", characterBrief: "The bartender — quick with a pour, quicker with a joke, and three months behind on rent.", potentialMotive: "He owes Reed three months' back rent on the apartment above the club. Reed threatened eviction that very week.", alibi: "Behind the bar all night; the register log and the regulars back him up.", demeanor: "Easygoing, deflects with humor; goes quiet when the rent comes up.", tells: "Polishes the same glass when nervous; avoids eye contact on direct questions.", extraInfo: "He saw Priya near the side door around 11 PM but assumed she was taking out trash. He feels guilty for not mentioning it sooner.", trueRole: "No part in the crime — he is the one who found the body, taking Reed his usual nightcap at 12:05 AM.", alibiReality: "It holds: he was behind the bar all night. The register log and the regulars — Old Pete among them — place him there at 11:45 PM.", questions: ["Walk me through your night behind the bar, hour by hour.", "Reed threatened to evict you — how did that make you feel?", "Did you see anyone near the office or the side door after 11?"], guideVideoPrompt: "Noir character intro: Danny Cole, bartender, wiping a glass, neon bar glow, uneasy smile", isGuilty: false },
-      { id: "sus-priya", name: "Priya Raman", occupation: "Bookkeeper at The Velvet Note", age: "Mid 30s", knownFor: "The only person who truly understands the club's finances.", personality: "Composed and exact; treats every conversation like an audit.", quote: "Numbers don't lie, detective. People do.", gender: "Female", ethnicity: "", characterBrief: "The club's bookkeeper — precise, soft-spoken, and the only person who truly understands the finances.", potentialMotive: "She has been quietly skimming from the club's accounts for a year. Reed found the discrepancy that afternoon.", alibi: "Claims she left the club at 11:00 PM — but the side-door camera was unplugged at 11:02 PM.", demeanor: "Calm, precise, almost clinical; never raises her voice.", tells: "Straightens objects on any surface; her answers get shorter the closer you get.", extraInfo: "She is the guilty party. She is terrified but disciplined — she will only crack if confronted with the ledger page AND the camera gap together.", trueRole: "She did it. She poisoned Reed's after-show brandy with oleander extract at 11:40 PM, slipping back in through the side door after unplugging its camera at 11:02 PM — because Reed had discovered her year-long embezzlement that afternoon and confronted her at 9 PM.", alibiReality: "Half true, and the false half is the tell: she really did leave at 11:00 PM — then came back through the side door at 11:02 PM, which is exactly when its camera went dark.", questions: ["The ledger shows $40,000 missing. As bookkeeper, how do you explain that?", "You say you left at 11 — then why was the side-door camera unplugged at 11:02?", "Marcus confronted you at 9 PM. What did he say, exactly?"], guideVideoPrompt: "Noir character intro: Priya Raman, bookkeeper, desk lamp glow, ledger in hand, unreadable expression", isGuilty: true },
-      { id: "sus-sam", name: "Sam Whitaker", occupation: "Owner of the rival club across town", age: "Late 40s", knownFor: "Owner of the rival club across town — all handshakes and grievances.", personality: "Blustery and grand; plays the wronged businessman to any audience.", quote: "Marcus stole my act, not the other way around.", gender: "Male", ethnicity: "", characterBrief: "Owner of the rival club across town — all handshakes and grievances.", potentialMotive: "Reed poached his star act last month. Sam was heard saying 'the Velvet Note won't survive the month.'", alibi: "At his own club across town until 1 AM — his staff and a dozen patrons confirm.", demeanor: "Blustery, big gestures; plays the wronged businessman.", tells: "Laughs too loud at his own jokes; drums his fingers when impatient.", extraInfo: "His alibi is airtight — he was genuinely across town. The note is not his; his threats were always public and performative.", trueRole: "No part in the crime. His feud with Reed was real but loud and public — a rival's bluster, not a murder plan. He never entered the club that night.", alibiReality: "It holds completely: he was at his own club across town until 1 AM, confirmed by his staff and a dozen patrons. Mara saw him leave the Velvet Note at 9:45 PM and never return.", questions: ["You said the Velvet Note wouldn't survive the month — what did you mean?", "Where were you between 11 PM and midnight?", "Did you write the threatening note found by the stage?"], guideVideoPrompt: "Noir character intro: Sam Whitaker, rival club owner, cigar smoke, city lights through blinds", isGuilty: false },
+      { id: "sus-elena", name: "Elena Voss", occupation: "Headliner torch singer at The Velvet Note", age: "Late 30s", knownFor: "The voice of The Velvet Note — the headliner every table goes quiet for.", personality: "Fiery and theatrical; performs even in conversation, and feels everything at full volume.", quote: "I sing other people's heartbreak, detective. I don't live it.", gender: "Female", ethnicity: "", characterBrief: "The club's headliner — a torch singer with a voice like smoke and a temper like gasoline.", potentialMotive: "Reed cut her headline set short two nights running and docked her pay. She threatened him backstage, loudly, in front of witnesses.", alibi: "On stage performing until 11:55 PM — fifty witnesses in the room.", demeanor: "Fiery and theatrical; performs even in conversation.", tells: "Touches her throat when cornered; her accent thickens when she lies.", extraInfo: "She genuinely loved Reed like a father — the fight was about respect, not money. She cries when she talks about him if pressed gently.", trueRole: "No part in the crime. Her backstage threat was about her cut set — anger, in public, in front of witnesses — and she never went near the office or the brandy.", alibiReality: "It holds completely: she was on stage until 11:55 PM in front of fifty witnesses, then went straight to the green room, where Lucia saw her.", questions: ["You threatened Marcus backstage — what exactly did you say to him?", "Who was with you between your last set and midnight?", "That note by the stage — is that your handwriting?"], guideVideoPrompt: "Noir character intro: Elena Voss, torch singer, smoky spotlight, defiant gaze into camera", portraitPrompt: "Cinematic noir character portrait: Elena Voss, headliner torch singer in her late 30s, smoky spotlight on a jazz club stage, defiant gaze, period glamour, film still", isGuilty: false },
+      { id: "sus-danny", name: "Danny Cole", occupation: "Bartender at The Velvet Note", age: "Early 30s", knownFor: "Knows every regular's order — and every regular's secrets.", personality: "Easygoing and quick with a joke; the smile thins when money comes up.", quote: "I pour drinks, detective. I don't pour poison.", gender: "Male", ethnicity: "", characterBrief: "The bartender — quick with a pour, quicker with a joke, and three months behind on rent.", potentialMotive: "He owes Reed three months' back rent on the apartment above the club. Reed threatened eviction that very week.", alibi: "Behind the bar all night; the register log and the regulars back him up.", demeanor: "Easygoing, deflects with humor; goes quiet when the rent comes up.", tells: "Polishes the same glass when nervous; avoids eye contact on direct questions.", extraInfo: "He saw Priya near the side door around 11 PM but assumed she was taking out trash. He feels guilty for not mentioning it sooner.", trueRole: "No part in the crime — he is the one who found the body, taking Reed his usual nightcap at 12:05 AM.", alibiReality: "It holds: he was behind the bar all night. The register log and the regulars — Old Pete among them — place him there at 11:45 PM.", questions: ["Walk me through your night behind the bar, hour by hour.", "Reed threatened to evict you — how did that make you feel?", "Did you see anyone near the office or the side door after 11?"], guideVideoPrompt: "Noir character intro: Danny Cole, bartender, wiping a glass, neon bar glow, uneasy smile", portraitPrompt: "Cinematic noir character portrait: Danny Cole, bartender in his early 30s, behind a long mahogany bar, polishing a glass, neon glow, uneasy smile, film still", isGuilty: false },
+      { id: "sus-priya", name: "Priya Raman", occupation: "Bookkeeper at The Velvet Note", age: "Mid 30s", knownFor: "The only person who truly understands the club's finances.", personality: "Composed and exact; treats every conversation like an audit.", quote: "Numbers don't lie, detective. People do.", gender: "Female", ethnicity: "", characterBrief: "The club's bookkeeper — precise, soft-spoken, and the only person who truly understands the finances.", potentialMotive: "She has been quietly skimming from the club's accounts for a year. Reed found the discrepancy that afternoon.", alibi: "Claims she left the club at 11:00 PM — but the side-door camera was unplugged at 11:02 PM.", demeanor: "Calm, precise, almost clinical; never raises her voice.", tells: "Straightens objects on any surface; her answers get shorter the closer you get.", extraInfo: "She is the guilty party. She is terrified but disciplined — she will only crack if confronted with the ledger page AND the camera gap together.", trueRole: "She did it. She poisoned Reed's after-show brandy with oleander extract at 11:40 PM, slipping back in through the side door after unplugging its camera at 11:02 PM — because Reed had discovered her year-long embezzlement that afternoon and confronted her at 9 PM.", alibiReality: "Half true, and the false half is the tell: she really did leave at 11:00 PM — then came back through the side door at 11:02 PM, which is exactly when its camera went dark.", questions: ["The ledger shows $40,000 missing. As bookkeeper, how do you explain that?", "You say you left at 11 — then why was the side-door camera unplugged at 11:02?", "Marcus confronted you at 9 PM. What did he say, exactly?"], guideVideoPrompt: "Noir character intro: Priya Raman, bookkeeper, desk lamp glow, ledger in hand, unreadable expression", portraitPrompt: "Cinematic noir character portrait: Priya Raman, bookkeeper in her mid 30s, desk lamp glow, ledger in hand, composed unreadable expression, film still", isGuilty: true },
+      { id: "sus-sam", name: "Sam Whitaker", occupation: "Owner of the rival club across town", age: "Late 40s", knownFor: "Owner of the rival club across town — all handshakes and grievances.", personality: "Blustery and grand; plays the wronged businessman to any audience.", quote: "Marcus stole my act, not the other way around.", gender: "Male", ethnicity: "", characterBrief: "Owner of the rival club across town — all handshakes and grievances.", potentialMotive: "Reed poached his star act last month. Sam was heard saying 'the Velvet Note won't survive the month.'", alibi: "At his own club across town until 1 AM — his staff and a dozen patrons confirm.", demeanor: "Blustery, big gestures; plays the wronged businessman.", tells: "Laughs too loud at his own jokes; drums his fingers when impatient.", extraInfo: "His alibi is airtight — he was genuinely across town. The note is not his; his threats were always public and performative.", trueRole: "No part in the crime. His feud with Reed was real but loud and public — a rival's bluster, not a murder plan. He never entered the club that night.", alibiReality: "It holds completely: he was at his own club across town until 1 AM, confirmed by his staff and a dozen patrons. Mara saw him leave the Velvet Note at 9:45 PM and never return.", questions: ["You said the Velvet Note wouldn't survive the month — what did you mean?", "Where were you between 11 PM and midnight?", "Did you write the threatening note found by the stage?"], guideVideoPrompt: "Noir character intro: Sam Whitaker, rival club owner, cigar smoke, city lights through blinds", portraitPrompt: "Cinematic noir character portrait: Sam Whitaker, rival club owner in his late 40s, cigar smoke, city lights through venetian blinds, blustery grin, film still", isGuilty: false },
     ],
     witnesses: [
       { id: "wit-frank", name: "Frank", role: "Doorman", statement: "Mr. Reed argued with Miss Priya in the office around 9. I heard it through the door — he said something about numbers not adding up.", locationId: "loc-stage" },
@@ -245,6 +262,8 @@ function normalizeSuspect(s: Partial<CityCrimeSceneSuspect>): CityCrimeSceneSusp
     alibiReality: s.alibiReality ? str(s.alibiReality) : undefined,
     questions: Array.isArray(s.questions) ? s.questions.map(str) : [],
     guideVideoPrompt: str(s.guideVideoPrompt), guideVideoKey: s.guideVideoKey ? str(s.guideVideoKey) : undefined,
+    portraitPrompt: s.portraitPrompt ? str(s.portraitPrompt) : undefined,
+    portraitKey: s.portraitKey ? str(s.portraitKey) : undefined,
     isGuilty: s.isGuilty === true,
   };
 }
@@ -255,6 +274,9 @@ function normalizeClue(c: Partial<CityCrimeSceneClue>): CityCrimeSceneClue {
     summary: str(c.summary), locationId: str(c.locationId),
     cutScenePrompt: str(c.cutScenePrompt), cutSceneVideoKey: c.cutSceneVideoKey ? str(c.cutSceneVideoKey) : undefined,
     audioPrompt: c.audioPrompt ? str(c.audioPrompt) : undefined, audioKey: c.audioKey ? str(c.audioKey) : undefined,
+    cardPhotoPrompt: c.cardPhotoPrompt ? str(c.cardPhotoPrompt) : undefined,
+    cardPhotoKey: c.cardPhotoKey ? str(c.cardPhotoKey) : undefined,
+    cardCaption: c.cardCaption ? str(c.cardCaption) : undefined,
     hotspot: str(c.hotspot), hotspotX: num(c.hotspotX), hotspotY: num(c.hotspotY),
     itemId: c.itemId ? str(c.itemId) : undefined,
     storySignificance: c.storySignificance ? str(c.storySignificance) : undefined,
@@ -431,6 +453,7 @@ export function sanitizeCityCrimeSceneForOverlay(config: CityCrimeSceneConfig): 
       knownFor: s.knownFor || "", personality: s.personality || "", quote: s.quote || "",
       characterBrief: s.characterBrief, potentialMotive: s.potentialMotive, alibi: s.alibi,
       guideVideoPrompt: s.guideVideoPrompt, guideVideoKey: s.guideVideoKey,
+      portraitKey: s.portraitKey,
     })),
     // Clues are rebuilt field by field (like suspects): the master-truth
     // layer — storySignificance — is never copied, so it cannot leak through
@@ -439,6 +462,7 @@ export function sanitizeCityCrimeSceneForOverlay(config: CityCrimeSceneConfig): 
       id: c.id, title: c.title, description: c.description, summary: c.summary,
       locationId: c.locationId, cutScenePrompt: c.cutScenePrompt, cutSceneVideoKey: c.cutSceneVideoKey,
       audioPrompt: c.audioPrompt, audioKey: c.audioKey,
+      cardPhotoPrompt: c.cardPhotoPrompt, cardPhotoKey: c.cardPhotoKey, cardCaption: c.cardCaption,
       hotspot: c.hotspot, hotspotX: c.hotspotX, hotspotY: c.hotspotY, itemId: c.itemId,
       initiallyPresent: c.initiallyPresent,
       unlocksSuspectId: c.unlocksSuspectId, unlocksHelperId: c.unlocksHelperId,
@@ -890,14 +914,73 @@ export function ccssHelperAvailable(
 }
 
 /** Generalized key evidence for one suspect — the only evidence text that may
- *  appear in suspect-facing materials (rundowns, clue cards). Never specifics. */
+ *  appear in suspect-facing materials (rundowns, clue cards). Never specifics.
+ *  Each entry also carries the clue's character-card photo and caption: both
+ *  were built from the generalized layer (see the clue fields), so the card's
+ *  photo items stay at the same preview level as the text. */
 export function generalizedKeyEvidence(
   config: { clues: CityCrimeSceneClue[] },
   suspectId: string,
-): { clueId: string; title: string; summary: string }[] {
+): { clueId: string; title: string; summary: string; photoKey?: string; caption?: string }[] {
   return config.clues
     .filter(c => (c.relatedSuspectIds || []).includes(suspectId))
-    .map(c => ({ clueId: c.id, title: c.title, summary: c.summary || "" }));
+    .map(c => ({ clueId: c.id, title: c.title, summary: c.summary || "", photoKey: c.cardPhotoKey, caption: c.cardCaption }));
+}
+
+/** The generation prompt for a character's card photo, DERIVED from the
+ *  character's own description — the host's description of the character, or
+ *  the approved story's, as carried on the card fields (occupation, age,
+ *  known-for, personality, signature quote) — plus the case's era/setting.
+ *  Photos are generated fresh for every game from these descriptions: this
+ *  derivation is what a portrait Generate uses when the host (or the case
+ *  generator) has not written a portrait prompt out in full. */
+export function ccssSuspectPortraitPrompt(
+  suspect: { name?: string; occupation?: string; age?: string; knownFor?: string; personality?: string; quote?: string },
+  setting: string,
+): string {
+  const who = [String(suspect.name || "").trim(), String(suspect.occupation || "").trim()].filter(Boolean).join(", ");
+  const bits = [
+    `Cinematic noir character portrait photograph${who ? `: ${who}` : ""}${suspect.age ? `, ${suspect.age}` : ""}.`,
+    suspect.personality ? `Personality: ${suspect.personality}` : "",
+    suspect.knownFor ? `Known for: ${suspect.knownFor}` : "",
+    suspect.quote ? `In their own words: “${suspect.quote}”` : "",
+    setting ? `Era and setting: ${setting}` : "",
+    "A single character study for a detective's case file — dramatic light, rich detail, film-still composition.",
+  ];
+  return bits.filter(Boolean).join(" ");
+}
+
+/** The generation prompt for a location's scene image, composed from the
+ *  CASE — this game's own establishing shot for the place as the approved
+ *  story establishes it (the location's imagePrompt, written with the case
+ *  from the story), with the place's laid-out scene items named so the
+ *  picture actually contains the visible things the evidence binds to.
+ *  Scene images are generated fresh for every game from its own case:
+ *  there is no stock or shared location art anywhere in the feature, and
+ *  the game MAP has no separate image of its own — the map's visuals are
+ *  exactly these per-location scene images, one per place in this story. */
+export function ccssLocationImagePrompt(
+  location: { imagePrompt?: string; items?: { name: string }[] },
+): string {
+  const base = String(location.imagePrompt || "").trim();
+  const items = (location.items || []).map(it => String(it.name || "").trim()).filter(Boolean);
+  return `${base}${items.length ? ` The scene visibly contains: ${items.join(", ")}.` : ""}`.trim();
+}
+
+/** The generation prompt for an evidence piece's character-card photo,
+ *  DERIVED from the generalized layer ONLY — the clue's summary and the
+ *  visible item the evidence is found on. The specific `description` is
+ *  never an input: the card photo is a first-glance case-file photo, and
+ *  what the detail MEANS is expounded in play, not pictured on the card. */
+export function ccssClueCardPhotoPrompt(
+  clue: { title?: string; summary?: string; hotspot?: string },
+): string {
+  const bits = [
+    `Evidence photograph for a detective's case file: ${String(clue.hotspot || clue.title || "a piece of evidence").trim()}.`,
+    clue.summary ? String(clue.summary).trim() : "",
+    "Shot like a crime-scene photo in a case file — plain, factual, cinematic noir light. First glance only: nothing forensic, no legible figures or writing, nothing that gives away what the detail means.",
+  ];
+  return bits.filter(Boolean).join(" ");
 }
 
 /**
@@ -991,8 +1074,8 @@ export type CcssAttachKind = "location" | "clue" | "suspect" | "flashback" | "he
 export type CcssMediaAttach = { toolId: string; kind: CcssAttachKind; itemId: string; field: string; mediaKind: CcssMediaKind };
 const CCSS_ATTACH_FIELDS: Record<CcssAttachKind, Record<string, CcssMediaKind>> = {
   location: { imageKey: "image" },
-  clue: { cutSceneVideoKey: "video", audioKey: "audio" },
-  suspect: { guideVideoKey: "video" },
+  clue: { cutSceneVideoKey: "video", audioKey: "audio", cardPhotoKey: "image" },
+  suspect: { guideVideoKey: "video", portraitKey: "image" },
   flashback: { videoKey: "video" },
   helper: { portraitKey: "image", videoKey: "video" },
 };
@@ -1012,7 +1095,7 @@ export function checkedCcssAttach(raw: unknown, project: { gameTools?: Array<{ i
   const kind = typeof input.kind === "string" ? input.kind : "";
   const itemId = typeof input.itemId === "string" ? input.itemId : "";
   const field = typeof input.field === "string" ? input.field : "";
-  if (!Object.prototype.hasOwnProperty.call(CCSS_ATTACH_FIELDS, kind)) throw new Error("Choose where in the case the new media belongs: a location image, a clue cut scene or audio clip, a suspect guide video, a flashback video, or a helper portrait or intro video.");
+  if (!Object.prototype.hasOwnProperty.call(CCSS_ATTACH_FIELDS, kind)) throw new Error("Choose where in the case the new media belongs: a location image, a clue cut scene, audio clip, or card photo, a suspect guide video or portrait, a flashback video, or a helper portrait or intro video.");
   const attachKind = kind as CcssAttachKind;
   const tool = (project?.gameTools || []).find(t => t.id === toolId && t.type === "city-crime-scene");
   if (!tool) throw new Error("The City Crime Scene case to attach media to could not be found in this project.");
