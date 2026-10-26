@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { GameTool } from "../lib/project";
+import { generateCcssMedia, type CcssMediaContext } from "../lib/city-crime-scene-media";
 import {
   readCityCrimeSceneConfig, validateCityCrimeScene, validateCityCrimeSceneStandards, suggestEvidenceForLocation,
   type CityCrimeSceneConfig, type CityCrimeSceneSuspect, type CityCrimeSceneClue,
@@ -19,7 +20,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
 const TA = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} style={{ width: "100%", minHeight: 64, ...(props.style || {}) }} />;
 const IN = (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} style={{ width: "100%", ...(props.style || {}) }} />;
 
-export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool; onSave: (t: GameTool) => void }) {
+export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: GameTool; onSave: (t: GameTool) => void; media?: CcssMediaContext }) {
   const [m, setM] = useState<CityCrimeSceneConfig>(() => readCityCrimeSceneConfig(tool.config));
   // Cases saved before the staged pipeline existed are not re-gated: their
   // build already happened. New AI drafts start unapproved at the read gate.
@@ -41,6 +42,14 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [walkIdx, setWalkIdx] = useState(0);
+  // Inline media generation (per slot). A generation can run for minutes, so
+  // completions apply against the LATEST case state via mRef — never against
+  // the render-time snapshot an item's form controls captured.
+  const mRef = useRef(m);
+  mRef.current = m;
+  const [slotBusy, setSlotBusy] = useState<Record<string, boolean>>({});
+  const [slotError, setSlotError] = useState<Record<string, string>>({});
+  const [slotNote, setSlotNote] = useState<Record<string, string>>({});
 
   const save = (next: CityCrimeSceneConfig, nextPipeline: Pipeline = pipeline) => {
     setM(next); setPipeline(nextPipeline); setSaved(true);
@@ -50,6 +59,41 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
   const problems = validateCityCrimeScene(m);
   const standards = validateCityCrimeSceneStandards(m);
   const allLocationsApproved = m.locations.length > 0 && m.locations.every(l => pipeline.locationApprovals[l.id]);
+
+  const patchLatest = (p: Partial<CityCrimeSceneConfig>) => save({ ...mRef.current, ...p });
+  /** Run one media slot end to end: generate through the app's existing
+   *  stack, store into the project, then write the asset key onto the item.
+   *  A failure lands only in this slot's error line — the case is untouched
+   *  and no other slot is affected. */
+  const runMedia = async (slot: string, kind: "image" | "video" | "sfx", prompt: string, name: string, apply: (key: string) => void, referenceKey?: string) => {
+    if (!media) return;
+    setSlotBusy(b => ({ ...b, [slot]: true }));
+    setSlotError(e => ({ ...e, [slot]: "" }));
+    setSlotNote(n => ({ ...n, [slot]: "Starting generation…" }));
+    try {
+      const asset = await generateCcssMedia({ kind, prompt, name, referenceKey }, media, text => setSlotNote(n => ({ ...n, [slot]: text })));
+      apply(asset.storageKey || asset.name);
+      setSlotNote(n => ({ ...n, [slot]: `Saved ✓ — “${asset.name}” is attached to this item.` }));
+    } catch (err) {
+      setSlotError(e => ({ ...e, [slot]: err instanceof Error ? err.message : "Generation failed." }));
+      setSlotNote(n => ({ ...n, [slot]: "" }));
+    } finally {
+      setSlotBusy(b => ({ ...b, [slot]: false }));
+    }
+  };
+  /** The per-slot Generate control. Renders only when the host supplied a
+   *  media context; with no prompt yet it shows as a disabled button with the
+   *  reason, never a dead control. */
+  const genBtn = (slot: string, label: string, onClick: (() => void) | null, reason?: string) => {
+    if (!media) return null;
+    const busyNow = !!slotBusy[slot];
+    return <div style={{ margin: "0.25rem 0" }}>
+      <button type="button" className="build-btn" disabled={busyNow || !onClick} onClick={() => onClick?.()}>{busyNow ? "Generating…" : slotError[slot] ? `Retry — ${label}` : label}</button>
+      {!onClick && reason && <small style={{ display: "block", opacity: 0.75 }}>{reason}</small>}
+      {slotNote[slot] && <small style={{ display: "block", opacity: 0.85 }}>{slotNote[slot]}</small>}
+      {slotError[slot] && <small role="alert" style={{ display: "block", color: "#ff9a9a" }}>{slotError[slot]}</small>}
+    </div>;
+  };
 
   async function generate() {
     if (pitchMode === "pitch" && !pitch.trim() && !premise.trim()) { setStatus("Pitch your ideas first — plots, characters, a storyline framework — or switch to letting the builder formulate one."); return; }
@@ -167,7 +211,8 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
         <label style={{ display: "block", margin: "0.5rem 0" }}><input type="checkbox" checked={!!l.isCrimeScene} onChange={e => patch({ locations: m.locations.map(x => ({ ...x, isCrimeScene: x.id === l.id ? e.target.checked : e.target.checked ? undefined : x.isCrimeScene })) })} /> <strong>🚨 This location is the crime scene itself</strong> (exactly one per case)</label>
         <Field label="Description"><TA value={l.description} onChange={e => setL({ ...l, description: e.target.value })} /></Field>
         <Field label="Image prompt (for the site's image generator)" hint="Describe the noir establishing shot for this location."><TA value={l.imagePrompt || ""} onChange={e => setL({ ...l, imagePrompt: e.target.value })} /></Field>
-        <Field label="Scene image asset key (optional)" hint="Generate or upload the location's visual in this project's media, then paste its asset key or file name here — it becomes the scene the detective searches."><IN value={l.imageKey || ""} onChange={e => setL({ ...l, imageKey: e.target.value })} placeholder="e.g. reed-office-scene.jpg" /></Field>
+        <Field label="Scene image asset key (optional)" hint="Generate it right here with the button below, or paste a key from this project's media — it becomes the scene the detective searches."><IN value={l.imageKey || ""} onChange={e => setL({ ...l, imageKey: e.target.value })} placeholder="e.g. reed-office-scene.jpg" /></Field>
+        {genBtn(`loc-img-${l.id}`, "✦ Generate this scene image", l.imagePrompt?.trim() ? () => void runMedia(`loc-img-${l.id}`, "image", l.imagePrompt || "", `CCS location — ${l.name || l.id}`, key => patchLatest({ locations: mRef.current.locations.map(x => x.id === l.id ? { ...x, imageKey: key } : x) })) : null, "Write the image prompt first — the scene image is generated from it.")}
       </>, newLocation, "Add location", (l, i) => `Location ${i + 1}${l.name ? `: ${l.name}` : ""}${l.isCrimeScene ? " 🚨 CRIME SCENE" : ""}`)}
     </details>
 
@@ -206,6 +251,9 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
             </div>
             <Field label="Cut-scene prompt (cinematic reveal video)"><TA value={c.cutScenePrompt} onChange={e => setClue({ ...c, cutScenePrompt: e.target.value })} /></Field>
             <Field label="Audio evidence prompt (optional clip)"><TA value={c.audioPrompt || ""} onChange={e => setClue({ ...c, audioPrompt: e.target.value })} placeholder="e.g. A muffled argument through the office door, a glass set down hard…" /></Field>
+            <p style={{ fontSize: "0.85rem", opacity: 0.9, margin: "0.25rem 0" }}>{c.cutSceneVideoKey ? `🎬 Cut scene saved: ${c.cutSceneVideoKey}` : "🎬 No cut scene yet."} · {c.audioKey ? `🔊 Audio saved: ${c.audioKey}` : "🔊 No audio clip yet."}</p>
+            {genBtn(`walk-cut-${c.id}`, "✦ Generate cut scene", c.cutScenePrompt.trim() ? () => void runMedia(`walk-cut-${c.id}`, "video", c.cutScenePrompt, `CCS clue — ${c.title || c.id} (cut scene)`, key => patchLatest({ clues: mRef.current.clues.map(x => x.id === c.id ? { ...x, cutSceneVideoKey: key } : x) })) : null, "Write the cut-scene prompt first.")}
+            {genBtn(`walk-aud-${c.id}`, "✦ Generate audio clip", c.audioPrompt?.trim() ? () => void runMedia(`walk-aud-${c.id}`, "sfx", c.audioPrompt || "", `CCS clue — ${c.title || c.id} (audio)`, key => patchLatest({ clues: mRef.current.clues.map(x => x.id === c.id ? { ...x, audioKey: key } : x) })) : null, "Write the audio prompt first.")}
           </div>)}
           {!locClues.length && <p role="alert" style={lockNote}>This location has no evidence yet — choose from the list below or add a custom clue.</p>}
           <Field label={`Evidence that fits this story and this location (${suggestions.length})`} hint="The list is filtered: only evidence that works for the overall storyline AND belongs in this room appears. Tire tracks will never be offered for an upstairs bedroom.">
@@ -229,9 +277,11 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
         <Field label="Location"><select value={c.locationId} onChange={e => setC({ ...c, locationId: e.target.value })}>{m.locations.map(l => <option key={l.id} value={l.id}>{l.name || l.id}</option>)}</select></Field>
         <Field label="Bound to clickable item / area in that room"><IN value={c.hotspot} onChange={e => setC({ ...c, hotspot: e.target.value })} placeholder="e.g. The ledger books on the desk" /></Field>
         <Field label="Cut-scene prompt (cinematic clue reveal)"><TA value={c.cutScenePrompt} onChange={e => setC({ ...c, cutScenePrompt: e.target.value })} /></Field>
-        <Field label="Cut-scene video asset key (optional)" hint="Generate or upload the reveal video in this project's media, then paste its asset key or file name here — it plays on the overlay when the clue is revealed."><IN value={c.cutSceneVideoKey || ""} onChange={e => setC({ ...c, cutSceneVideoKey: e.target.value })} placeholder="e.g. clue-decanter-reveal.mp4" /></Field>
+        <Field label="Cut-scene video asset key (optional)" hint="Generate it right here with the button below, or paste a key from this project's media — it plays on the overlay when the clue is revealed."><IN value={c.cutSceneVideoKey || ""} onChange={e => setC({ ...c, cutSceneVideoKey: e.target.value })} placeholder="e.g. clue-decanter-reveal.mp4" /></Field>
+        {genBtn(`clue-cut-${c.id}`, "✦ Generate cut scene", c.cutScenePrompt.trim() ? () => void runMedia(`clue-cut-${c.id}`, "video", c.cutScenePrompt, `CCS clue — ${c.title || c.id} (cut scene)`, key => patchLatest({ clues: mRef.current.clues.map(x => x.id === c.id ? { ...x, cutSceneVideoKey: key } : x) })) : null, "Write the cut-scene prompt first.")}
         <Field label="Audio evidence prompt (optional)"><TA value={c.audioPrompt || ""} onChange={e => setC({ ...c, audioPrompt: e.target.value })} /></Field>
         <Field label="Audio clip asset key (optional)"><IN value={c.audioKey || ""} onChange={e => setC({ ...c, audioKey: e.target.value })} placeholder="e.g. clue-door-argument.mp3" /></Field>
+        {genBtn(`clue-aud-${c.id}`, "✦ Generate audio clip", c.audioPrompt?.trim() ? () => void runMedia(`clue-aud-${c.id}`, "sfx", c.audioPrompt || "", `CCS clue — ${c.title || c.id} (audio)`, key => patchLatest({ clues: mRef.current.clues.map(x => x.id === c.id ? { ...x, audioKey: key } : x) })) : null, "Write the audio prompt first.")}
         <Field label="Unlocks questioning of (map discovery → initial ability)"><select value={c.unlocksSuspectId || ""} onChange={e => setC({ ...c, unlocksSuspectId: e.target.value || undefined })}><option value="">— unlocks nobody —</option>{m.suspects.map(s => <option key={s.id} value={s.id}>{s.name || s.id}</option>)}</select></Field>
         <Field label="Makes clue helper available"><select value={c.unlocksHelperId || ""} onChange={e => setC({ ...c, unlocksHelperId: e.target.value || undefined })}><option value="">— no helper —</option>{m.helperWitnesses.map(h => <option key={h.id} value={h.id}>{h.name || h.id}</option>)}</select></Field>
         <label style={{ display: "block", margin: "0.5rem 0" }}><input type="checkbox" checked={!!c.turningPoint} onChange={e => setC({ ...c, turningPoint: e.target.checked || undefined })} /> <strong>🔀 Turning point</strong> — new, previously-unknown information that can change the investigation&apos;s trajectory</label>
@@ -246,7 +296,8 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
         <Field label="Title"><IN value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="e.g. 11:02 PM — The Side Door" /></Field>
         <Field label="What the audience sees"><TA value={f.description} onChange={e => setF({ ...f, description: e.target.value })} /></Field>
         <Field label="Video prompt (for the site's video generator)"><TA value={f.videoPrompt} onChange={e => setF({ ...f, videoPrompt: e.target.value })} /></Field>
-        <Field label="Video asset key (optional)" hint="Generate or upload the flashback video in this project's media, then paste its asset key or file name here."><IN value={f.videoKey || ""} onChange={e => setF({ ...f, videoKey: e.target.value })} placeholder="e.g. flashback-sidedoor.mp4" /></Field>
+        <Field label="Video asset key (optional)" hint="Generate it right here with the button below, or paste a key from this project's media."><IN value={f.videoKey || ""} onChange={e => setF({ ...f, videoKey: e.target.value })} placeholder="e.g. flashback-sidedoor.mp4" /></Field>
+        {genBtn(`fb-vid-${f.id}`, "✦ Generate this flashback video", f.videoPrompt?.trim() ? () => void runMedia(`fb-vid-${f.id}`, "video", f.videoPrompt || "", `CCS flashback — ${f.title || f.id}`, key => patchLatest({ flashbacks: mRef.current.flashbacks.map(x => x.id === f.id ? { ...x, videoKey: key } : x) })) : null, "Write the video prompt first.")}
         <Field label="Implicates which suspects?">{m.suspects.map(s => <label key={s.id} style={{ display: "inline-block", marginRight: "0.75rem", fontWeight: 400 }}><input type="checkbox" checked={f.relatedSuspectIds.includes(s.id)} onChange={e => setF({ ...f, relatedSuspectIds: e.target.checked ? [...f.relatedSuspectIds, s.id] : f.relatedSuspectIds.filter(x => x !== s.id) })} /> {s.name || s.id}</label>)}</Field>
       </>, newFlashback, "Add flashback", (f, i) => `Flashback ${i + 1}${f.title ? `: ${f.title}` : ""}`)}
       </>}
@@ -276,7 +327,10 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
         <Field label="Extra info (not in the player's brief) 🔒"><TA value={s.extraInfo} onChange={e => setS({ ...s, extraInfo: e.target.value })} /></Field>
         <Field label="Suggested interrogation questions (optional for the detective) 🔒">{s.questions.map((q, qi) => <IN key={qi} value={q} onChange={e => setS({ ...s, questions: s.questions.map((x, j) => (j === qi ? e.target.value : x)) })} placeholder={`Question ${qi + 1}`} />)}<button type="button" className="outline-btn" onClick={() => setS({ ...s, questions: [...s.questions, ""] })}>Add question</button></Field>
         <Field label="Character guide video prompt (for the site's video generator)" hint="Plays center-focused during gameplay when the investigation turns to this suspect."><TA value={s.guideVideoPrompt} onChange={e => setS({ ...s, guideVideoPrompt: e.target.value })} /></Field>
-        <Field label="Character guide video asset key (optional)" hint="Generate or upload the intro video in this project's media, then paste its asset key or file name here — it plays full-screen when the suspect is introduced."><IN value={s.guideVideoKey || ""} onChange={e => setS({ ...s, guideVideoKey: e.target.value })} placeholder="e.g. elena-intro.mp4" /></Field>
+        <Field label="Character guide video asset key (optional)" hint="Generate it right here with the button below, or paste a key from this project's media — it plays full-screen when the suspect is introduced."><IN value={s.guideVideoKey || ""} onChange={e => setS({ ...s, guideVideoKey: e.target.value })} placeholder="e.g. elena-intro.mp4" /></Field>
+        {media && (pipeline.storylineApproved
+          ? genBtn(`sus-vid-${s.id}`, "✦ Generate guide video", s.guideVideoPrompt.trim() ? () => void runMedia(`sus-vid-${s.id}`, "video", s.guideVideoPrompt, `CCS suspect — ${s.name || s.id} (guide video)`, key => patchLatest({ suspects: mRef.current.suspects.map(x => x.id === s.id ? { ...x, guideVideoKey: key } : x) })) : null, "Write the guide video prompt first.")
+          : <small style={{ display: "block", opacity: 0.75, margin: "0.25rem 0" }}>Guide-video generation opens once the storyline is approved above — nothing is rendered from unapproved text.</small>)}
       </>, newSuspect, "Add suspect", (s, i) => <>Suspect {i + 1}{s.name ? `: ${s.name}` : ""}{s.isGuilty ? " 🔒 GUILTY" : ""}{roleBadge("SUSPECT")}</>)}
     </details>
 
@@ -306,7 +360,12 @@ export default function CityCrimeSceneEditor({ tool, onSave }: { tool: GameTool;
         <Field label="Your uploaded media — asset key (optional)" hint="Upload your pre-created photo/media for this helper in the project's media and paste its key here. It feeds the helper's info card and is the REFERENCE BASE for any further image/video generation of this helper."><IN value={w.mediaKey || ""} onChange={e => setW({ ...w, mediaKey: e.target.value })} placeholder="e.g. old-tommy-photo.jpg" /></Field>
         {(w.mediaMode || "generate") === "generate" && <>
           <Field label="Portrait prompt" hint={w.mediaKey ? "Generation starts from your uploaded media above, so the helper stays recognizably the same person." : undefined}><TA value={w.portraitPrompt || ""} onChange={e => setW({ ...w, portraitPrompt: e.target.value })} /></Field>
+          <Field label="Generated portrait asset key (optional)" hint="Filled automatically when you generate the portrait below. This is the generated media — your uploaded reference above stays untouched."><IN value={w.portraitKey || ""} onChange={e => setW({ ...w, portraitKey: e.target.value })} placeholder="Set automatically on generation" /></Field>
+          {genBtn(`help-img-${w.id}`, "✦ Generate portrait", w.portraitPrompt?.trim() ? () => void runMedia(`help-img-${w.id}`, "image", w.portraitPrompt || "", `CCS helper — ${w.name || w.id} (portrait)`, key => patchLatest({ helperWitnesses: mRef.current.helperWitnesses.map(x => x.id === w.id ? { ...x, portraitKey: key } : x) }), w.mediaKey || undefined) : null, "Write the portrait prompt first.")}
           <Field label="Intro video prompt"><TA value={w.videoPrompt || ""} onChange={e => setW({ ...w, videoPrompt: e.target.value })} /></Field>
+          <Field label="Generated intro video asset key (optional)" hint="Filled automatically when you generate the intro video below."><IN value={w.videoKey || ""} onChange={e => setW({ ...w, videoKey: e.target.value })} placeholder="Set automatically on generation" /></Field>
+          {genBtn(`help-vid-${w.id}`, "✦ Generate intro video", w.videoPrompt?.trim() ? () => void runMedia(`help-vid-${w.id}`, "video", w.videoPrompt || "", `CCS helper — ${w.name || w.id} (intro video)`, key => patchLatest({ helperWitnesses: mRef.current.helperWitnesses.map(x => x.id === w.id ? { ...x, videoKey: key } : x) }), w.mediaKey || undefined) : null, "Write the intro video prompt first.")}
+          {media && w.mediaKey && <small style={{ display: "block", opacity: 0.8, margin: "0.25rem 0" }}>Your uploaded reference ({w.mediaKey}) is used as the visual base for this helper's generated portrait and video.</small>}
           <Field label="Voice"><select value={w.voice || ""} onChange={e => setW({ ...w, voice: e.target.value })}><option value="">No voice</option><option value="Aria">Aria (female)</option><option value="Roger">Roger (male)</option></select></Field>
         </>}
       </>, newHelper, "Add helper witness", (w, i) => <>Helper {i + 1}{w.name ? `: ${w.name}` : ""}{roleBadge("HELPER · OPTIONAL")}</>)}
