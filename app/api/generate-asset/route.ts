@@ -65,6 +65,9 @@ export async function POST(request: Request) {
     const model = referenceImage ? "fal-ai/nano-banana-2/edit" : "fal-ai/nano-banana-2";
     // Queue the request instead of waiting synchronously: image jobs can run for
     // minutes, and a synchronous wait hangs the UI with no progress or errors.
+    // Caliber: 2K default so full-bleed overlay art stays sharp on the 1920×1080 canvas.
+    const allowedResolutions = ["0.5K", "1K", "2K", "4K"];
+    const resolution = allowedResolutions.includes(String(body?.resolution)) ? String(body.resolution) : "2K";
     const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
       method: "POST",
       headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
         num_images: 1,
         aspect_ratio: body?.aspectRatio || "16:9",
         output_format: "png",
-        resolution: body?.resolution || "1K",
+        resolution,
         limit_generations: true,
       }),
       cache: "no-store",
@@ -113,9 +116,10 @@ export async function POST(request: Request) {
         method: "POST",
         headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(promptImage ? turbo ? { image_url: promptImage } : { start_image_url: promptImage } : {}), prompt, resolution: "720p",
+          // Caliber: full 1080p on wan-3.0 so clips match the 1920×1080 overlay; turbo tops out at 720p, so push its quality to maximum instead.
+          ...(promptImage ? turbo ? { image_url: promptImage } : { start_image_url: promptImage } : {}), prompt, resolution: turbo ? "720p" : "1080p",
           aspect_ratio: "16:9",
-          ...(turbo ? { enable_output_safety_checker: true } : { duration: durationSeconds, audio: false }),
+          ...(turbo ? { enable_output_safety_checker: true, video_quality: "maximum" } : { duration: durationSeconds, audio: false }),
           enable_safety_checker: true,
           enable_prompt_expansion: false,
         }),
