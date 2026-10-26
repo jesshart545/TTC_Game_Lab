@@ -195,10 +195,10 @@ assert(!genDump.includes('$40,000'), 'generalized evidence never carries specifi
 console.log('PASS: generalized key evidence contains summaries only, never specifics.');
 
 // 14. Design standards: a complete case passes; each thinning is flagged.
-const suspect = (id, name) => ({ id, name, occupation: 'Staff', age: '30s', knownFor: 'Known around the club.', personality: 'Distinct and memorable.', quote: 'I had nothing to do with it.', gender: 'Female', ethnicity: 'Black', characterBrief: 'A full brief.', potentialMotive: 'A real reason to look guilty.', alibi: 'A checkable alibi.', demeanor: 'd', tells: 't', extraInfo: 'e', questions: ['Why?'], guideVideoPrompt: 'Noir intro video prompt', isGuilty: id === 's1' });
-const clue = (id, loc, extra = {}) => ({ id, title: 'Evidence ' + id, description: 'Specific detail the detective uncovers in play.', summary: 'A generalized hint of what this is.', locationId: loc, cutScenePrompt: 'Cinematic cut scene prompt', hotspot: 'The object on the table', relatedSuspectIds: ['s1', 's2'], ...extra });
+const suspect = (id, name) => ({ id, name, occupation: 'Staff', age: '30s', knownFor: 'Known around the club.', personality: 'Distinct and memorable.', quote: 'I had nothing to do with it.', gender: 'Female', ethnicity: 'Black', characterBrief: 'A full brief.', potentialMotive: 'A real reason to look guilty.', alibi: 'A checkable alibi.', demeanor: 'd', tells: 't', extraInfo: 'e', trueRole: 'What they actually did in the story.', alibiReality: 'Whether the alibi holds and how it happened.', questions: ['Why?'], guideVideoPrompt: 'Noir intro video prompt', isGuilty: id === 's1' });
+const clue = (id, loc, extra = {}) => ({ id, title: 'Evidence ' + id, description: 'Specific detail the detective uncovers in play.', summary: 'A generalized hint of what this is.', locationId: loc, cutScenePrompt: 'Cinematic cut scene prompt', hotspot: 'The object on the table', storySignificance: 'Why this evidence matters to the characters and the crime.', relatedSuspectIds: ['s1', 's2'], ...extra });
 const full = {
-  title: 'Standards Case', premise: 'Premise.', detectiveCount: 1, suspectCount: 4,
+  title: 'Standards Case', premise: 'Premise.', briefNarration: 'The host brief script: the victim, the place, the discovery, the discoverer, their statement, and the first discrepancy.', briefDocument: 'The typed audience brief document summarizing the script.', detectiveCount: 1, suspectCount: 4,
   crime: 'A crime occurred.', actualCrimeDetails: 'The truth.', victim: 'Victim.', backstory: 'Backstory.', plot: 'Plot.',
   locations: [1, 2, 3, 4, 5, 6].map(i => ({ id: 'L' + i, name: 'Location ' + i, description: 'A place in the story.', imagePrompt: 'Noir establishing shot', isCrimeScene: i === 1 || undefined })),
   clues: [
@@ -376,9 +376,12 @@ console.log('PASS: the stage feed reader keeps the newest outcome for its tool a
 const fsStage = require('node:fs');
 const overlaySrc = fsStage.readFileSync('components/CityCrimeSceneOverlay.tsx', 'utf8');
 const onClickCount = (overlaySrc.match(/onClick/g) || []).length;
-assert.equal(onClickCount, 2, 'the overlay component carries exactly two click handlers — the stage map card and the stage hotspot — and no others');
+assert.equal(onClickCount, 3, 'the overlay component carries exactly three click handlers — the stage map card, the stage scene-item region, and the stage hotspot — and no others');
 assert.ok(overlaySrc.includes('onClick={() => onStageAction?.(ccssStageInvestigateAction(l.id))}'), 'the map card click fires investigate for that location');
 assert.ok(overlaySrc.includes('onClick={() => onStageAction?.(ccssStageRevealAction(c.id))}'), 'the hotspot click fires revealClue for its bound clue');
+assert.ok(overlaySrc.includes('onClick={() => onStageAction?.(ccssStageRevealAction(r.nextClueId))}'), 'the scene-item region click fires revealClue for the next clue bound to that item');
+assert.ok(overlaySrc.includes('if (stage) return <button key={item.id}'), 'the audience scene item stays a plain div; only the stage renders a button');
+assert.ok(overlaySrc.includes('ccssSceneRegions(pubCfg, loc.id, revealedIds)'), 'the overlay computes its highlight regions from the public config scene items, via the shared lib helper');
 assert.ok(overlaySrc.includes('const stage = interactive && !!onStageAction;'), 'both handlers sit behind the stage flag');
 assert.ok(overlaySrc.includes('if (stage) return <button key={l.id}'), 'the audience map card stays a plain div; only the stage renders a button');
 assert.ok(overlaySrc.includes('if (stage) return <button key={c.id}'), 'the audience hotspot stays a plain div; only the stage renders a button');
@@ -394,6 +397,187 @@ assert.ok(stageSrc.includes('interactive onStageAction='), 'the stage renders th
 const dashSrc = fsStage.readFileSync('app/published/[slug]/page.tsx', 'utf8');
 assert.ok(dashSrc.includes('<CityCrimeSceneHostStage') && dashSrc.includes('assets={project.assets}'), 'the host dashboard mounts the stage with the project assets beside the host panel');
 console.log('PASS: stage interactivity is host-only — the audience component, runtime, and page render no handlers and never opt in.');
+
+// 19. SCENE ITEMS (Jessica, 2026-10-26): a location is exactly a location — a
+// place (interior or exterior) whose picture contains named visible items.
+// The clickable/highlighted things in play are those items, bound to chosen
+// evidence — never generic per-clue spots. Legacy cases migrate on read.
+const { ccssSceneRegions, suggestEvidenceForItem, ccssItemNamesMatch, ccssDetectiveBrief } = ccssLib;
+const itemsRaw = {
+  title: 'Item Case',
+  locations: [
+    { id: 'dock', name: 'The Dock', description: 'A foggy dock at night.', items: [
+      { id: 'it-crates', name: 'The crates', x: 10, y: 40, w: 30, h: 35 },
+      { id: 'it-post', name: 'The mooring post', x: 70, y: 30, w: 12, h: 40 },
+      { id: 'it-boat', name: 'The tied rowboat', x: 45, y: 60, w: 40, h: 25 },
+    ] },
+  ],
+  clues: [
+    { id: 'cl-dock-1', title: 'Wet rope fibers', description: 'Specific detail.', summary: 'Something about the crates.', locationId: 'dock', cutScenePrompt: 'p', hotspot: 'The crates', itemId: 'it-crates', relatedSuspectIds: [] },
+    { id: 'cl-dock-2', title: 'A cut mooring line', description: 'Specific detail.', summary: 'Something about the post.', locationId: 'dock', cutScenePrompt: 'p', hotspot: 'The mooring post', itemId: 'it-post', relatedSuspectIds: [] },
+  ],
+};
+
+// 19a. Item model round-trip + loud validation of broken bindings.
+const itemRead = readCityCrimeSceneConfig({ mystery: itemsRaw });
+const dockLoc = itemRead.locations.find(l => l.id === 'dock');
+assert.equal(dockLoc.items.length, 3, 'scene items round-trip through the reader');
+assert.deepEqual(JSON.parse(JSON.stringify(dockLoc.items[0])), { id: 'it-crates', name: 'The crates', x: 10, y: 40, w: 30, h: 35 }, 'an item region survives the read exactly');
+assert.equal(itemRead.clues.find(c => c.id === 'cl-dock-1').itemId, 'it-crates', 'a clue item binding round-trips');
+const badBind = JSON.parse(JSON.stringify(itemRead)); badBind.clues[0].itemId = 'it-nope';
+assert(validateCityCrimeScene(badBind).some(m => /not one of its location's visible items/i.test(m)), 'a clue bound to a non-existent item is flagged');
+const dupItem = JSON.parse(JSON.stringify(itemRead)); dupItem.locations.find(l => l.id === 'dock').items.push({ ...dockLoc.items[0] });
+assert(validateCityCrimeScene(dupItem).some(m => /two scene items with the same id/i.test(m)), 'duplicate scene-item ids are flagged');
+const nameless = JSON.parse(JSON.stringify(itemRead)); nameless.locations.find(l => l.id === 'dock').items[0].name = '';
+assert(validateCityCrimeScene(nameless).some(m => /scene item .* has no name/i.test(m)), 'an unnamed scene item is flagged');
+console.log('PASS: scene items round-trip; broken bindings, duplicate ids, and unnamed items fail loudly.');
+
+// 19b. Evidence possibilities are expressed against the scene's visible
+// items AND the storyline — both filters, always.
+const alleyItemsCfg = readCityCrimeSceneConfig({ mystery: {
+  title: 'Alley Items', premise: 'The killer fled by car down the back alley.', crime: 'Murder after the show.', backstory: 'A getaway car was used that night, and no fingerprints were found anywhere.', victim: 'The singer.', plot: 'Solve it.',
+  locations: [{ id: 'alley', name: 'Back Alley', description: 'The wet alley behind the club, mud after the rain, by the stage door.', items: [
+    { id: 'it-ground', name: 'The mud by the vehicle tracks', x: 20, y: 60, w: 40, h: 30 },
+    { id: 'it-bin', name: 'The bin behind the club', x: 75, y: 25, w: 20, h: 45 },
+  ] }],
+  clues: [],
+} });
+const alleySug = suggestEvidenceForLocation(alleyItemsCfg, 'alley');
+assert(alleySug.length > 0 && alleySug.every(s => s.itemName && s.itemName.trim()), 'every evidence suggestion names the visible item it pertains to');
+const groundSug = suggestEvidenceForItem(alleyItemsCfg, 'alley', 'it-ground');
+assert(groundSug.some(s => s.archetypeId === 'tire-tracks'), 'tire tracks pertain to the mud/tracks item of the alley');
+const binSug = suggestEvidenceForItem(alleyItemsCfg, 'alley', 'it-bin');
+assert(binSug.some(s => s.archetypeId === 'discarded-glove'), 'a discarded glove pertains to the bin item');
+assert(!binSug.some(s => s.archetypeId === 'tire-tracks'), 'tire tracks are never offered against the bin');
+assert(ccssItemNamesMatch('the ledger', 'The ledger on the desk') && ccssItemNamesMatch('The crates', 'the crates') && !ccssItemNamesMatch('the ledger', 'the decanter'), 'item-name matching is containment-based and discriminating');
+console.log('PASS: evidence suggestions pertain to visible items, filtered by item and storyline together.');
+
+// 19c. The play data path: only chosen+bound items are regions; an item is
+// active only while it holds unrevealed evidence; several clues on one item
+// reveal one per click in case order; itemless places yield no regions.
+let regions19 = ccssSceneRegions(itemRead, 'dock', []);
+assert.equal(regions19.length, 2, 'only items with chosen evidence appear — the rowboat is scenery and never a region');
+const crates19 = regions19.find(r => r.item.id === 'it-crates');
+assert(crates19.active && crates19.nextClueId === 'cl-dock-1', 'a bound, unrevealed item is active with its clue next');
+regions19 = ccssSceneRegions(itemRead, 'dock', ['cl-dock-1']);
+const cratesDone = regions19.find(r => r.item.id === 'it-crates');
+assert(cratesDone && cratesDone.active === false && cratesDone.nextClueId === undefined, 'once its evidence is revealed, the item stops being active');
+assert(regions19.find(r => r.item.id === 'it-post').active, 'an item still holding evidence stays active');
+const multiCfg = readCityCrimeSceneConfig({ mystery: { ...itemsRaw, clues: [...itemsRaw.clues, { id: 'cl-dock-3', title: 'Second find on the crates', description: 'd', summary: 's', locationId: 'dock', cutScenePrompt: 'p', hotspot: 'The crates', itemId: 'it-crates', relatedSuspectIds: [] }] } });
+const multiReg = ccssSceneRegions(multiCfg, 'dock', []);
+assert.deepEqual(multiReg.find(r => r.item.id === 'it-crates').clueIds, ['cl-dock-1', 'cl-dock-3'], 'several clues on one item stay in case order');
+assert.equal(ccssSceneRegions(multiCfg, 'dock', ['cl-dock-1']).find(r => r.item.id === 'it-crates').nextClueId, 'cl-dock-3', 'the next click on the item reveals the next bound clue');
+assert.deepEqual(JSON.parse(JSON.stringify(ccssSceneRegions(itemRead, 'loc-office', []))), [], 'a location with no items of its own in this case yields no item regions — legacy per-clue markers take over');
+console.log('PASS: play regions — chosen+bound items active, unbound items scenery, exhausted items stop, multi-clue items reveal in order.');
+
+// 19d. Migration: a legacy case (clue positions/labels, no items) derives
+// its scene items from its clues on read — same highlights, now as items —
+// and re-reading is stable (no duplicates, no drift).
+const legacyRead1 = readCityCrimeSceneConfig({ mystery: JSON.parse(JSON.stringify(cityCrimeSceneDefaults())) });
+const migOffice = legacyRead1.locations.find(l => l.id === 'loc-office');
+assert.equal(migOffice.items.length, 2, 'the legacy office derives one item per positioned clue');
+const decItem = migOffice.items.find(i => i.id === 'item-clue-decanter');
+assert(decItem && decItem.name === 'The crystal decanter on the desk', 'a derived item is named by the clue bound-item text');
+assert.equal(decItem.x + decItem.w / 2, 62, 'the derived item region is centered on the clue marked X');
+assert.equal(decItem.y + decItem.h / 2, 44, 'the derived item region is centered on the clue marked Y');
+assert.equal(legacyRead1.clues.find(c => c.id === 'clue-decanter').itemId, 'item-clue-decanter', 'the legacy clue is bound to its derived item');
+assert.equal(legacyRead1.locations.find(l => l.id === 'loc-stage').items.length, 1, 'the legacy stage derives its item too');
+const migRegions = ccssSceneRegions(legacyRead1, 'loc-office', []);
+assert(migRegions.length === 2 && migRegions.every(r => r.active), 'a migrated legacy case highlights its derived items in play');
+const legacyRead2 = readCityCrimeSceneConfig({ mystery: JSON.parse(JSON.stringify(legacyRead1)) });
+assert.deepEqual(JSON.parse(JSON.stringify(legacyRead2.locations.map(l => l.items))), JSON.parse(JSON.stringify(legacyRead1.locations.map(l => l.items))), 're-reading a migrated case yields identical items — no duplicates, no drift');
+assert.deepEqual(legacyRead2.clues.map(c => c.itemId), legacyRead1.clues.map(c => c.itemId), 'bindings are stable across re-reads');
+const namedRead = readCityCrimeSceneConfig({ mystery: (() => { const r = JSON.parse(JSON.stringify(itemsRaw)); delete r.clues[0].itemId; return r; })() });
+assert.equal(namedRead.clues.find(c => c.id === 'cl-dock-1').itemId, 'it-crates', 'in an itemized location, an unbound clue whose text names an item is bound to it on read');
+console.log('PASS: legacy cases migrate to scene items on read, highlight the same things, and re-read identically.');
+
+// 19e. STRICT STORY ADHERENCE in standards: every location must carry a
+// storyline role; the crime scene is itself a role; filler fails loudly.
+const std2 = (fn) => { const c = JSON.parse(JSON.stringify(full)); fn(c); return validateCityCrimeSceneStandards(c); };
+assert(std2(c => { c.clues = c.clues.filter(x => x.locationId !== 'L6').concat([1, 2, 3, 4].map(j => clue('f6-' + j, 'L6'))); }).some(m => /no storyline role/i.test(m)), 'a location carrying nothing for the story fails loudly as filler');
+assert(!std2(c => { c.locations.forEach(l => delete l.isCrimeScene); c.locations.find(l => l.id === 'L5').isCrimeScene = true; c.witnesses = []; }).some(m => /no storyline role/i.test(m)), 'the crime scene itself is a storyline role — it needs no further justification');
+console.log('PASS: standards enforce a storyline role for every location — no filler locations.');
+
+// 20. THE APPROVED STORY vs THE DETECTIVE'S CASE BRIEF (Jessica, 2026-10-26):
+// the master truth (evidence significance, true roles, alibi realities, the
+// true crime sequence) is host-only and is stripped at publish; the opening
+// presents the brief layer only — basic character files + the evidence
+// flagged initially present.
+const pubRead = sanitizeCityCrimeSceneForOverlay(readCityCrimeSceneConfig({ mystery: JSON.parse(JSON.stringify(sample)) }));
+const pubReadDump = JSON.stringify(pubRead);
+for (const s of sample.suspects) {
+  assert(s.trueRole && !pubReadDump.includes(s.trueRole), 'a suspect true role never publishes: ' + s.name);
+  assert(s.alibiReality && !pubReadDump.includes(s.alibiReality), 'a suspect alibi reality never publishes: ' + s.name);
+}
+for (const c of sample.clues) assert(c.storySignificance && !pubReadDump.includes(c.storySignificance), 'evidence significance never publishes: ' + c.title);
+assert(!/storySignificance/.test(pubReadDump) && !/trueRole/.test(pubReadDump) && !/alibiReality/.test(pubReadDump), 'the public config carries no master-truth field names at all');
+const brief = ccssDetectiveBrief(pubRead);
+assert.equal(brief.title, sample.title, 'the brief opens with the game title');
+// SCRIPT vs DOCUMENT (Jessica, 2026-10-26): the host's full script is
+// host-side only and is stripped at publish; the audience payload carries
+// only the typed brief document that summarizes it.
+assert(!pubReadDump.includes(sample.briefNarration) && !/briefNarration/.test(pubReadDump), 'the host brief script never publishes — stripped from the audience payload');
+assert.equal(pubRead.briefDocument, sample.briefDocument, 'the audience brief document IS in the public payload');
+assert(brief.document === sample.briefDocument && brief.document.includes('Marcus Reed') && brief.document.includes('Danny Cole'), 'the brief document summarizes the pertinent info (victim, discoverer)');
+assert(brief.document.includes('faintly warm'), 'the brief document carries the noted discrepancy — the first thread');
+assert(brief.document.length < sample.briefNarration.length, 'the document is a summary of the script, not the full script');
+assert(!brief.document.includes('oleander') && !brief.document.includes('Priya'), 'the brief document carries no master-truth content (no poison, no culprit)');
+const scriptRead = readCityCrimeSceneConfig({ mystery: JSON.parse(JSON.stringify(sample)) });
+assert.equal(scriptRead.briefNarration, sample.briefNarration, 'the host script round-trips on the host side');
+assert.equal(scriptRead.briefDocument, sample.briefDocument, 'the brief document round-trips on the host side');
+assert(std2(c => { c.briefNarration = ''; }).some(m => /host brief script/i.test(m)), 'a case with no host brief script is unfinished by the standards');
+assert(std2(c => { c.briefDocument = ''; }).some(m => /audience brief document/i.test(m)), 'a case with no audience brief document is unfinished by the standards');
+const panelSrc20 = require('node:fs').readFileSync('components/CityCrimeSceneHostPanel.tsx', 'utf8');
+assert.ok(panelSrc20.includes('cfg.briefNarration'), 'the host dashboard (panel) carries the full brief script');
+assert.ok(panelSrc20.includes('your opening script'), 'the panel presents the script as the host opening script');
+assert.equal(brief.suspects.length, sample.suspects.length, 'the brief carries the basic character files');
+assert(brief.suspects.every(s => !('trueRole' in s) && !('alibiReality' in s) && !('isGuilty' in s)), 'brief character files are basics only — no truth layer');
+assert.deepEqual(brief.evidence.map(e => e.clueId), ['clue-decanter'], 'the brief contains exactly the evidence flagged initially present');
+assert.equal(brief.evidence[0].summary, sample.clues[0].summary, 'brief evidence is presented in its generalized form');
+assert.equal(brief.evidence[0].itemName, 'The crystal decanter on the desk', 'brief evidence names the visible item it sits on');
+const layerRead = readCityCrimeSceneConfig({ mystery: JSON.parse(JSON.stringify(sample)) });
+assert.equal(layerRead.clues.find(c => c.id === 'clue-decanter').initiallyPresent, true, 'the brief flag round-trips on the host side');
+assert(layerRead.clues.filter(c => c.initiallyPresent).length === 1, 'only the flagged evidence is initially present');
+assert(layerRead.suspects.every(s => s.trueRole && s.alibiReality), 'master-truth fields round-trip on the host side');
+assert(std2(c => c.suspects.forEach(s => delete s.trueRole)).some(m => /no true role/i.test(m)), 'a case missing true roles is unfinished by the standards');
+assert(std2(c => c.clues.forEach(x => delete x.storySignificance)).some(m => /no story significance/i.test(m)), 'evidence missing its story significance is unfinished by the standards');
+console.log('PASS: the two layers hold — master truth host-only and stripped, the brief is basics + initially-present evidence only.');
+
+// 20b. The brief's on-screen face: the overlay's briefing view renders the
+// typewritten dossier form from the brief layer (narration + on-record
+// evidence + character summaries), so the form the host reads from is the
+// same form the detective can call back up all game.
+const overlaySrc20 = require('node:fs').readFileSync('components/CityCrimeSceneOverlay.tsx', 'utf8');
+assert.ok(overlaySrc20.includes('ccssDetectiveBrief(pubCfg)'), 'the overlay briefing is rendered from the brief-layer accessor');
+assert.ok(overlaySrc20.includes('CASE BRIEF'), 'the briefing renders as the typewritten case-brief form');
+assert.ok(overlaySrc20.includes('brief.document.split'), 'the form carries the brief document, paragraph by paragraph');
+assert.ok(overlaySrc20.includes('EVIDENCE ON RECORD AT THE OPENING'), 'the form lists the evidence on record at the opening');
+assert.ok(overlaySrc20.includes('reference throughout the investigation'), 'the form is filed as the detective reference for the whole game, not a one-time flash');
+console.log('PASS: the briefing view is the typewritten case-brief form, rendered from the brief layer.');
+
+// 21. THE OPENING CHOREOGRAPHY (Jessica, 2026-10-26): (1) the host reads the
+// case brief — the typewritten form on screen; (2) the character cards are
+// presented; (3) both are FILED AWAY, and filing them away opens the game
+// board (the map) as the live surface. The brief and cards stay on file —
+// steps 1–2 pull them back up all game. Every step is an existing live
+// action driven from the host stage; the audience overlay stays display-only.
+const { ccssStageBriefingAction, ccssStageLineupAction, ccssOpeningSequence } = stageLib;
+assert.deepEqual(plain(ccssStageBriefingAction()), { kind: 'briefing' }, 'step 1 presents the case brief');
+assert.deepEqual(plain(ccssStageLineupAction()), { kind: 'suspectLineup' }, 'step 2 presents the character cards');
+assert.deepEqual(plain(ccssStagePostBody('tool-ccs', ccssStageBriefingAction())), { cityCrimeSceneAction: { toolId: 'tool-ccs', kind: 'briefing' } }, 'the brief step posts the exact panel body shape');
+assert.deepEqual(plain(ccssStagePostBody('tool-ccs', ccssStageLineupAction())), { cityCrimeSceneAction: { toolId: 'tool-ccs', kind: 'suspectLineup' } }, 'the cards step posts the exact panel body shape');
+const opening = ccssOpeningSequence();
+assert.deepEqual(plain(opening.map(s => s.step)), [1, 2, 3, 4], 'the opening has exactly four steps, in order');
+assert.deepEqual(plain(opening.map(s => s.action.kind)), ['briefing', 'suspectLineup', 'map', 'map'], 'the sequence runs brief → characters → file away onto the board → handover');
+assert(opening.every(s => s.label && s.label.trim()), 'every opening step is labeled for the host');
+assert(/hand the investigation to the detective/i.test(opening[3].label), 'the final beat is the handover to the detective');
+const stageSrc21 = require('node:fs').readFileSync('components/CityCrimeSceneHostStage.tsx', 'utf8');
+assert.ok(stageSrc21.includes('fire(ccssStageBriefingAction())'), 'the host stage drives step 1 (brief) itself');
+assert.ok(stageSrc21.includes('fire(ccssStageLineupAction())'), 'the host stage drives step 2 (characters) itself');
+assert.ok(stageSrc21.includes('File away — open the game board'), 'the host stage drives step 3 (file away onto the board) itself');
+assert.ok(stageSrc21.includes('Hand the investigation to the detective'), 'the host stage drives step 4 (the handover) itself');
+assert.ok(stageSrc21.includes('stay on file all game'), 'the stage tells the host the filed brief/cards remain referenceable');
+console.log('PASS: the opening runs brief → characters → filed away → map opens → investigation handed to the detective, driven from the host stage over the existing actions.');
 
 // 16d. The generation runner refuses an unresolvable helper reference
 // instead of silently generating without it.
