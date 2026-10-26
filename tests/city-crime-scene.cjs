@@ -337,6 +337,64 @@ if (chosenRead.helperWitnesses[1]) assert.equal(chosenRead.helperWitnesses[1].vo
 assert.equal(helperVoiceProblems(validateCityCrimeScene(chosenRead)).length, 0, 'a chosen voice is never a validation problem');
 console.log('PASS: a helper with an explicitly chosen voice keeps it, untouched.');
 
+// 18. The HOST STAGE (Jessica, 2026-10-26): the host points the spyglass at
+// the item in the picture and clicks the item itself. The stage renders the
+// same overlay component the audience sees — interactive for the host,
+// purely presentational for everyone else — and a stage click must produce
+// EXACTLY the live action the host panel's buttons send.
+const stageLib = require('./load.cjs')('lib/city-crime-scene-stage.ts');
+const { ccssStageInvestigateAction, ccssStageRevealAction, ccssStageMapAction, ccssStageHideAction, ccssStagePostBody, latestCcssStageResult, ccssStageLocationIdFromResult, ccssStageKindFromResult } = stageLib;
+const plain = (v) => JSON.parse(JSON.stringify(v));
+assert.deepEqual(plain(ccssStageInvestigateAction('loc-bedroom')), { kind: 'investigate', locationId: 'loc-bedroom' }, 'clicking a map card is the investigate action for that location');
+assert.deepEqual(plain(ccssStageRevealAction('clue-drawer')), { kind: 'revealClue', clueId: 'clue-drawer' }, 'clicking a hotspot is the revealClue action for its bound clue');
+assert.deepEqual(plain(ccssStageMapAction()), { kind: 'map' }, 'stage chrome returns to the map');
+assert.deepEqual(plain(ccssStageHideAction()), { kind: 'hide' }, 'stage chrome clears the scene');
+assert.deepEqual(plain(ccssStagePostBody('tool-ccs', ccssStageRevealAction('clue-drawer'))), { cityCrimeSceneAction: { toolId: 'tool-ccs', kind: 'revealClue', clueId: 'clue-drawer' } }, 'a stage click body is byte-for-byte the host panel body shape');
+assert.deepEqual(plain(ccssStagePostBody('tool-ccs', ccssStageInvestigateAction('loc-bedroom'))), { cityCrimeSceneAction: { toolId: 'tool-ccs', kind: 'investigate', locationId: 'loc-bedroom' } }, 'a stage map click body matches the panel investigate body');
+console.log('PASS: stage clicks map to the exact live actions and POST bodies the host panel sends.');
+
+// 18b. The stage reads the same init/since feed the overlay reads and keeps
+// the newest outcome for its own tool only.
+const feedEvents = [
+  { id: 3, controlId: 'tool-other', payload: { outcomes: { 'tool-other': { result: '{"kind":"show"}' } } } },
+  { id: 5, controlId: 'tool-ccs', payload: { outcomes: { 'tool-ccs': { result: '{"kind":"map"}' } } } },
+  { id: 8, controlId: 'tool-ccs', payload: { outcomes: { 'tool-ccs': { result: '{"kind":"location","location":{"id":"loc-bedroom"}}' } } } },
+  { id: 9, controlId: 'tool-ccs', payload: { outcomes: {} } },
+];
+assert.equal(latestCcssStageResult(feedEvents, 'tool-ccs'), '{"kind":"location","location":{"id":"loc-bedroom"}}', 'the newest outcome for the stage tool wins; empty batches never rewind it');
+assert.equal(latestCcssStageResult(feedEvents, 'tool-absent'), null, 'a feed with nothing for the tool yields null');
+assert.equal(latestCcssStageResult([], 'tool-ccs'), null, 'an empty feed yields null');
+assert.equal(ccssStageLocationIdFromResult('{"kind":"location","location":{"id":"loc-bedroom"}}'), 'loc-bedroom', 'a location outcome tells the stage where it is (for the way back)');
+assert.equal(ccssStageLocationIdFromResult('{"kind":"clue","clue":{"id":"clue-drawer"}}'), null, 'a clue outcome is not a location');
+assert.equal(ccssStageLocationIdFromResult('not json'), null, 'garbage results carry no location');
+assert.equal(ccssStageKindFromResult('{"kind":"clue"}'), 'clue', 'outcome kind reads through');
+assert.equal(ccssStageKindFromResult(null), null, 'no result, no kind');
+console.log('PASS: the stage feed reader keeps the newest outcome for its tool and knows where the scene is.');
+
+// 18c. Source invariants: interactivity exists ONLY behind the stage flag,
+// and the audience path never opts in.
+const fsStage = require('node:fs');
+const overlaySrc = fsStage.readFileSync('components/CityCrimeSceneOverlay.tsx', 'utf8');
+const onClickCount = (overlaySrc.match(/onClick/g) || []).length;
+assert.equal(onClickCount, 2, 'the overlay component carries exactly two click handlers — the stage map card and the stage hotspot — and no others');
+assert.ok(overlaySrc.includes('onClick={() => onStageAction?.(ccssStageInvestigateAction(l.id))}'), 'the map card click fires investigate for that location');
+assert.ok(overlaySrc.includes('onClick={() => onStageAction?.(ccssStageRevealAction(c.id))}'), 'the hotspot click fires revealClue for its bound clue');
+assert.ok(overlaySrc.includes('const stage = interactive && !!onStageAction;'), 'both handlers sit behind the stage flag');
+assert.ok(overlaySrc.includes('if (stage) return <button key={l.id}'), 'the audience map card stays a plain div; only the stage renders a button');
+assert.ok(overlaySrc.includes('if (stage) return <button key={c.id}'), 'the audience hotspot stays a plain div; only the stage renders a button');
+const runtimeSrc = fsStage.readFileSync('components/RuntimeActionLayers.tsx', 'utf8');
+assert.ok(runtimeSrc.includes('<CityCrimeSceneOverlay tool={tool} result={run.result} assets={assets}/>'), 'the audience runtime renders the overlay with no stage props');
+assert.ok(!/CityCrimeSceneOverlay[^>]*interactive/.test(runtimeSrc), 'the audience runtime never enables stage mode');
+const audiencePageSrc = fsStage.readFileSync('app/published/[slug]/overlay/page.tsx', 'utf8');
+assert.ok(!audiencePageSrc.includes('CityCrimeSceneHostStage') && !audiencePageSrc.includes('onStageAction') && !audiencePageSrc.includes('interactive='), 'the public overlay page never reaches the stage');
+const stageSrc = fsStage.readFileSync('components/CityCrimeSceneHostStage.tsx', 'utf8');
+assert.ok(stageSrc.includes('"x-host-key": hostKey') && stageSrc.includes('ccssStagePostBody(tool.id, action)'), 'stage clicks POST the panel body with the host key header');
+assert.ok(stageSrc.includes('init=1') && stageSrc.includes('since=${cursor}'), 'the stage consumes the same init/since feed as the overlay');
+assert.ok(stageSrc.includes('interactive onStageAction='), 'the stage renders the shared overlay in stage mode');
+const dashSrc = fsStage.readFileSync('app/published/[slug]/page.tsx', 'utf8');
+assert.ok(dashSrc.includes('<CityCrimeSceneHostStage') && dashSrc.includes('assets={project.assets}'), 'the host dashboard mounts the stage with the project assets beside the host panel');
+console.log('PASS: stage interactivity is host-only — the audience component, runtime, and page render no handlers and never opt in.');
+
 // 16d. The generation runner refuses an unresolvable helper reference
 // instead of silently generating without it.
 (async () => {
