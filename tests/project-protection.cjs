@@ -35,16 +35,21 @@ function makeDb(store) {
       const keepIds = new Set(sorted.slice(0, keep).map(b => b.id));
       const removed = store.backups.filter(b => !keepIds.has(b.id));
       store.backups = store.backups.filter(b => keepIds.has(b.id));
-      return removed.map(b => ({ id: b.id }));
+      return removed.map(b => ({ id: b.id, export_key: b.export_key ?? null }));
     }
     if (q.includes('INSERT INTO project_backups')) {
-      const row = { id: ++store.backupSeq, created_at: tick(store), project_count: values[0], payload: JSON.parse(values[1]) };
+      const row = { id: ++store.backupSeq, created_at: tick(store), project_count: values[0], payload: JSON.parse(values[1]), export_key: null, exported_at: null, export_error: null };
       store.backups.push(row);
       return [{ id: row.id, created_at: row.created_at }];
     }
+    if (q.includes('UPDATE project_backups')) {
+      const row = store.backups.find(b => b.id === Number(values[3]));
+      if (row) { row.export_key = values[0]; row.exported_at = values[1]; row.export_error = values[2]; }
+      return [];
+    }
     if (q.includes('FROM project_backups')) {
       if (q.includes('payload')) { const row = store.backups.find(b => b.id === values[0]); return row ? [{ ...row }] : []; }
-      return [...store.backups].sort((a, b) => (b.created_at - a.created_at) || (b.id - a.id)).map(b => ({ id: b.id, created_at: b.created_at, project_count: b.project_count }));
+      return [...store.backups].sort((a, b) => (b.created_at - a.created_at) || (b.id - a.id)).map(b => ({ id: b.id, created_at: b.created_at, project_count: b.project_count, export_key: b.export_key ?? null, exported_at: b.exported_at ?? null, export_error: b.export_error ?? null }));
     }
     if (q.includes('UPDATE projects SET deleted_at = NOW()')) {
       const row = store.projects.get(values[1]);
@@ -112,7 +117,23 @@ function makeDb(store) {
 }
 
 // ---- Module loading with stubs ----
-const protection = load('lib/project-protection.ts', id => id === './db' ? {} : require(id));
+// The default backup-export storage (used when createBackupSnapshot is
+// called without an explicit storage, as the routes do) delegates to this
+// swappable fake so tests can record or break exports at will.
+let defaultExportHook = null;
+const objectStorageStub = {
+  putAsset: async (key, body, contentType) => { if (defaultExportHook) return defaultExportHook.put(key, body, contentType); },
+  deleteAsset: async key => { if (defaultExportHook) return defaultExportHook.remove(key); },
+};
+const protection = load('lib/project-protection.ts', id => id === './db' ? {} : id === './object-storage' ? objectStorageStub : require(id));
+function recordingStorage() {
+  const objects = new Map(); const removed = [];
+  return {
+    objects, removed,
+    put: async (key, body, contentType) => { objects.set(key, { body: String(body), contentType }); },
+    remove: async key => { removed.push(key); objects.delete(key); },
+  };
+}
 let activeDb = null, currentUser = null, assetDeleteCalls = 0;
 const nextStub = { NextResponse: { json: (body, init) => ({ status: init?.status ?? 200, body }) } };
 function routeRequire(extra = {}) {
@@ -321,6 +342,90 @@ const params = id => ({ params: Promise.resolve({ id }) });
     res = await restoreRoute.POST({ json: async () => ({ projectId: 'a1' }) }, params('1'));
     assert.equal(res.status, 409); // conflict surfaced, nothing overwritten
     console.log('PASS: admin backups API is admin-gated, backs up on demand, and restores one project per snapshot.');
+  }
+
+  // ---------- External export: written on snapshot creation ----------
+  {
+    const store = makeStore(); const db = makeDb(store);
+    seedProject(store, 'x1', 'user-1', 'Exported One');
+    const storage = recordingStorage();
+    const snap = await protection.createBackupSnapshot(db, storage);
+    assert.equal(storage.objects.size, 1);
+    const [key, entry] = [...storage.objects.entries()][0];
+    assert.equal(key, snap.exportKey);
+    assert.equal(key, protection.backupExportKey(Number(snap.id), snap.createdAt));
+    assert.match(key, /^backups\/snapshot-1-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z\.json$/);
+    assert.equal(entry.contentType, 'application/json');
+    const exportedPayload = JSON.parse(entry.body);
+    assert.equal(exportedPayload.projects.length, 1);
+    assert.equal(exportedPayload.projects[0].id, 'x1'); // the export IS the snapshot payload
+    assert.ok(snap.exportedAt instanceof Date); assert.equal(snap.exportError, null);
+    const row = store.backups.find(b => b.id === Number(snap.id));
+    assert.equal(row.export_key, key); assert.ok(row.exported_at instanceof Date); assert.equal(row.export_error, null);
+    const list = await protection.listBackupSnapshots(db);
+    assert.equal(list[0].export_key, key); assert.equal(list[0].export_error, null);
+    // Default path (what the cron + admin routes call): no storage argument.
+    const storage2 = recordingStorage(); defaultExportHook = storage2;
+    const snap2 = await protection.createBackupSnapshot(db);
+    defaultExportHook = null;
+    assert.equal(storage2.objects.size, 1); assert.equal(snap2.exportKey, [...storage2.objects.keys()][0]);
+    console.log('PASS: every new snapshot is also exported to object storage under backups/, with the outcome recorded on the snapshot row.');
+  }
+
+  // ---------- External export: failure never fails the snapshot ----------
+  {
+    const store = makeStore(); const db = makeDb(store);
+    seedProject(store, 'x2', 'user-1', 'Export Fails');
+    const broken = { put: async () => { throw new Error('storage is down'); }, remove: async () => {} };
+    const snap = await protection.createBackupSnapshot(db, broken); // resolves, does not throw
+    assert.equal(snap.projectCount, 1);
+    assert.equal(snap.exportKey, null); assert.equal(snap.exportedAt, null); assert.equal(snap.exportError, 'storage is down');
+    const row = store.backups.find(b => b.id === Number(snap.id));
+    assert.equal(row.export_error, 'storage is down'); assert.equal(row.export_key, null); assert.equal(row.exported_at, null);
+    const full = await protection.getBackupSnapshot(db, Number(snap.id));
+    assert.equal(full.payload.projects[0].id, 'x2'); // the database snapshot stands, fully restorable
+    console.log('PASS: a failed external export leaves the snapshot intact and records the error on the row.');
+  }
+
+  // ---------- External export: pruning removes only pruned snapshots' copies ----------
+  {
+    const store = makeStore(); const db = makeDb(store);
+    seedProject(store, 'x3', 'user-1', 'Prune Exports');
+    const storage = recordingStorage();
+    const total = protection.BACKUP_RETENTION + 2; // 16 snapshots, newest 14 survive
+    const allKeys = [];
+    for (let i = 0; i < total; i++) allKeys.push((await protection.createBackupSnapshot(db, storage)).exportKey);
+    const list = await protection.listBackupSnapshots(db);
+    assert.equal(list.length, protection.BACKUP_RETENTION);
+    const survivingKeys = new Set(list.map(r => r.export_key));
+    assert.equal(storage.objects.size, protection.BACKUP_RETENTION);
+    assert.deepEqual(new Set(storage.objects.keys()), survivingKeys); // exactly the survivors' exports remain
+    assert.deepEqual([...storage.removed].sort(), allKeys.slice(0, 2).sort()); // snapshots 1 and 2 were pruned, their exports deleted
+    assert.ok(storage.removed.every(k => !survivingKeys.has(k)));
+    // A lone snapshot is never pruned, so its export is never deleted either.
+    const single = makeStore(); const singleDb = makeDb(single);
+    seedProject(single, 'x4', 'user-1', 'Last One');
+    const singleStorage = recordingStorage();
+    const only = await protection.createBackupSnapshot(singleDb, singleStorage);
+    assert.equal(await protection.pruneBackups(singleDb, protection.BACKUP_RETENTION, singleStorage), 0);
+    assert.equal(singleStorage.objects.size, 1); assert.ok(singleStorage.objects.has(only.exportKey));
+    assert.equal(singleStorage.removed.length, 0);
+    console.log('PASS: pruning deletes the external copies of pruned snapshots only, and never the last remaining snapshot\'s copy.');
+  }
+
+  // ---------- Schema extension is lazy + idempotent ----------
+  {
+    const sql = [];
+    const recordingDb = async (parts, ...values) => { sql.push(parts.join('?').replace(/\s+/g, ' ').trim()); return []; };
+    const fresh = load('lib/project-protection.ts', id => id === './db' ? {} : id === './object-storage' ? objectStorageStub : require(id));
+    await fresh.ensureProtectionSchema(recordingDb);
+    await fresh.ensureProtectionSchema(recordingDb); // second call: memoized, no duplicate DDL
+    await Promise.all([fresh.ensureProtectionSchema(recordingDb), fresh.ensureProtectionSchema(recordingDb)]);
+    for (const col of ['export_key', 'exported_at', 'export_error']) {
+      const stmt = `ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS ${col}`;
+      assert.equal(sql.filter(q => q.startsWith(stmt)).length, 1, 'expected exactly one idempotent DDL for ' + col);
+    }
+    console.log('PASS: export columns are added by lazy, idempotent (IF NOT EXISTS) schema DDL.');
   }
 
   console.log('ALL PROJECT-PROTECTION TESTS PASSED');

@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { deleteAsset, putAsset } from "./object-storage";
 
 // Project deletion protection: soft-delete (trash), a deletion audit log,
 // nightly full-project backups, and restore-from-backup.
@@ -30,6 +31,9 @@ export function ensureProtectionSchema(db: Db) {
       await db`CREATE TABLE IF NOT EXISTS project_deletion_audit (id BIGSERIAL PRIMARY KEY, project_id TEXT NOT NULL, project_title TEXT NOT NULL DEFAULT '', owner_id TEXT, actor_id TEXT, actor_email TEXT, action TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
       await db`CREATE INDEX IF NOT EXISTS project_deletion_audit_project_idx ON project_deletion_audit (project_id, created_at DESC)`;
       await db`CREATE TABLE IF NOT EXISTS project_backups (id BIGSERIAL PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), project_count INTEGER NOT NULL DEFAULT 0, payload JSONB NOT NULL)`;
+      await db`ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS export_key TEXT`;
+      await db`ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS exported_at TIMESTAMPTZ`;
+      await db`ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS export_error TEXT`;
     })().catch(error => { schema = null; throw error; });
   }
   return schema;
@@ -127,26 +131,74 @@ export async function buildBackupPayload(db: Db): Promise<BackupPayload> {
   };
 }
 
+// ---- External backup export ----
+
+// Snapshots live in the same Neon database they protect, so a whole-database
+// loss would take the backups with it. Every snapshot is therefore ALSO
+// written to object storage (which lives outside the database) as a JSON
+// file under `backups/`. The export outcome is recorded on the snapshot row
+// (export_key / exported_at / export_error) so the admin page can show it,
+// and pruned snapshots take their external copies with them.
+export type BackupExportStorage = {
+  put: (key: string, body: string | Uint8Array, contentType: string) => Promise<unknown>;
+  remove: (key: string) => Promise<unknown>;
+};
+
+const defaultBackupExportStorage: BackupExportStorage = {
+  put: (key, body, contentType) => putAsset(key, body, contentType),
+  remove: key => deleteAsset(key),
+};
+
+export function backupExportKey(snapshotId: number, createdAt: string | Date) {
+  const iso = new Date(createdAt).toISOString().replace(/:/g, "-");
+  return `backups/snapshot-${snapshotId}-${iso}.json`;
+}
+
 // Prune to the newest `keep` snapshots. The DELETE only ever removes rows
 // outside the newest `keep`, so it can never remove the last remaining
-// snapshot.
-export async function pruneBackups(db: Db, keep = BACKUP_RETENTION) {
+// snapshot. Exports belonging to pruned snapshots are deleted too (best
+// effort: the database row is already gone, and a failed object delete must
+// not fail the backup that triggered the prune).
+export async function pruneBackups(db: Db, keep = BACKUP_RETENTION, storage: BackupExportStorage = defaultBackupExportStorage) {
   await ensureProtectionSchema(db);
-  const removed = await db`DELETE FROM project_backups WHERE id NOT IN (SELECT id FROM project_backups ORDER BY created_at DESC, id DESC LIMIT ${keep}) RETURNING id`;
+  const removed = await db`DELETE FROM project_backups WHERE id NOT IN (SELECT id FROM project_backups ORDER BY created_at DESC, id DESC LIMIT ${keep}) RETURNING id, export_key`;
+  for (const row of removed) {
+    if (!row.export_key) continue;
+    try { await storage.remove(String(row.export_key)); } catch { /* best effort, see above */ }
+  }
   return removed.length;
 }
 
-export async function createBackupSnapshot(db: Db) {
+export async function createBackupSnapshot(db: Db, storage: BackupExportStorage = defaultBackupExportStorage) {
   await ensureProtectionSchema(db);
   const payload = await buildBackupPayload(db);
   const rows = await db`INSERT INTO project_backups (project_count, payload) VALUES (${payload.projects.length}, ${JSON.stringify(payload)}::jsonb) RETURNING id, created_at`;
-  const pruned = await pruneBackups(db);
-  return { id: rows[0].id, createdAt: rows[0].created_at, projectCount: payload.projects.length, pruned };
+  const id = rows[0].id;
+  // Export AFTER the snapshot exists. An export failure never fails the
+  // snapshot or the backup request — it is recorded on the row instead, so
+  // the database copy still stands and the admin page shows what happened.
+  let exportKey: string | null = null;
+  let exportedAt: Date | null = null;
+  let exportError: string | null = null;
+  try {
+    exportKey = backupExportKey(Number(id), rows[0].created_at as string | Date);
+    await storage.put(exportKey, JSON.stringify(payload), "application/json");
+    exportedAt = new Date();
+  } catch (error) {
+    exportKey = null;
+    const message = (error as { message?: unknown } | null)?.message;
+    exportError = typeof message === "string" ? message : String(error);
+  }
+  try {
+    await db`UPDATE project_backups SET export_key = ${exportKey}, exported_at = ${exportedAt}, export_error = ${exportError} WHERE id = ${id}`;
+  } catch { /* bookkeeping only — the snapshot itself already succeeded */ }
+  const pruned = await pruneBackups(db, BACKUP_RETENTION, storage);
+  return { id, createdAt: rows[0].created_at, projectCount: payload.projects.length, pruned, exportKey, exportedAt, exportError };
 }
 
 export async function listBackupSnapshots(db: Db) {
   await ensureProtectionSchema(db);
-  return db`SELECT id, created_at, project_count FROM project_backups ORDER BY created_at DESC, id DESC`;
+  return db`SELECT id, created_at, project_count, export_key, exported_at, export_error FROM project_backups ORDER BY created_at DESC, id DESC`;
 }
 
 export async function getBackupSnapshot(db: Db, id: number) {
