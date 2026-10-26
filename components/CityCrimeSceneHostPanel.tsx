@@ -245,6 +245,15 @@ export default function CityCrimeSceneHostPanel({ tool, slug, hostKey }: { tool:
       {!notes.length && <p>No notes yet.</p>}
     </details>
 
+    <details open><summary><strong>📜 Case brief — your opening script 🔒 (host only, never on overlay)</strong></summary>
+      <div style={lockStyle}>
+        <p style={{ opacity: 0.9, fontSize: "0.9rem" }}>Read this aloud to open the game while the typed brief document is on the audience screen (send it with the stage&apos;s step 1, or the briefing control). This full script lives only on your dashboard — the audience sees the document summary, never the script.</p>
+        {cfg.briefNarration
+          ? cfg.briefNarration.split(/\n\n+/).map((para, i) => <p key={i} style={{ lineHeight: 1.6 }}>{para}</p>)
+          : <p>No brief script written yet — write it in the builder (The case → Host&apos;s brief script).</p>}
+      </div>
+    </details>
+
     <details><summary><strong>🔒 Host case file (never on overlay)</strong></summary>
       <div style={lockStyle}>
         <p><strong>Crime:</strong> {cfg.crime}</p>

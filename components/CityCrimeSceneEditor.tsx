@@ -1,12 +1,13 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GameTool } from "../lib/project";
 import { generateCcssMedia, type CcssMediaContext } from "../lib/city-crime-scene-media";
 import {
   readCityCrimeSceneConfig, validateCityCrimeScene, validateCityCrimeSceneStandards, suggestEvidenceForLocation,
+  suggestEvidenceForItem, ccssItemNamesMatch,
   type CityCrimeSceneConfig, type CityCrimeSceneSuspect, type CityCrimeSceneClue,
   type CityCrimeSceneFlashback, type CityCrimeSceneWitness,
-  type CityCrimeSceneLocation, type CityCrimeSceneHelperWitness, type CityCrimeSceneTimelineEvent, type CityCrimeSceneTwist,
+  type CityCrimeSceneLocation, type CityCrimeSceneSceneItem, type CityCrimeSceneHelperWitness, type CityCrimeSceneTimelineEvent, type CityCrimeSceneTwist,
 } from "../lib/city-crime-scene";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -42,6 +43,15 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [walkIdx, setWalkIdx] = useState(0);
+  // ---- Scene-item layout (guided walk): the host marks the visible things
+  // of a place directly on its picture — drag a rectangle over the object, or
+  // click to place a default-sized area. Drag state lives at the top level
+  // (hooks cannot run inside the walk's render branch).
+  const [markRect, setMarkRect] = useState<{ locId: string; x: number; y: number; w: number; h: number } | null>(null);
+  const [markName, setMarkName] = useState("");
+  const [itemDrag, setItemDrag] = useState<{ locId: string; itemId: string; dx: number; dy: number } | null>(null);
+  const dragStart = useRef<{ px: number; py: number; mode: "mark" | "move"; itemId?: string } | null>(null);
+  const [sceneImg, setSceneImg] = useState<{ locId: string; url: string }>({ locId: "", url: "" });
   // Inline media generation (per slot). A generation can run for minutes, so
   // completions apply against the LATEST case state via mRef — never against
   // the render-time snapshot an item's form controls captured.
@@ -95,6 +105,83 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
     </div>;
   };
 
+  // The scene picture for the walk's current location (resolved from its
+  // asset key when a media context is available).
+  const walkLoc = m.locations.length ? m.locations[Math.min(walkIdx, m.locations.length - 1)] : undefined;
+  useEffect(() => {
+    let live = true;
+    const key = walkLoc?.imageKey;
+    if (!media || !key) { setSceneImg({ locId: walkLoc?.id || "", url: "" }); return; }
+    media.resolveAssetUrl(key)
+      .then(url => { if (live) setSceneImg({ locId: walkLoc?.id || "", url: url || "" }); })
+      .catch(() => { if (live) setSceneImg({ locId: walkLoc?.id || "", url: "" }); });
+    return () => { live = false; };
+  }, [media, walkLoc?.id, walkLoc?.imageKey]);
+
+  /** Write a location's scene items (and, when given, the clue follow-ups —
+   *  renames and unbindings — in the SAME save, so items and their bound
+   *  clues never disagree). */
+  const commitItems = (locId: string, items: CityCrimeSceneSceneItem[], cluePatches?: (clues: CityCrimeSceneClue[]) => CityCrimeSceneClue[]) => {
+    patch({
+      locations: m.locations.map(l => (l.id === locId ? { ...l, items } : l)),
+      ...(cluePatches ? { clues: cluePatches(m.clues) } : {}),
+    });
+  };
+  const framePct = (e: React.PointerEvent, rect: DOMRect) => ({
+    x: Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)),
+    y: Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)),
+  });
+  const onFrameDown = (e: React.PointerEvent<HTMLDivElement>, loc: CityCrimeSceneLocation) => {
+    const p = framePct(e, e.currentTarget.getBoundingClientRect());
+    dragStart.current = { px: p.x, py: p.y, mode: "mark" };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setMarkRect({ locId: loc.id, x: p.x, y: p.y, w: 0, h: 0 });
+  };
+  const onItemDown = (e: React.PointerEvent<HTMLDivElement>, loc: CityCrimeSceneLocation, item: CityCrimeSceneSceneItem) => {
+    e.stopPropagation();
+    const frame = e.currentTarget.parentElement;
+    if (!frame) return;
+    const p = framePct(e, frame.getBoundingClientRect());
+    dragStart.current = { px: p.x, py: p.y, mode: "move", itemId: item.id };
+    frame.setPointerCapture?.(e.pointerId);
+    setItemDrag({ locId: loc.id, itemId: item.id, dx: 0, dy: 0 });
+  };
+  const onFrameMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const ds = dragStart.current;
+    if (!ds) return;
+    const p = framePct(e, e.currentTarget.getBoundingClientRect());
+    if (ds.mode === "mark")
+      setMarkRect(prev => (prev ? { ...prev, x: Math.min(ds.px, p.x), y: Math.min(ds.py, p.y), w: Math.abs(p.x - ds.px), h: Math.abs(p.y - ds.py) } : prev));
+    else
+      setItemDrag(prev => (prev ? { ...prev, dx: p.x - ds.px, dy: p.y - ds.py } : prev));
+  };
+  const onFrameUp = (loc: CityCrimeSceneLocation) => {
+    const ds = dragStart.current;
+    dragStart.current = null;
+    if (!ds) return;
+    if (ds.mode === "move" && ds.itemId && itemDrag) {
+      const item = (loc.items || []).find(it => it.id === ds.itemId);
+      if (item) {
+        const nx = Math.max(0, Math.min(100 - item.w, item.x + itemDrag.dx));
+        const ny = Math.max(0, Math.min(100 - item.h, item.y + itemDrag.dy));
+        commitItems(loc.id, (loc.items || []).map(it => (it.id === item.id ? { ...it, x: Math.round(nx), y: Math.round(ny) } : it)));
+      }
+      setItemDrag(null);
+    }
+    if (ds.mode === "mark") {
+      setMarkRect(prev => {
+        if (!prev) return prev;
+        // A plain click (no real drag) places a default-sized area centered
+        // on the click — either way the host is marking THE OBJECT.
+        if (prev.w < 3 && prev.h < 3) {
+          const w = 24, h = 24;
+          return { ...prev, x: Math.round(Math.max(0, Math.min(100 - w, prev.x - w / 2))), y: Math.round(Math.max(0, Math.min(100 - h, prev.y - h / 2))), w, h };
+        }
+        return { ...prev, x: Math.round(prev.x), y: Math.round(prev.y), w: Math.round(prev.w), h: Math.round(prev.h) };
+      });
+    }
+  };
+
   async function generate() {
     if (pitchMode === "pitch" && !pitch.trim() && !premise.trim()) { setStatus("Pitch your ideas first — plots, characters, a storyline framework — or switch to letting the builder formulate one."); return; }
     if (pitchMode === "formulate" && premise.trim() && pitch.trim()) { setStatus("Formulate mode ignores the pitch — clear it or switch back to building from your pitch."); return; }
@@ -131,7 +218,7 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
   const newWitness = (): CityCrimeSceneWitness => ({ id: `wit-${uid()}`, name: "", role: "", statement: "" });
   const newClue = (): CityCrimeSceneClue => ({ id: `clue-${uid()}`, title: "", description: "", summary: "", locationId: m.locations[0]?.id || "", cutScenePrompt: "", cutSceneVideoKey: "", hotspot: "", relatedSuspectIds: [] });
   const newFlashback = (): CityCrimeSceneFlashback => ({ id: `fb-${uid()}`, title: "", description: "", videoPrompt: "", videoKey: "", relatedSuspectIds: [] });
-  const newLocation = (): CityCrimeSceneLocation => ({ id: `loc-${uid()}`, name: "", description: "", imagePrompt: "" });
+  const newLocation = (): CityCrimeSceneLocation => ({ id: `loc-${uid()}`, name: "", description: "", imagePrompt: "", items: [] });
   const newHelper = (): CityCrimeSceneHelperWitness => ({ id: `wit-${uid()}`, name: "", role: "", description: "", info: "", giftToUnlock: "", howItHelps: "", mediaMode: "generate", portraitPrompt: "", videoPrompt: "", voice: "" });
   const newTimeline = (): CityCrimeSceneTimelineEvent => ({ id: `t-${uid()}`, time: "", event: "" });
   const newTwist = (): CityCrimeSceneTwist => ({ id: `tw-${uid()}`, title: "", description: "", triggerMoment: "" });
@@ -187,11 +274,13 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
     <details open><summary><strong>The case</strong> — read it entirely, edit anything, then approve</summary>
       <Field label="Case title"><IN value={m.title} onChange={e => patch({ title: e.target.value })} /></Field>
       <Field label="Premise"><TA value={m.premise} onChange={e => patch({ premise: e.target.value })} /></Field>
+      <Field label="📋 Audience case brief document — the typed document on screen during the opening" hint="The official-document version: a typed SUMMARY of the pertinent info in your host script below (victim, scene, found how/where/when, discovered by, the discoverer's statement in summary, the one noted discrepancy). This is what the audience screen shows — filed away with the character cards, and referenceable all game. Your full read-aloud script is the host-only field further down."><TA value={m.briefDocument} onChange={e => patch({ briefDocument: e.target.value })} style={{ minHeight: 110 }} /></Field>
       <Field label="The crime (shown in the briefing)"><TA value={m.crime} onChange={e => patch({ crime: e.target.value })} /></Field>
       <Field label="The victim"><TA value={m.victim} onChange={e => patch({ victim: e.target.value })} /></Field>
       <Field label="Backstory"><TA value={m.backstory} onChange={e => patch({ backstory: e.target.value })} /></Field>
       <Field label="Plot"><TA value={m.plot} onChange={e => patch({ plot: e.target.value })} /></Field>
       <div style={{ ...lockNote, margin: "0.5rem 0" }}>🔒 <strong>HOST ONLY — never shown on the overlay.</strong></div>
+      <Field label="📜 Host's brief script 🔒 — the FULL narrative you read aloud to open the game" hint="Your dashboard script, host-side only — it is stripped before publish; the audience sees only the typed brief document above. Beats: the victim and who they were; the place; how the body/situation was found and where; who discovered it and when; the discoverer's statement; then ONE initial observed discrepancy — the first analytical thread you hand the detective, drawn only from what was observed, never from the master truth."><TA value={m.briefNarration} onChange={e => patch({ briefNarration: e.target.value })} style={{ minHeight: 130 }} /></Field>
       <Field label="Actual crime details (the truth — host only)"><TA value={m.actualCrimeDetails} onChange={e => patch({ actualCrimeDetails: e.target.value })} style={{ minHeight: 100 }} /></Field>
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
         <Field label="Suspects"><select value={m.suspectCount} onChange={e => patch({ suspectCount: Number(e.target.value) })}>{[4, 5, 6, 7].map(n => <option key={n} value={n}>{n}</option>)}</select></Field>
@@ -210,14 +299,14 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
         <Field label="Name"><IN value={l.name} onChange={e => setL({ ...l, name: e.target.value })} /></Field>
         <label style={{ display: "block", margin: "0.5rem 0" }}><input type="checkbox" checked={!!l.isCrimeScene} onChange={e => patch({ locations: m.locations.map(x => ({ ...x, isCrimeScene: x.id === l.id ? e.target.checked : e.target.checked ? undefined : x.isCrimeScene })) })} /> <strong>🚨 This location is the crime scene itself</strong> (exactly one per case)</label>
         <Field label="Description"><TA value={l.description} onChange={e => setL({ ...l, description: e.target.value })} /></Field>
-        <Field label="Image prompt (for the site's image generator)" hint="Describe the noir establishing shot for this location."><TA value={l.imagePrompt || ""} onChange={e => setL({ ...l, imagePrompt: e.target.value })} /></Field>
+        <Field label="Image prompt (for the site's image generator)" hint="Describe the noir establishing shot for this location, as the approved story establishes the place. When the location has scene items (laid out in the guided walk), their names are appended to this prompt at generation time so the picture actually contains them."><TA value={l.imagePrompt || ""} onChange={e => setL({ ...l, imagePrompt: e.target.value })} /></Field>
         <Field label="Scene image asset key (optional)" hint="Generate it right here with the button below, or paste a key from this project's media — it becomes the scene the detective searches."><IN value={l.imageKey || ""} onChange={e => setL({ ...l, imageKey: e.target.value })} placeholder="e.g. reed-office-scene.jpg" /></Field>
-        {genBtn(`loc-img-${l.id}`, "✦ Generate this scene image", l.imagePrompt?.trim() ? () => void runMedia(`loc-img-${l.id}`, "image", l.imagePrompt || "", `CCS location — ${l.name || l.id}`, key => patchLatest({ locations: mRef.current.locations.map(x => x.id === l.id ? { ...x, imageKey: key } : x) })) : null, "Write the image prompt first — the scene image is generated from it.")}
+        {genBtn(`loc-img-${l.id}`, "✦ Generate this scene image", l.imagePrompt?.trim() ? () => void runMedia(`loc-img-${l.id}`, "image", `${l.imagePrompt || ""}${(l.items || []).length ? ` The scene visibly contains: ${(l.items || []).map(it => it.name).join(", ")}.` : ""}`, `CCS location — ${l.name || l.id}`, key => patchLatest({ locations: mRef.current.locations.map(x => x.id === l.id ? { ...x, imageKey: key } : x) })) : null, "Write the image prompt first — the scene image is generated from it.")}
       </>, newLocation, "Add location", (l, i) => `Location ${i + 1}${l.name ? `: ${l.name}` : ""}${l.isCrimeScene ? " 🚨 CRIME SCENE" : ""}`)}
     </details>
 
     {pipeline.storylineApproved && <details open><summary><strong>🧭 Guided map walk</strong> — location by location ({m.locations.filter(l => pipeline.locationApprovals[l.id]).length}/{m.locations.length} approved)</summary>
-      <p style={{ opacity: 0.85, fontSize: "0.9rem" }}>Work the map the way the detective will — one location at a time. For each: lay out who is revealed here, choose the evidence from the list that fits <em>this story and this room</em>, bind it to a clickable item, finish its media, then approve. Only the next location&apos;s media is made as you go — nothing is rendered ahead of approval. After every location is approved, the whole map opens for extra tie-ins.</p>
+      <p style={{ opacity: 0.85, fontSize: "0.9rem" }}>Work the map the way the detective will — one location at a time. For each: lay out the place&apos;s visible items on its picture, choose the evidence from the list that fits <em>this story and this place</em> — the list is grouped by those items — bind each piece to its item, finish its media, then approve. Only the next location&apos;s media is made as you go — nothing is rendered ahead of approval. After every location is approved, the whole map opens for extra tie-ins.</p>
       {m.locations.length > 0 && (() => {
         const loc = m.locations[Math.min(walkIdx, m.locations.length - 1)];
         const locClues = m.clues.filter(c => c.locationId === loc.id);
@@ -226,6 +315,44 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
         return <fieldset style={{ margin: "0.5rem 0", padding: "0.75rem", border: "1px solid #d6aa58" }}>
           <legend><strong>{loc.name || loc.id}</strong>{loc.isCrimeScene ? " 🚨 CRIME SCENE" : ""} — location {Math.min(walkIdx, m.locations.length - 1) + 1} of {m.locations.length} {pipeline.locationApprovals[loc.id] ? "✅ approved" : ""}</legend>
           <p style={{ fontStyle: "italic", opacity: 0.85 }}>{loc.description}</p>
+          <Field label="Scene items — the visible things in this place" hint="A location is a place, not necessarily a room — a back alley, a dock, a parked car. Its items are whatever would really be there, as the approved story establishes it: name each visible thing and mark ITS area in the picture. In play, the spyglass highlights exactly these areas — and only for the items that carry evidence you chose. Everything else stays scenery.">
+            <div
+              onPointerDown={e => onFrameDown(e, loc)}
+              onPointerMove={onFrameMove}
+              onPointerUp={() => onFrameUp(loc)}
+              style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", border: "1px solid #666", borderRadius: 8, overflow: "hidden", touchAction: "none", cursor: "crosshair", background: sceneImg.locId === loc.id && sceneImg.url ? `center / cover no-repeat url("${sceneImg.url}")` : "linear-gradient(135deg,#20222e,#3a2c14)" }}>
+              {!(sceneImg.locId === loc.id && sceneImg.url) && <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.75, padding: "1rem", textAlign: "center", pointerEvents: "none" }}>No scene image yet — generate it in the Locations section above, or lay the items out on this frame and match them to the picture once it exists.</span>}
+              {(loc.items || []).map(it => {
+                const dragging = itemDrag?.locId === loc.id && itemDrag?.itemId === it.id;
+                const boundCount = locClues.filter(c => c.itemId === it.id).length;
+                return <div key={it.id}
+                  onPointerDown={e => onItemDown(e, loc, it)}
+                  style={{ position: "absolute", left: `${it.x + (dragging ? itemDrag.dx : 0)}%`, top: `${it.y + (dragging ? itemDrag.dy : 0)}%`, width: `${it.w}%`, height: `${it.h}%`, border: `2px solid ${boundCount ? "#ffd76a" : "#9db2ce"}`, background: boundCount ? "rgba(255,215,106,0.10)" : "rgba(157,178,206,0.08)", borderRadius: 6, cursor: "move" }}>
+                  <span style={{ position: "absolute", left: 2, bottom: 2, background: "rgba(0,0,0,0.65)", color: "#fff", fontSize: "0.7rem", padding: "0 0.3rem", borderRadius: 3, pointerEvents: "none" }}>{it.name}{boundCount ? ` · ${boundCount} evidence` : ""}</span>
+                </div>;
+              })}
+              {markRect && markRect.locId === loc.id && <div style={{ position: "absolute", left: `${markRect.x}%`, top: `${markRect.y}%`, width: `${markRect.w}%`, height: `${markRect.h}%`, border: "2px dashed #7dff9a", background: "rgba(125,255,154,0.10)", borderRadius: 6, pointerEvents: "none" }} />}
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginTop: "0.4rem" }}>
+              <IN style={{ flex: "1 1 12rem", width: "auto" }} value={markRect?.locId === loc.id ? markName : ""} onChange={e => setMarkName(e.target.value)} placeholder="Name the thing you marked — e.g. the drawer, the employees-only staircase, the dumpster" disabled={!(markRect && markRect.locId === loc.id)} />
+              <button type="button" className="build-btn" disabled={!(markRect && markRect.locId === loc.id && markName.trim())} onClick={() => {
+                if (!markRect || markRect.locId !== loc.id || !markName.trim()) return;
+                commitItems(loc.id, [...(loc.items || []), { id: `item-${uid()}`, name: markName.trim(), x: markRect.x, y: markRect.y, w: markRect.w, h: markRect.h }]);
+                setMarkRect(null); setMarkName("");
+              }}>Add scene item</button>
+              <small style={{ opacity: 0.8 }}>Drag a rectangle over the thing itself (or click to place an area, then drag it into place). Drag an item to move it.</small>
+            </div>
+            {(loc.items || []).map(it => {
+              const boundCount = locClues.filter(c => c.itemId === it.id).length;
+              return <div key={it.id} style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap", margin: "0.3rem 0" }}>
+                <IN style={{ flex: "1 1 10rem", width: "auto" }} value={it.name} onChange={e => commitItems(loc.id, (loc.items || []).map(x => (x.id === it.id ? { ...x, name: e.target.value } : x)), clues => clues.map(c => (c.locationId === loc.id && c.itemId === it.id ? { ...c, hotspot: e.target.value } : c)))} />
+                {(["x", "y", "w", "h"] as const).map(k => <label key={k} style={{ fontSize: "0.8rem" }}>{k.toUpperCase()} <IN type="number" min={0} max={100} style={{ width: "4rem" }} value={Math.round(it[k])} onChange={e => commitItems(loc.id, (loc.items || []).map(x => (x.id === it.id ? { ...x, [k]: Math.max(0, Math.min(100, +e.target.value || 0)) } : x)))} /></label>)}
+                <small>{boundCount ? `${boundCount} evidence bound — highlights in play` : "scenery — no evidence bound"}</small>
+                <button type="button" className="outline-btn" onClick={() => commitItems(loc.id, (loc.items || []).filter(x => x.id !== it.id), clues => clues.map(c => (c.itemId === it.id ? { ...c, itemId: undefined } : c)))}>Remove item</button>
+              </div>;
+            })}
+            {!(loc.items || []).length && <small style={{ display: "block", marginTop: "0.3rem" }}>No items laid out yet. A place with no items is not a dead end — its clues still work with the older spot positions — but laying out the visible things is what lets the spyglass highlight the objects themselves.</small>}
+          </Field>
           <Field label="Character revealed in this location (their unlock discovery)" hint="Discovering this location's unlock evidence opens the detective's ability to question that suspect. Detective decides when to use it.">
             <select value={locClues.find(c => c.unlocksSuspectId)?.unlocksSuspectId || ""} onChange={e => {
               const sid = e.target.value;
@@ -244,11 +371,26 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
           <p><strong>Evidence in this location ({locClues.length})</strong> — bind each piece to its clickable item; finish its cut-scene and audio prompts here.</p>
           {locClues.map(c => <div key={c.id} style={{ border: "1px solid #444", borderRadius: 8, padding: "0.5rem", margin: "0.5rem 0" }}>
             <strong>{c.title || c.id}</strong>{c.unlocksSuspectId ? ` — 🔓 unlocks ${m.suspects.find(s => s.id === c.unlocksSuspectId)?.name || c.unlocksSuspectId}` : ""}{c.turningPoint ? " — 🔀 turning point" : ""}
-            <Field label="Clickable item / area it's bound to"><IN value={c.hotspot} onChange={e => setClue({ ...c, hotspot: e.target.value })} placeholder="e.g. The decanter on the desk" /></Field>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <Field label="Spot position X % (on the scene visual)"><IN type="number" min={0} max={100} value={c.hotspotX ?? ""} onChange={e => setClue({ ...c, hotspotX: e.target.value === "" ? undefined : Math.max(0, Math.min(100, +e.target.value)) })} /></Field>
-              <Field label="Spot position Y %"><IN type="number" min={0} max={100} value={c.hotspotY ?? ""} onChange={e => setClue({ ...c, hotspotY: e.target.value === "" ? undefined : Math.max(0, Math.min(100, +e.target.value)) })} /></Field>
-            </div>
+            <Field label="Found on — the scene item this evidence pertains to" hint="In play, the spyglass highlights that item's whole area in the picture, and clicking it reveals this evidence.">
+              <select value={c.itemId || ""} onChange={e => {
+                const itemId = e.target.value || undefined;
+                const item = (loc.items || []).find(it => it.id === itemId);
+                setClue({ ...c, itemId, hotspot: item ? item.name : c.hotspot });
+              }}>
+                <option value="">— no scene item (legacy spot position below) —</option>
+                {(loc.items || []).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+              </select></Field>
+            {c.itemId
+              ? <p style={{ fontSize: "0.85rem", opacity: 0.9, margin: "0.25rem 0" }}>🎯 Bound to <strong>{(loc.items || []).find(it => it.id === c.itemId)?.name || "a scene item"}</strong> — its highlight area is the item&apos;s area as laid out above; no separate spot position applies.</p>
+              : <>
+                <Field label="Bound-item text (the spot's label)"><IN value={c.hotspot} onChange={e => setClue({ ...c, hotspot: e.target.value })} placeholder="e.g. The decanter on the desk" /></Field>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <Field label="Spot position X % (on the scene visual)"><IN type="number" min={0} max={100} value={c.hotspotX ?? ""} onChange={e => setClue({ ...c, hotspotX: e.target.value === "" ? undefined : Math.max(0, Math.min(100, +e.target.value)) })} /></Field>
+                  <Field label="Spot position Y %"><IN type="number" min={0} max={100} value={c.hotspotY ?? ""} onChange={e => setClue({ ...c, hotspotY: e.target.value === "" ? undefined : Math.max(0, Math.min(100, +e.target.value)) })} /></Field>
+                </div>
+              </>}
+            <Field label="Story significance 🔒 — the approved story (host only)" hint="This evidence's importance and relevance — to the characters and to the crime. Part of the master truth; never shown to the audience."><TA value={c.storySignificance || ""} onChange={e => setClue({ ...c, storySignificance: e.target.value })} /></Field>
+            <label style={{ display: "block", margin: "0.5rem 0" }}><input type="checkbox" checked={!!c.initiallyPresent} onChange={e => setClue({ ...c, initiallyPresent: e.target.checked || undefined })} /> <strong>📋 In the detective&apos;s opening brief</strong> — initially present when the game opens. Everything not flagged is discovered through play only.</label>
             <Field label="Cut-scene prompt (cinematic reveal video)"><TA value={c.cutScenePrompt} onChange={e => setClue({ ...c, cutScenePrompt: e.target.value })} /></Field>
             <Field label="Audio evidence prompt (optional clip)"><TA value={c.audioPrompt || ""} onChange={e => setClue({ ...c, audioPrompt: e.target.value })} placeholder="e.g. A muffled argument through the office door, a glass set down hard…" /></Field>
             <p style={{ fontSize: "0.85rem", opacity: 0.9, margin: "0.25rem 0" }}>{c.cutSceneVideoKey ? `🎬 Cut scene saved: ${c.cutSceneVideoKey}` : "🎬 No cut scene yet."} · {c.audioKey ? `🔊 Audio saved: ${c.audioKey}` : "🔊 No audio clip yet."}</p>
@@ -256,8 +398,39 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
             {genBtn(`walk-aud-${c.id}`, "✦ Generate audio clip", c.audioPrompt?.trim() ? () => void runMedia(`walk-aud-${c.id}`, "sfx", c.audioPrompt || "", `CCS clue — ${c.title || c.id} (audio)`, key => patchLatest({ clues: mRef.current.clues.map(x => x.id === c.id ? { ...x, audioKey: key } : x) })) : null, "Write the audio prompt first.")}
           </div>)}
           {!locClues.length && <p role="alert" style={lockNote}>This location has no evidence yet — choose from the list below or add a custom clue.</p>}
-          <Field label={`Evidence that fits this story and this location (${suggestions.length})`} hint="The list is filtered: only evidence that works for the overall storyline AND belongs in this room appears. Tire tracks will never be offered for an upstairs bedroom.">
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>{suggestions.map(s => <button key={s.archetypeId} type="button" className="outline-btn" title={s.detail} onClick={() => patch({ clues: [...m.clues, { id: `clue-${uid()}`, title: s.label, description: s.detail, summary: s.summary, locationId: loc.id, cutScenePrompt: "", hotspot: s.hotspot, relatedSuspectIds: [] }] })}>＋ {s.label}</button>)}{!suggestions.length && <span>No catalog evidence fits this location and story — add a custom clue below or in the Clues section.</span>}</div></Field>
+          <Field label={`Evidence that fits this story and this location (${suggestions.length})`} hint="The list is filtered twice: only evidence that works for the overall storyline AND belongs in this place appears — and every possibility pertains to a visible thing in the picture, grouped by that thing. Tire tracks will never be offered for an upstairs bedroom.">
+            {(() => {
+              const choose = (s: (typeof suggestions)[number], item?: CityCrimeSceneSceneItem) => {
+                let items = loc.items || [];
+                let bound = item || items.find(it => ccssItemNamesMatch(it.name, s.itemName));
+                if (!bound) {
+                  // Choosing evidence on a thing that is not laid out yet adds
+                  // the item to the scene; the host then drags its area onto
+                  // the thing itself in the layout above.
+                  bound = { id: `item-${uid()}`, name: s.itemName, x: 38, y: 34, w: 24, h: 24 };
+                  items = [...items, bound];
+                }
+                patch({
+                  locations: m.locations.map(l => (l.id === loc.id ? { ...l, items } : l)),
+                  clues: [...m.clues, { id: `clue-${uid()}`, title: s.label, description: s.detail, summary: s.summary, locationId: loc.id, cutScenePrompt: "", hotspot: bound.name, itemId: bound.id, relatedSuspectIds: [] }],
+                });
+              };
+              const grouped = (loc.items || []).map(it => ({ item: it, list: suggestEvidenceForItem(m, loc.id, it.id) }));
+              const groupedIds = new Set(grouped.flatMap(g => g.list.map(s => s.archetypeId)));
+              const ungrouped = suggestions.filter(s => !groupedIds.has(s.archetypeId));
+              return <div>
+                {grouped.map(({ item, list }) => list.length > 0 && <div key={item.id} style={{ margin: "0.4rem 0" }}>
+                  <div style={{ fontSize: "0.85rem", marginBottom: "0.25rem" }}>On <strong>{item.name}</strong>:</div>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>{list.map(s => <button key={s.archetypeId} type="button" className="outline-btn" title={s.detail} onClick={() => choose(s, item)}>＋ {s.label}</button>)}</div>
+                </div>)}
+                {ungrouped.length > 0 && <div style={{ margin: "0.4rem 0" }}>
+                  <div style={{ fontSize: "0.85rem", marginBottom: "0.25rem" }}>On a visible thing not laid out yet — choosing one adds that item to the scene (drag its area onto the thing itself above):</div>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>{ungrouped.map(s => <button key={s.archetypeId} type="button" className="outline-btn" title={s.detail} onClick={() => choose(s)}>＋ {s.label} <small>({s.itemName})</small></button>)}</div>
+                </div>}
+                {!suggestions.length && <span>No catalog evidence fits this location and story — add a custom clue below or in the Clues section.</span>}
+              </div>;
+            })()}
+          </Field>
           <button type="button" className="outline-btn" onClick={() => patch({ clues: [...m.clues, newClue()] })}>Add a blank clue (placed in the first location — move it in the Clues section)</button>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginTop: "0.75rem" }}>
             <button type="button" className="outline-btn" disabled={walkIdx <= 0} onClick={() => setWalkIdx(i => Math.max(0, i - 1))}>← Previous location</button>
@@ -274,8 +447,11 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
         <Field label="Title"><IN value={c.title} onChange={e => setC({ ...c, title: e.target.value })} /></Field>
         <Field label="Description — the SPECIFIC detail (revealed only during play)"><TA value={c.description} onChange={e => setC({ ...c, description: e.target.value })} /></Field>
         <Field label="Generalized summary — the ONLY version suspects ever see" hint="Rundowns and clue cards generalize evidence so performers learn the specifics live, at the same moment the detective discovers them."><TA value={c.summary} onChange={e => setC({ ...c, summary: e.target.value })} /></Field>
-        <Field label="Location"><select value={c.locationId} onChange={e => setC({ ...c, locationId: e.target.value })}>{m.locations.map(l => <option key={l.id} value={l.id}>{l.name || l.id}</option>)}</select></Field>
-        <Field label="Bound to clickable item / area in that room"><IN value={c.hotspot} onChange={e => setC({ ...c, hotspot: e.target.value })} placeholder="e.g. The ledger books on the desk" /></Field>
+        <Field label="Location"><select value={c.locationId} onChange={e => setC({ ...c, locationId: e.target.value, itemId: undefined })}>{m.locations.map(l => <option key={l.id} value={l.id}>{l.name || l.id}</option>)}</select></Field>
+        <Field label="Bound to clickable item / area in that place"><IN value={c.hotspot} onChange={e => setC({ ...c, hotspot: e.target.value })} placeholder="e.g. The ledger books on the desk" /></Field>
+        <Field label="Scene item of that location (its area is the highlight in play)"><select value={c.itemId || ""} onChange={e => { const item = (m.locations.find(l => l.id === c.locationId)?.items || []).find(it => it.id === e.target.value); setC({ ...c, itemId: e.target.value || undefined, hotspot: item ? item.name : c.hotspot }); }}><option value="">— no scene item (legacy spot) —</option>{(m.locations.find(l => l.id === c.locationId)?.items || []).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}</select></Field>
+        <Field label="Story significance 🔒 — the approved story (host only)" hint="This evidence's importance and relevance — to the characters and to the crime. Never shown to the audience."><TA value={c.storySignificance || ""} onChange={e => setC({ ...c, storySignificance: e.target.value })} /></Field>
+        <label style={{ display: "block", margin: "0.5rem 0" }}><input type="checkbox" checked={!!c.initiallyPresent} onChange={e => setC({ ...c, initiallyPresent: e.target.checked || undefined })} /> <strong>📋 In the detective&apos;s opening brief</strong> — initially present when the game opens; everything else is discovered through play only</label>
         <Field label="Cut-scene prompt (cinematic clue reveal)"><TA value={c.cutScenePrompt} onChange={e => setC({ ...c, cutScenePrompt: e.target.value })} /></Field>
         <Field label="Cut-scene video asset key (optional)" hint="Generate it right here with the button below, or paste a key from this project's media — it plays on the overlay when the clue is revealed."><IN value={c.cutSceneVideoKey || ""} onChange={e => setC({ ...c, cutSceneVideoKey: e.target.value })} placeholder="e.g. clue-decanter-reveal.mp4" /></Field>
         {genBtn(`clue-cut-${c.id}`, "✦ Generate cut scene", c.cutScenePrompt.trim() ? () => void runMedia(`clue-cut-${c.id}`, "video", c.cutScenePrompt, `CCS clue — ${c.title || c.id} (cut scene)`, key => patchLatest({ clues: mRef.current.clues.map(x => x.id === c.id ? { ...x, cutSceneVideoKey: key } : x) })) : null, "Write the cut-scene prompt first.")}
@@ -320,8 +496,10 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
         <label style={{ display: "block", margin: "0.5rem 0" }}><input type="checkbox" checked={s.isGuilty} onChange={e => { const next = m.suspects.map(x => ({ ...x, isGuilty: x.id === s.id ? e.target.checked : e.target.checked ? false : x.isGuilty })); save({ ...m, suspects: next }); }} /> <strong>🔒 This suspect is the guilty party</strong> (only one may be guilty)</label>
         <Field label="Character brief (given to the player pre-game)"><TA value={s.characterBrief} onChange={e => setS({ ...s, characterBrief: e.target.value })} /></Field>
         <Field label="Potential motive (they look guilty — guilt not confirmed to them)"><TA value={s.potentialMotive} onChange={e => setS({ ...s, potentialMotive: e.target.value })} /></Field>
-        <Field label="Alibi"><TA value={s.alibi} onChange={e => setS({ ...s, alibi: e.target.value })} /></Field>
+        <Field label="Alibi — the claim in their basic character file"><TA value={s.alibi} onChange={e => setS({ ...s, alibi: e.target.value })} /></Field>
         <div style={{ ...lockNote, margin: "0.5rem 0" }}>🔒 Detective dossier — private. Never on the overlay.</div>
+        <Field label="True role in the crime 🔒 — the approved story" hint="What this character ACTUALLY played in the crime — the master truth. Host only, never published."><TA value={s.trueRole || ""} onChange={e => setS({ ...s, trueRole: e.target.value })} /></Field>
+        <Field label="Alibi reality 🔒 — the approved story" hint="Whether the alibi above holds, and how it actually took place. Host only, never published."><TA value={s.alibiReality || ""} onChange={e => setS({ ...s, alibiReality: e.target.value })} /></Field>
         <Field label="Demeanor 🔒"><TA value={s.demeanor} onChange={e => setS({ ...s, demeanor: e.target.value })} /></Field>
         <Field label="Tells 🔒"><TA value={s.tells} onChange={e => setS({ ...s, tells: e.target.value })} /></Field>
         <Field label="Extra info (not in the player's brief) 🔒"><TA value={s.extraInfo} onChange={e => setS({ ...s, extraInfo: e.target.value })} /></Field>
