@@ -115,7 +115,7 @@ test('the status route still rejects fal task endpoints outside the allowlist', 
 test('both video edit clients poll against a 60-minute deadline, not a 300-attempt cap', () => {
   const editor = fs.readFileSync('components/MediaEditor.tsx', 'utf8');
   const editFlow = editor.slice(editor.indexOf('async function editMedia'), editor.indexOf('async function saveCopy'));
-  assert.ok(editFlow.includes('Date.now() + 60 * 60 * 1000'), 'MediaEditor polls the edit against a 60-minute deadline');
+  assert.ok(editFlow.includes('pollForEditedVideoUrl('), 'MediaEditor polls the edit through the shared poller');
   assert.ok(!editFlow.includes('attempt < 300'), 'MediaEditor no longer caps the edit at 300 attempts');
   assert.ok(editFlow.includes('Your edit is still processing. Please try again in a little while.'), 'MediaEditor keeps its still-processing message');
 
@@ -123,25 +123,30 @@ test('both video edit clients poll against a 60-minute deadline, not a 300-attem
   const submitAt = page.indexOf('fetch("/api/edit-video"');
   assert.ok(submitAt > -1, 'project page still submits video edits');
   const editBranch = page.slice(submitAt, submitAt + 3000);
-  assert.ok(editBranch.includes('Date.now() + 60 * 60 * 1000'), 'project page polls the edit against a 60-minute deadline');
+  assert.ok(editBranch.includes('pollForEditedVideoUrl('), 'project page polls the edit through the shared poller');
   assert.ok(!editBranch.includes('attempt < 300'), 'project page no longer caps the edit at 300 attempts');
-  assert.ok(editBranch.includes('Video editing is still processing. Please try again in a little while.'), 'project page keeps its still-processing message');
+
+  const poller = fs.readFileSync('lib/video-edit-poll.ts', 'utf8');
+  assert.ok(poller.includes('deadlineMs ?? 60 * 60 * 1000'), 'the shared poller waits against a 60-minute deadline by default');
+  assert.ok(poller.includes('Video editing is still processing. Please try again in a little while.'), 'the shared poller keeps the project page still-processing message as its default');
 });
 
 test('both video edit clients submit then poll the status route', () => {
   const editor = fs.readFileSync('components/MediaEditor.tsx', 'utf8');
   const editFlow = editor.slice(editor.indexOf('async function editMedia'), editor.indexOf('async function saveCopy'));
   assert.ok(editFlow.includes('"/api/edit-video"'), 'MediaEditor still submits video edits');
-  assert.ok(editFlow.includes('/api/generate-asset/status'), 'MediaEditor polls the status route for the edit result');
-  assert.ok(editFlow.includes('provider=fal'), 'MediaEditor polls with the fal provider');
+  assert.ok(editFlow.includes('pollForEditedVideoUrl('), 'MediaEditor polls for the edit result through the shared poller');
 
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   const submitAt = page.indexOf('fetch("/api/edit-video"');
   assert.ok(submitAt > -1, 'project page still submits video edits');
   const editBranch = page.slice(submitAt, submitAt + 3000);
-  assert.ok(editBranch.includes('/api/generate-asset/status'), 'project page polls the status route for the edit result');
-  assert.ok(editBranch.includes('provider=fal'), 'project page polls with the fal provider');
+  assert.ok(editBranch.includes('pollForEditedVideoUrl('), 'project page polls for the edit result through the shared poller');
   assert.ok(editBranch.includes('saveAssetAsNew'), 'project page still stores the finished edit as a new asset');
+
+  const poller = fs.readFileSync('lib/video-edit-poll.ts', 'utf8');
+  assert.ok(poller.includes('/api/generate-asset/status'), 'the shared poller polls the status route for the edit result');
+  assert.ok(poller.includes('provider=fal'), 'the shared poller polls with the fal provider');
 });
 
 test('the project page chains layered video edits through Jewel edit result turns', () => {
