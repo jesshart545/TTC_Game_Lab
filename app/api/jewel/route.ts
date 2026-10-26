@@ -14,7 +14,7 @@ import { validateExplicitSettings, validateSavedReferences, validateCompletionCl
 import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
 import { NextResponse } from "next/server";
 import { requireCreator } from "../../../lib/auth/server";
-import { canUseCityCrimeScene } from "../../../lib/city-crime-scene";
+import { canUseCityCrimeScene, checkedCcssAttach } from "../../../lib/city-crime-scene";
 import { getGameTemplate } from "../../../lib/game-templates";
 import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured } from "../../../lib/muse-client";
 
@@ -84,8 +84,10 @@ export async function POST(request: Request) {
   const aiUser = await requireCreator().catch(() => null);
   const ccssEntitled = canUseCityCrimeScene(aiUser?.email);
   const draftSystemBase = ccssEntitled
-    ? DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is an improv whodunnit mystery game builder available to this user. When they mention mysteries, crimes, detective games, or whodunnits — or ask what you can build — proactively offer to create a City Crime Scene game. Create it with changes.newTools [{type:"city-crime-scene",name,config:{},connect:true}]; the dedicated editor opens for full customization.`
-    : DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool. If the user asks for it, explain briefly that it is not available for their account.`;
+    ? DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is an improv whodunnit mystery game builder available to this user. When they mention mysteries, crimes, detective games, or whodunnits — or ask what you can build — proactively offer to create a City Crime Scene game. Create it with changes.newTools [{type:"city-crime-scene",name,config:{},connect:true}]; the dedicated editor opens for full customization.
+Editing this user's existing City Crime Scene case: use changes.gameTools [{id:"the existing city-crime-scene tool id",config:{mystery:PATCH}}]. PATCH is a partial case — include ONLY the items and fields you are changing. Scalar fields (title, premise, crime, victim, backstory, plot, suspectCount, detectiveCount, interrogationSeconds, courtroomSeconds) replace when included. Collections (locations, clues, flashbacks, suspects, witnesses, helperWitnesses, timeline, twists) match by each item's existing id: include an item's id plus only its changed fields — every other field and every other item is preserved exactly; an item with a new unique id is added to the case. Keep the case coherent or the edit is refused: exactly one suspect may be guilty (marking one suspect guilty in your patch automatically clears the others), every suspect keeps a motive and an alibi, and a clue's summary stays GENERALIZED — the specific detail lives only in its description, revealed during play. Host-only truth (isGuilty, actualCrimeDetails, twists, demeanor, tells, extraInfo, questions) belongs in the case file only: never name the guilty party or quote the actual crime details in your reply.
+Attaching media to the case: media already saved in this project attaches by setting the item's media key field in a mystery patch to the asset's exact storageKey — location imageKey; clue cutSceneVideoKey or audioKey; suspect guideVideoKey; flashback videoKey; helper portraitKey or videoKey (a helper's mediaKey is the host's own uploaded reference and is never overwritten by generation). To create NEW media for a case item, return the media generation action AND add "ccssAttach":{"toolId":"the city-crime-scene tool id","kind":"location"|"clue"|"suspect"|"flashback"|"helper","itemId":"the item's existing id","field":"the media key field"}: the app generates the media, saves it to the project, and attaches it to that item automatically — never claim it is attached before that happens. Match the media type to the field: image for imageKey/portraitKey, video for cutSceneVideoKey/guideVideoKey/videoKey, voice or sfx for audioKey. For a helper who has an uploaded reference (mediaKey), pass that asset's exact storageKey as the action's sourceKey so the portrait or video is generated from the host's own media.`
+    : DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool, never edit one, and never attach media to one. If the user asks for it, explain briefly that it is not available for their account.`;
   const templateInfo = body.project?.templateId ? getGameTemplate(body.project.templateId) : undefined;
   const templateNote = templateInfo ? `\nThis project was started from the "${templateInfo.name}" game template. ${templateInfo.description} When the user asks to customize it, help them modify the template's questions, content, styling, rules, or structure. You can edit any part of the template.` : "";
   const rawFeedback = body.generationFeedback && typeof body.generationFeedback === "object" ? body.generationFeedback : null;
@@ -135,7 +137,9 @@ export async function POST(request: Request) {
       parsed.changes = normalizeDraftChanges(parsed.changes);
       if (!ccssEntitled) {
         const wantsCcss = (parsed.action?.type === "tool" && parsed.action?.toolType === "city-crime-scene")
-          || (Array.isArray(parsed.changes?.newTools) && parsed.changes.newTools.some((t: any) => t?.type === "city-crime-scene"));
+          || (Array.isArray(parsed.changes?.newTools) && parsed.changes.newTools.some((t: any) => t?.type === "city-crime-scene"))
+          || (Array.isArray(parsed.changes?.gameTools) && parsed.changes.gameTools.some((t: any) => t?.id && (body.project?.gameTools || []).some((existing: any) => existing.id === t.id && existing.type === "city-crime-scene")))
+          || (parsed.action && typeof parsed.action === "object" && (parsed.action as any).ccssAttach);
         if (wantsCcss) throw new Error("City Crime Scene is only available to select accounts and is not enabled for this account.");
       }
       validateExplicitSettings(String(body.request || ""), parsed);
@@ -162,6 +166,20 @@ export async function POST(request: Request) {
       if (generationFeedback && action && ["image", "video", "voice", "music", "sfx"].includes(action.type) && action.type === generationFeedback.kind && "prompt" in action && typeof action.prompt === "string" && action.prompt.trim() === generationFeedback.prompt.trim()) {
         if (attempt === 0) throw new Error("That exact generation already failed. Adjust the approach: rewrite or simplify the prompt, change the length or wording, offer an image as a motion-treated still when a video failed, or explain in reply with action null. Never resubmit the identical request.");
         action = null;
+      }
+      // City Crime Scene media attachment: an entitled user's media action
+      // may name the case item its finished media belongs to. The target is
+      // validated against the actual draft here (saved IDs only, never a
+      // URL); the client executor performs the attachment once the generation
+      // has been saved to the project.
+      const rawAttach = raw && typeof raw === "object" ? (raw as any).ccssAttach : undefined;
+      if (rawAttach !== undefined && rawAttach !== null) {
+        if (!ccssEntitled) throw new Error("City Crime Scene is only available to select accounts and is not enabled for this account.");
+        if (!action || !["image", "video", "voice", "music", "sfx"].includes(action.type)) throw new Error("Attaching new media to the case requires a media generation action in the same response.");
+        const attach = checkedCcssAttach(rawAttach, body.project);
+        const actionKind = action.type === "image" ? "image" : action.type === "video" ? "video" : (action.type === "voice" || action.type === "sfx") ? "audio" : "";
+        if (attach.mediaKind !== actionKind) throw new Error(`That case field holds a ${attach.mediaKind}, so generate a ${attach.mediaKind} for it instead.`);
+        (action as any).ccssAttach = { toolId: attach.toolId, kind: attach.kind, itemId: attach.itemId, field: attach.field };
       }
       // Safety net: the user asked for an original song but the assistant returned no music action
       // (e.g. it deflected to the manual Lyrics field). Force a retry with explicit instructions.

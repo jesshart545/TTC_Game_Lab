@@ -167,7 +167,7 @@ function ccssOutcome(tool: GameTool, action: CcssAction, prev: any) {
     if (!ccssHelperAvailable(cfg, state, w.id))
       return { error: `${w.name} hasn't been discovered on the map yet — the detective must find the evidence that makes this helper available first.` };
     if (!state.unlockedHelperIds.includes(w.id)) state.unlockedHelperIds.push(w.id);
-    return withTrack({ kind: "witness", witness: { id: w.id, name: w.name, role: w.role, description: w.description, info: w.info, mediaKey: w.mediaKey } });
+    return withTrack({ kind: "witness", witness: { id: w.id, name: w.name, role: w.role, description: w.description, info: w.info, mediaKey: w.mediaKey, portraitKey: w.portraitKey, videoKey: w.videoKey } });
   }
   if (kind === "hide") return withTrack({ kind: "hide" });
   return { error: "Unknown City Crime Scene action." };
