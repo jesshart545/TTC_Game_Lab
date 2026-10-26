@@ -1,12 +1,19 @@
 "use client";
 import type { CSSProperties } from "react";
 import type { GameTool, ProjectAsset } from "../lib/project";
+import { ccssStageInvestigateAction, ccssStageRevealAction, type CcssStageAction } from "../lib/city-crime-scene-stage";
 
 /**
  * Public overlay for City Crime Scene. Renders ONLY from the live-event outcome
  * JSON plus the sanitized public tool config. It must never read isGuilty,
  * actualCrimeDetails, twists, demeanor, tells, extraInfo, or question lists —
  * those fields are stripped before this component ever sees them.
+ *
+ * With `interactive` set — the authenticated HOST STAGE only — the map's
+ * location cards and the location scene's hotspots become real controls
+ * that fire the same live actions the host panel's buttons send. Without
+ * it (the audience surface) this component is purely presentational and
+ * renders no handlers at all.
  */
 
 type SuspectView = { id: string; name: string; occupation?: string; age?: string; gender?: string; ethnicity?: string; knownFor?: string; personality?: string; quote?: string; characterBrief?: string; potentialMotive?: string; alibi?: string; guideVideoPrompt?: string; guideVideoKey?: string };
@@ -80,7 +87,8 @@ function SuspectCard({ s }: { s: SuspectView }) {
 /** The spyglass: the only cursor the audience ever sees over a scene. */
 const spyglassCursor = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30'><circle cx='12' cy='12' r='8' fill='none' stroke='%23ffd98a' stroke-width='3'/><line x1='18' y1='18' x2='27' y2='27' stroke='%23ffd98a' stroke-width='4' stroke-linecap='round'/></svg>") 12 12, zoom-in`;
 
-export default function CityCrimeSceneOverlay({ tool, result, assets = [] }: { tool: GameTool; result?: string; assets?: ProjectAsset[] }) {
+export default function CityCrimeSceneOverlay({ tool, result, assets = [], interactive = false, onStageAction }: { tool: GameTool; result?: string; assets?: ProjectAsset[]; interactive?: boolean; onStageAction?: (action: CcssStageAction) => void }) {
+  const stage = interactive && !!onStageAction;
   let o: Outcome | null = null;
   try { o = JSON.parse(String(result || "null")); } catch { o = null; }
   if (!o || o.kind === "hide") return null;
@@ -122,13 +130,14 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [] }: { t
   // The map: every location, presented as a place to enter — no directions,
   // no order. The detective (through the host) chooses freely.
   if (o.kind === "map") return <div style={noir}>
-    <style>{`@keyframes ccss-reveal{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:none}}.ccss-place{transition:box-shadow .25s ease,transform .25s ease}.ccss-place:hover{box-shadow:0 0 0 3px #ffd98a,0 0 34px rgba(255,217,138,.45);transform:translateY(-2px)}`}</style>
+    <style>{`@keyframes ccss-reveal{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:none}}.ccss-place{transition:box-shadow .25s ease,transform .25s ease}.ccss-place:hover{box-shadow:0 0 0 3px #ffd98a,0 0 34px rgba(255,217,138,.45);transform:translateY(-2px)}${stage ? ".ccss-place:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 34px rgba(255,217,138,.45);outline:none}" : ""}`}</style>
     <div style={tape}>THE CITY · CHOOSE WHERE TO LOOK</div>
     <h2 style={{ ...typewriter, letterSpacing: 2, margin: "0.75rem 0", color: "#ffd98a" }}>{title}</h2>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: "0.9rem", animation: "ccss-reveal .8s ease-out" }}>
       {(o.locations || []).map(l => {
         const img = l.imageKey ? assets.find(a => (a.storageKey || a.name) === l.imageKey && a.url) : undefined;
-        return <div key={l.id} className="ccss-place" style={{ border: "2px solid #d6aa58", borderRadius: 10, overflow: "hidden", background: "#141420" }}>
+        const cardStyle: CSSProperties = { border: "2px solid #d6aa58", borderRadius: 10, overflow: "hidden", background: "#141420" };
+        const cardInner = <>
           <div style={{ height: 120, background: img ? `center/cover url(${img.url})` : "linear-gradient(150deg,#241b33,#141420 70%)", display: "flex", alignItems: "flex-end", padding: "0.4rem 0.6rem" }}>
             {l.isCrimeScene ? <span style={{ ...stamp, margin: 0, fontSize: "0.7rem", background: "rgba(12,12,18,.8)" }}>🚨 CRIME SCENE</span> : null}
           </div>
@@ -137,7 +146,11 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [] }: { t
             <p style={{ fontSize: "0.8rem", fontStyle: "italic", opacity: 0.85, margin: "0.25rem 0" }}>{l.description}</p>
             <small style={typewriter}>{l.cluesTotal ? `Evidence found: ${l.cluesFound || 0} of ${l.cluesTotal}` : "Nothing to find here"}</small>
           </div>
-        </div>;
+        </>;
+        // Host stage only: the card itself is the control — clicking it
+        // enters the location, the panel's "Show location" as a picture.
+        if (stage) return <button key={l.id} type="button" className="ccss-place" style={{ ...cardStyle, cursor: "pointer", font: "inherit", color: "inherit", textAlign: "left", padding: 0, width: "100%" }} aria-label={`Investigate ${l.name}`} onClick={() => onStageAction?.(ccssStageInvestigateAction(l.id))}>{cardInner}</button>;
+        return <div key={l.id} className="ccss-place" style={cardStyle}>{cardInner}</div>;
       })}
     </div>
   </div>;
@@ -149,15 +162,21 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [] }: { t
     const img = loc.imageKey ? assets.find(a => (a.storageKey || a.name) === loc.imageKey && a.url) : undefined;
     const clues = o.clues || [];
     return <div style={{ ...noir, padding: 0, overflow: "hidden" }}>
-      <style>{`@keyframes ccss-reveal{from{opacity:0}to{opacity:1}}.ccss-spot{transition:box-shadow .2s ease,background .2s ease}.ccss-spot:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28)}.ccss-spot .ccss-spot-label{opacity:0;transition:opacity .2s ease}.ccss-spot:hover .ccss-spot-label{opacity:1}`}</style>
+      <style>{`@keyframes ccss-reveal{from{opacity:0}to{opacity:1}}.ccss-spot{transition:box-shadow .2s ease,background .2s ease}.ccss-spot:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28)}.ccss-spot .ccss-spot-label{opacity:0;transition:opacity .2s ease}.ccss-spot:hover .ccss-spot-label{opacity:1}${stage ? ".ccss-spot:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28);outline:none}.ccss-spot:focus-visible .ccss-spot-label{opacity:1}" : ""}`}</style>
       <div style={{ position: "relative", minHeight: 380, cursor: spyglassCursor, background: img ? `center/cover url(${img.url})` : "linear-gradient(160deg,#191324 0%,#0c0c12 70%)", animation: "ccss-reveal .8s ease-out" }}>
         {clues.map((c, i) => {
           const x = typeof c.hotspotX === "number" ? c.hotspotX : 12 + ((i * 29) % 72);
           const y = typeof c.hotspotY === "number" ? c.hotspotY : 26 + ((i * 19) % 48);
-          return <div key={c.id} className="ccss-spot" title={c.hotspot || c.title} style={{ position: "absolute", left: `${x}%`, top: `${y}%`, transform: "translate(-50%,-50%)", width: 54, height: 54, borderRadius: "50%", border: c.revealed ? "2px solid #ffd98a" : "2px dashed rgba(255,217,138,.65)", background: c.revealed ? "rgba(214,170,88,.35)" : "rgba(20,20,32,.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          const spotStyle: CSSProperties = { position: "absolute", left: `${x}%`, top: `${y}%`, transform: "translate(-50%,-50%)", width: 54, height: 54, borderRadius: "50%", border: c.revealed ? "2px solid #ffd98a" : "2px dashed rgba(255,217,138,.65)", background: c.revealed ? "rgba(214,170,88,.35)" : "rgba(20,20,32,.25)", display: "flex", alignItems: "center", justifyContent: "center" };
+          const spotInner = <>
             <span style={{ fontSize: "1.3rem" }}>{c.revealed ? "📌" : "🔍"}</span>
             <span className="ccss-spot-label" style={{ position: "absolute", top: "110%", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", background: "rgba(12,12,18,.92)", border: "1px solid #d6aa58", borderRadius: 6, padding: "0.15rem 0.5rem", ...typewriter, fontSize: "0.75rem", color: "#ffd98a" }}>{c.revealed ? c.title : (c.hotspot || "Something to examine")}</span>
-          </div>;
+          </>;
+          // Host stage only: the hotspot itself is the control — the host
+          // points the spyglass at the item and clicks it to reveal its
+          // clue, the panel's "Reveal: …" as a picture.
+          if (stage) return <button key={c.id} type="button" className="ccss-spot" title={c.hotspot || c.title} style={{ ...spotStyle, cursor: spyglassCursor, padding: 0, font: "inherit" }} aria-label={c.revealed ? `Show clue again: ${c.title}` : `Reveal clue: ${c.hotspot || c.title}`} onClick={() => onStageAction?.(ccssStageRevealAction(c.id))}>{spotInner}</button>;
+          return <div key={c.id} className="ccss-spot" title={c.hotspot || c.title} style={spotStyle}>{spotInner}</div>;
         })}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, background: "linear-gradient(transparent,rgba(12,12,18,.94) 45%)", padding: "2.2rem 1.25rem 0.9rem" }}>
           <div style={{ ...typewriter, letterSpacing: 2, color: "#ffd98a", fontSize: "1.25rem", fontWeight: 800 }}>{loc.name}{loc.isCrimeScene ? " 🚨" : ""}</div>
