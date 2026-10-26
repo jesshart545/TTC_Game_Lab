@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ProjectAsset, ProjectAssetEdits } from "../lib/project";
 import { imageLayout, imageAspectRatio } from "../lib/image-layout";
+import { pollForEditedVideoUrl } from "../lib/video-edit-poll";
 
 function isVideo(asset: ProjectAsset) {
   return asset.type.toLowerCase().includes("video") || /\.(mp4|webm|mov|m4v)$/i.test(asset.name);
@@ -41,18 +42,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
       if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
       let resultUrl = typeof data.url === "string" ? data.url : "";
       if (video && !resultUrl && data.videoId) {
-        const deadline = Date.now() + 60 * 60 * 1000;
-        let firstCheck = true;
-        while (!resultUrl && Date.now() < deadline) {
-          if (!firstCheck) await new Promise(resolve => setTimeout(resolve, 3000));
-          firstCheck = false;
-          const statusResponse = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(String(data.videoId))}&model=${encodeURIComponent(String(data.model || "fal-ai/wan-vace-apps/video-edit"))}&provider=fal`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
-          const statusData = await statusResponse.json().catch(() => ({}));
-          if (!statusResponse.ok) throw new Error(statusData.error || "Unable to check on your edit.");
-          if (statusData.status === "failed" || statusData.status === "error") throw new Error(statusData.error || "I couldn't make that edit.");
-          if (statusData.status === "completed" && statusData.url) resultUrl = String(statusData.url);
-        }
-        if (!resultUrl) throw new Error("Your edit is still processing. Please try again in a little while.");
+        resultUrl = await pollForEditedVideoUrl(String(data.videoId), String(data.model || "fal-ai/wan-vace-apps/video-edit"), { messages: { progress: "Unable to check on your edit.", failed: "I couldn't make that edit.", stillProcessing: "Your edit is still processing. Please try again in a little while." } });
       }
       if (!resultUrl) throw new Error("The image editor returned no image.");
       const next: ProjectAsset = {
