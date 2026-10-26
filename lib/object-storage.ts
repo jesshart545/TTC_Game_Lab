@@ -1,4 +1,4 @@
-import { DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const ASSET_BUCKET = "ttcgamelab";
@@ -19,12 +19,19 @@ export function getAssetStorage() {
   });
 }
 
-export async function putAsset(key: string, body: Uint8Array, contentType: string) {
+export async function putAsset(key: string, body: string | Uint8Array, contentType: string) {
   await getAssetStorage().send(new PutObjectCommand({
     Bucket: ASSET_BUCKET,
     Key: key,
     Body: body,
     ContentType: contentType || "application/octet-stream",
+  }));
+}
+
+export async function deleteAsset(key: string) {
+  await getAssetStorage().send(new DeleteObjectCommand({
+    Bucket: ASSET_BUCKET,
+    Key: key,
   }));
 }
 
