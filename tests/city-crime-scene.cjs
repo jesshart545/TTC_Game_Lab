@@ -301,6 +301,42 @@ assert.throws(() => checkedCcssAttach({ toolId: 'tool-ccs', kind: 'helper', item
 assert.deepEqual(JSON.parse(JSON.stringify(ccssMediaAttachPatch({ toolId: 'tool-ccs', kind: 'clue', itemId: clueId, field: 'cutSceneVideoKey' }, 'projects/p/cut.mp4'))), { gameTools: [{ id: 'tool-ccs', config: { mystery: { clues: [{ id: clueId, cutSceneVideoKey: 'projects/p/cut.mp4' }] } } }] }, 'attach patch targets exactly one item field');
 console.log('PASS: attach validation accepts every real slot and refuses wrong tools, items, kinds, and fields.');
 
+// 17. Helper voice is the builder's explicit choice ONLY (Jessica, 2026-10-26):
+// a clue helper has a voice only when the builder picks one. Nothing may
+// require it, default it, or fail validation over it.
+const helperVoiceProblems = (problems) => problems.filter(m => /helper/i.test(m) && /voice/i.test(m));
+const voicelessCase = JSON.parse(JSON.stringify(sample));
+voicelessCase.helperWitnesses.forEach(h => { delete h.voice; });
+assert.equal(helperVoiceProblems(validateCityCrimeScene(voicelessCase)).length, 0, 'coherence validation never faults a helper for having no voice: ' + validateCityCrimeScene(voicelessCase).join(' | '));
+assert.equal(helperVoiceProblems(validateCityCrimeSceneStandards(voicelessCase)).length, 0, 'standards validation never faults a helper for having no voice: ' + validateCityCrimeSceneStandards(voicelessCase).join(' | '));
+console.log('PASS: a case whose helpers have no voice raises no voice problem in either validator.');
+
+// 17b. The reader never invents a voice: unset and empty stay unset through
+// repeated round-trips — for the sample helpers AND for helpers the defaults
+// have never seen (fresh ids) — and no helper gains a named voice.
+const voicelessRead = readCityCrimeSceneConfig({ mystery: voicelessCase });
+assert(voicelessRead.helperWitnesses.length > 0 && voicelessRead.helperWitnesses.every(h => !h.voice), 'helpers read back voiceless when the builder chose none');
+const voicelessRead2 = readCityCrimeSceneConfig({ mystery: JSON.parse(JSON.stringify(voicelessRead)) });
+assert(voicelessRead2.helperWitnesses.every(h => !h.voice), 'a second read still substitutes no voice');
+const emptyVoiceCase = JSON.parse(JSON.stringify(sample));
+emptyVoiceCase.helperWitnesses.forEach(h => { h.voice = ''; });
+assert(readCityCrimeSceneConfig({ mystery: emptyVoiceCase }).helperWitnesses.every(h => !h.voice), 'an empty voice stays unset, never a named voice');
+const freshHelperCase = JSON.parse(JSON.stringify(sample));
+freshHelperCase.helperWitnesses = [{ id: 'help-fresh-1', name: 'Fresh Helper', role: 'Usher', description: 'New here.', info: 'Saw the lights flicker.', howItHelps: 'Narrows the timeline.', giftToUnlock: 'Coffee' }];
+assert(readCityCrimeSceneConfig({ mystery: freshHelperCase }).helperWitnesses.every(h => !h.voice), 'a brand-new helper with no voice key at all reads back with no voice');
+console.log('PASS: the normalizer round-trips an unset helper voice as unset and never invents one.');
+
+// 17c. A voice the builder DID choose is kept exactly, helper by helper, and
+// is itself valid — the explicit-choice path is unchanged.
+const chosenVoiceCase = JSON.parse(JSON.stringify(sample));
+chosenVoiceCase.helperWitnesses[0].voice = 'Roger';
+if (chosenVoiceCase.helperWitnesses[1]) chosenVoiceCase.helperWitnesses[1].voice = 'Aria';
+const chosenRead = readCityCrimeSceneConfig({ mystery: chosenVoiceCase });
+assert.equal(chosenRead.helperWitnesses[0].voice, 'Roger', 'an explicitly chosen voice survives the read exactly');
+if (chosenRead.helperWitnesses[1]) assert.equal(chosenRead.helperWitnesses[1].voice, 'Aria', 'each helper keeps its own explicit choice');
+assert.equal(helperVoiceProblems(validateCityCrimeScene(chosenRead)).length, 0, 'a chosen voice is never a validation problem');
+console.log('PASS: a helper with an explicitly chosen voice keeps it, untouched.');
+
 // 16d. The generation runner refuses an unresolvable helper reference
 // instead of silently generating without it.
 (async () => {
