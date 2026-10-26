@@ -5,6 +5,7 @@ import { imageLayout } from "../../../lib/image-layout";
 import { useSupportBridge, requestResearchOpen, type SupportTurn, type SupportTaskResult } from "../../../lib/support-client";
 import { checkedAssistantMediaAction } from "../../../lib/assistant-media-actions";
 import { runEditLayerChain, type EditVideoAction, type EditLayerOutcome } from "../../../lib/edit-layer-chain";
+import { pollForEditedVideoUrl } from "../../../lib/video-edit-poll";
 import { backgroundContext, wantsBackgroundMatch } from "../../../lib/ai-background-context";
 
 import CompactConversation from "../../../components/CompactConversation";
@@ -993,19 +994,7 @@ export default function ProjectWorkspace() {
               const output = await response.json();
               if (!response.ok || !output.videoId) throw new Error(output.error || "Video editing returned no output.");
               guard();
-              let editedUrl = "";
-              const deadline = Date.now() + 60 * 60 * 1000;
-              let firstCheck = true;
-              while (!editedUrl && Date.now() < deadline) {
-                if (!firstCheck) await new Promise(resolve => setTimeout(resolve, 3000));
-                firstCheck = false;
-                const statusResponse = await fetch(`/api/generate-asset/status?id=${encodeURIComponent(String(output.videoId))}&model=${encodeURIComponent(String(output.model || "fal-ai/wan-vace-apps/video-edit"))}&provider=fal`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
-                const statusData = await statusResponse.json().catch(() => ({}));
-                if (!statusResponse.ok) throw new Error(statusData.error || "Unable to check video editing progress.");
-                if (statusData.status === "failed" || statusData.status === "error") throw new Error(statusData.error || "Video editing failed.");
-                if (statusData.status === "completed" && statusData.url) editedUrl = String(statusData.url);
-              }
-              if (!editedUrl) throw new Error("Video editing is still processing. Please try again in a little while.");
+              const editedUrl = await pollForEditedVideoUrl(String(output.videoId), String(output.model || "fal-ai/wan-vace-apps/video-edit"));
               guard();
               const resultName = layerSource.name.replace(/\.[^.]+$/, "") + "-edited.mp4";
               await saveAssetAsNew({ ...layerHydrated, name: resultName, type: "video/mp4", url: editedUrl, storageKey: undefined, edits: undefined });
