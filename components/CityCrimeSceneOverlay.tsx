@@ -190,7 +190,9 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
   // evidence (computed from the sanitized public config by the same lib
   // helper the tests exercise); items holding no chosen evidence never
   // render — they are scenery. A place with no items keeps the legacy
-  // per-clue spots, unchanged.
+  // per-clue spots, unchanged. And nothing is ever WRITTEN on the picture:
+  // no item names drawn over the scene (Jessica, 2026-10-26) — the glow is
+  // the object's own area, and names surface only in revealed content.
   if (o.kind === "location") {
     const loc = o.location!;
     const img = loc.imageKey ? assets.find(a => (a.storageKey || a.name) === loc.imageKey && a.url) : undefined;
@@ -205,31 +207,35 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
     const boundClueIds = new Set(allRegions.flatMap(r => r.clueIds));
     const markerClues = clues.filter(c => !boundClueIds.has(c.id));
     return <div style={{ ...noir, padding: 0, overflow: "hidden" }}>
-      <style>{`@keyframes ccss-reveal{from{opacity:0}to{opacity:1}}.ccss-spot{transition:box-shadow .2s ease,background .2s ease}.ccss-spot:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28)}.ccss-spot .ccss-spot-label{opacity:0;transition:opacity .2s ease}.ccss-spot:hover .ccss-spot-label{opacity:1}.ccss-item{transition:box-shadow .2s ease,background .2s ease}.ccss-item:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.16)}.ccss-item .ccss-spot-label{opacity:0;transition:opacity .2s ease}.ccss-item:hover .ccss-spot-label{opacity:1}${stage ? ".ccss-spot:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28);outline:none}.ccss-spot:focus-visible .ccss-spot-label{opacity:1}.ccss-item:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.16);outline:none}.ccss-item:focus-visible .ccss-spot-label{opacity:1}" : ""}`}</style>
+      <style>{`@keyframes ccss-reveal{from{opacity:0}to{opacity:1}}.ccss-spot{transition:box-shadow .2s ease,background .2s ease}.ccss-spot:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28)}.ccss-item{transition:box-shadow .2s ease,background .2s ease}.ccss-item:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.16)}${stage ? ".ccss-spot:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28);outline:none}.ccss-item:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.16);outline:none}" : ""}`}</style>
       <div style={{ position: "relative", minHeight: 380, cursor: spyglassCursor, background: img ? `center/cover url(${img.url})` : "linear-gradient(160deg,#191324 0%,#0c0c12 70%)", animation: "ccss-reveal .8s ease-out" }}>
         {regions.map(r => {
           const item = r.item;
-          const regionStyle: CSSProperties = { position: "absolute", left: `${item.x}%`, top: `${item.y}%`, width: `${item.w}%`, height: `${item.h}%`, border: "2px dashed rgba(255,217,138,.65)", background: "rgba(20,20,32,.18)", borderRadius: 10, display: "flex", alignItems: "flex-end", padding: "0.25rem 0.4rem" };
-          const regionInner = <span className="ccss-spot-label" style={{ background: "rgba(12,12,18,.92)", border: "1px solid #d6aa58", borderRadius: 6, padding: "0.15rem 0.5rem", ...typewriter, fontSize: "0.75rem", color: "#ffd98a", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>;
+          const regionStyle: CSSProperties = { position: "absolute", left: `${item.x}%`, top: `${item.y}%`, width: `${item.w}%`, height: `${item.h}%`, border: "2px dashed rgba(255,217,138,.65)", background: "rgba(20,20,32,.18)", borderRadius: 10 };
+          // NO NAMES OVER PICTURES (Jessica, 2026-10-26): the highlight is
+          // the object's own area glowing — nothing is written on the scene,
+          // no label chip, no name tooltip. A name appears only in revealed
+          // content. The stage button's aria-label is its accessible name —
+          // spoken by assistive tech, never drawn on the picture.
           // Host stage only: the item itself is the control — the host
           // points the spyglass at the visible thing and clicks it; the
           // click reveals the next clue bound to that item, in case order.
-          if (stage) return <button key={item.id} type="button" className="ccss-item" title={item.name} style={{ ...regionStyle, cursor: spyglassCursor, padding: "0.25rem 0.4rem", font: "inherit", textAlign: "left" }} aria-label={`Reveal clue on: ${item.name}`} onClick={() => onStageAction?.(ccssStageRevealAction(r.nextClueId))}>{regionInner}</button>;
-          return <div key={item.id} className="ccss-item" title={item.name} style={regionStyle}>{regionInner}</div>;
+          if (stage) return <button key={item.id} type="button" className="ccss-item" style={{ ...regionStyle, cursor: spyglassCursor, font: "inherit", textAlign: "left" }} aria-label={`Reveal clue on: ${item.name}`} onClick={() => onStageAction?.(ccssStageRevealAction(r.nextClueId))} />;
+          return <div key={item.id} className="ccss-item" style={regionStyle} />;
         })}
         {markerClues.map((c, i) => {
           const x = typeof c.hotspotX === "number" ? c.hotspotX : 12 + ((i * 29) % 72);
           const y = typeof c.hotspotY === "number" ? c.hotspotY : 26 + ((i * 19) % 48);
           const spotStyle: CSSProperties = { position: "absolute", left: `${x}%`, top: `${y}%`, transform: "translate(-50%,-50%)", width: 54, height: 54, borderRadius: "50%", border: c.revealed ? "2px solid #ffd98a" : "2px dashed rgba(255,217,138,.65)", background: c.revealed ? "rgba(214,170,88,.35)" : "rgba(20,20,32,.25)", display: "flex", alignItems: "center", justifyContent: "center" };
-          const spotInner = <>
-            <span style={{ fontSize: "1.3rem" }}>{c.revealed ? "📌" : "🔍"}</span>
-            <span className="ccss-spot-label" style={{ position: "absolute", top: "110%", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", background: "rgba(12,12,18,.92)", border: "1px solid #d6aa58", borderRadius: 6, padding: "0.15rem 0.5rem", ...typewriter, fontSize: "0.75rem", color: "#ffd98a" }}>{c.revealed ? c.title : (c.hotspot || "Something to examine")}</span>
-          </>;
+          // The legacy spot carries no caption either — the marker and its
+          // glow only; its name lives in the revealed clue, never on the
+          // picture (Jessica, 2026-10-26).
+          const spotInner = <span style={{ fontSize: "1.3rem" }}>{c.revealed ? "📌" : "🔍"}</span>;
           // Host stage only: the hotspot itself is the control — the host
           // points the spyglass at the item and clicks it to reveal its
           // clue, the panel's "Reveal: …" as a picture.
-          if (stage) return <button key={c.id} type="button" className="ccss-spot" title={c.hotspot || c.title} style={{ ...spotStyle, cursor: spyglassCursor, padding: 0, font: "inherit" }} aria-label={c.revealed ? `Show clue again: ${c.title}` : `Reveal clue: ${c.hotspot || c.title}`} onClick={() => onStageAction?.(ccssStageRevealAction(c.id))}>{spotInner}</button>;
-          return <div key={c.id} className="ccss-spot" title={c.hotspot || c.title} style={spotStyle}>{spotInner}</div>;
+          if (stage) return <button key={c.id} type="button" className="ccss-spot" style={{ ...spotStyle, cursor: spyglassCursor, padding: 0, font: "inherit" }} aria-label={c.revealed ? `Show clue again: ${c.title}` : `Reveal clue: ${c.hotspot || c.title}`} onClick={() => onStageAction?.(ccssStageRevealAction(c.id))}>{spotInner}</button>;
+          return <div key={c.id} className="ccss-spot" style={spotStyle}>{spotInner}</div>;
         })}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, background: "linear-gradient(transparent,rgba(12,12,18,.94) 45%)", padding: "2.2rem 1.25rem 0.9rem" }}>
           <div style={{ ...typewriter, letterSpacing: 2, color: "#ffd98a", fontSize: "1.25rem", fontWeight: 800 }}>{loc.name}{loc.isCrimeScene ? " 🚨" : ""}</div>

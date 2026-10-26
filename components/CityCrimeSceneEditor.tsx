@@ -325,11 +325,14 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
               {(loc.items || []).map(it => {
                 const dragging = itemDrag?.locId === loc.id && itemDrag?.itemId === it.id;
                 const boundCount = locClues.filter(c => c.itemId === it.id).length;
+                // Outlines only — NO NAMES OVER PICTURES (Jessica,
+                // 2026-10-26), in the builder too: an item's name lives in
+                // its row in the list below the picture, never drawn on the
+                // scene. The outline's color says whether it carries
+                // evidence; dragging identifies the item being placed.
                 return <div key={it.id}
                   onPointerDown={e => onItemDown(e, loc, it)}
-                  style={{ position: "absolute", left: `${it.x + (dragging ? itemDrag.dx : 0)}%`, top: `${it.y + (dragging ? itemDrag.dy : 0)}%`, width: `${it.w}%`, height: `${it.h}%`, border: `2px solid ${boundCount ? "#ffd76a" : "#9db2ce"}`, background: boundCount ? "rgba(255,215,106,0.10)" : "rgba(157,178,206,0.08)", borderRadius: 6, cursor: "move" }}>
-                  <span style={{ position: "absolute", left: 2, bottom: 2, background: "rgba(0,0,0,0.65)", color: "#fff", fontSize: "0.7rem", padding: "0 0.3rem", borderRadius: 3, pointerEvents: "none" }}>{it.name}{boundCount ? ` · ${boundCount} evidence` : ""}</span>
-                </div>;
+                  style={{ position: "absolute", left: `${it.x + (dragging ? itemDrag.dx : 0)}%`, top: `${it.y + (dragging ? itemDrag.dy : 0)}%`, width: `${it.w}%`, height: `${it.h}%`, border: `2px solid ${boundCount ? "#ffd76a" : "#9db2ce"}`, background: boundCount ? "rgba(255,215,106,0.10)" : "rgba(157,178,206,0.08)", borderRadius: 6, cursor: "move" }} />;
               })}
               {markRect && markRect.locId === loc.id && <div style={{ position: "absolute", left: `${markRect.x}%`, top: `${markRect.y}%`, width: `${markRect.w}%`, height: `${markRect.h}%`, border: "2px dashed #7dff9a", background: "rgba(125,255,154,0.10)", borderRadius: 6, pointerEvents: "none" }} />}
             </div>

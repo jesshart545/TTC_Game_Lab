@@ -579,6 +579,27 @@ assert.ok(stageSrc21.includes('Hand the investigation to the detective'), 'the h
 assert.ok(stageSrc21.includes('stay on file all game'), 'the stage tells the host the filed brief/cards remain referenceable');
 console.log('PASS: the opening runs brief → characters → filed away → map opens → investigation handed to the detective, driven from the host stage over the existing actions.');
 
+// 22. NO NAMES OVER PICTURES (Jessica, 2026-10-26): "there should be no
+// names over pictures — that isn't at all realistic." A scene picture never
+// carries text names/labels drawn over it, in play OR in the builder: the
+// spyglass highlight is the object's own area glowing, nothing written on
+// the image. Item names live in the builder's item rows beside the picture
+// and in revealed content — never rendered on the scene itself.
+const overlaySrc22 = fsStage.readFileSync('components/CityCrimeSceneOverlay.tsx', 'utf8');
+assert.ok(!overlaySrc22.includes('ccss-spot-label'), 'the hover name-label chip class is gone from the scene entirely');
+assert.ok(!overlaySrc22.includes('regionInner'), 'the scene-item region renders no name content over the picture');
+assert.ok(!overlaySrc22.includes('title={item.name}'), 'no item-name tooltip hangs over the picture');
+assert.ok(!overlaySrc22.includes('title={c.hotspot || c.title}'), 'no spot-name tooltip hangs over the picture');
+assert.ok(!overlaySrc22.includes('Something to examine'), 'the legacy spot no longer captions itself over the picture');
+assert.ok(overlaySrc22.includes('aria-label={`Reveal clue on: ${item.name}`}'), 'the stage region keeps its accessible name — assistive only, never drawn on the picture');
+assert.ok(overlaySrc22.includes('className="ccss-item"') && overlaySrc22.includes('ccssSceneRegions(pubCfg, loc.id, revealedIds)'), 'the bare glowing item regions still render from the shared helper');
+assert.equal((overlaySrc22.match(/onClick/g) || []).length, 3, 'still exactly three click handlers in the component, all behind the stage flag');
+const editorSrc22 = fsStage.readFileSync('components/CityCrimeSceneEditor.tsx', 'utf8');
+assert.ok(!editorSrc22.includes('{it.name}{boundCount'), 'the builder draws no item name on the layout picture');
+assert.ok(editorSrc22.includes('value={it.name}'), 'item names are still shown and edited in the item rows beside the picture');
+assert.ok(editorSrc22.includes('evidence bound — highlights in play'), 'the item rows still say which items carry evidence');
+console.log('PASS: no names over pictures — scene highlights are bare glowing areas in play and bare outlines in the builder; names live in lists and revealed content.');
+
 // 16d. The generation runner refuses an unresolvable helper reference
 // instead of silently generating without it.
 (async () => {
