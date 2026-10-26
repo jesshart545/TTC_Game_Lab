@@ -2,7 +2,7 @@
 import type { CSSProperties } from "react";
 import type { GameTool, ProjectAsset } from "../lib/project";
 import { ccssStageInvestigateAction, ccssStageRevealAction, type CcssStageAction } from "../lib/city-crime-scene-stage";
-import { ccssSceneRegions, ccssDetectiveBrief, type CcssSceneRegion, type PublicCityCrimeSceneConfig } from "../lib/city-crime-scene";
+import { ccssSceneRegions, ccssDetectiveBrief, generalizedKeyEvidence, type CcssSceneRegion, type PublicCityCrimeSceneConfig } from "../lib/city-crime-scene";
 
 /**
  * Public overlay for City Crime Scene. Renders ONLY from the live-event outcome
@@ -21,7 +21,11 @@ import { ccssSceneRegions, ccssDetectiveBrief, type CcssSceneRegion, type Public
  * component is purely presentational and renders no handlers at all.
  */
 
-type SuspectView = { id: string; name: string; occupation?: string; age?: string; gender?: string; ethnicity?: string; knownFor?: string; personality?: string; quote?: string; characterBrief?: string; potentialMotive?: string; alibi?: string; guideVideoPrompt?: string; guideVideoKey?: string };
+type SuspectView = { id: string; name: string; occupation?: string; age?: string; gender?: string; ethnicity?: string; knownFor?: string; personality?: string; quote?: string; characterBrief?: string; potentialMotive?: string; alibi?: string; guideVideoPrompt?: string; guideVideoKey?: string; portraitKey?: string };
+
+/** One generalized key-evidence entry on a character card — text at preview
+ *  level, plus the entry's captioned photo when the case carries one. */
+type KeyEvidenceView = { clueId: string; title: string; summary: string; photoKey?: string; caption?: string };
 
 type Outcome = {
   kind: "briefing" | "crimeIntro" | "suspectLineup" | "map" | "location" | "clue" | "suspect" | "questioned" | "evidence" | "arrest" | "verdict" | "courtroom" | "witness" | "witnessHeard" | "flashback" | "hide";
@@ -35,7 +39,7 @@ type Outcome = {
   clues?: { id: string; title: string; revealed?: boolean; description?: string; locationName?: string; hotspot?: string; hotspotX?: number; hotspotY?: number; unlocksSuspect?: boolean }[];
   clue?: { id: string; title: string; description: string; cutScenePrompt?: string; cutSceneVideoKey?: string; audioKey?: string; hotspot?: string };
   suspect?: SuspectView;
-  keyEvidence?: { clueId: string; title: string; summary: string }[];
+  keyEvidence?: KeyEvidenceView[];
   flashback?: { id: string; title: string; description?: string; videoKey?: string };
   witness?: { id: string; name: string; role?: string; description?: string; info?: string; statement?: string; mediaKey?: string; portraitKey?: string; videoKey?: string };
   defendant?: { id: string; name: string };
@@ -74,9 +78,23 @@ function Frame({ kicker, title, children }: { kicker: string; title: string; chi
   </div>;
 }
 
-function SuspectCard({ s }: { s: SuspectView }) {
+/** An evidence entry's captioned photo, resolved from the project's assets.
+ *  This is a character CARD (a document surface, like the reference clue
+ *  card) — photos and captions belong here. Location scene pictures are a
+ *  different surface and never carry anything written over them. */
+function EvidencePhoto({ k, assets }: { k: KeyEvidenceView; assets: ProjectAsset[] }) {
+  const photo = k.photoKey ? assets.find(a => (a.storageKey || a.name) === k.photoKey && a.url) : undefined;
+  if (!photo) return <p style={{ fontSize: "0.85rem", margin: "0.3rem 0" }}><strong>{k.title}:</strong> {k.summary}</p>;
+  return <figure style={{ margin: "0 0 0.55rem" }}>
+    <img src={photo.url} alt={k.caption || k.title} style={{ width: "100%", borderRadius: 3, display: "block", boxShadow: "0 2px 6px rgba(0,0,0,.35)" }} />
+    <figcaption style={{ fontSize: "0.8rem", fontStyle: "italic", marginTop: "0.25rem", lineHeight: 1.45 }}>{k.caption || `${k.title} — ${k.summary}`}</figcaption>
+  </figure>;
+}
+
+function SuspectCard({ s, assets = [], portrait, evidence }: { s: SuspectView; assets?: ProjectAsset[]; portrait?: ProjectAsset; evidence?: KeyEvidenceView[] }) {
   const cardLine = [s.age, s.gender, s.ethnicity].filter(x => String(x || "").trim()).join(" · ");
   return <div style={{ background: "#f5ecd7", color: "#2a2118", padding: "0.75rem", borderRadius: 4, boxShadow: "0 4px 10px rgba(0,0,0,.5)" }}>
+    {portrait && <img src={portrait.url} alt={`${s.name} — character portrait`} style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", borderRadius: 3, display: "block", marginBottom: "0.55rem", boxShadow: "0 2px 6px rgba(0,0,0,.35)" }} />}
     <div style={{ ...typewriter, fontWeight: 800, fontSize: "1.05rem", color: "#7a1f1f" }}>{s.name}</div>
     {s.occupation && <div style={{ ...typewriter, fontSize: "0.8rem", opacity: 0.75 }}>{s.occupation}</div>}
     {cardLine && <div style={{ ...typewriter, fontSize: "0.8rem", opacity: 0.75, marginBottom: "0.4rem" }}>{cardLine}</div>}
@@ -86,6 +104,10 @@ function SuspectCard({ s }: { s: SuspectView }) {
     {s.quote && <p style={{ fontSize: "0.85rem", margin: "0.4rem 0", fontStyle: "italic" }}>“{s.quote}”</p>}
     {s.potentialMotive && <p style={{ fontSize: "0.85rem", margin: "0.4rem 0" }}><strong>Why they look guilty:</strong> {s.potentialMotive}</p>}
     {s.alibi && <p style={{ fontSize: "0.85rem", margin: "0.4rem 0" }}><strong>Alibi:</strong> {s.alibi}</p>}
+    {!!(evidence || []).length && <div style={{ marginTop: "0.55rem", borderTop: "1px solid #b39b63", paddingTop: "0.45rem" }}>
+      <p style={{ ...typewriter, fontWeight: 700, fontSize: "0.82rem", letterSpacing: 1, margin: "0 0 0.4rem" }}>KEY EVIDENCE</p>
+      {(evidence || []).map(k => <EvidencePhoto key={k.clueId} k={k} assets={assets} />)}
+    </div>}
   </div>;
 }
 
@@ -98,6 +120,14 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
   try { o = JSON.parse(String(result || "null")); } catch { o = null; }
   if (!o || o.kind === "hide") return null;
   const title = String(o.title || (tool.config as Record<string, unknown>).title || tool.name || "City Crime Scene");
+  // The sanitized public config: character cards are enriched from it (the
+  // suspect's portrait and their generalized key evidence with its captioned
+  // photos live in the brief layer the publish carried) — the same source
+  // the briefing form and the scene regions already read.
+  const pubCfg = ((tool.config as Record<string, unknown>)?.mystery || {}) as unknown as PublicCityCrimeSceneConfig;
+  const assetFor = (key?: string) => (key ? assets.find(a => (a.storageKey || a.name) === key && a.url) : undefined);
+  const portraitOf = (s: SuspectView) => assetFor(s.portraitKey || pubCfg.suspects?.find(x => x.id === s.id)?.portraitKey);
+  const cardEvidenceOf = (s: SuspectView): KeyEvidenceView[] => generalizedKeyEvidence(pubCfg, s.id);
 
   // The opening briefing IS the detective's case brief, presented as its
   // on-screen face: a typewritten dossier form carrying the brief DOCUMENT
@@ -110,7 +140,6 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
   // returns. Cases built before the brief document existed fall back to
   // the premise/crime/victim layout.
   if (o.kind === "briefing") {
-    const pubCfg = ((tool.config as Record<string, unknown>)?.mystery || {}) as unknown as PublicCityCrimeSceneConfig;
     const brief = ccssDetectiveBrief(pubCfg);
     return <Frame kicker="CASE FILE · OPENING BRIEFING" title={title}>
     {brief.document ? <div style={{ background: "#f5ecd7", color: "#2a2118", padding: "1rem 1.1rem", borderRadius: 4, boxShadow: "0 6px 14px rgba(0,0,0,.55)", marginBottom: "1rem" }}>
@@ -131,7 +160,7 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
     {!!(o.suspects || []).length && <>
       <div style={{ ...stamp, marginTop: "1rem" }}>THE SUSPECTS</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: "0.75rem", marginTop: "0.5rem" }}>
-        {(o.suspects || []).map(s => <SuspectCard key={s.id} s={s} />)}
+        {(o.suspects || []).map(s => <SuspectCard key={s.id} s={s} assets={assets} portrait={portraitOf(s)} evidence={cardEvidenceOf(s)} />)}
       </div>
     </>}
   </Frame>;
@@ -148,7 +177,7 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
   if (o.kind === "suspectLineup") return <Frame kicker="CASE FILE · PERSONS OF INTEREST" title={title}>
     <div style={stamp}>THE SUSPECTS</div>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: "0.75rem", marginTop: "0.5rem" }}>
-      {(o.suspects || []).map(s => <SuspectCard key={s.id} s={s} />)}
+      {(o.suspects || []).map(s => <SuspectCard key={s.id} s={s} assets={assets} portrait={portraitOf(s)} evidence={cardEvidenceOf(s)} />)}
     </div>
     {!!(o.witnesses || []).length && <>
       <div style={{ ...stamp, marginTop: "1rem" }}>WITNESSES</div>
@@ -197,7 +226,6 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
     const loc = o.location!;
     const img = loc.imageKey ? assets.find(a => (a.storageKey || a.name) === loc.imageKey && a.url) : undefined;
     const clues = o.clues || [];
-    const pubCfg = ((tool.config as Record<string, unknown>)?.mystery || {}) as unknown as PublicCityCrimeSceneConfig;
     const pubLoc = (pubCfg.locations || []).find(l => l.id === loc.id);
     const revealedIds = (o.revealedClueIds && o.revealedClueIds.length) ? o.revealedClueIds : clues.filter(c => c.revealed).map(c => c.id);
     const allRegions = (pubLoc?.items?.length) ? ccssSceneRegions(pubCfg, loc.id, revealedIds) : [];
@@ -278,10 +306,12 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
   if (o.kind === "suspect") {
     const s = o.suspect!;
     const video = s.guideVideoKey ? assets.find(a => (a.storageKey || a.name) === s.guideVideoKey && a.url) : undefined;
+    const portrait = portraitOf(s);
     return <div style={{ ...noir, textAlign: "center" }}>
       <div style={tape}>SUSPECT FILE · NOW ENTERING THE INVESTIGATION</div>
       <div style={{ width: "min(56%,520px)", margin: "1rem auto", border: "3px solid #d6aa58", borderRadius: 8, overflow: "hidden", background: "#000", aspectRatio: "16/9", display: "flex", alignItems: "center", justifyContent: "center" }}>
         {video ? <video src={video.url} autoPlay muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} /> :
+          portrait ? <img src={portrait.url} alt={`${s.name} — character portrait`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> :
           <div><div style={{ fontSize: "3rem" }}>🕵️</div><div style={{ ...typewriter, letterSpacing: 3, color: "#ffd98a" }}>{s.name.toUpperCase()}</div><small style={{ opacity: 0.6 }}>(character guide video plays here)</small></div>}
       </div>
       <div style={{ ...typewriter, textAlign: "left", borderTop: "1px solid #d6aa58", paddingTop: "0.75rem" }}>
@@ -295,7 +325,7 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
         <p><strong style={{ color: "#ffd98a" }}>ALIBI:</strong> {s.alibi}</p>
         {!!(o.keyEvidence || []).length && <>
           <p><strong style={{ color: "#ffd98a" }}>KEY EVIDENCE:</strong></p>
-          <ul>{(o.keyEvidence || []).map(k => <li key={k.clueId} style={{ margin: "0.3rem 0" }}><strong>{k.title}:</strong> {k.summary}</li>)}</ul>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "0.75rem" }}>{(o.keyEvidence || []).map(k => <EvidencePhoto key={k.clueId} k={k} assets={assets} />)}</div>
         </>}
       </div>
     </div>;
