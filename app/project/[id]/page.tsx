@@ -42,6 +42,7 @@ import MediaEditor from "../../../components/MediaEditor";
 import AssetComposer from "../../../components/AssetComposer";
 import CompositionPlayer, { defaultOverlayResult } from "../../../components/CompositionPlayer";
 import { applyBuildChanges } from "../../../lib/build-edits";
+import { ccssMediaAttachPatch } from "../../../lib/city-crime-scene";
 import {addCreationControl,clarifyYoutubeSearch} from "../../../lib/build-controls";
 import {toolDefaults,infoTypes} from "../../../lib/game-tools";
 import {GameInfoHostPanel} from "../../../components/GameInfoTools";
@@ -1059,6 +1060,7 @@ export default function ProjectWorkspace() {
           }
         };
         let generated = await attemptGeneration(action);
+        let successfulAction: any = action;
         let jewelRecovered = false;
         if (!generated) {
           // One automatic feedback turn: Jewel sees the failed generation and
@@ -1073,6 +1075,7 @@ export default function ProjectWorkspace() {
           if (feedbackData?.action && ["image", "video", "voice", "music", "sfx"].includes(feedbackData.action.type) && typeof feedbackData.action.prompt === "string" && feedbackData.action.prompt.trim()) {
             generated = await attemptGeneration(feedbackData.action);
             jewelRecovered = Boolean(generated);
+            if (generated) successfulAction = feedbackData.action;
           }
           if (!generated && feedbackData) {
             guard();
@@ -1094,8 +1097,29 @@ export default function ProjectWorkspace() {
         if (!generated) throw new Error("Generation could not start. Check whether another generation is already running.");
         savedStepsThisTask += 1;
         guard();
-        const finished = generated.name + " is generated and saved in your assets for review." + (jewelRecovered ? " Jewel adjusted the approach after the first attempt ran into trouble." : "");
-        persist({ ...generated.project, messages: [...updated.messages, { role: "assistant", text: finished }] });
+        // City Crime Scene attachment: when Jewel's action named the case
+        // item this media belongs to, write the saved asset's key onto that
+        // item now that the asset exists (the route validated the target;
+        // applyBuildChanges re-checks the case stays coherent). A failed
+        // attachment never loses the media — it stays in the assets, and the
+        // reply says plainly that it was not attached.
+        let attachNote = "";
+        const generatedAsset = generated;
+        let finalProject = generatedAsset.project;
+        const attach = (successfulAction as any)?.ccssAttach;
+        if (attach && typeof attach === "object") {
+          try {
+            const beforeKeys = new Set((working.assets || []).map(a => a.storageKey || a.name));
+            const stored = [...generatedAsset.project.assets].reverse().find(a => !beforeKeys.has(a.storageKey || a.name)) || generatedAsset.project.assets.find(a => a.name === generatedAsset.name);
+            const assetKey = stored ? (stored.storageKey || stored.name) : "";
+            if (!assetKey) throw new Error("stored asset identity missing");
+            const attachResult = applyBuildChanges(generatedAsset.project, ccssMediaAttachPatch(attach, assetKey));
+            if (attachResult.applied && !attachResult.warnings.length) { finalProject = { ...generatedAsset.project, gameTools: attachResult.project.gameTools }; attachNote = " It is attached to the case in your draft."; }
+            else attachNote = " It was saved to your assets, but could not be attached to the case automatically — you can attach it from the City Crime Scene editor.";
+          } catch { attachNote = " It was saved to your assets, but could not be attached to the case automatically — you can attach it from the City Crime Scene editor."; }
+        }
+        const finished = generatedAsset.name + " is generated and saved in your assets for review." + attachNote + (jewelRecovered ? " Jewel adjusted the approach after the first attempt ran into trouble." : "");
+        persist({ ...finalProject, messages: [...updated.messages, { role: "assistant", text: finished }] });
         setAiUndo(baseProject);
         complete(finished);
       } else {
