@@ -203,7 +203,7 @@ export default function CityCrimeSceneHostPanel({ tool, slug, hostKey }: { tool:
         return <button key={w.id} type="button" disabled={busy || !available} onClick={() => void act("unlockWitness", { witnessId: w.id })} title={available ? w.info : "Not yet discovered on the map"}>{available ? `Unlock ${w.name} (${w.giftToUnlock})` : `🔒 ${w.name} — not yet discovered`}</button>;
       })}{!cfg.helperWitnesses.length && <span>No helper witnesses in this case.</span>}</div>
       {cfg.helperWitnesses.map(w => <div key={w.id} style={{ border: "1px solid #444", borderRadius: 8, padding: "0.5rem", margin: "0.5rem 0" }}>
-        <strong>ℹ️ {w.name}</strong>{w.role ? ` — ${w.role}` : ""} <small>(gift: {w.giftToUnlock}{w.mediaMode === "relay" ? " · you relay this one yourself" : ""}{w.mediaKey ? ` · your media: ${w.mediaKey}` : ""})</small>
+        <strong>ℹ️ {w.name}</strong>{w.role ? ` — ${w.role}` : ""} <small>(gift: {w.giftToUnlock}{w.mediaMode === "relay" ? " · you relay this one yourself" : ""}{w.mediaKey ? ` · your media: ${w.mediaKey}` : ""}{w.portraitKey ? ` · generated portrait: ${w.portraitKey}` : ""}{w.videoKey ? ` · generated video: ${w.videoKey}` : ""})</small>
         <p style={{ margin: "0.25rem 0" }}><strong>Character:</strong> {w.description}</p>
         <p style={{ margin: "0.25rem 0" }}><strong>What they can reveal:</strong> {w.info}</p>
         <p style={{ margin: "0.25rem 0" }}><strong>How it helps the detective:</strong> {w.howItHelps}</p>

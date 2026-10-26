@@ -11,6 +11,7 @@ import {GameEntriesEditor,GameInfoOverlay} from "./GameInfoTools";
 import {infoTypes} from "../lib/game-tools";
 import {WheelDisplay,DiceDisplay,CoinDisplay,PlinkoDisplay,HigherLowerDisplay,CliffhangerDisplay,PrizeWheelDisplay} from "./ChanceTools";
 import CityCrimeSceneEditor from "./CityCrimeSceneEditor";
+import { hydrateAsset } from "../lib/asset-store";
 import {CountdownDesignPreview} from "./QuestionCardEditor";
 import {freshCardState} from '../lib/question-cards';
 import type { Project } from "../lib/project";
@@ -24,7 +25,7 @@ const looks=[
 ];
 export function ToolArtwork({tool,assets}:{tool:GameTool;assets:ProjectAsset[]}) {const a=(tool.config.appearance||{}) as Record<string,unknown>;const asset=assets.find(x=>(x.storageKey||x.name)===(a.imageKey||tool.config.backgroundAssetKey));return asset?.url?<img src={asset.url} alt={asset.name} style={{width:"100%",maxHeight:140,objectFit:"contain"}}/>:null;}
 
-export default function GameToolEditor({tool,assets,onSave,project,showDuration=true,expanded=false}:{showDuration?:boolean;expanded?:boolean;tool:GameTool;assets:ProjectAsset[];project?:Project;onSave:(next:GameTool)=>void}) {
+export default function GameToolEditor({tool,assets,onSave,project,showDuration=true,expanded=false,onRegisterAsset}:{showDuration?:boolean;expanded?:boolean;tool:GameTool;assets:ProjectAsset[];project?:Project;onSave:(next:GameTool)=>void;onRegisterAsset?:(asset:ProjectAsset)=>void}) {
  const {draft,commit,patchConfig,patchAppearance,patchTool}=useEditableTool(tool,onSave);const [saved,setSaved]=useState(false);const cfg=draft.config,a=(cfg.appearance||{}) as Record<string,unknown>;
  const update=(patch:Record<string,unknown>)=>{patchConfig(patch);setSaved(true)};
  const appearance=(patch:Record<string,unknown>)=>{patchAppearance(patch);setSaved(true);};
@@ -36,7 +37,7 @@ export default function GameToolEditor({tool,assets,onSave,project,showDuration=
  if(draft.type==="cliffhanger")content=<CliffhangerDisplay preview textColor={String(a.textColor||"#ffffff")}/>;
  if(draft.type==="prize-wheel")content=<PrizeWheelDisplay preview outcome={{values:(Array.isArray(cfg.values)?cfg.values:[]).map(String)}} colors={[String(cfg.slotColor||"#b3123f"),String(cfg.alternateSlotColor||"#0f6b4f")]} textColor={String(a.textColor||"#ffffff")}/>;
  const cardPairs=(key:string)=> (Array.isArray(cfg[key])?cfg[key] as any[]:[]);
- if(draft.type==="city-crime-scene")return <CityCrimeSceneEditor tool={draft} onSave={next=>{commit(next);setSaved(true);}}/>;
+ if(draft.type==="city-crime-scene")return <CityCrimeSceneEditor tool={draft} onSave={next=>{commit(next);setSaved(true);}} media={project&&onRegisterAsset?{projectId:project.id,registerAsset:onRegisterAsset,resolveAssetUrl:async key=>{const found=(assets||[]).find(a=>(a.storageKey||a.name)===key);if(!found)return undefined;const hydrated=await hydrateAsset(found).catch(()=>found);return hydrated.url&&!hydrated.url.startsWith("blob:")?hydrated.url:undefined;}}:undefined}/>;
  if(draft.type==="random-picker")return <section className="card-editor card-host" aria-label="Random draw setup"><h4>Choose what to draw at random</h4><p>One button shows an unused item, then removes it when pressed again. Items never repeat during the same game.</p><label>Picker name<input value={draft.name} onChange={e=>{patchTool({name:e.target.value});setSaved(true);}}/></label><label>What should it draw?<select value={String(cfg.source||'cards')} onChange={e=>update({source:e.target.value})}><option value="cards">Cards from a saved list</option><option value="images">Images from an asset pool</option></select></label>{cfg.source==='images'?<label>Choose image pool<select value={String(cfg.assetPoolId||'')} onChange={e=>update({assetPoolId:e.target.value})}><option value="">Choose a pool</option>{project?.assetPools?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><small>Add images to pools in Workshop by selecting each thumbnail.</small></label>:<label>Choose card list<select value={String(cfg.listId||'')} onChange={e=>update({listId:e.target.value})}><option value="">Choose a saved card list</option>{project?.gameTools.filter(t=>t.enabled&&t.type==='card-list').map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}<button type="button" className="build-btn" onClick={()=>{onSave(draft);setSaved(true);}}>Save picker</button>{saved&&<p role="status">Picker connection saved.</p>}</section>;
 
  const name=draft.type==="wheel"?"wheel":draft.type==="dice"?"dice":draft.type==="coin-toss"?"coin":draft.type==="poll"?"poll":draft.type==="countdown"?"timer":draft.type==="plinko"?"plinko board":draft.type==="higher-lower"?"higher or lower game":draft.type==="cliffhanger"?"cliffhanger":draft.type==="prize-wheel"?"big wheel":"tool";
