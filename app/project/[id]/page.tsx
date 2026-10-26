@@ -910,6 +910,11 @@ export default function ProjectWorkspace() {
     const project = current;
     const taskHistory = supportHistory?.map(({role,text}) => ({role,text})) || [...project.messages, {role: "user" as const,text}].slice(-30);
     let outcome: SupportTaskResult = {reply: "The task did not complete.", status: "failed"};
+    // Truth tracking for the failure reply below: the catch may only say
+    // finished steps were kept when this task actually saved some. A failed
+    // attempt that saved nothing must say so plainly.
+    let savedStepsThisTask = 0;
+    let draftChangedThisTask = false;
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
     setBuilding(true);
     progress?.("Preparing the requested draft task…");
@@ -944,7 +949,7 @@ export default function ProjectWorkspace() {
       if (data.action) {
         // Commit independently valid requested edits before asynchronous media/trivia work.
         // Helpers then start from the same current project and failures keep completed work.
-        if (result.applied) persist(result.project);
+        if (result.applied) { persist(result.project); draftChangedThisTask = true; }
         const action = data.action;
         if (action.type === "trivia") {
           const generated = await generateTriviaList({count:action.count,categories:action.categories,baseProject:result.project});
@@ -1004,6 +1009,7 @@ export default function ProjectWorkspace() {
               guard();
               const resultName = layerSource.name.replace(/\.[^.]+$/, "") + "-edited.mp4";
               await saveAssetAsNew({ ...layerHydrated, name: resultName, type: "video/mp4", url: editedUrl, storageKey: undefined, edits: undefined });
+              savedStepsThisTask += 1;
               const saved = [...(projectRef.current || baseProject).assets].reverse().find(asset => asset.name === resultName);
               return { resultKey: saved ? (saved.storageKey || saved.name) : resultName, resultName };
             };
@@ -1033,6 +1039,7 @@ export default function ProjectWorkspace() {
           }
           progress?.("Rendering a new media copy. Your original stays unchanged…");
           await saveAssetAsNew({ ...hydrated, edits: checked.edits });
+          savedStepsThisTask += 1;
           guard();
           const reply = "The edited copy is now in your draft assets. Your original and published live version are unchanged.";
           const latest = projectRef.current || baseProject;
@@ -1096,6 +1103,7 @@ export default function ProjectWorkspace() {
           if (!generated) throw new Error(generationFailure || "Generation could not start. Check whether another generation is already running.");
         }
         if (!generated) throw new Error("Generation could not start. Check whether another generation is already running.");
+        savedStepsThisTask += 1;
         guard();
         const finished = generated.name + " is generated and saved in your assets for review." + (jewelRecovered ? " Jewel adjusted the approach after the first attempt ran into trouble." : "");
         persist({ ...generated.project, messages: [...updated.messages, { role: "assistant", text: finished }] });
@@ -1108,7 +1116,10 @@ export default function ProjectWorkspace() {
         if(workflowStep===1&&affectedControls.length){const focus=affectedControls.find(control=>control.action.startsWith('coin.cycle.'))||affectedControls.find(control=>control.action==='sequence')||affectedControls[0];setAiControlFocus({id:focus.id,request:Date.now()});}
       }
     } catch (error) {
-      const reply = (error instanceof Error ? error.message : "The task could not complete.") + " Review your current draft; completed steps and originals have been kept. Your live version has not been published.";
+      const failureNote = savedStepsThisTask > 0 || draftChangedThisTask
+        ? " The steps that did finish are saved in your draft, and your originals are unchanged. Your live version has not been published."
+        : " Nothing new was saved by this attempt, and your originals are unchanged. Your live version has not been published.";
+      const reply = (error instanceof Error ? error.message : "The task could not complete.") + failureNote;
       if (workspaceMounted.current && activeProjectId.current === originRoute && projectRef.current?.id === originId) {
         const latest = projectRef.current;
         persist({ ...latest, messages: [...updated.messages, { role: "assistant", text: reply }] });
