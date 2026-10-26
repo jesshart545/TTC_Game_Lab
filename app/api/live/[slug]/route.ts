@@ -8,7 +8,7 @@ import { getDb } from "../../../../lib/db";
 import type { Project, GameTool } from "../../../../lib/project";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { randomUUID, randomInt } from "node:crypto";
-import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, accusationVerdict } from "../../../../lib/city-crime-scene";
+import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, accusationVerdict, readCityCrimeSceneLiveState, ccssProgress, ccssUnlocksForRevealedClues, ccssQuestioningOpen, ccssHelperAvailable, generalizedKeyEvidence } from "../../../../lib/city-crime-scene";
 import { verifyYoutube } from "../../../../lib/youtube-server";
 import { youtubeId, youtubePosition, safeYoutubePlacement } from "../../../../lib/youtube";
 import type { YouTubeState } from "../../../../lib/youtube";
@@ -40,58 +40,136 @@ async function hostKeyValid(db: ReturnType<typeof getDb>, projectId: string, key
   return /^[a-f0-9]{64}$/.test(expected) && timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
 }
 
-type CcssAction = { toolId: string; kind: string; locationId?: string; clueId?: string; suspectId?: string; witnessId?: string };
+type CcssAction = { toolId: string; kind: string; locationId?: string; clueId?: string; suspectId?: string; witnessId?: string; flashbackId?: string };
 
 /**
  * Build a City Crime Scene overlay outcome from PUBLIC fields only.
  * The snapshot config is sanitized at publish; sanitize again here defensively.
  * Guilt, case truth, twists, detective intel never leave this function.
+ *
+ * Investigation progress (revealed clues, introduced suspects, unlocked
+ * witnesses) rides along in every outcome so the host panel can show it and
+ * the arrest stays locked until the investigation is complete.
  */
 function ccssOutcome(tool: GameTool, action: CcssAction, prev: any) {
   const cfg = sanitizeCityCrimeSceneForOverlay(readCityCrimeSceneConfig(tool.config as Record<string, unknown>));
-  const revealed: string[] = Array.isArray(prev?.revealedClueIds) ? prev.revealedClueIds : [];
+  const state = readCityCrimeSceneLiveState(prev);
   const title = String(cfg.title || "City Crime Scene");
   const kind = String(action.kind || "");
-  if (kind === "briefing") return { kind, title, premise: cfg.premise, crime: cfg.crime, victim: cfg.victim, witnessStatements: cfg.witnessStatements, locations: cfg.locations.map(l => ({ id: l.id, name: l.name, description: l.description })) };
+  const progress = () => ccssProgress(cfg, state);
+  const derivedUnlocks = () => ccssUnlocksForRevealedClues(cfg, state.revealedClueIds);
+  const withTrack = (o: Record<string, unknown>) => {
+    const d = derivedUnlocks();
+    return {
+      ...o,
+      revealedClueIds: state.revealedClueIds,
+      introducedSuspectIds: state.introducedSuspectIds,
+      questionedSuspectIds: state.questionedSuspectIds,
+      heardWitnessIds: state.heardWitnessIds,
+      unlockedHelperIds: state.unlockedHelperIds,
+      unlockedSuspectIds: [...new Set([...state.unlockedSuspectIds, ...d.unlockedSuspectIds])],
+      availableHelperIds: [...new Set([...state.availableHelperIds, ...d.availableHelperIds])],
+      // Legacy key kept for older host panels.
+      unlockedWitnessIds: state.unlockedHelperIds,
+      progress: progress(),
+    };
+  };
+  const publicSuspect = (s: (typeof cfg.suspects)[number]) => ({
+    id: s.id, name: s.name, occupation: s.occupation,
+    age: s.age, gender: s.gender, ethnicity: s.ethnicity,
+    knownFor: s.knownFor, personality: s.personality, quote: s.quote,
+    characterBrief: s.characterBrief,
+    potentialMotive: s.potentialMotive, alibi: s.alibi, guideVideoKey: s.guideVideoKey,
+  });
+  const publicWitness = (w: (typeof cfg.witnesses)[number]) => ({ id: w.id, name: w.name, role: w.role, statement: w.statement });
+  // Opening beat 1: the crime itself.
+  if (kind === "crimeIntro") return withTrack({ kind, title, premise: cfg.premise, crime: cfg.crime, victim: cfg.victim });
+  // Opening beat 2: a character card for every suspect, plus the required witness statements.
+  if (kind === "suspectLineup") return withTrack({ kind, title, suspects: cfg.suspects.map(publicSuspect), witnesses: cfg.witnesses.map(publicWitness) });
+  // Legacy combined briefing (kept for older live events).
+  if (kind === "briefing") return withTrack({ kind, title, premise: cfg.premise, crime: cfg.crime, victim: cfg.victim, witnessStatements: cfg.witnesses.map(w => `${w.name}${w.role ? ` (${w.role})` : ""}: ${w.statement}`), locations: cfg.locations.map(l => ({ id: l.id, name: l.name, description: l.description })), suspects: cfg.suspects.map(publicSuspect) });
+  // The map: every location, free-roam — the detective chooses where to go.
+  if (kind === "map") {
+    return withTrack({ kind: "map", title, locations: cfg.locations.map(l => ({
+      id: l.id, name: l.name, description: l.description, imageKey: l.imageKey, imagePrompt: l.imagePrompt,
+      isCrimeScene: !!l.isCrimeScene,
+      cluesFound: cfg.clues.filter(c => c.locationId === l.id && state.revealedClueIds.includes(c.id)).length,
+      cluesTotal: cfg.clues.filter(c => c.locationId === l.id).length,
+    })) });
+  }
   if (kind === "investigate") {
     const location = cfg.locations.find(l => l.id === action.locationId) || cfg.locations[0];
     if (!location) return { error: "Add locations to City Crime Scene first." };
-    return { kind: "location", location: { id: location.id, name: location.name, description: location.description }, clues: cfg.clues.filter(c => c.locationId === location.id).map(c => ({ id: c.id, title: c.title, revealed: revealed.includes(c.id) })), revealedClueIds: revealed };
+    const keyWitness = cfg.witnesses.find(w => w.locationId === location.id);
+    return withTrack({ kind: "location", location: { id: location.id, name: location.name, description: location.description, imageKey: location.imageKey, imagePrompt: location.imagePrompt, isCrimeScene: !!location.isCrimeScene }, keyWitness: keyWitness ? { id: keyWitness.id, name: keyWitness.name, role: keyWitness.role } : undefined, clues: cfg.clues.filter(c => c.locationId === location.id).map(c => ({ id: c.id, title: c.title, hotspot: c.hotspot, hotspotX: c.hotspotX, hotspotY: c.hotspotY, revealed: state.revealedClueIds.includes(c.id), unlocksSuspect: !!c.unlocksSuspectId })) });
   }
   if (kind === "revealClue") {
     const clue = cfg.clues.find(c => c.id === action.clueId);
     if (!clue) return { error: "Clue not found." };
-    const next = revealed.includes(clue.id) ? revealed : [...revealed, clue.id];
-    return { kind: "clue", clue: { id: clue.id, title: clue.title, description: clue.description }, revealedClueIds: next };
+    if (!state.revealedClueIds.includes(clue.id)) state.revealedClueIds.push(clue.id);
+    // A map discovery may unlock the INITIAL ability to question a suspect or
+    // use a clue helper — record it so the host panel reflects the unlock.
+    const d = derivedUnlocks();
+    state.unlockedSuspectIds = [...new Set([...state.unlockedSuspectIds, ...d.unlockedSuspectIds])];
+    state.availableHelperIds = [...new Set([...state.availableHelperIds, ...d.availableHelperIds])];
+    return withTrack({ kind: "clue", clue: { id: clue.id, title: clue.title, description: clue.description, cutSceneVideoKey: clue.cutSceneVideoKey, audioKey: clue.audioKey, hotspot: clue.hotspot } });
   }
   if (kind === "introduceSuspect") {
     const s = cfg.suspects.find(x => x.id === action.suspectId);
     if (!s) return { error: "Suspect not found." };
-    return { kind: "suspect", suspect: { id: s.id, name: s.name, characterBrief: s.characterBrief, potentialMotive: s.potentialMotive, alibi: s.alibi, guideVideoKey: s.guideVideoKey } };
+    if (!state.introducedSuspectIds.includes(s.id)) state.introducedSuspectIds.push(s.id);
+    // The suspect's card shows key evidence GENERALIZED only — specifics are
+    // expounded in play, never on suspect-facing materials.
+    return withTrack({ kind: "suspect", suspect: publicSuspect(s), keyEvidence: generalizedKeyEvidence(cfg, s.id) });
   }
-  if (kind === "evidence") return { kind: "evidence", title, clues: cfg.clues.filter(c => revealed.includes(c.id)).map(c => ({ id: c.id, title: c.title, description: c.description, locationName: cfg.locations.find(l => l.id === c.locationId)?.name || "" })), revealedClueIds: revealed };
+  if (kind === "questionSuspect") {
+    const s = cfg.suspects.find(x => x.id === action.suspectId);
+    if (!s) return { error: "Suspect not found." };
+    if (!ccssQuestioningOpen(cfg, state, s.id))
+      return { error: `${s.name} can't be questioned yet — the detective must first discover the map evidence that points to their connection to the crime.` };
+    if (!state.introducedSuspectIds.includes(s.id)) state.introducedSuspectIds.push(s.id);
+    if (!state.questionedSuspectIds.includes(s.id)) state.questionedSuspectIds.push(s.id);
+    return withTrack({ kind: "questioned", suspect: { id: s.id, name: s.name } });
+  }
+  if (kind === "hearWitness") {
+    const w = cfg.witnesses.find(x => x.id === action.witnessId);
+    if (!w) return { error: "Witness not found." };
+    if (!state.heardWitnessIds.includes(w.id)) state.heardWitnessIds.push(w.id);
+    return withTrack({ kind: "witnessHeard", witness: publicWitness(w) });
+  }
+  if (kind === "flashback") {
+    const fb = cfg.flashbacks.find(x => x.id === action.flashbackId);
+    if (!fb) return { error: "Flashback not found." };
+    return withTrack({ kind: "flashback", flashback: { id: fb.id, title: fb.title, description: fb.description, videoKey: fb.videoKey } });
+  }
+  if (kind === "evidence") return withTrack({ kind: "evidence", title, clues: cfg.clues.filter(c => state.revealedClueIds.includes(c.id)).map(c => ({ id: c.id, title: c.title, description: c.description, locationName: cfg.locations.find(l => l.id === c.locationId)?.name || "" })) });
   if (kind === "arrest") {
+    if (!progress().complete)
+      return { error: "The investigation isn't complete yet — reveal every clue, introduce and question every suspect, and hear every witness before the arrest. (Helper witnesses are optional and never block the arrest.)" };
     const s = cfg.suspects.find(x => x.id === action.suspectId);
     if (!s) return { error: "Choose a suspect to arrest." };
-    return { kind: "arrest", suspect: { id: s.id, name: s.name, characterBrief: s.characterBrief } };
+    return withTrack({ kind: "arrest", suspect: { id: s.id, name: s.name, characterBrief: s.characterBrief } });
   }
   if (kind === "verdict") {
     const s = cfg.suspects.find(x => x.id === action.suspectId);
     if (!s) return { error: "Choose a suspect for the verdict." };
-    return { kind: "verdict", suspect: { id: s.id, name: s.name }, correct: !!(action as CcssAction & { correct?: boolean }).correct };
+    return withTrack({ kind: "verdict", suspect: { id: s.id, name: s.name }, correct: !!(action as CcssAction & { correct?: boolean }).correct });
   }
   if (kind === "courtroom") {
     const defendant = cfg.suspects.find(x => x.id === action.suspectId) || cfg.suspects[0];
     if (!defendant) return { error: "Add suspects to City Crime Scene first." };
-    const shown = cfg.clues.filter(c => revealed.includes(c.id)).map(c => ({ id: c.id, title: c.title, description: c.description, defendant: c.relatedSuspectIds.includes(defendant.id) }));
-    return { kind: "courtroom", defendant: { id: defendant.id, name: defendant.name }, pointingAt: shown.filter(c => c.defendant), pointedElsewhere: shown.filter(c => !c.defendant), witnessStatements: cfg.witnessStatements, courtroomSeconds: cfg.courtroomSeconds };
+    const shown = cfg.clues.filter(c => state.revealedClueIds.includes(c.id)).map(c => ({ id: c.id, title: c.title, description: c.description, defendant: c.relatedSuspectIds.includes(defendant.id) }));
+    return withTrack({ kind: "courtroom", defendant: { id: defendant.id, name: defendant.name }, pointingAt: shown.filter(c => c.defendant), pointedElsewhere: shown.filter(c => !c.defendant), witnessStatements: cfg.witnesses.map(w => `${w.name}${w.role ? ` (${w.role})` : ""}: ${w.statement}`), courtroomSeconds: cfg.courtroomSeconds });
   }
   if (kind === "unlockWitness") {
     const w = cfg.helperWitnesses.find(x => x.id === action.witnessId);
     if (!w) return { error: "Witness not found." };
-    return { kind: "witness", witness: { id: w.id, name: w.name, role: w.role, description: w.description, info: w.info } };
+    if (!ccssHelperAvailable(cfg, state, w.id))
+      return { error: `${w.name} hasn't been discovered on the map yet — the detective must find the evidence that makes this helper available first.` };
+    if (!state.unlockedHelperIds.includes(w.id)) state.unlockedHelperIds.push(w.id);
+    return withTrack({ kind: "witness", witness: { id: w.id, name: w.name, role: w.role, description: w.description, info: w.info, mediaKey: w.mediaKey } });
   }
-  if (kind === "hide") return { kind: "hide" };
+  if (kind === "hide") return withTrack({ kind: "hide" });
   return { error: "Unknown City Crime Scene action." };
 }
 
@@ -134,6 +212,21 @@ export async function GET(request: Request, context: Context) {
     const tool = draft?.gameTools?.find(t => t.id === casefileId && t.type === "city-crime-scene");
     if (!tool) return NextResponse.json({ error: "City Crime Scene tool not found." }, { status: 404 });
     return NextResponse.json({ config: (tool.config as Record<string, unknown>)?.mystery || null }, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  // ---- City Crime Scene: latest overlay outcome (host panel progress polling) ----
+  const ccssStateId = new URL(request.url).searchParams.get("ccssState");
+  if (ccssStateId) {
+    const key = request.headers.get("x-host-key") || "";
+    if (!await hostKeyValid(live.db, live.project.id, key)) return NextResponse.json({ error: "Host access required. Open the dashboard from the builder." }, { status: 403 });
+    const rows0 = await live.db`SELECT data FROM projects WHERE slug = ${slug} LIMIT 1`;
+    const draft0 = rows0[0]?.data as Project | undefined;
+    const tool0 = draft0?.gameTools?.find(t => t.id === ccssStateId && t.type === "city-crime-scene");
+    if (!tool0) return NextResponse.json({ error: "City Crime Scene tool not found." }, { status: 404 });
+    const rows = await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${tool0.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
+    let outcome: unknown = null;
+    try { outcome = JSON.parse(String(rows[0]?.payload?.outcomes?.[tool0.id]?.result || "null")); } catch {}
+    return NextResponse.json({ outcome }, { headers: { "Cache-Control": "no-store" } });
   }
 
   const wheelId=new URL(request.url).searchParams.get("wheelSlots");
@@ -396,11 +489,11 @@ export async function POST(request: Request, context: Context) {
     const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id)});
   }
-  // ---- City Crime Scene: dashboard buttons (briefing / evidence / hide) ----
+  // ---- City Crime Scene: dashboard buttons (crime intro / lineup / evidence / hide) ----
   if(control.action.startsWith('ccss.')){
     const rest=control.action.slice(5),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
     const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='city-crime-scene'&&t.enabled);
-    const kind={briefing:'briefing',evidence:'evidence',hide:'hide'}[op];
+    const kind={crimeIntro:'crimeIntro',suspectLineup:'suspectLineup',briefing:'briefing',evidence:'evidence',hide:'hide'}[op];
     if(!tool||!kind)return NextResponse.json({error:"City Crime Scene action not found."},{status:400});
     const done=await ccssAct(live.db,live.project.id,tool,{toolId:tool.id,kind});
     if((done as {error?:string}).error)return NextResponse.json({error:(done as {error:string}).error},{status:400});

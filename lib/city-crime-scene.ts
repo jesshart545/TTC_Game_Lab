@@ -2,6 +2,11 @@
 
 export type CityCrimeSceneSuspect = {
   id: string; name: string;
+  occupation: string;
+  /** Suspect clue-card fields (public, shown on the suspect's card/intro). */
+  age: string; knownFor: string; personality: string; quote: string;
+  /** The ONLY character attributes adjustable to fit the live performer. */
+  gender: string; ethnicity: string;
   characterBrief: string; potentialMotive: string; alibi: string;
   demeanor: string; tells: string; extraInfo: string;
   questions: string[];
@@ -10,12 +15,56 @@ export type CityCrimeSceneSuspect = {
 };
 export type CityCrimeSceneClue = {
   id: string; title: string; description: string;
-  locationId: string; cutScenePrompt: string; relatedSuspectIds: string[];
+  /** Generalized, suspect-facing summary for clue cards/rundowns. The specific
+   *  detail lives in `description` and is revealed only during play. */
+  summary: string;
+  locationId: string; cutScenePrompt: string; cutSceneVideoKey?: string;
+  audioPrompt?: string; audioKey?: string;
+  /** The clickable item/area in the room this evidence is bound to. */
+  hotspot: string; hotspotX?: number; hotspotY?: number;
+  /** Map discoveries unlock ONLY the initial ability: questioning this suspect
+   *  or using this clue helper. Empty means no unlock (open as before). */
+  unlocksSuspectId?: string; unlocksHelperId?: string;
+  /** New, previously-unknown information that can change the investigation. */
+  turningPoint?: boolean;
+  relatedSuspectIds: string[];
 };
-export type CityCrimeSceneLocation = { id: string; name: string; description: string; imagePrompt?: string };
+/** A crime flashback snippet: a short cinematic video uncovering a fragment of
+ *  what happened. Fairness rule: every suspect must appear across the clues and
+ *  flashbacks — no single suspect may dominate, or the audience solves it by
+ *  screen time. */
+export type CityCrimeSceneFlashback = {
+  id: string; title: string; description: string;
+  videoPrompt: string; videoKey?: string; relatedSuspectIds: string[];
+};
+export type CityCrimeSceneLocation = {
+  id: string; name: string; description: string; imagePrompt?: string;
+  /** Exactly one location per case must be the crime scene itself. */
+  isCrimeScene?: boolean;
+  /** Generated/uploaded scene visual (asset key), shown when the detective enters. */
+  imageKey?: string;
+};
+/** A required witness: a real character with a statement the detective must hear
+ *  before the accusation. Distinct from helper witnesses, who are optional. */
+export type CityCrimeSceneWitness = {
+  id: string; name: string; role: string; statement: string;
+  /** When set, this witness's account is the key evidence of that location. */
+  locationId?: string;
+};
+/** Cast roles, fixed by the case file at build time: suspect, required witness,
+ *  or optional helper. Characters are never moved between roles — live
+ *  performers improvise the role the case file assigns them. */
+export type CityCrimeSceneCastRole = "suspect" | "witness" | "helper";
 export type CityCrimeSceneHelperWitness = {
   id: string; name: string; role: string; description: string;
   info: string; giftToUnlock: string;
+  /** Info-card field: how this helper's information helps the detective move forward. */
+  howItHelps: string;
+  /** How the host presents the helper when triggered: generated media, or the host relays it. */
+  mediaMode?: "generate" | "relay";
+  /** Host-uploaded pre-created media (asset key). Feeds the info card and is the
+   *  reference base for any further image/video generation of this helper. */
+  mediaKey?: string;
   portraitPrompt?: string; videoPrompt?: string; voice?: string;
 };
 export type CityCrimeSceneTimelineEvent = { id: string; time: string; event: string };
@@ -28,8 +77,9 @@ export type CityCrimeSceneConfig = {
   backstory: string; plot: string;
   locations: CityCrimeSceneLocation[];
   clues: CityCrimeSceneClue[];
+  flashbacks: CityCrimeSceneFlashback[];
   suspects: CityCrimeSceneSuspect[];
-  witnessStatements: string[];
+  witnesses: CityCrimeSceneWitness[];
   helperWitnesses: CityCrimeSceneHelperWitness[];
   timeline: CityCrimeSceneTimelineEvent[];
   twists: CityCrimeSceneTwist[];
@@ -39,15 +89,24 @@ export type CityCrimeSceneConfig = {
 
 /** Public-safe suspect: everything the audience may see. Never guilt, tells, or detective intel. */
 export type PublicCityCrimeSceneSuspect = {
-  id: string; name: string; characterBrief: string; potentialMotive: string; alibi: string;
+  id: string; name: string; occupation: string;
+  age: string; gender: string; ethnicity: string;
+  knownFor: string; personality: string; quote: string;
+  characterBrief: string; potentialMotive: string; alibi: string;
   guideVideoPrompt: string; guideVideoKey?: string;
 };
-export type PublicCityCrimeSceneConfig = Omit<CityCrimeSceneConfig, "suspects" | "actualCrimeDetails" | "twists"> & {
+export type PublicCityCrimeSceneFlashback = {
+  id: string; title: string; description: string; videoPrompt: string; videoKey?: string;
+};
+export type PublicCityCrimeSceneConfig = Omit<CityCrimeSceneConfig, "suspects" | "flashbacks" | "actualCrimeDetails" | "twists"> & {
   suspects: PublicCityCrimeSceneSuspect[];
+  flashbacks: PublicCityCrimeSceneFlashback[];
 };
 
 const blankSuspect = (id: string, name: string): CityCrimeSceneSuspect => ({
-  id, name, characterBrief: "", potentialMotive: "", alibi: "",
+  id, name, occupation: "", age: "", knownFor: "", personality: "", quote: "",
+  gender: "", ethnicity: "",
+  characterBrief: "", potentialMotive: "", alibi: "",
   demeanor: "", tells: "", extraInfo: "", questions: ["", "", ""],
   guideVideoPrompt: "", isGuilty: false,
 });
@@ -64,27 +123,32 @@ export function cityCrimeSceneDefaults(): CityCrimeSceneConfig {
     plot: "The detective investigates the club's two key locations, uncovers three pieces of physical evidence, and interrogates four suspects — each with a reason to look guilty. When the evidence is compiled, the detective makes an arrest. If the accusation is correct, the case goes to trial.",
     locations: [
       { id: "loc-stage", name: "The Main Stage & Bar", description: "Velvet curtains, a baby grand, and a long mahogany bar. The last set ended at 11:30 PM.", imagePrompt: "Noir jazz club stage and bar at night, empty, moody spotlight, cinematic" },
-      { id: "loc-office", name: "Reed's Office", description: "A cramped back office. Desk, decanter, ledger books — and a locked door.", imagePrompt: "Noir detective office interior, desk with brandy decanter and ledger books, venetian blind shadows, cinematic" },
+      { id: "loc-office", name: "Reed's Office", description: "A cramped back office. Desk, decanter, ledger books — and a locked door.", imagePrompt: "Noir detective office interior, desk with brandy decanter and ledger books, venetian blind shadows, cinematic", isCrimeScene: true },
     ],
     clues: [
-      { id: "clue-decanter", title: "The Brandy Decanter", description: "The decanter Reed poured from smells faintly of bitter almonds — the signature of oleander. Someone dosed his after-show ritual.", locationId: "loc-office", cutScenePrompt: "Extreme close-up: amber brandy swirling in a crystal decanter, a single oleander petal drifting on the surface. Low strings swell.", relatedSuspectIds: ["sus-priya", "sus-danny"] },
-      { id: "clue-ledger", title: "The Torn Ledger Page", description: "A page ripped from the club's ledger shows $40,000 in unaccounted cash over twelve months — and Reed's angry margin note: 'I KNOW.'", locationId: "loc-office", cutScenePrompt: "A gloved hand smooths a torn ledger page under a desk lamp. The camera pushes in on the words 'I KNOW' circled in red.", relatedSuspectIds: ["sus-priya"] },
-      { id: "clue-note", title: "The Threatening Note", description: "An angry note in block letters, found crumpled by the stage: 'YOU STOLE MY ACT — YOU'LL PAY.'", locationId: "loc-stage", cutScenePrompt: "Rain-streaked spotlight. A crumpled note unfolds in slow motion: 'YOU STOLE MY ACT — YOU'LL PAY.'", relatedSuspectIds: ["sus-elena", "sus-sam"] },
+      { id: "clue-decanter", title: "The Brandy Decanter", description: "The decanter Reed poured from smells faintly of bitter almonds — the signature of oleander. Someone dosed his after-show ritual.", summary: "Something about the drink Reed poured that night isn't right.", locationId: "loc-office", cutScenePrompt: "Extreme close-up: amber brandy swirling in a crystal decanter, a single oleander petal drifting on the surface. Low strings swell.", hotspot: "The crystal decanter on the desk", hotspotX: 62, hotspotY: 44, relatedSuspectIds: ["sus-priya", "sus-danny"] },
+      { id: "clue-ledger", title: "The Torn Ledger Page", description: "A page ripped from the club's ledger shows $40,000 in unaccounted cash over twelve months — and Reed's angry margin note: 'I KNOW.'", summary: "The club's books don't add up — money has gone missing.", locationId: "loc-office", cutScenePrompt: "A gloved hand smooths a torn ledger page under a desk lamp. The camera pushes in on the words 'I KNOW' circled in red.", hotspot: "The ledger books on the desk", hotspotX: 30, hotspotY: 58, unlocksSuspectId: "sus-priya", relatedSuspectIds: ["sus-priya"] },
+      { id: "clue-note", title: "The Threatening Note", description: "An angry note in block letters, found crumpled by the stage: 'YOU STOLE MY ACT — YOU'LL PAY.'", summary: "Someone left Reed a threatening note.", locationId: "loc-stage", cutScenePrompt: "Rain-streaked spotlight. A crumpled note unfolds in slow motion: 'YOU STOLE MY ACT — YOU'LL PAY.'", hotspot: "The crumpled paper by the stage", hotspotX: 48, hotspotY: 72, unlocksSuspectId: "sus-elena", relatedSuspectIds: ["sus-elena", "sus-sam"] },
+    ],
+    flashbacks: [
+      { id: "fb-argument", title: "9:00 PM — The Argument", description: "The office door, half open. Raised voices inside — Reed's, sharp with accusation, and a second voice answering low and steady. A ledger slams onto the desk.", videoPrompt: "Noir flashback: office door ajar, two silhouettes arguing, a ledger slammed on a desk, venetian blind shadows", relatedSuspectIds: ["sus-priya", "sus-elena"] },
+      { id: "fb-sidedoor", title: "11:02 PM — The Side Door", description: "The alley behind the club. A figure slips through the side door as the security camera's red light dies. A second figure crosses the far end of the alley, unaware.", videoPrompt: "Noir flashback: rainy alley at night, a figure slipping through a side door, a security camera light going dark", relatedSuspectIds: ["sus-priya", "sus-danny", "sus-sam"] },
+      { id: "fb-stage", title: "10:30 PM — The Walkout", description: "Mid-song, the music stops. A singer storms off the stage past the tables while the crowd murmurs — and across the room, a rival watches with a thin smile.", videoPrompt: "Noir flashback: jazz singer storming off a stage mid-song, murmuring crowd, a rival watching from a dark corner", relatedSuspectIds: ["sus-elena", "sus-sam", "sus-danny"] },
     ],
     suspects: [
-      { id: "sus-elena", name: "Elena Voss", characterBrief: "The club's headliner — a torch singer with a voice like smoke and a temper like gasoline.", potentialMotive: "Reed cut her headline set short two nights running and docked her pay. She threatened him backstage, loudly, in front of witnesses.", alibi: "On stage performing until 11:55 PM — fifty witnesses in the room.", demeanor: "Fiery and theatrical; performs even in conversation.", tells: "Touches her throat when cornered; her accent thickens when she lies.", extraInfo: "She genuinely loved Reed like a father — the fight was about respect, not money. She cries when she talks about him if pressed gently.", questions: ["You threatened Marcus backstage — what exactly did you say to him?", "Who was with you between your last set and midnight?", "That note by the stage — is that your handwriting?"], guideVideoPrompt: "Noir character intro: Elena Voss, torch singer, smoky spotlight, defiant gaze into camera", isGuilty: false },
-      { id: "sus-danny", name: "Danny Cole", characterBrief: "The bartender — quick with a pour, quicker with a joke, and three months behind on rent.", potentialMotive: "He owes Reed three months' back rent on the apartment above the club. Reed threatened eviction that very week.", alibi: "Behind the bar all night; the register log and the regulars back him up.", demeanor: "Easygoing, deflects with humor; goes quiet when the rent comes up.", tells: "Polishes the same glass when nervous; avoids eye contact on direct questions.", extraInfo: "He saw Priya near the side door around 11 PM but assumed she was taking out trash. He feels guilty for not mentioning it sooner.", questions: ["Walk me through your night behind the bar, hour by hour.", "Reed threatened to evict you — how did that make you feel?", "Did you see anyone near the office or the side door after 11?"], guideVideoPrompt: "Noir character intro: Danny Cole, bartender, wiping a glass, neon bar glow, uneasy smile", isGuilty: false },
-      { id: "sus-priya", name: "Priya Raman", characterBrief: "The club's bookkeeper — precise, soft-spoken, and the only person who truly understands the finances.", potentialMotive: "She has been quietly skimming from the club's accounts for a year. Reed found the discrepancy that afternoon.", alibi: "Claims she left the club at 11:00 PM — but the side-door camera was unplugged at 11:02 PM.", demeanor: "Calm, precise, almost clinical; never raises her voice.", tells: "Straightens objects on any surface; her answers get shorter the closer you get.", extraInfo: "She is the guilty party. She is terrified but disciplined — she will only crack if confronted with the ledger page AND the camera gap together.", questions: ["The ledger shows $40,000 missing. As bookkeeper, how do you explain that?", "You say you left at 11 — then why was the side-door camera unplugged at 11:02?", "Marcus confronted you at 9 PM. What did he say, exactly?"], guideVideoPrompt: "Noir character intro: Priya Raman, bookkeeper, desk lamp glow, ledger in hand, unreadable expression", isGuilty: true },
-      { id: "sus-sam", name: "Sam Whitaker", characterBrief: "Owner of the rival club across town — all handshakes and grievances.", potentialMotive: "Reed poached his star act last month. Sam was heard saying 'the Velvet Note won't survive the month.'", alibi: "At his own club across town until 1 AM — his staff and a dozen patrons confirm.", demeanor: "Blustery, big gestures; plays the wronged businessman.", tells: "Laughs too loud at his own jokes; drums his fingers when impatient.", extraInfo: "His alibi is airtight — he was genuinely across town. The note is not his; his threats were always public and performative.", questions: ["You said the Velvet Note wouldn't survive the month — what did you mean?", "Where were you between 11 PM and midnight?", "Did you write the threatening note found by the stage?"], guideVideoPrompt: "Noir character intro: Sam Whitaker, rival club owner, cigar smoke, city lights through blinds", isGuilty: false },
+      { id: "sus-elena", name: "Elena Voss", occupation: "Headliner torch singer at The Velvet Note", age: "Late 30s", knownFor: "The voice of The Velvet Note — the headliner every table goes quiet for.", personality: "Fiery and theatrical; performs even in conversation, and feels everything at full volume.", quote: "I sing other people's heartbreak, detective. I don't live it.", gender: "Female", ethnicity: "", characterBrief: "The club's headliner — a torch singer with a voice like smoke and a temper like gasoline.", potentialMotive: "Reed cut her headline set short two nights running and docked her pay. She threatened him backstage, loudly, in front of witnesses.", alibi: "On stage performing until 11:55 PM — fifty witnesses in the room.", demeanor: "Fiery and theatrical; performs even in conversation.", tells: "Touches her throat when cornered; her accent thickens when she lies.", extraInfo: "She genuinely loved Reed like a father — the fight was about respect, not money. She cries when she talks about him if pressed gently.", questions: ["You threatened Marcus backstage — what exactly did you say to him?", "Who was with you between your last set and midnight?", "That note by the stage — is that your handwriting?"], guideVideoPrompt: "Noir character intro: Elena Voss, torch singer, smoky spotlight, defiant gaze into camera", isGuilty: false },
+      { id: "sus-danny", name: "Danny Cole", occupation: "Bartender at The Velvet Note", age: "Early 30s", knownFor: "Knows every regular's order — and every regular's secrets.", personality: "Easygoing and quick with a joke; the smile thins when money comes up.", quote: "I pour drinks, detective. I don't pour poison.", gender: "Male", ethnicity: "", characterBrief: "The bartender — quick with a pour, quicker with a joke, and three months behind on rent.", potentialMotive: "He owes Reed three months' back rent on the apartment above the club. Reed threatened eviction that very week.", alibi: "Behind the bar all night; the register log and the regulars back him up.", demeanor: "Easygoing, deflects with humor; goes quiet when the rent comes up.", tells: "Polishes the same glass when nervous; avoids eye contact on direct questions.", extraInfo: "He saw Priya near the side door around 11 PM but assumed she was taking out trash. He feels guilty for not mentioning it sooner.", questions: ["Walk me through your night behind the bar, hour by hour.", "Reed threatened to evict you — how did that make you feel?", "Did you see anyone near the office or the side door after 11?"], guideVideoPrompt: "Noir character intro: Danny Cole, bartender, wiping a glass, neon bar glow, uneasy smile", isGuilty: false },
+      { id: "sus-priya", name: "Priya Raman", occupation: "Bookkeeper at The Velvet Note", age: "Mid 30s", knownFor: "The only person who truly understands the club's finances.", personality: "Composed and exact; treats every conversation like an audit.", quote: "Numbers don't lie, detective. People do.", gender: "Female", ethnicity: "", characterBrief: "The club's bookkeeper — precise, soft-spoken, and the only person who truly understands the finances.", potentialMotive: "She has been quietly skimming from the club's accounts for a year. Reed found the discrepancy that afternoon.", alibi: "Claims she left the club at 11:00 PM — but the side-door camera was unplugged at 11:02 PM.", demeanor: "Calm, precise, almost clinical; never raises her voice.", tells: "Straightens objects on any surface; her answers get shorter the closer you get.", extraInfo: "She is the guilty party. She is terrified but disciplined — she will only crack if confronted with the ledger page AND the camera gap together.", questions: ["The ledger shows $40,000 missing. As bookkeeper, how do you explain that?", "You say you left at 11 — then why was the side-door camera unplugged at 11:02?", "Marcus confronted you at 9 PM. What did he say, exactly?"], guideVideoPrompt: "Noir character intro: Priya Raman, bookkeeper, desk lamp glow, ledger in hand, unreadable expression", isGuilty: true },
+      { id: "sus-sam", name: "Sam Whitaker", occupation: "Owner of the rival club across town", age: "Late 40s", knownFor: "Owner of the rival club across town — all handshakes and grievances.", personality: "Blustery and grand; plays the wronged businessman to any audience.", quote: "Marcus stole my act, not the other way around.", gender: "Male", ethnicity: "", characterBrief: "Owner of the rival club across town — all handshakes and grievances.", potentialMotive: "Reed poached his star act last month. Sam was heard saying 'the Velvet Note won't survive the month.'", alibi: "At his own club across town until 1 AM — his staff and a dozen patrons confirm.", demeanor: "Blustery, big gestures; plays the wronged businessman.", tells: "Laughs too loud at his own jokes; drums his fingers when impatient.", extraInfo: "His alibi is airtight — he was genuinely across town. The note is not his; his threats were always public and performative.", questions: ["You said the Velvet Note wouldn't survive the month — what did you mean?", "Where were you between 11 PM and midnight?", "Did you write the threatening note found by the stage?"], guideVideoPrompt: "Noir character intro: Sam Whitaker, rival club owner, cigar smoke, city lights through blinds", isGuilty: false },
     ],
-    witnessStatements: [
-      "DOORMAN (Frank): 'Mr. Reed argued with Miss Priya in the office around 9. I heard it through the door — he said something about numbers not adding up.'",
-      "WAITRESS (Lucia): 'Miss Elena stormed off stage at 10:30, furious. But she went straight to the green room — I saw her.'",
-      "REGULAR (Old Pete): 'Danny never left that bar all night. Poured my whiskey at 11:45 himself.'",
+    witnesses: [
+      { id: "wit-frank", name: "Frank", role: "Doorman", statement: "Mr. Reed argued with Miss Priya in the office around 9. I heard it through the door — he said something about numbers not adding up.", locationId: "loc-stage" },
+      { id: "wit-lucia", name: "Lucia", role: "Waitress", statement: "Miss Elena stormed off stage at 10:30, furious. But she went straight to the green room — I saw her." },
+      { id: "wit-pete", name: "Old Pete", role: "Regular", statement: "Danny never left that bar all night. Poured my whiskey at 11:45 himself." },
     ],
     helperWitnesses: [
-      { id: "wit-tommy", name: "Old Tommy", role: "Piano tuner", description: "Has tuned the club's baby grand for 30 years; sees everything, says little.", info: "Tommy saw Priya come BACK through the side door around 11:15 PM carrying nothing — odd, since she'd 'left' at 11.", giftToUnlock: "Coffee", portraitPrompt: "Noir portrait: elderly Black piano tuner, kind eyes, flat cap, warm practical lighting" },
-      { id: "wit-mara", name: "Mara", role: "Coat-check girl", description: "Twenty-two, sharp-eyed, remembers every face.", info: "Mara remembers Sam Whitaker leaving the club at 9:45 PM in a huff — and not coming back. His alibi checks out.", giftToUnlock: "Rose", portraitPrompt: "Noir portrait: young coat-check girl, curious eyes, red scarf, dim cloakroom light" },
+      { id: "wit-tommy", name: "Old Tommy", role: "Piano tuner", description: "Has tuned the club's baby grand for 30 years; sees everything, says little.", info: "Tommy saw Priya come BACK through the side door around 11:15 PM carrying nothing — odd, since she'd 'left' at 11.", giftToUnlock: "Coffee", howItHelps: "Places the bookkeeper back inside the club after she claimed to have left — the detective can use it to press her on her timeline.", mediaMode: "generate", portraitPrompt: "Noir portrait: elderly Black piano tuner, kind eyes, flat cap, warm practical lighting" },
+      { id: "wit-mara", name: "Mara", role: "Coat-check girl", description: "Twenty-two, sharp-eyed, remembers every face.", info: "Mara remembers Sam Whitaker leaving the club at 9:45 PM in a huff — and not coming back. His alibi checks out.", giftToUnlock: "Rose", howItHelps: "Corroborates the rival owner's alibi from an independent witness — the detective can stop spending time on him and focus elsewhere.", mediaMode: "generate", portraitPrompt: "Noir portrait: young coat-check girl, curious eyes, red scarf, dim cloakroom light" },
     ],
     timeline: [
       { id: "t1", time: "9:00 PM", event: "Reed argues with Priya in his office — the doorman hears 'numbers not adding up.'" },
@@ -100,15 +164,77 @@ export function cityCrimeSceneDefaults(): CityCrimeSceneConfig {
       "Noir case-insight: a detective's corkboard filling with photos and red string, voiceover tone, cinematic",
       "Noir case-insight: rain on a window with the club's neon sign reflected, pensive detective silhouette",
     ],
-    interrogationSeconds: 120, courtroomSeconds: 180,
+    interrogationSeconds: 300, courtroomSeconds: 180,
+  };
+}
+
+const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
+/** Fill newer fields on stored records so legacy cases migrate in place. */
+function normalizeSuspect(s: Partial<CityCrimeSceneSuspect>): CityCrimeSceneSuspect {
+  return {
+    id: str(s.id), name: str(s.name), occupation: str(s.occupation),
+    age: str(s.age), knownFor: str(s.knownFor), personality: str(s.personality), quote: str(s.quote),
+    gender: str(s.gender), ethnicity: str(s.ethnicity),
+    characterBrief: str(s.characterBrief), potentialMotive: str(s.potentialMotive), alibi: str(s.alibi),
+    demeanor: str(s.demeanor), tells: str(s.tells), extraInfo: str(s.extraInfo),
+    questions: Array.isArray(s.questions) ? s.questions.map(str) : [],
+    guideVideoPrompt: str(s.guideVideoPrompt), guideVideoKey: s.guideVideoKey ? str(s.guideVideoKey) : undefined,
+    isGuilty: s.isGuilty === true,
+  };
+}
+function normalizeClue(c: Partial<CityCrimeSceneClue>): CityCrimeSceneClue {
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : undefined);
+  return {
+    id: str(c.id), title: str(c.title), description: str(c.description),
+    summary: str(c.summary), locationId: str(c.locationId),
+    cutScenePrompt: str(c.cutScenePrompt), cutSceneVideoKey: c.cutSceneVideoKey ? str(c.cutSceneVideoKey) : undefined,
+    audioPrompt: c.audioPrompt ? str(c.audioPrompt) : undefined, audioKey: c.audioKey ? str(c.audioKey) : undefined,
+    hotspot: str(c.hotspot), hotspotX: num(c.hotspotX), hotspotY: num(c.hotspotY),
+    unlocksSuspectId: c.unlocksSuspectId ? str(c.unlocksSuspectId) : undefined,
+    unlocksHelperId: c.unlocksHelperId ? str(c.unlocksHelperId) : undefined,
+    turningPoint: c.turningPoint === true ? true : undefined,
+    relatedSuspectIds: Array.isArray(c.relatedSuspectIds) ? c.relatedSuspectIds.map(str) : [],
+  };
+}
+function normalizeLocation(l: Partial<CityCrimeSceneLocation>): CityCrimeSceneLocation {
+  return {
+    id: str(l.id), name: str(l.name), description: str(l.description),
+    imagePrompt: l.imagePrompt ? str(l.imagePrompt) : undefined,
+    isCrimeScene: l.isCrimeScene === true ? true : undefined,
+    imageKey: l.imageKey ? str(l.imageKey) : undefined,
+  };
+}
+function normalizeWitness(w: Partial<CityCrimeSceneWitness>): CityCrimeSceneWitness {
+  return {
+    id: str(w.id), name: str(w.name), role: str(w.role), statement: str(w.statement),
+    locationId: w.locationId ? str(w.locationId) : undefined,
+  };
+}
+function normalizeHelper(h: Partial<CityCrimeSceneHelperWitness>): CityCrimeSceneHelperWitness {
+  return {
+    id: str(h.id), name: str(h.name), role: str(h.role), description: str(h.description),
+    info: str(h.info), giftToUnlock: str(h.giftToUnlock), howItHelps: str(h.howItHelps),
+    mediaMode: h.mediaMode === "relay" ? "relay" : h.mediaMode === "generate" ? "generate" : undefined,
+    mediaKey: h.mediaKey ? str(h.mediaKey) : undefined,
+    portraitPrompt: h.portraitPrompt ? str(h.portraitPrompt) : undefined,
+    videoPrompt: h.videoPrompt ? str(h.videoPrompt) : undefined,
+    voice: h.voice ? str(h.voice) : undefined,
   };
 }
 
 /** Read the mystery config out of a tool config, defensively merged over defaults. */
 export function readCityCrimeSceneConfig(config: Record<string, unknown>): CityCrimeSceneConfig {
-  const raw = (config?.mystery || {}) as Partial<CityCrimeSceneConfig>;
+  const raw = (config?.mystery || {}) as Partial<CityCrimeSceneConfig> & { witnessStatements?: unknown };
   const d = cityCrimeSceneDefaults();
   const arr = <T>(v: unknown, fb: T[]): T[] => (Array.isArray(v) ? (v as T[]) : fb);
+  // Migrate legacy string witness statements into structured required witnesses.
+  let witnesses = arr<CityCrimeSceneWitness>(raw.witnesses, []);
+  if (!witnesses.length && Array.isArray(raw.witnessStatements)) {
+    witnesses = (raw.witnessStatements as unknown[]).map((s, i) => ({
+      id: `wit-legacy-${i}`, name: "", role: "", statement: String(s ?? ""),
+    }));
+  }
+  if (!witnesses.length) witnesses = d.witnesses;
   return {
     title: String(raw.title ?? d.title),
     premise: String(raw.premise ?? d.premise),
@@ -119,11 +245,12 @@ export function readCityCrimeSceneConfig(config: Record<string, unknown>): CityC
     victim: String(raw.victim ?? d.victim),
     backstory: String(raw.backstory ?? d.backstory),
     plot: String(raw.plot ?? d.plot),
-    locations: arr(raw.locations, d.locations),
-    clues: arr(raw.clues, d.clues),
-    suspects: arr(raw.suspects, d.suspects),
-    witnessStatements: arr<string>(raw.witnessStatements, d.witnessStatements).map(String),
-    helperWitnesses: arr(raw.helperWitnesses, d.helperWitnesses),
+    locations: arr(raw.locations, d.locations).map(normalizeLocation),
+    clues: arr(raw.clues, d.clues).map(normalizeClue),
+    flashbacks: arr(raw.flashbacks, d.flashbacks),
+    suspects: arr(raw.suspects, d.suspects).map(normalizeSuspect),
+    witnesses: witnesses.map(normalizeWitness),
+    helperWitnesses: arr(raw.helperWitnesses, d.helperWitnesses).map(normalizeHelper),
     timeline: arr(raw.timeline, d.timeline),
     twists: arr(raw.twists, d.twists),
     caseInsightVideoPrompts: arr<string>(raw.caseInsightVideoPrompts, d.caseInsightVideoPrompts).map(String),
@@ -142,9 +269,15 @@ export function sanitizeCityCrimeSceneForOverlay(config: CityCrimeSceneConfig): 
   return {
     ...rest,
     suspects: config.suspects.map(s => ({
-      id: s.id, name: s.name,
+      id: s.id, name: s.name, occupation: s.occupation || "",
+      age: s.age || "", gender: s.gender || "", ethnicity: s.ethnicity || "",
+      knownFor: s.knownFor || "", personality: s.personality || "", quote: s.quote || "",
       characterBrief: s.characterBrief, potentialMotive: s.potentialMotive, alibi: s.alibi,
       guideVideoPrompt: s.guideVideoPrompt, guideVideoKey: s.guideVideoKey,
+    })),
+    flashbacks: (config.flashbacks || []).map(f => ({
+      id: f.id, title: f.title, description: f.description,
+      videoPrompt: f.videoPrompt, videoKey: f.videoKey,
     })),
   };
 }
@@ -159,13 +292,26 @@ export function validateCityCrimeScene(config: CityCrimeSceneConfig): string[] {
   if (guilty.length > 1) problems.push(`${guilty.length} suspects are marked guilty (${guilty.map(s => s.name).join(", ")}) — exactly one may be guilty.`);
   if (config.suspects.length !== config.suspectCount)
     problems.push(`Suspect list has ${config.suspects.length} suspects but the cast size is set to ${config.suspectCount}.`);
-  // Detective count is not user-configurable — it defaults to 1 and needs no validation.
+  // Detectives are the host's choice: one by default, two if the host adds a second.
+  // Detectives never get character descriptions — they are simply the players solving the mystery.
+  if (config.detectiveCount !== 1 && config.detectiveCount !== 2)
+    problems.push("Detective count must be 1 or 2.");
   if (!config.crime.trim()) problems.push("The crime is empty — the briefing needs it.");
   if (!config.actualCrimeDetails.trim()) problems.push("The host-only actual crime details are empty.");
   const dupes = config.suspects.map(s => s.id).filter((id, i, a) => a.indexOf(id) !== i);
   if (dupes.length) problems.push(`Duplicate suspect ids: ${[...new Set(dupes)].join(", ")}.`);
   for (const clue of config.clues) {
     if (!clue.title.trim()) problems.push("A clue is missing its title.");
+    if (!String(clue.description || "").trim())
+      problems.push(`Clue "${clue.title || clue.id}" has no description — evidence needs its specific detail for the playthrough.`);
+    if (!String(clue.summary || "").trim())
+      problems.push(`Clue "${clue.title || clue.id}" has no generalized summary — suspect-facing materials may only generalize evidence, so every clue needs a summary.`);
+    if (!String(clue.hotspot || "").trim())
+      problems.push(`Clue "${clue.title || clue.id}" is not bound to a clickable item or area in its location.`);
+    if (clue.unlocksSuspectId && !suspectIds.has(clue.unlocksSuspectId))
+      problems.push(`Clue "${clue.title || clue.id}" unlocks unknown suspect "${clue.unlocksSuspectId}".`);
+    if (clue.unlocksHelperId && !(config.helperWitnesses || []).some(h => h.id === clue.unlocksHelperId))
+      problems.push(`Clue "${clue.title || clue.id}" unlocks unknown clue helper "${clue.unlocksHelperId}".`);
     if (!locationIds.has(clue.locationId))
       problems.push(`Clue "${clue.title || clue.id}" points at unknown location "${clue.locationId}".`);
     if (!Array.isArray(clue.relatedSuspectIds) || !clue.relatedSuspectIds.length)
@@ -178,13 +324,160 @@ export function validateCityCrimeScene(config: CityCrimeSceneConfig): string[] {
       problems.push(`Location "${loc.name}" has no clues — the detective must find at least one clue in every location.`);
   for (const s of config.suspects) {
     if (!s.name.trim()) problems.push("A suspect is missing a name.");
+    if (!String(s.occupation || "").trim()) problems.push(`Suspect "${s.name || s.id}" has no occupation — the opening character card needs what they do.`);
+    if (!String(s.age || "").trim()) problems.push(`Suspect "${s.name || s.id}" has no age — the suspect clue card needs it.`);
+    if (!String(s.knownFor || "").trim()) problems.push(`Suspect "${s.name || s.id}" has no "known for" line — the suspect clue card needs it.`);
+    if (!String(s.personality || "").trim()) problems.push(`Suspect "${s.name || s.id}" has no personality line — the suspect clue card needs it.`);
+    if (!String(s.quote || "").trim()) problems.push(`Suspect "${s.name || s.id}" has no signature quote — the suspect clue card needs their voice.`);
     if (!s.potentialMotive.trim()) problems.push(`Suspect "${s.name || s.id}" has no potential motive.`);
     if (!s.alibi.trim()) problems.push(`Suspect "${s.name || s.id}" has no alibi.`);
     if (!s.questions.filter(q => String(q || "").trim()).length)
       problems.push(`Suspect "${s.name || s.id}" has no interrogation questions for the detective.`);
   }
+  // Required witnesses: real characters the detective must hear before the accusation.
+  const witnessIds = new Set<string>();
+  for (const w of config.witnesses || []) {
+    if (!w.name.trim()) problems.push("A required witness is missing a name.");
+    if (!String(w.statement || "").trim()) problems.push(`Witness "${w.name || w.id}" has no statement for the detective to hear.`);
+    if (w.locationId && !locationIds.has(w.locationId))
+      problems.push(`Witness "${w.name || w.id}" is the key evidence of unknown location "${w.locationId}".`);
+    if (witnessIds.has(w.id)) problems.push(`Duplicate witness id: ${w.id}.`);
+    witnessIds.add(w.id);
+  }
+  // Clue helpers: static authored content — their info card must be complete
+  // (what they reveal, and how it helps the detective) before the case ships.
+  for (const h of config.helperWitnesses || []) {
+    if (!h.name.trim()) problems.push("A clue helper is missing a name.");
+    if (!String(h.description || "").trim()) problems.push(`Clue helper "${h.name || h.id}" has no character description — the host describes each helper first.`);
+    if (!String(h.info || "").trim()) problems.push(`Clue helper "${h.name || h.id}" has no information to reveal.`);
+    if (!String(h.howItHelps || "").trim()) problems.push(`Clue helper "${h.name || h.id}" does not say how their information helps the detective.`);
+    if (!String(h.giftToUnlock || "").trim()) problems.push(`Clue helper "${h.name || h.id}" has no gift that unlocks them.`);
+  }
+  // Flashback fairness: every suspect must appear across the clues and flashbacks,
+  // or the audience solves the case by screen time. No single suspect may be singled out.
+  const implicated = new Set<string>();
+  for (const clue of config.clues) for (const sid of clue.relatedSuspectIds || []) implicated.add(sid);
+  for (const fb of config.flashbacks || []) {
+    if (!fb.title.trim()) problems.push("A flashback is missing its title.");
+    if (!Array.isArray(fb.relatedSuspectIds) || !fb.relatedSuspectIds.length)
+      problems.push(`Flashback "${fb.title || fb.id}" has no related suspects — every flashback must implicate at least one suspect.`);
+    for (const sid of fb.relatedSuspectIds || []) {
+      if (!suspectIds.has(sid)) problems.push(`Flashback "${fb.title || fb.id}" references unknown suspect "${sid}".`);
+      implicated.add(sid);
+    }
+  }
+  for (const s of config.suspects)
+    if (!implicated.has(s.id))
+      problems.push(`Suspect "${s.name || s.id}" appears in no clue or flashback — every suspect must look potentially guilty, or the flashbacks give the game away.`);
   if (config.twists.length < 1) problems.push("Add at least one pre-woven twist for the host to deploy.");
   return problems;
+}
+
+/**
+ * Design standards for a complete case — the generation targets the builder
+ * holds every case to (checked in the builder and reported for AI drafts).
+ * Stricter than coherence validation: a case can be coherent yet unfinished.
+ */
+export function validateCityCrimeSceneStandards(config: CityCrimeSceneConfig): string[] {
+  const problems: string[] = [];
+  const cluesAt = (locId: string) => config.clues.filter(c => c.locationId === locId);
+  if (config.locations.length < 5 || config.locations.length > 7)
+    problems.push(`The map has ${config.locations.length} locations — a full case builds around 6 locations pertinent to the storyline.`);
+  const crimeScenes = config.locations.filter(l => l.isCrimeScene);
+  if (crimeScenes.length === 0)
+    problems.push("No location is marked as the crime scene — one of the locations must always be the crime scene itself.");
+  if (crimeScenes.length > 1)
+    problems.push(`${crimeScenes.length} locations are marked as the crime scene (${crimeScenes.map(l => l.name).join(", ")}) — exactly one may be.`);
+  for (const loc of config.locations) {
+    const n = cluesAt(loc.id).length;
+    if (n < 4)
+      problems.push(`Location "${loc.name}" holds ${n} evidence piece${n === 1 ? "" : "s"} — every location needs at least 4 relevant evidence pieces to discover.`);
+    if (!String(loc.imagePrompt || "").trim() && !loc.imageKey)
+      problems.push(`Location "${loc.name}" has no visual yet — the map is a visual medium; every location needs an image prompt or scene image.`);
+  }
+  // Suspect unlocks: every suspect is unlocked by exactly one map discovery,
+  // and that discovery's cinematic cut scene shows how the evidence ties them in.
+  const unlockLocations = new Set<string>();
+  for (const s of config.suspects) {
+    const unlocks = config.clues.filter(c => c.unlocksSuspectId === s.id);
+    if (!unlocks.length)
+      problems.push(`Suspect "${s.name || s.id}" has no unlock discovery — a piece of map evidence must point to their connection and unlock their questioning.`);
+    if (unlocks.length > 1)
+      problems.push(`Suspect "${s.name || s.id}" has ${unlocks.length} unlock discoveries — exactly one discovery unlocks each suspect.`);
+    for (const u of unlocks) {
+      unlockLocations.add(u.locationId);
+      if (!(u.relatedSuspectIds || []).includes(s.id))
+        problems.push(`The unlock discovery "${u.title || u.id}" does not list ${s.name || "its suspect"} in its related suspects — the unlock evidence must point at that suspect's connection.`);
+      if (!String(u.cutScenePrompt || "").trim())
+        problems.push(`The unlock discovery "${u.title || u.id}" has no cinematic cut-scene prompt — every suspect unlock plays a cut scene showing the evidence and how it ties the suspect to the crime.`);
+    }
+    if (!String(s.guideVideoPrompt || "").trim())
+      problems.push(`Suspect "${s.name || s.id}" has no character guide video prompt.`);
+    if (!String(s.gender || "").trim() || !String(s.ethnicity || "").trim())
+      problems.push(`Suspect "${s.name || s.id}" has no gender/ethnicity set yet — the only attributes adjusted to fit the live performer, set them on the clue card.`);
+  }
+  const suspectsWithUnlock = new Set(config.clues.map(c => c.unlocksSuspectId).filter(Boolean));
+  if (suspectsWithUnlock.size >= 4 && unlockLocations.size < 4)
+    problems.push("Fewer than 4 locations hold a suspect unlock — at least 4 locations must each unlock a suspect.");
+  // Locations that unlock nobody carry the case another way: a witness account
+  // as their key evidence, or turning-point information.
+  for (const loc of config.locations) {
+    if (cluesAt(loc.id).some(c => c.unlocksSuspectId)) continue;
+    const hasWitnessAccount = (config.witnesses || []).some(w => w.locationId === loc.id);
+    const hasTurningPoint = cluesAt(loc.id).some(c => c.turningPoint);
+    if (!hasWitnessAccount && !hasTurningPoint)
+      problems.push(`Location "${loc.name}" unlocks no suspect and carries neither a witness account nor turning-point information as its key evidence.`);
+  }
+  return problems;
+}
+
+/** Evidence archetypes for the builder's per-location evidence list. The list
+ *  offered for a location contains ONLY options that fit the overall storyline
+ *  AND are relevant to that location — no tire tracks in an upstairs bedroom. */
+export type CityCrimeSceneEvidenceSuggestion = {
+  archetypeId: string; label: string; hotspot: string; summary: string; detail: string;
+};
+const EVIDENCE_CATALOG: (CityCrimeSceneEvidenceSuggestion & { locations: string[]; story: string[] })[] = [
+  { archetypeId: "tire-tracks", label: "Tire tracks", hotspot: "The mud by the vehicle tracks", summary: "A vehicle came and went from here in a hurry.", detail: "Fresh tire tracks cut through the soft ground — a vehicle arrived quietly and left in a hurry, far later than anyone admits to being here.", locations: ["alley", "street", "road", "driveway", "garage", "parking", "yard", "grounds", "exterior", "dock", "lot", "carriage"], story: ["car", "vehicle", "getaway", "drove", "drive", "tire"] },
+  { archetypeId: "muddy-footprints", label: "Muddy footprints", hotspot: "The floor by the door", summary: "Someone tracked mud through here that night.", detail: "A trail of muddy footprints crosses the floor — the tread is distinctive, and the mud is fresh enough to have been tracked in that night.", locations: ["door", "entrance", "hall", "stairs", "staircase", "office", "room", "garden", "yard", "floor", "foyer", "porch"], story: [] },
+  { archetypeId: "broken-glass", label: "Broken glass", hotspot: "The window frame", summary: "Glass was broken here — and recently.", detail: "Shards of glass glitter along the frame, most of them on the inside — whatever broke this window, it was not an accident.", locations: ["window", "door", "office", "room", "bar", "stage", "greenhouse", "shop", "studio", "conservatory"], story: ["broke", "smashed", "break-in", "window", "glass"] },
+  { archetypeId: "shell-casing", label: "A spent shell casing", hotspot: "The floorboards by the wall", summary: "A shot was fired in this room.", detail: "A single spent shell casing rests against the baseboard, half-hidden — a shot was fired here, whatever anyone claims.", locations: ["floor", "alley", "room", "office", "stage", "street", "hall", "basement", "attic"], story: ["shot", "gun", "pistol", "shooting", "firearm", "revolver"] },
+  { archetypeId: "torn-fabric", label: "Torn fabric snagged on a fixture", hotspot: "The fixture by the passage", summary: "Someone passed through here in a rush — and left a piece of themselves behind.", detail: "A scrap of torn fabric clings to the fixture — someone squeezed through here in a hurry and left part of their clothing behind.", locations: ["fence", "door", "window", "stairs", "staircase", "stage", "room", "office", "gate"], story: [] },
+  { archetypeId: "ledger-page", label: "A torn-out ledger page", hotspot: "The ledger on the desk", summary: "The books don't add up — and someone tore out the page that would prove it.", detail: "A page has been ripped from the ledger; the remaining figures show money unaccounted for, month after month.", locations: ["office", "desk", "study", "back room", "counting", "library"], story: ["money", "embezzle", "accounts", "ledger", "cash", "stole", "funds", "debt", "books"] },
+  { archetypeId: "dropped-key", label: "A dropped key", hotspot: "The floor by the door", summary: "Someone dropped a key here — a key they were never supposed to have.", detail: "A single key lies where it fell, half under the doorframe — and it is not a key anyone admits to owning.", locations: ["door", "hallway", "entrance", "stairs", "staircase", "alley", "office", "porch"], story: ["lock", "key", "locked"] },
+  { archetypeId: "cigarette-butt", label: "A fresh cigarette butt", hotspot: "The ground by the doorway", summary: "Someone stood here a while — waiting, and watching.", detail: "A cigarette butt, ground out where someone stood for some time — long enough to smoke it down to the filter while watching this spot.", locations: ["alley", "doorway", "balcony", "fire escape", "street", "stage door", "porch", "terrace"], story: ["smoke", "smoker", "waited", "cigarette", "watch"] },
+  { archetypeId: "lipstick-glass", label: "A lipstick-marked glass", hotspot: "The table by the seat", summary: "Someone drank here with the victim — and never mentioned it.", detail: "A second glass sits beside the victim's own, lipstick on the rim — someone shared a drink here that night and told no one.", locations: ["bar", "table", "dressing", "lounge", "kitchen", "office", "parlor", "salon"], story: ["drink", "glass", "toast", "brandy", "wine", "whiskey", "poured"] },
+  { archetypeId: "camera-gap", label: "A disabled security camera", hotspot: "The camera above the door", summary: "The camera watching this spot was put out of action that night.", detail: "The security camera's cable hangs cut — or its light is dark. Someone made sure this spot went unseen at the crucial hour.", locations: ["office", "hallway", "entrance", "security", "stage", "bar", "door", "lobby"], story: ["camera", "surveillance", "unplugged", "footage", "security"] },
+  { archetypeId: "threatening-note", label: "A threatening note", hotspot: "The note left where it would be found", summary: "Someone left the victim a threat in writing.", detail: "A note in block letters, left where the victim was sure to find it — a threat made in writing, by someone who wanted it felt.", locations: ["stage", "desk", "door", "mailbox", "dressing", "office", "table"], story: ["note", "threat", "threatened", "letter", "wrote"] },
+  { archetypeId: "perfume-trace", label: "A trace of perfume", hotspot: "The air by the doorway", summary: "A distinctive scent still hangs here — someone's signature fragrance.", detail: "Hours later, a distinctive perfume still hangs in the air of this room — a signature scent that belongs to exactly one person in this case.", locations: ["room", "office", "dressing", "closet", "bathroom", "bedroom", "parlor"], story: ["perfume", "scent", "fragrance"] },
+  { archetypeId: "phone-record", label: "A phone left behind", hotspot: "The phone on the desk", summary: "A phone was left here — and its call log tells a story.", detail: "A phone lies forgotten here, and its recent calls do not match the story its owner has been telling.", locations: ["office", "desk", "room", "table", "bar"], story: ["phone", "call", "called", "telephone"] },
+  { archetypeId: "ticket-stub", label: "A ticket stub", hotspot: "The coat left hanging here", summary: "A ticket stub puts someone somewhere they deny being.", detail: "A ticket stub, dated that very night — it places its owner somewhere their alibi says they never were.", locations: ["coat", "dressing", "office", "stage", "pocket", "cloakroom"], story: ["train", "show", "ticket", "theater", "theatre", "travel", "performance"] },
+  { archetypeId: "tool-marks", label: "Fresh tool marks", hotspot: "The lock on the door", summary: "This lock was worked on with a tool — recently.", detail: "Bright, fresh scratches score the metal around the lock — someone worked this lock open with a tool, and not long ago.", locations: ["door", "window", "safe", "lock", "office", "basement", "cellar"], story: ["pried", "forced", "safe", "lock", "jimmy"] },
+  { archetypeId: "warm-ashtray", label: "An ashtray still warm", hotspot: "The ashtray on the table", summary: "Someone lingered here not long before the crime.", detail: "The ashtray is still faintly warm — someone sat here smoking within the hour, though the room was supposed to be empty.", locations: ["office", "lounge", "room", "bar", "study", "parlor"], story: ["smoke", "cigar", "waited", "sat"] },
+  { archetypeId: "scuff-marks", label: "Scuff marks across the floor", hotspot: "The floor by the door", summary: "Something heavy was dragged across this floor.", detail: "Parallel scuff marks score the floorboards from the door to the corner — something heavy was dragged here, not carried.", locations: ["floor", "stairs", "staircase", "hallway", "stage", "door", "basement"], story: ["drag", "struggle", "moved", "body"] },
+  { archetypeId: "torn-photograph", label: "Half of a torn photograph", hotspot: "The ground where it fell", summary: "Half a photograph — someone kept the other half.", detail: "One half of a torn photograph lies here; the tear is fresh. Whoever holds the other half holds the rest of this story.", locations: ["alley", "street", "yard", "grounds", "office", "desk", "stage"], story: ["photo", "photograph", "picture"] },
+  { archetypeId: "fiber-thread", label: "A caught thread of fabric", hotspot: "The fixture on the stairs", summary: "A thread of distinctive fabric caught here as someone passed.", detail: "A single thread of distinctive fabric is caught on the fixture — it matches a garment in this case, thread for thread.", locations: ["stairs", "staircase", "window", "fence", "stage", "curtain", "banister"], story: [] },
+  { archetypeId: "discarded-glove", label: "A discarded glove", hotspot: "The bin by the door", summary: "A glove, thrown away in a hurry.", detail: "A single glove, discarded in haste — whoever wore it did not want their hands remembered here.", locations: ["alley", "trash", "bin", "dumpster", "garden", "yard", "street"], story: ["glove", "prints", "fingerprint", "hands"] },
+  { archetypeId: "purchase-receipt", label: "A purchase receipt", hotspot: "The counter by the register", summary: "A receipt for something bought that day — something that matters now.", detail: "A receipt dated that day, for a purchase nobody has mentioned — and it connects to the means of the crime.", locations: ["desk", "office", "counter", "bar", "register", "coat", "shop"], story: ["bought", "purchased", "receipt", "store", "shop", "poison", "bought"] },
+];
+
+/**
+ * The evidence list for one location: ONLY archetypes that fit the overall
+ * storyline AND are relevant to that specific location.
+ */
+export function suggestEvidenceForLocation(
+  config: CityCrimeSceneConfig,
+  locationId: string,
+): CityCrimeSceneEvidenceSuggestion[] {
+  const loc = config.locations.find(l => l.id === locationId);
+  if (!loc) return [];
+  const locText = `${loc.name} ${loc.description}`.toLowerCase();
+  const storyText = [config.title, config.premise, config.crime, config.victim, config.backstory, config.plot]
+    .join(" ").toLowerCase();
+  return EVIDENCE_CATALOG
+    .filter(a => a.locations.some(k => locText.includes(k)))
+    .filter(a => !a.story.length || a.story.some(k => storyText.includes(k)))
+    .map(({ archetypeId, label, hotspot, summary, detail }) => ({ archetypeId, label, hotspot, summary, detail }));
 }
 
 /** Split revealed clues for the courtroom: what points at the defendant vs what pointed elsewhere. */
@@ -193,6 +486,150 @@ export function splitCourtroomEvidence(config: CityCrimeSceneConfig, revealedClu
   return {
     pointingAt: revealed.filter(c => c.relatedSuspectIds.includes(defendantId)),
     pointedElsewhere: revealed.filter(c => !c.relatedSuspectIds.includes(defendantId)),
+  };
+}
+
+/** Live investigation state tracked across host actions. */
+export type CityCrimeSceneLiveState = {
+  revealedClueIds: string[];
+  introducedSuspectIds: string[];
+  questionedSuspectIds: string[];
+  heardWitnessIds: string[];
+  unlockedHelperIds: string[];
+  /** Suspects whose questioning the map has unlocked (initial ability only). */
+  unlockedSuspectIds: string[];
+  /** Clue helpers the map has made available (before any gift unlock). */
+  availableHelperIds: string[];
+};
+
+export type CityCrimeSceneProgress = {
+  clues: number; cluesTotal: number;
+  introduced: number; suspectsTotal: number;
+  questioned: number; questionedTotal: number;
+  witnesses: number; witnessesTotal: number;
+  helpers: number; helpersTotal: number;
+  /** Map unlocks (initial abilities). Reported for the host; they never gate the accusation. */
+  suspectsUnlocked: number; suspectsUnlockedTotal: number;
+  helpersAvailable: number; helpersAvailableTotal: number;
+  /** The accusation unlocks only when every required element is done.
+   *  Optional helper witnesses NEVER gate the accusation. */
+  complete: boolean;
+};
+
+const emptyLiveState = (): CityCrimeSceneLiveState => ({
+  revealedClueIds: [], introducedSuspectIds: [], questionedSuspectIds: [],
+  heardWitnessIds: [], unlockedHelperIds: [], unlockedSuspectIds: [], availableHelperIds: [],
+});
+
+/** Read live state defensively out of a stored outcome payload. */
+export function readCityCrimeSceneLiveState(prev: any): CityCrimeSceneLiveState {
+  const s = emptyLiveState();
+  const ids = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+  s.revealedClueIds = ids(prev?.revealedClueIds);
+  s.introducedSuspectIds = ids(prev?.introducedSuspectIds);
+  s.questionedSuspectIds = ids(prev?.questionedSuspectIds);
+  s.heardWitnessIds = ids(prev?.heardWitnessIds);
+  // Legacy payloads tracked helper unlocks as unlockedWitnessIds.
+  s.unlockedHelperIds = ids(prev?.unlockedHelperIds ?? prev?.unlockedWitnessIds);
+  s.unlockedSuspectIds = ids(prev?.unlockedSuspectIds);
+  s.availableHelperIds = ids(prev?.availableHelperIds);
+  return s;
+}
+
+/**
+ * The map unlocks ONLY initial abilities: discovering a clue whose
+ * `unlocksSuspectId`/`unlocksHelperId` is set opens questioning for that
+ * suspect / availability for that helper. Pure derivation from revealed clues.
+ */
+export function ccssUnlocksForRevealedClues(
+  config: { clues: CityCrimeSceneClue[] },
+  revealedClueIds: string[],
+): { unlockedSuspectIds: string[]; availableHelperIds: string[] } {
+  const revealed = new Set(revealedClueIds);
+  const unlockedSuspectIds = new Set<string>();
+  const availableHelperIds = new Set<string>();
+  for (const clue of config.clues) {
+    if (!revealed.has(clue.id)) continue;
+    if (clue.unlocksSuspectId) unlockedSuspectIds.add(clue.unlocksSuspectId);
+    if (clue.unlocksHelperId) availableHelperIds.add(clue.unlocksHelperId);
+  }
+  return { unlockedSuspectIds: [...unlockedSuspectIds], availableHelperIds: [...availableHelperIds] };
+}
+
+/** Whether questioning this suspect is open. Cases that define no unlock clue
+ *  for a suspect keep questioning open (legacy behavior); a defined unlock
+ *  clue must have been discovered first. Detective chooses WHEN after that. */
+export function ccssQuestioningOpen(
+  config: { clues: CityCrimeSceneClue[] },
+  state: CityCrimeSceneLiveState,
+  suspectId: string,
+): boolean {
+  const gated = config.clues.some(c => c.unlocksSuspectId === suspectId);
+  if (!gated) return true;
+  const derived = ccssUnlocksForRevealedClues(config, state.revealedClueIds).unlockedSuspectIds;
+  return state.unlockedSuspectIds.includes(suspectId) || derived.includes(suspectId);
+}
+
+/** Whether a clue helper can be used yet (gift unlock still applies on top).
+ *  Helpers with no availability clue on the map are available from the start. */
+export function ccssHelperAvailable(
+  config: { clues: CityCrimeSceneClue[] },
+  state: CityCrimeSceneLiveState,
+  helperId: string,
+): boolean {
+  const gated = config.clues.some(c => c.unlocksHelperId === helperId);
+  if (!gated) return true;
+  const derived = ccssUnlocksForRevealedClues(config, state.revealedClueIds).availableHelperIds;
+  return state.availableHelperIds.includes(helperId) || derived.includes(helperId);
+}
+
+/** Generalized key evidence for one suspect — the only evidence text that may
+ *  appear in suspect-facing materials (rundowns, clue cards). Never specifics. */
+export function generalizedKeyEvidence(
+  config: { clues: CityCrimeSceneClue[] },
+  suspectId: string,
+): { clueId: string; title: string; summary: string }[] {
+  return config.clues
+    .filter(c => (c.relatedSuspectIds || []).includes(suspectId))
+    .map(c => ({ clueId: c.id, title: c.title, summary: c.summary || "" }));
+}
+
+/**
+ * Investigation progress. Pure and testable. The accusation gate requires:
+ * every clue revealed, every suspect introduced AND questioned, and every
+ * REQUIRED witness heard. Optional helpers are reported but never required.
+ */
+export function ccssProgress(
+  config: { clues: CityCrimeSceneClue[]; suspects: { id: string }[]; witnesses: { id: string }[]; helperWitnesses: { id: string }[] },
+  state: CityCrimeSceneLiveState,
+): CityCrimeSceneProgress {
+  const has = (list: { id: string }[], ids: string[]) => {
+    const valid = new Set(list.map(x => x.id));
+    return new Set(ids.filter(id => valid.has(id))).size;
+  };
+  const clues = has(config.clues, state.revealedClueIds);
+  const introduced = has(config.suspects, state.introducedSuspectIds);
+  const questioned = has(config.suspects, state.questionedSuspectIds);
+  const witnesses = has(config.witnesses, state.heardWitnessIds);
+  const helpers = has(config.helperWitnesses, state.unlockedHelperIds);
+  const gatedSuspects = new Set(config.clues.map(c => c.unlocksSuspectId).filter(Boolean) as string[]);
+  const gatedHelpers = new Set(config.clues.map(c => c.unlocksHelperId).filter(Boolean) as string[]);
+  const suspectsUnlocked = config.suspects.filter(s => ccssQuestioningOpen(config, state, s.id)).length;
+  const helpersAvailable = config.helperWitnesses.filter(h => ccssHelperAvailable(config, state, h.id)).length;
+  const complete =
+    clues >= config.clues.length &&
+    introduced >= config.suspects.length &&
+    questioned >= config.suspects.length &&
+    witnesses >= config.witnesses.length;
+  return {
+    clues, cluesTotal: config.clues.length,
+    introduced, suspectsTotal: config.suspects.length,
+    questioned, questionedTotal: config.suspects.length,
+    witnesses, witnessesTotal: config.witnesses.length,
+    helpers, helpersTotal: config.helperWitnesses.length,
+    suspectsUnlocked, suspectsUnlockedTotal: gatedSuspects.size,
+    helpersAvailable, helpersAvailableTotal: gatedHelpers.size,
+    complete,
   };
 }
 
