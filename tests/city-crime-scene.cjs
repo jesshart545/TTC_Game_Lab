@@ -242,4 +242,114 @@ const alleyList = suggestEvidenceForLocation(pitchCfg, 'alley');
 assert(alleyList.some(x => x.archetypeId === 'tire-tracks'), 'tire tracks offered for a back alley when the story involves a car');
 assert(alleyList.every(x => x.label && x.hotspot && x.summary && x.detail), 'every suggestion carries label, hotspot, summary, and detail');
 console.log('PASS: evidence suggestions are filtered by storyline and location fit.');
-console.log('ALL CITY CRIME SCENE TESTS PASSED');
+
+// 16. Inline media + Jewel wiring: helper generated-media keys, mystery
+// patch merging (Jewel case edits), attach validation (Jewel media attach),
+// and the hardened image poller the editor's Generate buttons use.
+const { mergeCityCrimeSceneMysteryPatch, checkedCcssAttach, ccssMediaAttachPatch } = ccssLib;
+const { pollForGeneratedImageUrl } = require('./load.cjs')('lib/poll-generated-image.ts');
+const ccssMediaLib = require('./load.cjs')('lib/city-crime-scene-media.ts');
+
+// 16a. Helper portrait/video keys survive normalization alongside mediaKey.
+const helperCfg = readCityCrimeSceneConfig({ mystery: { helperWitnesses: [{ id: 'hh', name: 'Hattie', role: 'Usher', description: 'd', info: 'i', giftToUnlock: 'Rose', mediaKey: 'upload.jpg', portraitKey: 'projects/p/portrait.jpg', videoKey: 'projects/p/intro.mp4' }] } });
+const hh = helperCfg.helperWitnesses.find(w => w.id === 'hh');
+assert(hh && hh.portraitKey === 'projects/p/portrait.jpg' && hh.videoKey === 'projects/p/intro.mp4' && hh.mediaKey === 'upload.jpg', 'helper portrait/video keys round-trip through normalization');
+console.log('PASS: helper generated portrait/video keys normalize and round-trip.');
+
+// 16b. Mystery patch merge: field-level merge, scalar replace, append,
+// guilty clearing, and problem reporting — without mutating the input.
+const otherId = sample.suspects.find(s => !s.isGuilty).id;
+const baseSnapshot = JSON.stringify(sample);
+const merged1 = mergeCityCrimeSceneMysteryPatch(sample, { suspects: [{ id: otherId, alibi: 'A brand-new alibi.' }] });
+assert.equal(merged1.problems.length, 0, 'clean patch reports no problems: ' + merged1.problems.join(' | '));
+const patchedSuspect = merged1.config.suspects.find(s => s.id === otherId);
+assert.equal(patchedSuspect.alibi, 'A brand-new alibi.', 'patched field replaced');
+assert.equal(patchedSuspect.potentialMotive, sample.suspects.find(s => s.id === otherId).potentialMotive, 'omitted fields preserved exactly');
+assert.equal(merged1.config.suspects.length, sample.suspects.length, 'no suspects added or lost');
+const merged2 = mergeCityCrimeSceneMysteryPatch(sample, { title: 'Renamed Case' });
+assert.equal(merged2.config.title, 'Renamed Case', 'scalar fields replace');
+assert.equal(merged2.config.crime, sample.crime, 'other scalars preserved');
+const merged3 = mergeCityCrimeSceneMysteryPatch(sample, { timeline: [{ id: 't-new', time: '11 PM', event: 'A late arrival.' }] });
+assert(merged3.config.timeline.some(t => t.id === 't-new'), 'a patch item with a new id is appended');
+const merged4 = mergeCityCrimeSceneMysteryPatch(sample, { suspects: [{ id: otherId, isGuilty: true }] });
+assert.equal(merged4.config.suspects.filter(s => s.isGuilty).length, 1, 'marking a new guilty clears the old one');
+assert.equal(merged4.config.suspects.find(s => s.isGuilty).id, otherId);
+assert.equal(merged4.problems.length, 0);
+const merged5 = mergeCityCrimeSceneMysteryPatch(sample, { suspects: [{ id: guiltyId, isGuilty: false }] });
+assert(merged5.problems.length > 0, 'a patch that leaves no guilty suspect reports problems');
+const merged6 = mergeCityCrimeSceneMysteryPatch(sample, { clues: [{ id: sample.clues[0].id, relatedSuspectIds: [] }] });
+assert(merged6.problems.length > 0, 'a patch that breaks a clue reports problems');
+const merged7 = mergeCityCrimeSceneMysteryPatch(sample, 'not-an-object');
+assert(merged7.problems.length > 0, 'a non-object patch reports problems instead of throwing');
+assert.equal(JSON.stringify(sample), baseSnapshot, 'merging never mutates the existing case');
+console.log('PASS: mystery patch merge preserves, replaces, appends, clears guilt, and reports invalid results.');
+
+// 16c. Attach validation: only real CCS tools, real items, allowed fields.
+const attachProject = { gameTools: [{ id: 'tool-ccs', type: 'city-crime-scene', config: { mystery: sample } }, { id: 'tool-wheel', type: 'wheel', config: {} }] };
+const locId = sample.locations[0].id, clueId = sample.clues[0].id, susId = sample.suspects[0].id, fbId = sample.flashbacks[0].id, helpId = sample.helperWitnesses[0].id;
+assert.deepEqual(JSON.parse(JSON.stringify(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'location', itemId: locId, field: 'imageKey' }, attachProject))), { toolId: 'tool-ccs', kind: 'location', itemId: locId, field: 'imageKey', mediaKind: 'image' });
+assert.equal(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'clue', itemId: clueId, field: 'cutSceneVideoKey' }, attachProject).mediaKind, 'video');
+assert.equal(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'clue', itemId: clueId, field: 'audioKey' }, attachProject).mediaKind, 'audio');
+assert.equal(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'suspect', itemId: susId, field: 'guideVideoKey' }, attachProject).mediaKind, 'video');
+assert.equal(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'flashback', itemId: fbId, field: 'videoKey' }, attachProject).mediaKind, 'video');
+assert.equal(checkedCcssAttach({ toolId: 'tool-ccs', kind: 'helper', itemId: helpId, field: 'portraitKey' }, attachProject).mediaKind, 'image');
+assert.throws(() => checkedCcssAttach({ toolId: 'tool-ccs', kind: 'location', itemId: locId, field: 'videoKey' }, attachProject), /not a media field for a location/, 'a field from another kind is refused');
+assert.throws(() => checkedCcssAttach({ toolId: 'tool-wheel', kind: 'location', itemId: locId, field: 'imageKey' }, attachProject), /could not be found in this project/, 'a non-CCS tool is refused');
+assert.throws(() => checkedCcssAttach({ toolId: 'tool-ccs', kind: 'clue', itemId: 'missing', field: 'audioKey' }, attachProject), /not part of this case/, 'a missing item is refused');
+assert.throws(() => checkedCcssAttach({ toolId: 'tool-ccs', kind: 'witness', itemId: 'x', field: 'mediaKey' }, attachProject), /Choose where in the case/, 'an unknown kind is refused');
+assert.throws(() => checkedCcssAttach({ toolId: 'tool-ccs', kind: 'helper', itemId: helpId, field: 'mediaKey' }, attachProject), /not a media field for a helper/, 'the host upload field is never a generation target');
+assert.deepEqual(JSON.parse(JSON.stringify(ccssMediaAttachPatch({ toolId: 'tool-ccs', kind: 'clue', itemId: clueId, field: 'cutSceneVideoKey' }, 'projects/p/cut.mp4'))), { gameTools: [{ id: 'tool-ccs', config: { mystery: { clues: [{ id: clueId, cutSceneVideoKey: 'projects/p/cut.mp4' }] } } }] }, 'attach patch targets exactly one item field');
+console.log('PASS: attach validation accepts every real slot and refuses wrong tools, items, kinds, and fields.');
+
+// 16d. The generation runner refuses an unresolvable helper reference
+// instead of silently generating without it.
+(async () => {
+  await assert.rejects(
+    () => ccssMediaLib.generateCcssMedia({ kind: 'image', prompt: 'portrait', name: 'n', referenceKey: 'gone.jpg' }, { projectId: 'p1', registerAsset: () => {}, resolveAssetUrl: async () => undefined }),
+    /could not be loaded/,
+    'an unresolvable reference fails truthfully rather than falling back'
+  );
+  console.log('PASS: generation runner never falls back silently when the helper reference cannot load.');
+
+  // 16e. Image poller: transient tolerance, immediate hard failure, failed
+  // jobs, deadline honesty, and queue-position progress.
+  const jsonRes = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+  const noSleep = async () => {};
+  let calls = 0;
+  const flaky = async () => { calls++; if (calls <= 2) throw new Error('network blip'); if (calls === 3) return jsonRes(503, {}); return jsonRes(200, { status: 'completed', url: 'https://cdn.example/img.jpg' }); };
+  const url = await pollForGeneratedImageUrl('req-1', 'https://q/status', 'https://q/response', 'nano-banana-2', { fetchImpl: flaky, sleep: noSleep });
+  assert.equal(url, 'https://cdn.example/img.jpg', 'poller returns the finished image URL');
+  assert.equal(calls, 4, 'transient throws and 5xx are tolerated before success');
+  let calls404 = 0;
+  await assert.rejects(() => pollForGeneratedImageUrl('r', 's', 'resp', 'm', { fetchImpl: async () => { calls404++; return jsonRes(404, { status: 'error', error: 'request gone' }); }, sleep: noSleep }), /request gone/);
+  assert.equal(calls404, 1, 'a non-retryable 4xx throws immediately');
+  await assert.rejects(() => pollForGeneratedImageUrl('r', 's', 'resp', 'm', { fetchImpl: async () => jsonRes(200, { status: 'failed', error: 'render exploded' }), sleep: noSleep }), /render exploded/, 'a failed job surfaces its error');
+  let tick = 0;
+  await assert.rejects(() => pollForGeneratedImageUrl('r', 's', 'resp', 'm', { fetchImpl: async () => jsonRes(200, { status: 'processing' }), sleep: noSleep, now: () => (tick += 61 * 60 * 1000), deadlineMs: 1000 }), /still processing/, 'the deadline reports still-processing instead of success');
+  const positions = [];
+  let pollCount = 0;
+  const queuedUrl = await pollForGeneratedImageUrl('r', 's', 'resp', 'm', { fetchImpl: async () => { pollCount++; return pollCount === 1 ? jsonRes(200, { status: 'in_queue', queuePosition: 3 }) : jsonRes(200, { status: 'completed', url: 'https://cdn.example/q.jpg' }); }, sleep: noSleep, onProgress: p => positions.push(p) });
+  assert.equal(queuedUrl, 'https://cdn.example/q.jpg');
+  assert(positions.includes(3), 'queue position is reported to the caller');
+  console.log('PASS: image poller tolerates transients, fails hard errors at once, and never fakes completion.');
+
+  // 16f. End to end at the draft-edit layer: applyBuildChanges expands a
+  // partial Jewel case patch into the full merged case, applies a media
+  // attach patch, and refuses an invalid case edit without touching it.
+  const buildEdits = require('./load.cjs')('lib/build-edits.ts');
+  const fixtureProject = () => ({ id: 'p1', name: 'Fixture', assets: [], controls: [], sequences: [], assetPools: [], gameTools: [{ id: 'ccs1', type: 'city-crime-scene', name: 'Case', config: { mystery: JSON.parse(JSON.stringify(sample)) } }] });
+  const okRes = buildEdits.applyBuildChanges(fixtureProject(), { gameTools: [{ id: 'ccs1', config: { mystery: { suspects: [{ id: otherId, alibi: 'Patched alibi.' }] } } }] });
+  assert.ok(okRes.applied >= 1, 'clean case patch applies');
+  assert.equal(okRes.warnings.length, 0, 'clean case patch warns about nothing: ' + okRes.warnings.join(' | '));
+  const afterSuspect = okRes.project.gameTools[0].config.mystery.suspects.find(s => s.id === otherId);
+  assert.equal(afterSuspect.alibi, 'Patched alibi.', 'the patch landed');
+  assert.equal(afterSuspect.potentialMotive, sample.suspects.find(s => s.id === otherId).potentialMotive, 'the rest of the case survived the shallow-merge layer');
+  const badRes = buildEdits.applyBuildChanges(fixtureProject(), { gameTools: [{ id: 'ccs1', config: { mystery: { suspects: [{ id: guiltyId, isGuilty: false }] } } }] });
+  assert(badRes.warnings.some(w => /City Crime Scene case edit was not applied/.test(w)), 'an invalid case edit is refused with a warning');
+  assert.equal(badRes.project.gameTools[0].config.mystery.suspects.find(s => s.id === guiltyId).isGuilty, true, 'a refused edit leaves the case untouched');
+  const attRes = buildEdits.applyBuildChanges(fixtureProject(), ccssMediaAttachPatch({ toolId: 'ccs1', kind: 'location', itemId: locId, field: 'imageKey' }, 'projects/p1/scene.jpg'));
+  assert.equal(attRes.warnings.length, 0, 'attach patch applies cleanly: ' + attRes.warnings.join(' | '));
+  assert.equal(attRes.project.gameTools[0].config.mystery.locations.find(l => l.id === locId).imageKey, 'projects/p1/scene.jpg', 'generated media key lands on the case item');
+  console.log('PASS: applyBuildChanges expands CCS mystery patches, refuses invalid ones, and applies media attach patches.');
+  console.log('ALL CITY CRIME SCENE TESTS PASSED');
+})().catch(err => { console.error(err); process.exit(1); });

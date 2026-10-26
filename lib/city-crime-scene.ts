@@ -66,6 +66,9 @@ export type CityCrimeSceneHelperWitness = {
    *  reference base for any further image/video generation of this helper. */
   mediaKey?: string;
   portraitPrompt?: string; videoPrompt?: string; voice?: string;
+  /** Media generated for this helper from the prompts above (asset keys),
+   *  produced inside the builder or by Jewel and attached automatically. */
+  portraitKey?: string; videoKey?: string;
 };
 export type CityCrimeSceneTimelineEvent = { id: string; time: string; event: string };
 export type CityCrimeSceneTwist = { id: string; title: string; description: string; triggerMoment: string };
@@ -219,6 +222,8 @@ function normalizeHelper(h: Partial<CityCrimeSceneHelperWitness>): CityCrimeScen
     portraitPrompt: h.portraitPrompt ? str(h.portraitPrompt) : undefined,
     videoPrompt: h.videoPrompt ? str(h.videoPrompt) : undefined,
     voice: h.voice ? str(h.voice) : undefined,
+    portraitKey: h.portraitKey ? str(h.portraitKey) : undefined,
+    videoKey: h.videoKey ? str(h.videoKey) : undefined,
   };
 }
 
@@ -631,6 +636,96 @@ export function ccssProgress(
     helpersAvailable, helpersAvailableTotal: gatedHelpers.size,
     complete,
   };
+}
+
+/**
+ * Field-level patching of a case, shared by the AI draft-edit pipeline
+ * (applyBuildChanges) for Jewel case edits. A patch names only what changes:
+ * scalar fields replace when provided; collection items (locations, clues,
+ * flashbacks, suspects, witnesses, helperWitnesses, timeline, twists) are
+ * matched by their existing "id" and merged field-by-field, so omitted fields
+ * keep their saved values; an item whose id is new is appended. Mirrors the
+ * editor's own rule: marking one suspect guilty clears every other suspect.
+ * The merged case is re-normalized and validated; problems are returned so
+ * callers can refuse the edit instead of saving a broken case.
+ */
+const CCSS_PATCH_SCALARS = ["title", "premise", "crime", "actualCrimeDetails", "victim", "backstory", "plot"] as const;
+const CCSS_PATCH_NUMBERS = ["suspectCount", "detectiveCount", "interrogationSeconds", "courtroomSeconds"] as const;
+const CCSS_PATCH_COLLECTIONS = ["locations", "clues", "flashbacks", "suspects", "witnesses", "helperWitnesses", "timeline", "twists"] as const;
+export function mergeCityCrimeSceneMysteryPatch(existingRaw: unknown, patchRaw: unknown): { config: CityCrimeSceneConfig; problems: string[] } {
+  const existing = readCityCrimeSceneConfig({ mystery: existingRaw && typeof existingRaw === "object" ? existingRaw : {} });
+  if (!patchRaw || typeof patchRaw !== "object" || Array.isArray(patchRaw)) {
+    return { config: existing, problems: ["The case edit was not an object — no case changes were applied."] };
+  }
+  const patch = patchRaw as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...existing };
+  for (const key of CCSS_PATCH_SCALARS) if (typeof patch[key] === "string") merged[key] = patch[key];
+  for (const key of CCSS_PATCH_NUMBERS) if (typeof patch[key] === "number" && Number.isFinite(patch[key])) merged[key] = patch[key];
+  if (Array.isArray(patch.caseInsightVideoPrompts)) merged.caseInsightVideoPrompts = patch.caseInsightVideoPrompts.filter(x => typeof x === "string");
+  for (const key of CCSS_PATCH_COLLECTIONS) {
+    const patchItems = patch[key];
+    if (!Array.isArray(patchItems)) continue;
+    const items = [...(((existing as unknown) as Record<string, unknown>)[key] as Record<string, unknown>[] || [])];
+    for (const rawItem of patchItems) {
+      if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
+      const item = rawItem as Record<string, unknown>;
+      const id = typeof item.id === "string" ? item.id : "";
+      if (!id) continue;
+      const idx = items.findIndex(x => x.id === id);
+      if (idx >= 0) items[idx] = { ...items[idx], ...item };
+      else items.push({ ...item });
+    }
+    merged[key] = items;
+  }
+  const config = readCityCrimeSceneConfig({ mystery: merged });
+  const patchSuspects = Array.isArray(patch.suspects) ? patch.suspects : [];
+  const newlyGuilty = [...patchSuspects].reverse().find(s => !!s && typeof s === "object" && (s as Record<string, unknown>).isGuilty === true && typeof (s as Record<string, unknown>).id === "string") as Record<string, unknown> | undefined;
+  if (newlyGuilty) config.suspects = config.suspects.map(s => ({ ...s, isGuilty: s.id === newlyGuilty.id }));
+  return { config, problems: validateCityCrimeScene(config) };
+}
+
+/** Attaching generated media to a case item (Jewel media actions). */
+export type CcssMediaKind = "image" | "video" | "audio";
+export type CcssAttachKind = "location" | "clue" | "suspect" | "flashback" | "helper";
+export type CcssMediaAttach = { toolId: string; kind: CcssAttachKind; itemId: string; field: string; mediaKind: CcssMediaKind };
+const CCSS_ATTACH_FIELDS: Record<CcssAttachKind, Record<string, CcssMediaKind>> = {
+  location: { imageKey: "image" },
+  clue: { cutSceneVideoKey: "video", audioKey: "audio" },
+  suspect: { guideVideoKey: "video" },
+  flashback: { videoKey: "video" },
+  helper: { portraitKey: "image", videoKey: "video" },
+};
+const CCSS_ATTACH_COLLECTIONS: Record<CcssAttachKind, "locations" | "clues" | "suspects" | "flashbacks" | "helperWitnesses"> = {
+  location: "locations", clue: "clues", suspect: "suspects", flashback: "flashbacks", helper: "helperWitnesses",
+};
+/**
+ * Validate a requested media attachment against the actual draft: the tool
+ * must be this project's City Crime Scene tool, the item must exist in the
+ * case, and the field must be that item kind's real media field. Accepts
+ * saved identity only — never a URL. Throws a plain Error on any mismatch.
+ */
+export function checkedCcssAttach(raw: unknown, project: { gameTools?: Array<{ id?: string; type?: string; config?: Record<string, unknown> }> }): CcssMediaAttach {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("The place to attach the new media was not understood.");
+  const input = raw as Record<string, unknown>;
+  const toolId = typeof input.toolId === "string" ? input.toolId : "";
+  const kind = typeof input.kind === "string" ? input.kind : "";
+  const itemId = typeof input.itemId === "string" ? input.itemId : "";
+  const field = typeof input.field === "string" ? input.field : "";
+  if (!Object.prototype.hasOwnProperty.call(CCSS_ATTACH_FIELDS, kind)) throw new Error("Choose where in the case the new media belongs: a location image, a clue cut scene or audio clip, a suspect guide video, a flashback video, or a helper portrait or intro video.");
+  const attachKind = kind as CcssAttachKind;
+  const tool = (project?.gameTools || []).find(t => t.id === toolId && t.type === "city-crime-scene");
+  if (!tool) throw new Error("The City Crime Scene case to attach media to could not be found in this project.");
+  const mediaKind = CCSS_ATTACH_FIELDS[attachKind][field];
+  if (!mediaKind) throw new Error(`"${field}" is not a media field for a ${attachKind}.`);
+  const config = readCityCrimeSceneConfig(tool.config || {});
+  const items = config[CCSS_ATTACH_COLLECTIONS[attachKind]] as Array<{ id: string }>;
+  if (!items.some(item => item.id === itemId)) throw new Error(`That ${attachKind} is not part of this case.`);
+  return { toolId, kind: attachKind, itemId, field, mediaKind };
+}
+/** The draft-changes object that writes a finished asset's key onto a case item. */
+export function ccssMediaAttachPatch(attach: CcssMediaAttach, assetKey: string): { gameTools: Array<{ id: string; config: { mystery: Record<string, unknown> } }> } {
+  const collection = CCSS_ATTACH_COLLECTIONS[attach.kind];
+  return { gameTools: [{ id: attach.toolId, config: { mystery: { [collection]: [{ id: attach.itemId, [attach.field]: assetKey }] } } }] };
 }
 
 /** Accounts entitled to build with City Crime Scene. Overridable via CITY_CRIME_SCENE_EMAILS (comma-separated). */

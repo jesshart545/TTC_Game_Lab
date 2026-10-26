@@ -36,7 +36,8 @@ test('saved work is counted where it actually happens', () => {
   assert.ok(page.slice(copySaveAt, copySaveAt + 200).includes('savedStepsThisTask += 1'), 'a saved render copy is counted');
 
   assert.ok(page.includes('if (result.applied) { persist(result.project); draftChangedThisTask = true; }'), 'applied draft changes are counted before media work begins');
-  assert.ok(page.includes('savedStepsThisTask += 1;\n        guard();\n        const finished = generated.name'), 'a successful generation is counted before the completion reply');
+  assert.ok(page.includes('savedStepsThisTask += 1;\n        guard();'), 'a successful generation is counted before the completion reply');
+  assert.ok(page.includes('const finished = generatedAsset.name + " is generated and saved in your assets for review."'), 'the completion reply is built from the generated asset after counting');
 });
 
 test('success replies are untouched', () => {

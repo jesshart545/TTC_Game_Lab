@@ -25,7 +25,7 @@ type Outcome = {
   suspect?: SuspectView;
   keyEvidence?: { clueId: string; title: string; summary: string }[];
   flashback?: { id: string; title: string; description?: string; videoKey?: string };
-  witness?: { id: string; name: string; role?: string; description?: string; info?: string; statement?: string; mediaKey?: string };
+  witness?: { id: string; name: string; role?: string; description?: string; info?: string; statement?: string; mediaKey?: string; portraitKey?: string; videoKey?: string };
   defendant?: { id: string; name: string };
   correct?: boolean;
   pointingAt?: { id: string; title: string; description?: string }[];
@@ -268,10 +268,14 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [] }: { t
   </Frame>;
 
   if (o.kind === "witness") {
-    const media = o.witness?.mediaKey ? assets.find(a => (a.storageKey || a.name) === o.witness!.mediaKey && a.url) : undefined;
+    // Generated media wins over the host's uploaded reference: the intro
+    // video first, then the generated portrait, then the uploaded media.
+    const mediaKey = [o.witness?.videoKey, o.witness?.portraitKey, o.witness?.mediaKey].find(k => k && assets.some(a => (a.storageKey || a.name) === k && a.url));
+    const media = mediaKey ? assets.find(a => (a.storageKey || a.name) === mediaKey && a.url) : undefined;
+    const looksVideo = !!media && /video|\.mp4|\.webm|\.mov|\.m4v/i.test(`${media.type} ${media.name}`);
     return <Frame kicker="🔓 WITNESS UNLOCKED" title={o.witness?.name || "Witness"}>
       <p style={typewriter}>{o.witness?.role}</p>
-      {media && (media.type === "video"
+      {media && (looksVideo
         ? <video src={media.url} autoPlay muted playsInline style={{ width: "min(100%,520px)", display: "block", margin: "0.5rem auto", border: "2px solid #d6aa58", borderRadius: 8 }} />
         : <img src={media.url} alt={o.witness?.name || "Witness"} style={{ width: "min(100%,520px)", display: "block", margin: "0.5rem auto", border: "2px solid #d6aa58", borderRadius: 8 }} />)}
       <p style={{ fontStyle: "italic" }}>{o.witness?.description}</p>

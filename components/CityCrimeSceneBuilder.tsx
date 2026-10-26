@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import CityCrimeSceneEditor from "./CityCrimeSceneEditor";
+import { hydrateAsset } from "../lib/asset-store";
+import type { CcssMediaContext } from "../lib/city-crime-scene-media";
 import type { GameTool, Project } from "../lib/project";
 import type { GameToolType } from "../lib/project";
 
@@ -39,7 +41,7 @@ export function useCityCrimeSceneBuilder(deps: Deps) {
 
   function renderBuilder() {
     const editingCcss = (project?.gameTools || []).find(t => t.id === cityCrimeSceneId && t.type === "city-crime-scene");
-    if (!editingCcss) return null;
+    if (!editingCcss || !project) return null;
     return (
       <main className="workspace-page">
         <div className="ccss-builder">
@@ -50,6 +52,11 @@ export function useCityCrimeSceneBuilder(deps: Deps) {
           <CityCrimeSceneEditor
             key={editingCcss.id}
             tool={editingCcss}
+            media={{
+              projectId: project.id,
+              registerAsset: asset => { const current = projectRef.current || project; persist({ ...current, assets: [...(current.assets || []), asset], updatedAt: "just now" }); },
+              resolveAssetUrl: async key => { const current = projectRef.current || project; const found = (current.assets || []).find(a => (a.storageKey || a.name) === key); if (!found) return undefined; const hydrated = await hydrateAsset(found).catch(() => found); return hydrated.url && !hydrated.url.startsWith("blob:") ? hydrated.url : undefined; },
+            }}
             onSave={next => {
               const current = projectRef.current || project;
               if (!current) return;
