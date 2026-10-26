@@ -38,6 +38,43 @@ export function ccssStageMapAction(): CcssStageAction {
   return { kind: "map" };
 }
 
+/** Opening choreography, step 1: present the detective's case brief — the
+ *  typewritten form the host reads aloud to open the game. The same action
+ *  pulls the brief back up later whenever the detective asks to see it. */
+export function ccssStageBriefingAction(): CcssStageAction {
+  return { kind: "briefing" };
+}
+
+/** Opening choreography, step 2: present the character cards/summaries.
+ *  Also the way back to the cards when the detective wants them again. */
+export function ccssStageLineupAction(): CcssStageAction {
+  return { kind: "suspectLineup" };
+}
+
+export type CcssOpeningStep = { step: number; label: string; action: CcssStageAction };
+
+/**
+ * THE OPENING SEQUENCE, in order: (1) the host reads the case brief from
+ * their dashboard script (the typewritten brief document on screen);
+ * (2) the character cards are presented; (3) the brief and the cards are
+ * FILED AWAY — and filing them away is what opens the interactive game
+ * board, the map, as the live surface; (4) THE HANDOVER — the map opens
+ * and the investigation is handed to the detective: the host-led opening
+ * ends, detective-led free investigation begins (the detective directs
+ * verbally; the host operates the board). The handover presents the same
+ * board — what changes is who leads. The brief and cards never disappear
+ * from the case: steps 1 and 2 stay available all game as the detective's
+ * reference.
+ */
+export function ccssOpeningSequence(): CcssOpeningStep[] {
+  return [
+    { step: 1, label: "Read the case brief", action: ccssStageBriefingAction() },
+    { step: 2, label: "Present the characters", action: ccssStageLineupAction() },
+    { step: 3, label: "File the brief away — open the game board", action: ccssStageMapAction() },
+    { step: 4, label: "Hand the investigation to the detective", action: ccssStageMapAction() },
+  ];
+}
+
 /** Stage chrome: clear the presented scene. */
 export function ccssStageHideAction(): CcssStageAction {
   return { kind: "hide" };

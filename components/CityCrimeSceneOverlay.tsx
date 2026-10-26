@@ -2,18 +2,23 @@
 import type { CSSProperties } from "react";
 import type { GameTool, ProjectAsset } from "../lib/project";
 import { ccssStageInvestigateAction, ccssStageRevealAction, type CcssStageAction } from "../lib/city-crime-scene-stage";
+import { ccssSceneRegions, ccssDetectiveBrief, type CcssSceneRegion, type PublicCityCrimeSceneConfig } from "../lib/city-crime-scene";
 
 /**
  * Public overlay for City Crime Scene. Renders ONLY from the live-event outcome
  * JSON plus the sanitized public tool config. It must never read isGuilty,
- * actualCrimeDetails, twists, demeanor, tells, extraInfo, or question lists —
- * those fields are stripped before this component ever sees them.
+ * actualCrimeDetails, twists, demeanor, tells, extraInfo, question lists, or
+ * the master-truth layer (each clue's storySignificance, each suspect's
+ * trueRole and alibiReality) — those fields are stripped before this
+ * component ever sees them.
  *
  * With `interactive` set — the authenticated HOST STAGE only — the map's
- * location cards and the location scene's hotspots become real controls
- * that fire the same live actions the host panel's buttons send. Without
- * it (the audience surface) this component is purely presentational and
- * renders no handlers at all.
+ * location cards and the location scene's clickable areas become real
+ * controls that fire the same live actions the host panel's buttons send.
+ * The scene's clickable areas are its SCENE ITEMS (the visible things of the
+ * place that carry chosen evidence); a place with no items falls back to the
+ * legacy per-clue spots. Without `interactive` (the audience surface) this
+ * component is purely presentational and renders no handlers at all.
  */
 
 type SuspectView = { id: string; name: string; occupation?: string; age?: string; gender?: string; ethnicity?: string; knownFor?: string; personality?: string; quote?: string; characterBrief?: string; potentialMotive?: string; alibi?: string; guideVideoPrompt?: string; guideVideoKey?: string };
@@ -94,10 +99,33 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
   if (!o || o.kind === "hide") return null;
   const title = String(o.title || (tool.config as Record<string, unknown>).title || tool.name || "City Crime Scene");
 
-  if (o.kind === "briefing") return <Frame kicker="CASE FILE · OPENING BRIEFING" title={title}>
-    <p style={{ fontStyle: "italic", opacity: 0.9 }}>{o.premise}</p>
-    <p><strong style={{ color: "#ffd98a" }}>THE CRIME</strong><br />{o.crime}</p>
-    <p><strong style={{ color: "#ffd98a" }}>VICTIM</strong><br />{o.victim}</p>
+  // The opening briefing IS the detective's case brief, presented as its
+  // on-screen face: a typewritten dossier form carrying the brief DOCUMENT
+  // — the official-document summary of the host's script (victim → place →
+  // discovery → discoverer → statement summary → the planted discrepancy) —
+  // and the evidence on record at the opening. The host's full script never
+  // reaches this component (stripped before publish); the host reads from
+  // their dashboard. The form is the detective's reference for the whole
+  // game — whenever the host brings the brief back up, this same form
+  // returns. Cases built before the brief document existed fall back to
+  // the premise/crime/victim layout.
+  if (o.kind === "briefing") {
+    const pubCfg = ((tool.config as Record<string, unknown>)?.mystery || {}) as unknown as PublicCityCrimeSceneConfig;
+    const brief = ccssDetectiveBrief(pubCfg);
+    return <Frame kicker="CASE FILE · OPENING BRIEFING" title={title}>
+    {brief.document ? <div style={{ background: "#f5ecd7", color: "#2a2118", padding: "1rem 1.1rem", borderRadius: 4, boxShadow: "0 6px 14px rgba(0,0,0,.55)", marginBottom: "1rem" }}>
+      <div style={{ ...typewriter, fontWeight: 800, letterSpacing: 2, borderBottom: "2px solid #8a6d3b", paddingBottom: "0.35rem", marginBottom: "0.6rem", fontSize: "0.95rem" }}>DETECTIVE&apos;S CASE BRIEF</div>
+      {brief.document.split(/\n\n+/).map((para, i) => <p key={i} style={{ ...typewriter, fontSize: "0.92rem", lineHeight: 1.65, margin: "0.55rem 0" }}>{para}</p>)}
+      {!!brief.evidence.length && <>
+        <div style={{ ...typewriter, fontWeight: 700, marginTop: "0.85rem", borderTop: "1px solid #8a6d3b", paddingTop: "0.5rem" }}>EVIDENCE ON RECORD AT THE OPENING:</div>
+        <ul style={{ ...typewriter, fontSize: "0.9rem", margin: "0.3rem 0", paddingLeft: "1.2rem" }}>{brief.evidence.map(e => <li key={e.clueId} style={{ margin: "0.3rem 0" }}><strong>{e.title}</strong> — {e.summary}{e.locationName ? ` (${e.locationName}${e.itemName ? ` · found on: ${e.itemName}` : ""})` : ""}</li>)}</ul>
+      </>}
+      <div style={{ ...typewriter, fontSize: "0.78rem", opacity: 0.75, marginTop: "0.85rem", borderTop: "1px solid #8a6d3b", paddingTop: "0.45rem" }}>— Filed for the detective&apos;s reference throughout the investigation. —</div>
+    </div> : <>
+      <p style={{ fontStyle: "italic", opacity: 0.9 }}>{o.premise}</p>
+      <p><strong style={{ color: "#ffd98a" }}>THE CRIME</strong><br />{o.crime}</p>
+      <p><strong style={{ color: "#ffd98a" }}>VICTIM</strong><br />{o.victim}</p>
+    </>}
     <div style={stamp}>WITNESS STATEMENTS</div>
     <ul style={typewriter}>{(o.witnessStatements || []).map((w, i) => <li key={i} style={{ margin: "0.4rem 0" }}>{w}</li>)}</ul>
     {!!(o.suspects || []).length && <>
@@ -107,6 +135,7 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
       </div>
     </>}
   </Frame>;
+  }
 
   // Opening beat 1: the crime, on its own.
   if (o.kind === "crimeIntro") return <Frame kicker="CASE FILE · THE CRIME" title={title}>
@@ -156,15 +185,39 @@ export default function CityCrimeSceneOverlay({ tool, result, assets = [], inter
   </div>;
 
   // Inside a location: the scene itself fills the view. No dashboards, no
-  // lists — a spyglass cursor, and the room's clickable items glow under it.
+  // lists — a spyglass cursor, and the location's clickable items glow under
+  // it. The highlight regions are the place's SCENE ITEMS bound to chosen
+  // evidence (computed from the sanitized public config by the same lib
+  // helper the tests exercise); items holding no chosen evidence never
+  // render — they are scenery. A place with no items keeps the legacy
+  // per-clue spots, unchanged.
   if (o.kind === "location") {
     const loc = o.location!;
     const img = loc.imageKey ? assets.find(a => (a.storageKey || a.name) === loc.imageKey && a.url) : undefined;
     const clues = o.clues || [];
+    const pubCfg = ((tool.config as Record<string, unknown>)?.mystery || {}) as unknown as PublicCityCrimeSceneConfig;
+    const pubLoc = (pubCfg.locations || []).find(l => l.id === loc.id);
+    const revealedIds = (o.revealedClueIds && o.revealedClueIds.length) ? o.revealedClueIds : clues.filter(c => c.revealed).map(c => c.id);
+    const allRegions = (pubLoc?.items?.length) ? ccssSceneRegions(pubCfg, loc.id, revealedIds) : [];
+    // Only ACTIVE regions render: an item whose bound evidence is exhausted
+    // stops highlighting and returns to scenery.
+    const regions = allRegions.filter((r): r is CcssSceneRegion & { nextClueId: string } => r.active && !!r.nextClueId);
+    const boundClueIds = new Set(allRegions.flatMap(r => r.clueIds));
+    const markerClues = clues.filter(c => !boundClueIds.has(c.id));
     return <div style={{ ...noir, padding: 0, overflow: "hidden" }}>
-      <style>{`@keyframes ccss-reveal{from{opacity:0}to{opacity:1}}.ccss-spot{transition:box-shadow .2s ease,background .2s ease}.ccss-spot:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28)}.ccss-spot .ccss-spot-label{opacity:0;transition:opacity .2s ease}.ccss-spot:hover .ccss-spot-label{opacity:1}${stage ? ".ccss-spot:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28);outline:none}.ccss-spot:focus-visible .ccss-spot-label{opacity:1}" : ""}`}</style>
+      <style>{`@keyframes ccss-reveal{from{opacity:0}to{opacity:1}}.ccss-spot{transition:box-shadow .2s ease,background .2s ease}.ccss-spot:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28)}.ccss-spot .ccss-spot-label{opacity:0;transition:opacity .2s ease}.ccss-spot:hover .ccss-spot-label{opacity:1}.ccss-item{transition:box-shadow .2s ease,background .2s ease}.ccss-item:hover{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.16)}.ccss-item .ccss-spot-label{opacity:0;transition:opacity .2s ease}.ccss-item:hover .ccss-spot-label{opacity:1}${stage ? ".ccss-spot:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.28);outline:none}.ccss-spot:focus-visible .ccss-spot-label{opacity:1}.ccss-item:focus-visible{box-shadow:0 0 0 3px #ffd98a,0 0 26px rgba(255,217,138,.8);background:rgba(255,217,138,.16);outline:none}.ccss-item:focus-visible .ccss-spot-label{opacity:1}" : ""}`}</style>
       <div style={{ position: "relative", minHeight: 380, cursor: spyglassCursor, background: img ? `center/cover url(${img.url})` : "linear-gradient(160deg,#191324 0%,#0c0c12 70%)", animation: "ccss-reveal .8s ease-out" }}>
-        {clues.map((c, i) => {
+        {regions.map(r => {
+          const item = r.item;
+          const regionStyle: CSSProperties = { position: "absolute", left: `${item.x}%`, top: `${item.y}%`, width: `${item.w}%`, height: `${item.h}%`, border: "2px dashed rgba(255,217,138,.65)", background: "rgba(20,20,32,.18)", borderRadius: 10, display: "flex", alignItems: "flex-end", padding: "0.25rem 0.4rem" };
+          const regionInner = <span className="ccss-spot-label" style={{ background: "rgba(12,12,18,.92)", border: "1px solid #d6aa58", borderRadius: 6, padding: "0.15rem 0.5rem", ...typewriter, fontSize: "0.75rem", color: "#ffd98a", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>;
+          // Host stage only: the item itself is the control — the host
+          // points the spyglass at the visible thing and clicks it; the
+          // click reveals the next clue bound to that item, in case order.
+          if (stage) return <button key={item.id} type="button" className="ccss-item" title={item.name} style={{ ...regionStyle, cursor: spyglassCursor, padding: "0.25rem 0.4rem", font: "inherit", textAlign: "left" }} aria-label={`Reveal clue on: ${item.name}`} onClick={() => onStageAction?.(ccssStageRevealAction(r.nextClueId))}>{regionInner}</button>;
+          return <div key={item.id} className="ccss-item" title={item.name} style={regionStyle}>{regionInner}</div>;
+        })}
+        {markerClues.map((c, i) => {
           const x = typeof c.hotspotX === "number" ? c.hotspotX : 12 + ((i * 29) % 72);
           const y = typeof c.hotspotY === "number" ? c.hotspotY : 26 + ((i * 19) % 48);
           const spotStyle: CSSProperties = { position: "absolute", left: `${x}%`, top: `${y}%`, transform: "translate(-50%,-50%)", width: 54, height: 54, borderRadius: "50%", border: c.revealed ? "2px solid #ffd98a" : "2px dashed rgba(255,217,138,.65)", background: c.revealed ? "rgba(214,170,88,.35)" : "rgba(20,20,32,.25)", display: "flex", alignItems: "center", justifyContent: "center" };
