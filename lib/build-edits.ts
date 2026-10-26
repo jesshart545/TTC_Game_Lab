@@ -2,6 +2,7 @@ import {controlConnectionError} from './control-connections';
 import type {ProjectEvent} from './project';
 import type {Project,GameToolType} from './project';
 import {applyDraftChanges,normalizeDraftChanges} from './draft-edit';
+import {mergeCityCrimeSceneMysteryPatch} from './city-crime-scene';
 import {addCreationControl} from './build-controls';
 import {toolDefaults} from './game-tools';
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
@@ -73,12 +74,27 @@ export function applyBuildChanges(project:Project,input:unknown){
   }
   extra++;
  }
- const result=applyDraftChanges(next,changes);next={...result.project,assetPools:next.assetPools};
- for(const item of [...created.map(id=>({kind:'tool',id})),...(Array.isArray(changes.connections)?changes.connections:[])]){
+ // City Crime Scene case edits arrive as a partial mystery patch (only the
+ // items/fields being changed). Expand each patch into the complete merged
+ // case here — once, for both the server validation pass and the client
+ // executor, which share this function — because the generic draft applier
+ // replaces config.mystery wholesale. A patch that would break the case is
+ // refused with a warning and its mystery dropped; other edits still apply.
+ const effectiveChanges=Array.isArray(changes.gameTools)?{...changes,gameTools:changes.gameTools.map(raw=>{
+  const item=record(raw),tool=next.gameTools.find(t=>t.id===item.id);
+  if(!tool||tool.type!=='city-crime-scene')return raw;
+  const cfg=record(item.config);
+  if(!cfg.mystery||typeof cfg.mystery!=='object'||Array.isArray(cfg.mystery))return raw;
+  const mergedCase=mergeCityCrimeSceneMysteryPatch(tool.config?.mystery,cfg.mystery);
+  if(mergedCase.problems.length){warnings.push(`The City Crime Scene case edit was not applied: ${mergedCase.problems.join(' ')}`);const{ mystery:_dropped,...restConfig}=cfg;return{...item,config:restConfig};}
+  return{...item,config:{...cfg,mystery:mergedCase.config}};
+ })}:changes;
+ const result=applyDraftChanges(next,effectiveChanges);next={...result.project,assetPools:next.assetPools};
+ for(const item of [...created.map(id=>({kind:'tool',id})),...(Array.isArray(effectiveChanges.connections)?effectiveChanges.connections:[])]){
   if(!['asset','tool','composition'].includes(item?.kind)||typeof item?.id!=='string'){warnings.push('A requested connection was missing its saved item.');continue;}
   try{const linked=addCreationControl(next,item.kind,item.id);next={...linked.project,assetPools:next.assetPools};if(typeof item.label==='string'&&item.label.trim())next.controls=next.controls.map(c=>c.id===linked.controlId?{...c,label:item.label.trim().slice(0,80)}:c);extra++;}catch{warnings.push('A requested item could not be connected because it is unavailable.');}
  }
- for(const raw of Array.isArray(changes.sequences)?changes.sequences:[]){
+ for(const raw of Array.isArray(effectiveChanges.sequences)?effectiveChanges.sequences:[]){
   const item=record(raw),old=next.controls.find(c=>c.id===item.id&&c.action==='sequence');
   if(item.id&&!old){warnings.push('The supplied id is not a saved sequence. Omit id for a new sequence; only reuse an existing sequence ID when editing.');continue;}
   let candidate:Project={...next,controls:[...next.controls]};
@@ -104,8 +120,8 @@ export function applyBuildChanges(project:Project,input:unknown){
   next={...candidate,assetPools:next.assetPools,controls:candidate.controls.map(c=>previousIds.has(c.id)?c:{...c,sequenceOnly:true})};
   next.controls=old?next.controls.map(c=>c.id===old.id?control:c):[...next.controls,control];extra++;
  }
- if(Array.isArray(changes.controlOrder)){const order=changes.controlOrder;next.controls=[...next.controls].sort((a,b)=>{const ai=order.indexOf(a.id),bi=order.indexOf(b.id);return (ai<0?order.length:ai)-(bi<0?order.length:bi);});extra++;}
- if(Array.isArray(changes.removeControls)){const ids=new Set(changes.removeControls);const count=next.controls.length;next.controls=next.controls.filter(c=>!ids.has(c.id));extra+=count-next.controls.length;}
+ if(Array.isArray(effectiveChanges.controlOrder)){const order=effectiveChanges.controlOrder;next.controls=[...next.controls].sort((a,b)=>{const ai=order.indexOf(a.id),bi=order.indexOf(b.id);return (ai<0?order.length:ai)-(bi<0?order.length:bi);});extra++;}
+ if(Array.isArray(effectiveChanges.removeControls)){const ids=new Set(effectiveChanges.removeControls);const count=next.controls.length;next.controls=next.controls.filter(c=>!ids.has(c.id));extra+=count-next.controls.length;}
  return {project:next,applied:result.applied+extra,warnings};
 }
 
