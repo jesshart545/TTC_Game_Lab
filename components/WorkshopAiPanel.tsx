@@ -76,6 +76,7 @@ export type WorkshopAiPanelProps = {
   sfxSeconds: number;
   setSfxSeconds: (v: number) => void;
   generationQueueCount: number;
+  jewelProgress: string;
   generateAsset: (type: GeneratorType, prompt: string, opts?: any) => void;
   assetStatus: string | null;
   persist: (p: Project) => void;
@@ -98,13 +99,14 @@ export default function WorkshopAiPanel(props: WorkshopAiPanelProps) {
     musicInstrumental, setMusicInstrumental,
     imageReferenceKey, setImageReferenceKey, generatorVoice, setGeneratorVoice,
     generatorStability, setGeneratorStability, sfxSeconds, setSfxSeconds, generationQueueCount,
+    jewelProgress,
     generateAsset, assetStatus, persist, setAiUndo, ccssEntitled, onAddTemplate,
   } = props;
   const videoSeconds = videoLength === "auto" ? 5 : Number(videoLength);
   const videoHd = videoSeconds > 10 || (Boolean(videoReferenceKey) && videoSeconds !== 5);
 
   return (
-<section hidden={workflowStep===1&&!buildAiOpen} className={"chat-panel"+(workflowStep===1?" build-space-chat":"")}><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h2>{workflowStep === 0 ? "Workshop AI" : "Build Space AI"}</h2></div><div className="ai-orb">✦</div></div>{workflowStep===1&&<button type="button" className="outline-btn" onClick={()=>{setBuildAiOpen(false);document.querySelector('.build-space')?.scrollIntoView({block:'start'});}}>Back to Build Space</button>}{workflowStep===1&&<p className="build-ai-help">Describe the change in your own words. I can connect pools and buttons, place items, change their look, and set playback. Changes apply to your draft for testing.</p>}{aiUndo&&<button type="button" className="outline-btn" disabled={building} onClick={()=>{const previous=aiUndo;persist({...previous,publishedSnapshot:project.publishedSnapshot,status:project.status,messages:[...project.messages,{role:"assistant",text:"The last AI edit has been undone."}]});setAiUndo(null);}}>Undo last AI edit</button>}<CompactConversation messages={project.messages} busy={building}/><details className="chat-example-requests"><summary>Example requests</summary><div className="idea-card"><span>TRY A REQUEST</span>{(workflowStep===1?[
+<section hidden={workflowStep===1&&!buildAiOpen} className={"chat-panel"+(workflowStep===1?" build-space-chat":"")}><div className="panel-heading"><div><small>AI CREATIVE DIRECTOR</small><h2>Jewel</h2></div><div className="ai-orb">✦</div></div>{workflowStep===1&&<button type="button" className="outline-btn" onClick={()=>{setBuildAiOpen(false);document.querySelector('.build-space')?.scrollIntoView({block:'start'});}}>Back to Build Space</button>}{workflowStep===1&&<p className="build-ai-help">Describe the change in your own words. I can connect pools and buttons, place items, change their look, and set playback. Changes apply to your draft for testing.</p>}{aiUndo&&<button type="button" className="outline-btn" disabled={building} onClick={()=>{const previous=aiUndo;persist({...previous,publishedSnapshot:project.publishedSnapshot,status:project.status,messages:[...project.messages,{role:"assistant",text:"The last AI edit has been undone."}]});setAiUndo(null);}}>Undo last AI edit</button>}<CompactConversation messages={project.messages} busy={building} progressText={jewelProgress}/><details className="chat-example-requests"><summary>Example requests</summary><div className="idea-card"><span>TRY A REQUEST</span>{(workflowStep===1?[
  ["Connect an image pool","Connect my image pool to one random draw/remove button. Ask me which pool if needed."],
  ["Add a scoreboard","Add and connect a scoreboard. Ask me which players or teams to include."],
  ["Adjust an item","Help me position and size the selected item on the overlay."]
