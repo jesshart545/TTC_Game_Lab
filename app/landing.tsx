@@ -17,6 +17,7 @@ const brandMark: CSSProperties = {
   width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center",
   background: "linear-gradient(135deg,#20e8ff,#7a5cff)", color: "#04121a", fontWeight: 800,
 };
+const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL || "https://buy.stripe.com/8x25kwaJhdu23J95UGawo00";
 const navLinks: CSSProperties = { display: "flex", alignItems: "center", gap: 18, marginLeft: "auto", fontSize: 14 };
 const navLink: CSSProperties = { color: "#9aa3b5", textDecoration: "none" };
 const primaryBtn: CSSProperties = {
@@ -201,6 +202,8 @@ export default function LandingPage() {
             <Link href="/guide" style={navLink}>How it works</Link>
             <Link href="/reference" style={navLink}>Practice project</Link>
             <Link href="/about" style={navLink}>Who we are</Link>
+            <Link href="/help" style={navLink}>Help</Link>
+            <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={navLink}>Donate</a>
             <Link href="/auth/sign-in" style={loginBtn}>Log in</Link>
             <Link href="/auth/sign-up" style={signupBtn}>Create account</Link>
           </div>
@@ -303,6 +306,9 @@ export default function LandingPage() {
           <Link href="/guide" style={navLink}>How it works</Link>
           <Link href="/reference" style={navLink}>Practice project</Link>
           <Link href="/about" style={navLink}>Who we are</Link>
+          <Link href="/help" style={navLink}>Help</Link>
+          <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={navLink}>Donate</a>
+          <a href="mailto:admin@ttcgamelab.com" style={navLink}>Contact</a>
           <Link href="/auth/sign-in" style={navLink}>Log in</Link>
         </footer>
       </div>
