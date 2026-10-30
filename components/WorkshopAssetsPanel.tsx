@@ -4,7 +4,7 @@ import { Dispatch, SetStateAction, useState } from "react";
 import GameToolEditor from "./GameToolEditor";
 import { isImage } from "../lib/workshop-libraries";
 import { assetCategory } from "../lib/asset-folders";
-import { downloadAssetToDevice } from "../lib/download-asset";
+import { assetDownloadHref, assetFileName, downloadAssetToDevice } from "../lib/download-asset";
 import { savedListEntries } from "../lib/card-lists";
 import type { Project, ProjectAsset, AssetPool } from "../lib/project";
 import Link from "next/link";
@@ -200,7 +200,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       <p role="status">{saveStatus}</p>
       <div className="asset-detail-actions">
         <button type="button" className="build-btn" onClick={()=>{setSelectedAssetKey(null);chooseWorkflowStep(1);}}>Use with dashboard buttons</button>
-        {(selectedAsset.url||selectedAsset.storageKey)&&<button type="button" className="build-btn" onClick={()=>void downloadSelectedAsset()}>Download to your device</button>}
+        {assetDownloadHref(selectedAsset) ? <a className="build-btn asset-download-link" href={assetDownloadHref(selectedAsset) ?? undefined} download={assetFileName(selectedAsset)}>Download to your device</a> : (selectedAsset.url||selectedAsset.storageKey)&&<button type="button" className="build-btn" onClick={()=>void downloadSelectedAsset()}>Download to your device</button>}
         {(isImage(selectedAsset)||isVideo(selectedAsset)||isAudio(selectedAsset))&&<button type="button" className="outline-btn" onClick={()=>{setSelectedAssetKey(null);setEditingAssetIndex(selectedAssetIndex);}}>Edit {isImage(selectedAsset)?"image":isVideo(selectedAsset)?"video":"audio"}</button>}
         {isAudio(selectedAsset)&&<button type="button" className="outline-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
         {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"background");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"layer");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}

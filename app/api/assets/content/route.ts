@@ -26,7 +26,12 @@ export async function GET(request: Request) {
     let fileName = (params.get("name") || key.split("/").pop() || "asset").replace(/["\\\r\n]/g, "").slice(0, 120) || "asset";
     const keyExt = key.match(/\.([a-z0-9]+)$/i)?.[1];
     if (keyExt && !/\.[a-z0-9]+$/i.test(fileName)) fileName = `${fileName}.${keyExt}`;
-    headers["Content-Disposition"] = `attachment; filename="${fileName}"`;
+    // Generated names contain an em dash (" — Image"), which is not a valid
+    // plain header character and makes the response fail. Send an ASCII
+    // fallback plus the RFC 5987 UTF-8 form, which carries the real name.
+    const asciiName = fileName.replace(/[^\x20-\x7E]/g, "-");
+    const utf8Name = encodeURIComponent(fileName).replace(/'/g, "%27");
+    headers["Content-Disposition"] = `attachment; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`;
     // A streamed body with a forwarded Content-Length aborts the download if
     // the byte counts ever disagree; attachment responses stream chunked.
     delete headers["Content-Length"];

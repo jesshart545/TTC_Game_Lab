@@ -299,3 +299,5 @@
 .workshop-upload-box>span{font-size:22px;color:#4edce8}
 .workshop-upload-box strong{font-size:15px}
 .workshop-upload-box small{color:#93a7ba;font-size:12px;line-height:1.45;max-width:420px}
+
+.asset-detail-actions>a.build-btn{display:flex;align-items:center;text-decoration:none}
