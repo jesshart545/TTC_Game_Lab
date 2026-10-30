@@ -1,6 +1,6 @@
 "use client";
 
-import { Dispatch, SetStateAction } from "react";
+import { Dispatch, SetStateAction, useState } from "react";
 import GameToolEditor from "./GameToolEditor";
 import { isImage } from "../lib/workshop-libraries";
 import { assetCategory } from "../lib/asset-folders";
@@ -54,6 +54,8 @@ export type WorkshopAssetsPanelProps = {
   setNewCardEditorId: Dispatch<SetStateAction<string>>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   openWorkshopTool: (tool: "media" | "trivia" | "boards" | "tools", background?: boolean) => void;
+  onMakeVariation: (asset: ProjectAsset) => void;
+  onRenameAsset: (index: number, name: string) => void;
   ccssEntitled: boolean;
   onAddTemplate: (templateId: string) => void;
   openCityCrimeScene: () => void;
@@ -99,7 +101,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     closeTriviaQuestion, placeSceneImage, saveAssetPools, beginBlank, spinWheel,
     setBackgroundIntent, setEditingComposition, setPositionAssetKey,
     setSideBySideTesting, setTriviaListQuestions, setListEditorId, setNewCardEditorId,
-    fileInputRef, openWorkshopTool, ccssEntitled, onAddTemplate, openCityCrimeScene, setShowBoardGuide, setShowAssetComposer,
+    fileInputRef, openWorkshopTool, onMakeVariation, onRenameAsset, ccssEntitled, onAddTemplate, openCityCrimeScene, setShowBoardGuide, setShowAssetComposer,
     setAssetKindFilter, setAssetSearch, setAssetStatus, setBoardDesignerId,
     setEditingAssetIndex, setGuideBoardId, setShowTriviaListGenerator,
     setTriviaListCategories, setTriviaListCount, setTriviaTopics, addGameTool,
@@ -109,6 +111,27 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     addCompositionControl, TRIVIA_CONFIG, triviaConfig, selectedAssetIndex, promptRef,
     BackgroundDestination,
   } = props;
+
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
+
+  async function downloadSelectedAsset() {
+    if (!selectedAsset?.url) return;
+    try {
+      const response = await fetch(selectedAsset.url);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const ext = selectedAsset.url.split("?")[0].match(/\.([a-z0-9]+)$/i)?.[1] || (selectedAsset.type.includes("/") ? selectedAsset.type.split("/")[1] : "");
+      link.href = objectUrl;
+      link.download = /\.[a-z0-9]+$/i.test(selectedAsset.name) || !ext ? selectedAsset.name : `${selectedAsset.name}.${ext.replace("jpeg", "jpg")}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    } catch {
+      window.open(selectedAsset.url, "_blank");
+    }
+  }
 
   return (
 <aside className="assets-panel" hidden={workflowStep === 0 && workshopStep === 0}>
@@ -176,6 +199,10 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
         {isAudio(selectedAsset)&&<button type="button" className="outline-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
         {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"background");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"layer");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
         {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&!isAudio(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
+        {selectedAsset.generation?.prompt&&<p className="asset-dialog-prompt"><small>Generated from: “{selectedAsset.generation.prompt}”{selectedAsset.generation.voice ? ` · Voice: ${selectedAsset.generation.voice}` : ""}</small></p>}
+        {selectedAsset.generation&&<button type="button" className="outline-btn" onClick={()=>{setSelectedAssetKey(null);setRenameDraft(null);onMakeVariation(selectedAsset);}}>Make a variation</button>}
+        {selectedAsset.url&&<button type="button" className="outline-btn" onClick={()=>void downloadSelectedAsset()}>Download</button>}
+        {renameDraft===null ? <button type="button" className="outline-btn" onClick={()=>setRenameDraft(selectedAsset.name)}>Rename</button> : <span className="asset-rename-row"><input aria-label="New asset name" value={renameDraft} onChange={e=>setRenameDraft(e.target.value)} /><button type="button" className="build-btn" onClick={()=>{onRenameAsset(selectedAssetIndex, renameDraft);setRenameDraft(null);}}>Save name</button><button type="button" className="outline-btn" onClick={()=>setRenameDraft(null)}>Cancel</button></span>}
         {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);setSelectedAssetKey(null);}}>Position and size on overlay</button>}
       </div>
       {isAudio(selectedAsset)&&selectedAsset.url&&<audio controls src={selectedAsset.url} style={{width:"100%"}} aria-label={`Play ${selectedAsset.name}`}/>}
