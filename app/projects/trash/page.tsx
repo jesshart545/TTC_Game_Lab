@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { loadTrashedProjects, trashAction, TrashedProject } from "../../../lib/project";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 import { useEffect, useState } from "react";
 
 export default function TrashPage() {
   const [loading, setLoading] = useState(true), [loadError, setLoadError] = useState(""), [retry, setRetry] = useState(0);
   const [trashed, setTrashed] = useState<TrashedProject[]>([]);
   const [busyId, setBusyId] = useState("");
+  const [confirming, setConfirming] = useState<TrashedProject | null>(null);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     setLoading(true); setLoadError("");
@@ -31,20 +34,18 @@ export default function TrashPage() {
       setTrashed(current => current.filter(entry => entry.id !== item.id));
     } catch (error) {
       console.error("Restore failed:", error);
-      window.alert("The project could not be restored. It is still in Trash.");
+      setNotice("The project could not be restored. It is still in Trash.");
     } finally { setBusyId(""); }
   }
 
-  async function handleDeleteForever(item: TrashedProject) {
-    const confirmed = window.confirm(`Delete "${item.name}" forever? This permanently removes the saved project and its stored assets. This cannot be undone.`);
-    if (!confirmed) return;
+  async function doDeleteForever(item: TrashedProject) {
     setBusyId(item.id);
     try {
       await trashAction(item.id, "delete-forever");
       setTrashed(current => current.filter(entry => entry.id !== item.id));
     } catch (error) {
       console.error("Delete forever failed:", error);
-      window.alert("The project could not be deleted forever. It is still in Trash.");
+      setNotice("The project could not be deleted forever. It is still in Trash.");
     } finally { setBusyId(""); }
   }
 
@@ -56,6 +57,7 @@ export default function TrashPage() {
         <Link href="/project/new" className="build-btn">＋ New Project</Link>
       </header>
       <p>Projects you delete land here first. Restore one to bring it back to your library exactly as it was, or delete it forever to erase it and its stored assets for good.</p>
+      {notice && <p role="alert" className="library-notice">{notice}</p>}
       {loading && <p role="status">Loading trash…</p>}
       {loadError && <div role="alert"><p>{loadError}</p><button className="outline-btn" onClick={() => setRetry(v => v + 1)}>Try again</button></div>}
       <div className="project-library-grid">
@@ -72,7 +74,7 @@ export default function TrashPage() {
             </div>
             <div className="project-card-actions">
               <button type="button" className="outline-btn" disabled={busyId === item.id} onClick={() => handleRestore(item)}>Restore</button>
-              <button type="button" className="danger-btn" disabled={busyId === item.id} onClick={() => handleDeleteForever(item)}>Delete forever</button>
+              <button type="button" className="danger-btn" disabled={busyId === item.id} onClick={() => setConfirming(item)}>Delete forever</button>
             </div>
           </article>
         ))}
@@ -84,6 +86,16 @@ export default function TrashPage() {
           </div>
         )}
       </div>
+      {confirming && (
+        <ConfirmDialog
+          title="Delete forever?"
+          message={`Delete "${confirming.name}" forever? This permanently removes the saved project and its stored assets. This cannot be undone.`}
+          confirmLabel="Delete forever"
+          danger
+          onConfirm={() => { const item = confirming; setConfirming(null); void doDeleteForever(item); }}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
     </main>
   );
 }

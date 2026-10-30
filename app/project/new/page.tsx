@@ -12,8 +12,21 @@ export default function NewProject() {
   const creation = useRef<Promise<string> | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [name, setName] = useState("");
+  const [begun, setBegun] = useState(false);
+  const [plain, setPlain] = useState<boolean | null>(null);
+
+  // Template and idea links carry their own starting point, so they create
+  // immediately. A plain New Project visit asks for a name first.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasStart = !!(params.get("template")?.trim() || params.get("idea")?.trim());
+    setPlain(!hasStart);
+    if (hasStart) setBegun(true);
+  }, []);
 
   useEffect(() => {
+    if (!begun) return;
     let cancelled = false;
     if (!creation.current) {
       const params = new URLSearchParams(window.location.search);
@@ -53,10 +66,10 @@ export default function NewProject() {
         project.prompt = idea;
         project.workflow = { stage: 0, workshopStep: 0, promptDraft: idea };
         if (idea) project.gamePlan = { theme: idea };
-        project.name = "New Project";
+        project.name = name.trim() || "New Project";
         project.description = "Your TikTok LIVE creation workspace.";
         project.controls = [];
-        project.overlay = { ...project.overlay, title: "YOUR LIVESTREAM", showCharacter: false };
+        project.overlay = { ...project.overlay, title: name.trim() ? name.trim().toUpperCase() : "YOUR LIVESTREAM", showCharacter: false };
         project.messages = [{
           role: "assistant",
           text: "Tell me what you want to create, or start with the trivia generator, board and tool templates, uploads, or Asset Composer. Your draft is ready to customize.",
@@ -72,12 +85,28 @@ export default function NewProject() {
       failure => { if (!cancelled) setError(failure instanceof Error ? failure.message : "Project could not be created."); },
     );
     return () => { cancelled = true; };
-  }, [router, attempt]);
+  }, [router, attempt, begun]);
 
   function retry() {
     creation.current = null;
     setError("");
     setAttempt(value => value + 1);
+  }
+
+  if (plain && !begun && !error) {
+    return (
+      <main className="loading-page">
+        <div className="ai-orb">✦</div>
+        <h1>Name your project</h1>
+        <p>You can rename it anytime — this is how it will appear in your library.</p>
+        <form onSubmit={event => { event.preventDefault(); setBegun(true); }} style={{ display: "grid", gap: 10, justifyItems: "center" }}>
+          <input aria-label="Project name" autoFocus maxLength={100} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Dragon Night Trivia" style={{ minWidth: 260, maxWidth: "80vw", padding: "10px 12px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6", fontSize: 15 }} />
+          <button type="submit" className="build-btn" disabled={!name.trim()}>Create project</button>
+          <button type="button" className="outline-btn" onClick={() => setBegun(true)}>Skip — name it later</button>
+        </form>
+        <Link href="/projects">Back to projects</Link>
+      </main>
+    );
   }
 
   return (

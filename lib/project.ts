@@ -113,7 +113,7 @@ export function replaceProjectAssets(projectId: string, assets: ProjectAsset[]):
     return {
       ...project,
       assets: assets.map(asset => asset.storageKey ? { ...asset, url: undefined } : asset),
-      updatedAt: "just now",
+      updatedAt: new Date().toISOString(),
     };
   });
   if (changed) saveProjects(next);
@@ -125,7 +125,7 @@ export function createProject(prompt: string): Project {
   const base = prompt.toLowerCase();
   const name = base.includes("space") ? "Space Battle" : base.includes("christmas") || base.includes("holiday") ? "Holiday Live" : base.includes("horror") || base.includes("spooky") ? "Haunted Gaming" : "New LIVE Experience";
   const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Math.random().toString(36).slice(2, 7)}`;
-  return { id, name, slug, description: "AI-generated interactive TikTok LIVE experience.", status: "Draft", theme: "cyan", updatedAt: "just now", prompt, messages: [{ role: "user", text: prompt }], compositions: [], controls: [{ id: "alert", label: "TEST ALERT", action: "alert.test", detail: "Trigger a project alert" }, { id: "effect", label: "TRIGGER EFFECT", action: "effect.trigger", detail: "Play the generated visual effect" }], assets: [], overlay: { title: name.toUpperCase(), subtitle: "YOUR LIVE EXPERIENCE", showChat: true, showAlerts: true, showCharacter: true }, wheel: { enabled: false, title: "Game Wheel", segments: ["Prize", "Challenge", "Bonus", "Mystery"], spinning: false, visible: false }, gameTools: [] };
+  return { id, name, slug, description: "AI-generated interactive TikTok LIVE experience.", status: "Draft", theme: "cyan", updatedAt: new Date().toISOString(), prompt, messages: [{ role: "user", text: prompt }], compositions: [], controls: [{ id: "alert", label: "TEST ALERT", action: "alert.test", detail: "Trigger a project alert" }, { id: "effect", label: "TRIGGER EFFECT", action: "effect.trigger", detail: "Play the generated visual effect" }], assets: [], overlay: { title: name.toUpperCase(), subtitle: "YOUR LIVE EXPERIENCE", showChat: true, showAlerts: true, showCharacter: true }, wheel: { enabled: false, title: "Game Wheel", segments: ["Prize", "Challenge", "Bonus", "Mystery"], spinning: false, visible: false }, gameTools: [] };
 }
 
 
@@ -133,7 +133,7 @@ export async function saveProjectToServer(project: Project, publish = false, hos
   const response = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ project, publish, hostKey }),
+    body: JSON.stringify({ project: { ...project, updatedAt: new Date().toISOString() }, publish, hostKey }),
   });
   if (!response.ok) throw new Error("Could not save project to Neon.");
   return response.json();

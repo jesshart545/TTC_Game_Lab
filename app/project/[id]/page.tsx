@@ -63,6 +63,7 @@ import GameToolEditor, { overlayToolPlacement } from "../../../components/GameTo
 import { useCityCrimeSceneBuilder } from "../../../components/CityCrimeSceneBuilder";
 import RuntimeActionLayers, { useRuntimeActions } from "../../../components/RuntimeActionLayers";
 import WorkshopAiPanel from "../../../components/WorkshopAiPanel";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 import WorkshopAssetsPanel from "../../../components/WorkshopAssetsPanel";
 import { GENERATORS, BOARD_LIBRARY, TOOL_LIBRARY, isImage, isVideo, isAudio, type GeneratorType, type LibraryItem } from "../../../lib/workshop-libraries";
 import { trimAudioToWav } from "../../../lib/audio-trim";
@@ -608,10 +609,16 @@ export default function ProjectWorkspace() {
     setAssetStatus("Project title updated.");
   }
 
-  async function handleDeleteProject() {
+  const [confirmingProjectDelete, setConfirmingProjectDelete] = useState(false);
+  const [assetPendingDelete, setAssetPendingDelete] = useState<ProjectAsset | null>(null);
+
+  function handleDeleteProject() {
     if (!project) return;
-    const confirmed = window.confirm(`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash in the project library, or delete it forever there.`);
-    if (!confirmed) return;
+    setConfirmingProjectDelete(true);
+  }
+
+  async function doDeleteProject() {
+    if (!project) return;
     try {
       await deleteProjectFromServer(project.id);
       window.location.href = "/projects";
@@ -620,10 +627,13 @@ export default function ProjectWorkspace() {
     }
   }
 
-  async function handleDeleteAsset(asset: ProjectAsset) {
+  function handleDeleteAsset(asset: ProjectAsset) {
     if (!project) return;
-    const confirmed = window.confirm(`Delete "${asset.name}" from this project?`);
-    if (!confirmed) return;
+    setAssetPendingDelete(asset);
+  }
+
+  async function doDeleteAsset(asset: ProjectAsset) {
+    if (!project) return;
     const current = project;
     const index = current.assets.findIndex(item =>
       asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
@@ -1654,6 +1664,8 @@ export default function ProjectWorkspace() {
       </div></details>}
     {showAssetComposer && <AssetComposer assets={project.assets} compositions={project.compositions || []} initial={editingComposition} onSave={saveComposition} onClose={() => setShowAssetComposer(false)} />}
     {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={saveAssetAsNew} />}
+    {confirmingProjectDelete && <ConfirmDialog title="Move project to Trash?" message={`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash in the project library, or delete it forever there.`} confirmLabel="Move to Trash" danger onConfirm={() => { setConfirmingProjectDelete(false); void doDeleteProject(); }} onCancel={() => setConfirmingProjectDelete(false)} />}
+    {assetPendingDelete && <ConfirmDialog title="Delete this asset?" message={`Delete "${assetPendingDelete.name}" from this project?`} confirmLabel="Delete asset" danger onConfirm={() => { const asset = assetPendingDelete; setAssetPendingDelete(null); void doDeleteAsset(asset); }} onCancel={() => setAssetPendingDelete(null)} />}
     {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}
     {listEditorId&&project.gameTools.find(t=>t.id===listEditorId)&&<dialog ref={listDialog} className="card-creation-dialog" aria-label="List and card creator" onCancel={()=>setListEditorId("")}><button type="button" onClick={()=>{listDialog.current?.close();setListEditorId("");}}>Close list creator</button><CardListEditor key={listEditorId} project={project} tool={project.gameTools.find(t=>t.id===listEditorId)!} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)});}}/></dialog>}
     {newCardEditorId&&project.gameTools.find(t=>t.id===newCardEditorId)&&<dialog ref={newCardDialog} className="card-creation-dialog" aria-label="Card designer" onCancel={()=>setNewCardEditorId("")}><button type="button" className="outline-btn" onClick={()=>{newCardDialog.current?.close();setNewCardEditorId("");}}>Close card editor</button><p role="status">Follow the steps below to customize your card, then save your changes.</p><QuestionCardEditor key={newCardEditorId} project={project} tool={project.gameTools.find(t=>t.id===newCardEditorId)!} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)});}}/></dialog>}

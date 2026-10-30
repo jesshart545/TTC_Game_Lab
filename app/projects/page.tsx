@@ -2,11 +2,26 @@
 
 import Link from "next/link";
 import { deleteProjectFromServer, Project } from "../../lib/project";
+import { formatUpdatedAt } from "../../lib/relative-time";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { useEffect, useState } from "react";
+
+type LibraryAsset = Project["assets"][number];
+
+function isLibraryImage(asset: LibraryAsset) {
+  return !!asset.url && !asset.url.startsWith("blob:") && (asset.type || "").toLowerCase().includes("image");
+}
+
+function projectThumbnail(project: Project): LibraryAsset | undefined {
+  return project.assets?.find(asset => asset.role === "background" && isLibraryImage(asset))
+    || project.assets?.find(isLibraryImage);
+}
 
 export default function ProjectsPage() {
   const [loading,setLoading]=useState(true),[loadError,setLoadError]=useState(""),[retry,setRetry]=useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [confirming, setConfirming] = useState<Project | null>(null);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     setLoading(true);setLoadError("");
@@ -28,17 +43,17 @@ export default function ProjectsPage() {
     return () => { cancelled = true; };
   }, [retry]);
 
-  async function handleDelete(project: Project) {
-    const confirmed = window.confirm(`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash, or delete it forever there.`);
-    if (!confirmed) return;
+  async function doDelete(project: Project) {
     try {
       await deleteProjectFromServer(project.id);
       setProjects(current => current.filter(item => item.id !== project.id));
     } catch (error) {
       console.error("Project deletion failed:", error);
-      window.alert("The project could not be moved to Trash. Nothing was removed from the project library.");
+      setNotice("The project could not be moved to Trash. Nothing was removed from your library.");
     }
   }
+
+  const sorted = [...projects].sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0));
 
   return (
     <main className="projects-page">
@@ -50,33 +65,40 @@ export default function ProjectsPage() {
           <Link href="/project/new" className="build-btn">＋ New Project</Link>
         </div>
       </header>
+      {notice && <p role="alert" className="library-notice">{notice}</p>}
       {loading&&<p role="status">Loading your saved projects…</p>}{loadError&&<div role="alert"><p>{loadError}</p><button className="outline-btn" onClick={()=>setRetry(v=>v+1)}>Try again</button></div>}<div className="project-library-grid">
         <article className="library-card project-library-card">
           <Link href="/reference" className="project-library-link">
-            <div className="library-preview purple"><span>SHARED · READ ONLY</span><strong>Verification Project</strong><em>A working reference for everyone</em></div>
+            <div className="library-preview purple"><div className="library-preview-text"><span>SHARED · READ ONLY</span><strong>Verification Project</strong><em>A working reference for everyone</em></div></div>
             <div className="library-info"><div><h2>Verification Project</h2><p>Explore the tools, settings, and dashboard controls. Practice without changing the original.</p></div><span>Shared reference</span></div>
           </Link>
           <div className="project-card-actions"><Link href="/reference" className="outline-btn">Open reference</Link></div>
         </article>
-        {projects.map(project => (
+        {sorted.map(project => {
+          const thumb = projectThumbnail(project);
+          return (
           <article key={project.id} className="library-card project-library-card">
             <Link href={`/project/${project.id}`} className="project-library-link">
-              <div className={`library-preview ${project.theme}`}>
-                <span>{project.status.toUpperCase()}</span>
-                <strong>{project.overlay.title}</strong>
-                <em>{project.overlay.subtitle}</em>
+              <div className={`library-preview ${project.theme}${thumb ? " has-thumb" : ""}`}>
+                {thumb && <img src={thumb.url} alt="" onError={event => { event.currentTarget.style.display = "none"; }} />}
+                <div className="library-preview-text">
+                  <span>{project.status.toUpperCase()}</span>
+                  <strong>{project.overlay.title}</strong>
+                  <em>{project.overlay.subtitle}</em>
+                </div>
               </div>
               <div className="library-info">
                 <div><h2>{project.name}</h2><p>{project.description}</p></div>
-                <span>{project.updatedAt}</span>
+                <span>{formatUpdatedAt(project.updatedAt)}</span>
               </div>
             </Link>
             <div className="project-card-actions">
               <Link href={`/project/${project.id}`} className="outline-btn">Open</Link>
-              <button type="button" className="danger-btn" onClick={() => handleDelete(project)}>Delete</button>
+              <button type="button" className="danger-btn" onClick={() => setConfirming(project)}>Delete</button>
             </div>
           </article>
-        ))}
+          );
+        })}
         {!loading&&!loadError&&projects.length === 0 && (
           <div className="asset-library-empty">
             <strong>No projects yet.</strong>
@@ -85,7 +107,16 @@ export default function ProjectsPage() {
           </div>
         )}
       </div>
+      {confirming && (
+        <ConfirmDialog
+          title="Move project to Trash?"
+          message={`Move "${confirming.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash, or delete it forever there.`}
+          confirmLabel="Move to Trash"
+          danger
+          onConfirm={() => { const project = confirming; setConfirming(null); void doDelete(project); }}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
     </main>
   );
 }
-
