@@ -4,7 +4,18 @@ import type { Project } from "./project";
 export function executionContext(project: Project) {
   const controls = Array.isArray(project.controls) ? project.controls : [];
   const tools = Array.isArray(project.gameTools) ? project.gameTools : [];
+  const assets = Array.isArray(project.assets) ? project.assets : [];
+  const assetRows = assets.map(asset => {
+    const key = asset.storageKey || asset.name;
+    const buttons = controls.filter(control => JSON.stringify(control).includes(key)).map(control => control.label);
+    return { name: asset.name, onDashboard: Boolean(asset.inProject) || buttons.length > 0, buttons };
+  });
   return {
+    dashboardGuide: {
+      instruction: "When listing what this project has, group it the way a creator thinks: first what is on the dashboard (with the buttons that run each item), then what is only in the library, ready to add.",
+      onDashboard: assetRows.filter(row => row.onDashboard),
+      inLibraryOnly: assetRows.filter(row => !row.onDashboard).map(row => row.name),
+    },
     sequenceContract: {
       create: "Omit id entirely for a NEW sequence. Do not put a tool ID or selected button ID in sequences.id.",
       edit: "id must be one of existingSequenceIds. An ordinary Start button is not a saved sequence.",
