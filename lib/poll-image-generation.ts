@@ -8,6 +8,8 @@ export async function pollImageGeneration(
   onStatus: (text: string) => void,
 ): Promise<string> {
   onStatus("Image queued with fal.ai. Waiting for the finished image…");
+  const startedAt = Date.now();
+  const elapsed = () => { const s = Math.floor((Date.now() - startedAt) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} elapsed`; };
   let completed = false;
   let url = "";
   for (let attempt = 0; attempt < 300; attempt += 1) {
@@ -21,7 +23,7 @@ export async function pollImageGeneration(
       completed = true;
       break;
     }
-    if (attempt % 10 === 0) onStatus(statusData.queuePosition != null ? `Image queued: ${statusData.queuePosition} ahead…` : "Image is still generating…");
+    if (attempt % 10 === 0) onStatus(statusData.queuePosition != null ? `Image queued: ${statusData.queuePosition} ahead… ${elapsed()}.` : `Image is still generating… ${elapsed()}.`);
   }
   if (!completed) throw new Error("Image is still processing on fal.ai. The request may complete later; please avoid submitting duplicate generations.");
   return url;

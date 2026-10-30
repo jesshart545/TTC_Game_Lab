@@ -674,7 +674,7 @@ export default function ProjectWorkspace() {
         signal: AbortSignal.timeout(type === "video" ? 60000 : 180000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(type === "image" ? { aspectRatio: options?.aspectRatio || "16:9" } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(type === "video" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "music" ? { durationSeconds: options?.durationSeconds, lyrics: options?.lyrics, instrumental: options?.instrumental } : {}) }),
+        body: JSON.stringify({ prompt: type === "video" ? `${requested.trim()} Avoid any readable text, words, letters, numbers, logos or signage in the scene.` : requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(type === "image" ? { aspectRatio: options?.aspectRatio || "16:9" } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(type === "video" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "music" ? { durationSeconds: options?.durationSeconds, lyrics: options?.lyrics, instrumental: options?.instrumental } : {}) }),
       });
       data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
@@ -710,17 +710,22 @@ export default function ProjectWorkspace() {
           await saveQueue.current;
         }
         setAssetStatus("Video request saved. Waiting for the provider…");
+        const videoWaitStartedAt = Date.now();
         url = await waitForGeneratedVideo(
           String(data.videoId),
           data.model || "agnes-video-2.5-flash",
-          progress => setAssetStatus(`Generating video… ${Math.round(progress)}%`),
+          () => { const elapsedSeconds = Math.floor((Date.now() - videoWaitStartedAt) / 1000); setAssetStatus(`Generating video… ${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, "0")} elapsed. Videos usually take a few minutes.`); },
         );
       }
       if (!url) throw new Error(`${type} generation returned no asset output.`);
 
       checkGenerationScope();
       const latest = projectRef.current || options?.baseProject || project;
-      const name = `${type[0].toUpperCase()}${type.slice(1)} ${latest.assets.length + 1}`;
+      const typeLabel = `${type[0].toUpperCase()}${type.slice(1)}`;
+      const promptWords = requested.replace(/\s+/g, " ").trim().split(" ").filter(Boolean).slice(0, 5).join(" ");
+      const baseName = promptWords ? `${(promptWords.charAt(0).toUpperCase() + promptWords.slice(1)).slice(0, 48)} — ${typeLabel}` : `${typeLabel} ${latest.assets.length + 1}`;
+      let name = baseName;
+      for (let suffix = 2; latest.assets.some(asset => asset.name === name); suffix += 1) name = `${baseName} ${suffix}`;
       const generatedAsset = { name, type: data.model || type, url, ...(type === "music" ? { durationSeconds: data.durationSeconds } : {}) };
 
       setAssetStatus(`Saving generated ${type} to your assets…`);
@@ -1405,7 +1410,7 @@ export default function ProjectWorkspace() {
 
     </section>
     <div data-workshop-section={workflowStep === 0 ? workshopStep : undefined} className={"workspace-grid workflow-layout workflow-stage-" + workflowStep + (workflowStep!==0 ? " general-build-space" : "")}>
-      {Boolean(project.pendingVideos?.length) && <section aria-label="Pending video generation" className="idea-card"><strong>Video requests awaiting a result</strong><p>Check a saved request without generating or paying for another copy.</p>{project.pendingVideos?.map(job => <div key={job.videoId}><p>{job.prompt}</p><button type="button" className="outline-btn" disabled={assetBusy || building} onClick={() => void generateAsset("video", job.prompt, { pendingVideo: job }).catch(() => undefined)}>Check video result</button></div>)}</section>}
+      {Boolean(project.pendingVideos?.length) && <section aria-label="Pending video generation" className="idea-card"><strong>Video requests awaiting a result</strong><p>Check a saved request without generating another copy.</p>{project.pendingVideos?.map(job => <div key={job.videoId}><p>{job.prompt}</p>{assetBusy ? <p role="status">Already checking — the finished video will appear in your assets automatically.</p> : <button type="button" className="outline-btn" disabled={building} onClick={() => void generateAsset("video", job.prompt, { pendingVideo: job }).catch(() => undefined)}>Check video result</button>}</div>)}</section>}
       <WorkshopAiPanel
         workflowStep={workflowStep}
         workshopStep={workshopStep}
