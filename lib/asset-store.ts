@@ -107,6 +107,17 @@ export async function storeGeneratedAsset(projectId: string, asset: { name: stri
   return uploadBlob(projectId, asset.name, blob);
 }
 
+/** The local file bytes for a browser-stored asset (legacy uploads whose
+ * storageKey does not point at object storage), or null when absent. */
+export async function getStoredAssetBlob(storageKey: string): Promise<Blob | null> {
+  try {
+    const stored = await getStoredAsset(storageKey);
+    return stored?.blob ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function hydrateAsset(asset: ProjectAsset): Promise<ProjectAsset> {
   if (!asset.storageKey) return asset;
   if (asset.storageKey.startsWith("projects/")) {
