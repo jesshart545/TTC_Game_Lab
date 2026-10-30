@@ -140,7 +140,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       <small>PROJECT</small>
       <h2>{workshopStep === 2 ? "Scenes & effects" : "Your assets & tools"}</h2>
     </div>
-    <button type="button" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => fileInputRef.current?.click()}>＋</button>
+    <button type="button" className="assets-upload-btn" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>＋ Upload</button>
   </div>
 {workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 11 : 10} description="Grouped: create, upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools">
   <div className="creation-group"><strong>CREATE</strong><div>
@@ -182,6 +182,11 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   <div className="detail-block" id="workshop-assets" hidden={workflowStep === 0 && workshopStep !== 1}>
     <h3>Media library</h3>
     <p className="asset-library-help">Open a media folder to find your assets. Select an item to edit, place it on the overlay, or add it to a game pool.</p>
+    <button type="button" className="workshop-upload-box" onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>
+      <span aria-hidden="true">⬆</span>
+      <strong>Upload from your device</strong>
+      <small>Add images, video, or audio. After uploading, select a file to place it on the overlay or use it as the background.</small>
+    </button>
     <CollapsibleFolder title="Asset pools" count={(project.assetPools || []).length} description="Named groups used by your game controls" storageKey={`${project.id}:pools`} keepMounted><AssetPoolManager pools={project.assetPools || []} assets={project.assets} onChange={saveAssetPools} saveStatus={saveStatus} /></CollapsibleFolder>
     <div className="workshop-assets-toolbar">
       <label className="workshop-assets-search">Find an asset<input type="search" value={assetSearch} onChange={event => setAssetSearch(event.target.value)} placeholder="Search by name" /></label>
