@@ -6,6 +6,21 @@ import { checkedSupportReply, fallbackSupport, type SupportContext, type Support
 import { getSupportBridge, subscribeSupportBridge, supportPanelEvent, type SupportTurn } from "../lib/support-client";
 
 type Turn = SupportTurn & { targets?: SupportTarget[]; offline?: boolean };
+
+/** Renders **bold** spans and line breaks in Jewel's replies instead of
+ *  showing the raw formatting marks to the creator. */
+function renderRichText(text: string) {
+  const lines = text.split("\n");
+  return lines.map((line, lineIndex) => {
+    const parts = line.split(/\*\*([^*]+)\*\*/g);
+    return (
+      <span key={lineIndex}>
+        {parts.map((part, partIndex) => (partIndex % 2 === 1 ? <strong key={partIndex}>{part}</strong> : part))}
+        {lineIndex < lines.length - 1 ? <br /> : null}
+      </span>
+    );
+  });
+}
 const targetLabels: Record<SupportTarget, string> = {
   "game-plan": "Open game plan", materials: "Open materials", scenes: "Open scenes & effects",
   background: "Choose a background", "add-items": "Add items in Build Space", test: "Open draft test",
@@ -31,6 +46,13 @@ export default function SiteSupportChat({ path }: { path: string }) {
   const setInput = (text: string) => setInputState({ scope, text });
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!busy) { setElapsed(0); return; }
+    const startedAt = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 500);
+    return () => clearInterval(timer);
+  }, [busy]);
   const [pending, setPending] = useState(false);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
@@ -139,8 +161,8 @@ export default function SiteSupportChat({ path }: { path: string }) {
       <p className="ttc-support-context">{context.page === "project" ? `${context.stage || "Project"}${context.section ? ` · ${context.section}` : ""}` : context.page === "host" ? "Private host dashboard · live controls stay manual" : "TTCGameLab help"}</p>
       <div className="ttc-support-transcript" role="log" aria-live="polite" aria-relevant="additions">
         {!turns.length && <div className="ttc-support-welcome"><p>Tell me what you want in your own words. I can explain the app, help you get unstuck, or carry out supported changes and generation in your open project.</p><p>If something important is missing, I’ll ask a short question.</p><div className="ttc-support-suggestions">{["Help me get started", "What can you create or edit for me?", "I’m stuck—help me figure it out"].map(text => <button type="button" key={text} onClick={() => void submit(text)}>{text}</button>)}</div></div>}
-        {turns.map((turn, index) => <article className={`ttc-support-turn ${turn.role}`} key={index}><strong>{turn.role === "user" ? "You" : turn.offline ? "Documented help · AI offline" : "Jewel"}</strong><p>{turn.text}</p>{turn.targets?.length ? <div className="ttc-support-targets">{turn.targets.map(target => <button type="button" key={target} disabled={busy} onClick={() => navigate(target)}>{targetLabels[target]}</button>)}</div> : null}</article>)}
-        {busy && <p className="ttc-support-progress" role="status">{progress}</p>}{bridge?.resumeMedia && <button type="button" onClick={bridge.resumeMedia}>Start video trim</button>}<div ref={end}/>
+        {turns.map((turn, index) => <article className={`ttc-support-turn ${turn.role}`} key={index}><strong>{turn.role === "user" ? "You" : turn.offline ? "Documented help · AI offline" : "Jewel"}</strong><p>{turn.role === "assistant" ? renderRichText(turn.text) : turn.text}</p>{turn.targets?.length ? <div className="ttc-support-targets">{turn.targets.map(target => <button type="button" key={target} disabled={busy} onClick={() => navigate(target)}>{targetLabels[target]}</button>)}</div> : null}</article>)}
+        {busy && <p className="ttc-support-progress" role="status">{progress}{elapsed >= 3 ? ` · ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}` : ""}{elapsed >= 20 ? " Media and multi-step requests can take a few minutes — Jewel is still working." : ""}</p>}{bridge?.resumeMedia && <button type="button" onClick={bridge.resumeMedia}>Start video trim</button>}<div ref={end}/>
       </div>
       <form onSubmit={event => { event.preventDefault(); void submit(); }}><label htmlFor="ttc-support-input">Describe your goal or ask a question</label><textarea ref={field} id="ttc-support-input" value={input} onChange={event => setInput(event.target.value)} maxLength={3000} rows={3} placeholder="Example: Make my background fit without cropping it" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); } }}/><button type="submit" disabled={busy || !input.trim()}>{busy ? "Working…" : "Send"}</button></form>
       <footer><p>Your messages go to the app’s AI provider. Requested tasks can change your draft and generate assets; help alone changes nothing. Keep the project open until tasks finish.</p><div>{bridge?.undo && <button type="button" disabled={busy} onClick={undo}>Undo last AI edit</button>}<button type="button" disabled={busy} onClick={() => { ++operation.current; commit([]); setPending(false); setInput(""); }}>New conversation</button><a href={context.page === "host" ? "https://www.ttcgamelab.com/help" : "/help"}>Contact support</a></div></footer>
