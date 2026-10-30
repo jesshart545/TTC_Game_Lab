@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SiteHeader from "../components/SiteHeader";
 import type { CSSProperties } from "react";
 
 /* Pre-signup landing page: explain the product, show what a creator builds,
@@ -193,21 +194,7 @@ export default function LandingPage() {
   return (
     <main style={page}>
       <div style={wrap}>
-        <nav style={nav} aria-label="Site">
-          <Link href="/" style={brand}>
-            <span style={brandMark}>TT</span>
-            <span><strong>TTCGameLab</strong><br /><small style={{ color: "#7f8797", fontSize: 11, letterSpacing: ".12em" }}>LIVE CREATIVE STUDIO</small></span>
-          </Link>
-          <div style={navLinks}>
-            <Link href="/guide" style={navLink}>How it works</Link>
-            <Link href="/reference" style={navLink}>Practice project</Link>
-            <Link href="/about" style={navLink}>Who we are</Link>
-            <Link href="/help" style={navLink}>Help</Link>
-            <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={navLink}>Donate</a>
-            <Link href="/auth/sign-in" style={loginBtn}>Log in</Link>
-            <Link href="/auth/sign-up" style={signupBtn}>Create account</Link>
-          </div>
-        </nav>
+        <SiteHeader />
 
         <section style={hero}>
           <div style={heroCopy}>
@@ -219,7 +206,7 @@ export default function LandingPage() {
               see. Polls, reveals, giveaways, live challenges — you press the buttons, your audience joins in.
             </p>
             <div style={ctaRow}>
-              <Link href="/auth/sign-up" style={primaryBtn}>Start building free</Link>
+              <Link href="/auth/sign-up" style={primaryBtn}>Start building</Link>
               <Link href="/reference" style={ghostBtn}>Try the live demo</Link>
             </div>
             <p style={trustLine}>No code · Nothing goes live until you publish · Try before you sign up</p>
