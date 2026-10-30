@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { deleteProjectFromServer, Project } from "../../lib/project";
+import { deleteProjectFromServer, saveProjectToServer, Project } from "../../lib/project";
 import { formatUpdatedAt } from "../../lib/relative-time";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useEffect, useState } from "react";
@@ -22,6 +22,9 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [confirming, setConfirming] = useState<Project | null>(null);
   const [notice, setNotice] = useState("");
+  const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"recent" | "name">("recent");
+  const [duplicatingId, setDuplicatingId] = useState("");
 
   useEffect(() => {
     setLoading(true);setLoadError("");
@@ -53,7 +56,32 @@ export default function ProjectsPage() {
     }
   }
 
-  const sorted = [...projects].sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0));
+  async function duplicateProject(project: Project) {
+    if (duplicatingId) return;
+    setDuplicatingId(project.id);
+    try {
+      const clone: Project = JSON.parse(JSON.stringify(project));
+      clone.id = `project-${Date.now()}`;
+      clone.name = `${project.name} copy`.slice(0, 100);
+      clone.slug = `${clone.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Math.random().toString(36).slice(2, 7)}`;
+      clone.status = "Draft";
+      clone.updatedAt = new Date().toISOString();
+      await saveProjectToServer(clone);
+      setProjects(current => [clone, ...current]);
+      setNotice(`Duplicated as "${clone.name}" — a fresh draft at the top of your library.`);
+    } catch (error) {
+      console.error("Duplicate failed:", error);
+      setNotice("The project could not be duplicated. Nothing was changed.");
+    } finally { setDuplicatingId(""); }
+  }
+
+  const visible = projects.filter(project => {
+    const text = query.trim().toLowerCase();
+    return !text || `${project.name} ${project.description}`.toLowerCase().includes(text);
+  });
+  const sorted = [...visible].sort((a, b) => sortMode === "name"
+    ? a.name.localeCompare(b.name)
+    : (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0));
 
   return (
     <main className="projects-page">
@@ -65,7 +93,11 @@ export default function ProjectsPage() {
           <Link href="/project/new" className="build-btn">＋ New Project</Link>
         </div>
       </header>
-      {notice && <p role="alert" className="library-notice">{notice}</p>}
+      {notice && <p role="status" className="library-notice">{notice}</p>}
+      <div className="asset-library-toolbar">
+        <input className="asset-library-search" type="search" aria-label="Search projects" placeholder="Search projects…" value={query} onChange={event => setQuery(event.target.value)} />
+        <label>Sort <select aria-label="Sort projects" value={sortMode} onChange={event => setSortMode(event.target.value as "recent" | "name")} style={{ background: "#0b0d12", border: "1px solid #252a34", color: "#e5eaf2", borderRadius: 8, padding: "8px 10px" }}><option value="recent">Recently edited</option><option value="name">Name A–Z</option></select></label>
+      </div>
       {loading&&<p role="status">Loading your saved projects…</p>}{loadError&&<div role="alert"><p>{loadError}</p><button className="outline-btn" onClick={()=>setRetry(v=>v+1)}>Try again</button></div>}<div className="project-library-grid">
         <article className="library-card project-library-card">
           <Link href="/reference" className="project-library-link">
@@ -94,11 +126,18 @@ export default function ProjectsPage() {
             </Link>
             <div className="project-card-actions">
               <Link href={`/project/${project.id}`} className="outline-btn">Open</Link>
+              <button type="button" className="outline-btn" disabled={duplicatingId === project.id} onClick={() => void duplicateProject(project)}>{duplicatingId === project.id ? "Duplicating…" : "Duplicate"}</button>
               <button type="button" className="danger-btn" onClick={() => setConfirming(project)}>Delete</button>
             </div>
           </article>
           );
         })}
+        {!loading&&!loadError&&projects.length > 0 && visible.length === 0 && (
+          <div className="asset-library-empty">
+            <strong>No projects match "{query}".</strong>
+            <span>Try a different search.</span>
+          </div>
+        )}
         {!loading&&!loadError&&projects.length === 0 && (
           <div className="asset-library-empty">
             <strong>No projects yet.</strong>
