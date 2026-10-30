@@ -1,9 +1,18 @@
 // Projects store updatedAt as an ISO timestamp (stamped on every save).
 // Older projects may still carry a legacy display string ("just now",
-// "12 min ago") — those pass through unchanged.
-export function formatUpdatedAt(value: string): string {
+// "12 min ago") with no real time behind it. Project ids embed their
+// creation time (project-<epoch milliseconds>), so for those, show an
+// honest creation date instead of a frozen "just now".
+export function formatUpdatedAt(value: string, projectId?: string): string {
   const then = Date.parse(value);
-  if (Number.isNaN(then)) return value;
+  if (Number.isNaN(then)) {
+    const match = /^project-(\d{10,})$/.exec(projectId || "");
+    if (match) {
+      const created = new Date(Number(match[1]));
+      if (!Number.isNaN(created.getTime())) return "Created " + created.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+    return value;
+  }
   const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
   if (seconds < 45) return "just now";
   const minutes = Math.floor(seconds / 60);
