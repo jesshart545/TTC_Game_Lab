@@ -7,7 +7,7 @@ import MediaEditor from "../../components/MediaEditor";
 import { Project, ProjectAsset, saveProjectToServer } from "../../lib/project";
 import AssetFolders from "../../components/AssetFolders";
 import CollapsibleFolder, { rememberFolderState, type FolderBulkAction } from "../../components/CollapsibleFolder";
-import { assetCategory, mediaFolders } from "../../lib/asset-folders";
+import { assetCategory, categoryMatchesFilter, mediaFolders } from "../../lib/asset-folders";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string; assetIndex: number };
 type Filter = "all" | "image" | "video" | "audio" | "other";
@@ -92,7 +92,7 @@ export default function AssetLibraryPage() {
 
   const filtered=useMemo(()=>assets.filter(a=>{
     const q=query.trim().toLowerCase(); const matches=!q||(a.name+" "+a.type+" "+a.projectName).toLowerCase().includes(q);
-    return matches&&(filter==="all"||assetCategory(a)===filter);
+    return matches&&categoryMatchesFilter(assetCategory(a),filter);
   }),[assets,query,filter]);
 
   const projectFolders=useMemo(()=>projects.map(project=>({

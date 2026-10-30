@@ -13,7 +13,7 @@ export function isImage(asset: ProjectAsset | null | undefined) {
 }
 
 export const GENERATORS = [
-  { type: "image", label: "Image · Nano Banana 2", icon: "▣" },
+  { type: "image", label: "Image", icon: "▣" },
   { type: "video", label: "Video", icon: "▶" },
   { type: "voice", label: "Voice", icon: "◖" },
   { type: "music", label: "Music", icon: "♫" },

@@ -32,7 +32,7 @@ export function workshopGuidance(project: Project, section: number): WorkshopTas
         ? "Your plan has a name and idea. Open Assets & tools to upload or create media, cards, boards, and tools. Nothing is published until you say so."
         : "Add a project name and a short idea below. Opening the form does not finish the plan or publish anything.",
       nextActions: [
-        planned ? { label: "Open Assets & tools", intent: "materials" } : { label: "Edit my game plan", intent: "plan" },
+        planned ? { label: "Open Assets & tools", intent: "materials" } : { label: "Go to my game plan", intent: "plan" },
         planned ? { label: "Edit my game plan", intent: "plan" } : { label: "Explore Assets & tools", intent: "materials" },
       ],
     };

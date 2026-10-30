@@ -57,7 +57,7 @@ export default function CollapsibleFolder({
         <svg className="asset-folder-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
         <svg className="asset-folder-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5h7l2 2h9v13H3Z" /></svg>
         <span className="asset-folder-label"><strong>{title}</strong>{description && <small>{description}</small>}</span>
-        {count !== undefined && <span className="asset-folder-count" aria-label={`${count} items`}>{count}</span>}
+        {count !== undefined && <span className="asset-folder-count" aria-label={`${count} item${count === 1 ? "" : "s"}`}>{count}</span>}
       </button>
       <div id={`${id}-contents`} className="asset-folder-contents" hidden={!open} role="region" aria-labelledby={`${id}-heading`}>
         {(open || keepMounted) && children}

@@ -19,23 +19,19 @@ const CATEGORY_ORDER: TemplateCategory[] = [
   "Puzzle & Adventure",
 ];
 
-export default function TemplateBrowser({ project, onChoose, ccssEntitled }: Props) {
+export default function TemplateBrowser({ project, onChoose }: Props) {
   const [query, setQuery] = useState("");
   const [bulkAction, setBulkAction] = useState<FolderBulkAction>({ open: false, sequence: 0 });
   const search = query.trim().toLowerCase();
   const matches = (name: string, tagline: string) =>
     !search || name.toLowerCase().includes(search) || tagline.toLowerCase().includes(search);
-  const visible = GAME_TEMPLATES.filter((t) => (!t.restricted || ccssEntitled) && matches(t.name, t.tagline));
+  const visible = GAME_TEMPLATES.filter((t) => !t.restricted && matches(t.name, t.tagline));
   const addedIds = new Set(
     project.gameTools.map((t) => (t.config as Record<string, unknown>)?.templateId).filter((v): v is string => typeof v === "string")
   );
 
   return (
     <section className="build-background-browser" aria-label="Game templates">
-      <h3>Game templates</h3>
-      <p className="workflow-quick-help">
-        Add a ready-made game to this project. Open the folder, pick a template, and its tools and dashboard buttons join your game — your existing setup stays untouched.
-      </p>
       <label>
         Find a template
         <input
