@@ -192,7 +192,7 @@ export default function ProjectWorkspace() {
     try {
       await saveQueue.current;
       await saveProjectToServer({ ...next, assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
-      setProject(next); setSaveStatus("Saved. Reopen this project to continue from this step.");
+      setProject(next); setSaveStatus("All changes saved.");
     } catch(error) { setSaveStatus(error instanceof Error ? error.message : "Could not save. Please try again."); }
     finally { setSaveBusy(false); }
   }
@@ -1413,8 +1413,8 @@ export default function ProjectWorkspace() {
       nextActions: workshopTask.nextActions.map(action => ({ label: action.label, onClick: workshopActions[action.intent] })),
     },
     {
-      stage: "Build Space", firstTitle: "Choose your starting background",
-      firstDescription: "Pick an image, video, or interactive board for your starting screen. If you have not made one yet, create it in Workshop.",
+      stage: "Build Space", firstTitle: "Choose your starting background (optional)",
+      firstDescription: "Pick an image, video, or interactive board for your starting screen — or skip it and add items first; a background can be added anytime. If you have not made one yet, create it in Workshop.",
       firstAction: {
         label: backgroundChoicesAvailable ? "Choose my background" : "Create a background in Workshop",
         onClick: () => {

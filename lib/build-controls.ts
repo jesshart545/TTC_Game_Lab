@@ -50,9 +50,9 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
  const playsMedia=!!composition||!!asset&&["audio","video"].includes(mediaKind(asset));
  const verb=playsMedia?"Play ":tool?.type==="wheel"?"Spin ":tool?.type==="dice"?"Roll ":tool?.type==="coin-toss"?"Flip ":tool?.type==="plinko"?"Drop ":tool?.type==="prize-wheel"?"Spin ":"Show ";
  let control=project.controls.find(c=>c.action===action);
- if(!control)control={id:crypto.randomUUID(),label:verb+name,action,detail:`${verb}${name} only when pressed`,toolIds:tool?[id]:[],compositionId:composition?.id,overlayResult:{...initialResult}};
+ if(!control)control={id:crypto.randomUUID(),label:verb+name,action,detail:playsMedia?`${verb}${name} — keeps playing until Stop is pressed`:`${verb}${name} — stays on the overlay until Hide is pressed`,toolIds:tool?[id]:[],compositionId:composition?.id,overlayResult:{...initialResult}};
  next={...project,assets:project.assets.map(a=>a===asset?{...a,inProject:false,edits:{...a.edits,loop:a.edits?.loop??false,sound:a.edits?.sound??['audio','video'].includes(mediaKind(a)),volume:a.edits?.volume??80}}:a),gameTools:project.gameTools.map(t=>t===tool?{...t,inToolbox:true,inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t),compositions:project.compositions?.map(c=>c===composition?{...c,inProject:true}:c),controls:project.controls.some(c=>c.id===control!.id)?project.controls:[...project.controls,control]};
  const hideAction=tool?.type==='blank-card'?`cards.clear.${id}`:`result.hide.${control.id}`;
- if(!next.controls.some(c=>c.action===hideAction))next={...next,controls:[...next.controls,{id:crypto.randomUUID(),label:(playsMedia?'Stop ':'Hide ')+name,action:hideAction,detail:'Remove '+name+' from the overlay',...(tool?.type==='blank-card'?{toolIds:[id]}:{})}]};
+ if(!next.controls.some(c=>c.action===hideAction))next={...next,controls:[...next.controls,{id:crypto.randomUUID(),label:(playsMedia?'Stop ':'Hide ')+name,action:hideAction,detail:playsMedia?'Stop playing '+name:'Remove '+name+' from the overlay',...(tool?.type==='blank-card'?{toolIds:[id]}:{})}]};
  return {project:next,controlId:control.id};
 }
