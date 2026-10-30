@@ -32,7 +32,9 @@ export type ProjectAssetEdits = {
   offsetX?: number;
   offsetY?: number;
 };
-export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio" };
+export type ProjectAssetGeneration = { type: string; prompt: string; aspectRatio?: string; durationSeconds?: number; lyrics?: string; instrumental?: boolean; voice?: string; stability?: number; sourceKey?: string | null };
+
+export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio"; generation?: ProjectAssetGeneration };
 export type AssetPool = { id: string; name: string; assetKeys: string[] };
 export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
 export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };

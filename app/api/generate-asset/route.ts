@@ -216,7 +216,7 @@ export async function POST(request: Request) {
     const response = await fetch(`https://fal.run/${model}`, {
       method: "POST",
       headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ text: prompt, duration_seconds: 5, prompt_influence: 0.4, output_format: "mp3_44100_128" }),
+      body: JSON.stringify({ text: prompt, duration_seconds: Math.max(1, Math.min(30, Number(body?.durationSeconds) || 5)), prompt_influence: 0.4, output_format: "mp3_44100_128" }),
       cache: "no-store",
     });
     const payload = await response.json().catch(() => ({}));

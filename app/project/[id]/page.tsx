@@ -32,7 +32,9 @@ import type { YouTubeState } from "../../../lib/youtube";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
+import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, ProjectAssetGeneration, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
+
+type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number] };
 import { deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { landscapeAnimationReference } from "../../../lib/overlay-media";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
@@ -252,9 +254,24 @@ export default function ProjectWorkspace() {
   const [generatorType, setGeneratorType] = useState<GeneratorType>("image");
   const [generatorPrompt, setGeneratorPrompt] = useState("");
   const [videoReferenceKey, setVideoReferenceKey] = useState("");
+  const [imageReferenceKey, setImageReferenceKey] = useState("");
+  const [generatorVoice, setGeneratorVoice] = useState("Aria");
+  const [generatorStability, setGeneratorStability] = useState(0.4);
+  const [sfxSeconds, setSfxSeconds] = useState(5);
+  const [generationQueue, setGenerationQueue] = useState<{ type: GeneratorType; prompt: string; options?: GenerateOptions; projectId: string }[]>([]);
+  const generationBusyRef = useRef(false);
   const [assetBusy, setAssetBusy] = useState(false);
   const [assetStatus, setAssetStatus] = useState("");
   useEffect(() => { if (assetStatus) taskProgress.current?.(assetStatus); }, [assetStatus]);
+  // Generation queue: when the current generation finishes, start the next
+  // queued request for this project automatically.
+  useEffect(() => {
+    if (assetBusy || generationBusyRef.current || !generationQueue.length) return;
+    const [job, ...rest] = generationQueue;
+    setGenerationQueue(rest);
+    if (!projectRef.current || job.projectId !== projectRef.current.id) return;
+    void queueOrGenerate(job.type, job.prompt, job.options);
+  }, [assetBusy, generationQueue]);
   const [boardDesignerId,setBoardDesignerId]=useState("");
   const [backgroundDestinationKey,setBackgroundDestinationKey]=useState("");
   const [triviaConfig, setTriviaConfig] = useState<any>(null);
@@ -646,7 +663,25 @@ export default function ProjectWorkspace() {
     }
   }
 
-  async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; pendingVideo?: NonNullable<Project["pendingVideos"]>[number] }) {
+  // Panel-facing entry point: while a generation is running, new requests join
+  // a queue and start automatically instead of being refused.
+  async function queueOrGenerate(type: GeneratorType, explicitPrompt?: string, options?: GenerateOptions) {
+    if (generationBusyRef.current || assetBusy) {
+      if (project && !options?.pendingVideo && !options?.baseProject) {
+        setGenerationQueue(queue => [...queue, { type, prompt: explicitPrompt || "", options, projectId: project.id }]);
+        setAssetStatus(`Queued: your ${type} will start automatically when the current generation finishes.`);
+      }
+      return;
+    }
+    generationBusyRef.current = true;
+    try {
+      await generateAsset(type, explicitPrompt, options);
+    } finally {
+      generationBusyRef.current = false;
+    }
+  }
+
+  async function generateAsset(type: GeneratorType, explicitPrompt?: string, options?: GenerateOptions) {
     if (!project || assetBusy) return;
     const origin = project.id;
     const checkGenerationScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin) throw new Error("The generation finished after you left its project. Return to that project; do not submit duplicate generations."); };
@@ -654,7 +689,7 @@ export default function ProjectWorkspace() {
     const referenceKey = options?.pendingVideo ? "" : options?.sourceKey !== undefined ? options.sourceKey : type === "video" ? videoReferenceKey : "";
     if ((type === "video" || type === "image") && referenceKey) {
       const selectedAsset = project.assets.find(asset => (asset.storageKey || asset.name) === referenceKey);
-      if (!selectedAsset) { setAssetStatus("The selected video reference image is no longer available."); return; }
+      if (!selectedAsset) { setAssetStatus("The selected reference image is no longer available."); return; }
       try {
         const hydrated = await hydrateAsset(selectedAsset);
         promptImage = hydrated.url || "";
@@ -675,7 +710,7 @@ export default function ProjectWorkspace() {
         signal: AbortSignal.timeout(type === "video" ? 60000 : 180000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: type === "video" ? `${requested.trim()} Avoid any readable text, words, letters, numbers, logos or signage in the scene.` : requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(type === "image" ? { aspectRatio: options?.aspectRatio || "16:9" } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(type === "video" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "music" ? { durationSeconds: options?.durationSeconds, lyrics: options?.lyrics, instrumental: options?.instrumental } : {}) }),
+        body: JSON.stringify({ prompt: type === "video" ? `${requested.trim()} Avoid any readable text, words, letters, numbers, logos or signage in the scene.` : requested.trim(), type, ...(promptImage ? { promptImage } : {}), ...(type === "image" ? { aspectRatio: options?.aspectRatio || "16:9" } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(typeof options?.stability === "number" ? { stability: options.stability } : {}), ...(type === "video" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "sfx" ? { durationSeconds: options?.durationSeconds } : {}), ...(type === "music" ? { durationSeconds: options?.durationSeconds, lyrics: options?.lyrics, instrumental: options?.instrumental } : {}) }),
       });
       data = await response.json();
       if (!response.ok) throw new Error(data.error || `${type} generation failed.`);
@@ -732,7 +767,8 @@ export default function ProjectWorkspace() {
       setAssetStatus(`Saving generated ${type} to your assets…`);
       const storedAsset = await storeGeneratedAsset(project.id, generatedAsset);
       checkGenerationScope();
-      const fittedAsset: ProjectAsset = type === "image" || type === "video" ? { ...storedAsset, edits: { ...storedAsset.edits, fit: "contain" } } : storedAsset;
+      const generation: ProjectAssetGeneration = { type, prompt: requested, ...(options?.aspectRatio ? { aspectRatio: options.aspectRatio } : {}), ...(options?.durationSeconds ? { durationSeconds: options.durationSeconds } : {}), ...(options?.lyrics ? { lyrics: options.lyrics } : {}), ...(options?.instrumental ? { instrumental: true } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(typeof options?.stability === "number" ? { stability: options.stability } : {}), ...(referenceKey ? { sourceKey: referenceKey } : {}) };
+      const fittedAsset: ProjectAsset = type === "image" || type === "video" ? { ...storedAsset, generation, edits: { ...storedAsset.edits, fit: "contain" } } : { ...storedAsset, generation };
       const asset: ProjectAsset = !options && backgroundIntent && (type === "image"||type === "video") ? { ...fittedAsset, role: "background", inProject: false } : fittedAsset;
 
       const currentAfterStore = projectRef.current || latest;
@@ -742,7 +778,9 @@ export default function ProjectWorkspace() {
       await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
       if (backgroundIntent && (type === "image"||type === "video")) setBackgroundDestinationKey(asset.storageKey||asset.name);
       setBackgroundIntent(false);
-      setGeneratorPrompt("");
+      // Clear the prompt box only if it still holds the prompt just generated —
+      // with queueing, the creator may already be composing the next request.
+      setGeneratorPrompt(current => current.trim() === requested ? "" : current);
       setShowGenerator(false);
       setAssetStatus(`${name} generated and saved`);
       return { project: savedProject, name };
@@ -801,6 +839,28 @@ export default function ProjectWorkspace() {
     if (!project) return;
     const nextAssets = project.assets.map((asset, assetIndex) => assetIndex === index ? nextAsset : asset);
     persist({ ...project, assets: nextAssets, updatedAt: "just now" });
+  }
+
+  function makeVariation(asset: ProjectAsset) {
+    const generation = asset.generation;
+    if (!generation) return;
+    const type = generation.type as GeneratorType;
+    setGeneratorType(type);
+    setGeneratorPrompt(generation.prompt);
+    if (type === "image") { setImageShape(generation.aspectRatio || "16:9"); setImageReferenceKey(generation.sourceKey || ""); }
+    if (type === "video") { setVideoLength(generation.durationSeconds ? String(generation.durationSeconds) : "auto"); setVideoReferenceKey(generation.sourceKey || ""); }
+    if (type === "music") { setMusicLengthMode(generation.durationSeconds ? "short" : "auto"); if (generation.durationSeconds) setMusicDuration(generation.durationSeconds); setMusicLyrics(generation.lyrics || ""); setMusicInstrumental(Boolean(generation.instrumental)); }
+    if (type === "voice") { setGeneratorVoice(generation.voice || "Aria"); setGeneratorStability(typeof generation.stability === "number" ? generation.stability : 0.4); }
+    if (type === "sfx" && generation.durationSeconds) setSfxSeconds(generation.durationSeconds);
+    openWorkshopTool("media");
+    setAssetStatus("Variation loaded: the original prompt and settings are in the generator. Adjust anything, then Generate.");
+  }
+
+  function renameProjectAsset(index: number, name: string) {
+    const current = projectRef.current || project;
+    const trimmed = name.trim();
+    if (!current || !trimmed) return;
+    persist({ ...current, assets: current.assets.map((item, i) => i === index ? { ...item, name: trimmed } : item), updatedAt: "just now" });
   }
 
   async function saveAssetAsNew(nextAsset: ProjectAsset) {
@@ -1475,6 +1535,15 @@ export default function ProjectWorkspace() {
         setVideoLength={setVideoLength}
         videoReferenceKey={videoReferenceKey}
         setVideoReferenceKey={setVideoReferenceKey}
+        imageReferenceKey={imageReferenceKey}
+        setImageReferenceKey={setImageReferenceKey}
+        generatorVoice={generatorVoice}
+        setGeneratorVoice={setGeneratorVoice}
+        generatorStability={generatorStability}
+        setGeneratorStability={setGeneratorStability}
+        sfxSeconds={sfxSeconds}
+        setSfxSeconds={setSfxSeconds}
+        generationQueueCount={generationQueue.length}
         musicLengthMode={musicLengthMode}
         setMusicLengthMode={setMusicLengthMode}
         musicDuration={musicDuration}
@@ -1483,7 +1552,7 @@ export default function ProjectWorkspace() {
         setMusicLyrics={setMusicLyrics}
         musicInstrumental={musicInstrumental}
         setMusicInstrumental={setMusicInstrumental}
-        generateAsset={generateAsset}
+        generateAsset={queueOrGenerate}
         assetStatus={assetStatus}
         persist={persist}
         setAiUndo={setAiUndo}
@@ -1531,6 +1600,8 @@ export default function ProjectWorkspace() {
         setNewCardEditorId={setNewCardEditorId}
         fileInputRef={fileInputRef}
         openWorkshopTool={openWorkshopTool}
+        onMakeVariation={makeVariation}
+        onRenameAsset={renameProjectAsset}
         setShowBoardGuide={setShowBoardGuide}
         setShowAssetComposer={setShowAssetComposer}
         setAssetKindFilter={setAssetKindFilter}
