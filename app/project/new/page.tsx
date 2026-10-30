@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createProject, saveProjectToServer } from "../../../lib/project";
-import { getGameTemplate } from "../../../lib/game-templates";
+import { GAME_TEMPLATES, getGameTemplate } from "../../../lib/game-templates";
 
 export default function NewProject() {
   const router = useRouter();
@@ -15,6 +15,9 @@ export default function NewProject() {
   const [name, setName] = useState("");
   const [begun, setBegun] = useState(false);
   const [plain, setPlain] = useState<boolean | null>(null);
+  const [stage, setStage] = useState<"name" | "template">("name");
+  const [chosenTemplate, setChosenTemplate] = useState("");
+  const [entitled, setEntitled] = useState(false);
 
   // Template and idea links carry their own starting point, so they create
   // immediately. A plain New Project visit asks for a name first.
@@ -23,6 +26,11 @@ export default function NewProject() {
     const hasStart = !!(params.get("template")?.trim() || params.get("idea")?.trim());
     setPlain(!hasStart);
     if (hasStart) setBegun(true);
+    // The template gallery hides restricted templates unless this account is entitled.
+    fetch("/api/me", { cache: "no-store" }).then(res => res.json()).then(me => {
+      const email = String(me?.email || "").toLowerCase();
+      setEntitled(["biscoe1972@gmail.com", "ladylovelace0627@gmail.com"].includes(email));
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -31,7 +39,7 @@ export default function NewProject() {
     if (!creation.current) {
       const params = new URLSearchParams(window.location.search);
       const idea = params.get("idea")?.trim().slice(0, 12000) || "";
-      const templateId = params.get("template")?.trim() || "";
+      const templateId = params.get("template")?.trim() || chosenTemplate;
       const template = templateId ? getGameTemplate(templateId) : undefined;
       // Restricted templates (e.g. City Crime Scene): verify entitlement before creating.
       // The save-time backstop strips restricted tools server-side, but this avoids
@@ -51,7 +59,7 @@ export default function NewProject() {
       const project = createProject("");
       if (template) {
         const draft = template.buildDraft();
-        project.name = draft.name;
+        project.name = name.trim() || draft.name;
         project.description = draft.description;
         project.overlay = { ...project.overlay, ...draft.overlay };
         project.gameTools = draft.gameTools;
@@ -85,7 +93,7 @@ export default function NewProject() {
       failure => { if (!cancelled) setError(failure instanceof Error ? failure.message : "Project could not be created."); },
     );
     return () => { cancelled = true; };
-  }, [router, attempt, begun]);
+  }, [router, attempt, begun, chosenTemplate]);
 
   function retry() {
     creation.current = null;
@@ -93,17 +101,42 @@ export default function NewProject() {
     setAttempt(value => value + 1);
   }
 
-  if (plain && !begun && !error) {
+  if (plain && !begun && !error && stage === "name") {
     return (
       <main className="loading-page">
         <div className="ai-orb">✦</div>
         <h1>Name your project</h1>
         <p>You can rename it anytime — this is how it will appear in your library.</p>
-        <form onSubmit={event => { event.preventDefault(); setBegun(true); }} style={{ display: "grid", gap: 10, justifyItems: "center" }}>
+        <form onSubmit={event => { event.preventDefault(); setStage("template"); }} style={{ display: "grid", gap: 10, justifyItems: "center" }}>
           <input aria-label="Project name" autoFocus maxLength={100} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Dragon Night Trivia" style={{ minWidth: 260, maxWidth: "80vw", padding: "10px 12px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6", fontSize: 15 }} />
-          <button type="submit" className="build-btn" disabled={!name.trim()}>Create project</button>
-          <button type="button" className="outline-btn" onClick={() => setBegun(true)}>Skip — name it later</button>
+          <button type="submit" className="build-btn" disabled={!name.trim()}>Continue</button>
+          <button type="button" className="outline-btn" onClick={() => setStage("template")}>Skip — name it later</button>
         </form>
+        <Link href="/projects">Back to projects</Link>
+      </main>
+    );
+  }
+
+  if (plain && !begun && !error && stage === "template") {
+    const visibleTemplates = GAME_TEMPLATES.filter(template => !template.restricted || entitled);
+    return (
+      <main className="loading-page">
+        <div className="ai-orb">✦</div>
+        <h1>Start blank, or with a template?</h1>
+        <p>A template sets up the game tools and dashboard buttons for you — you can change everything afterward.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10, width: "min(760px, 92vw)", textAlign: "left" }}>
+          <button type="button" className="outline-btn" style={{ display: "grid", gap: 4, justifyItems: "start", padding: "14px 16px" }} onClick={() => { setChosenTemplate(""); setBegun(true); }}>
+            <strong>✦ Start blank</strong>
+            <span>A clean slate — build everything yourself.</span>
+          </button>
+          {visibleTemplates.map(template => (
+            <button key={template.id} type="button" className="outline-btn" style={{ display: "grid", gap: 4, justifyItems: "start", padding: "14px 16px" }} onClick={() => { setChosenTemplate(template.id); setBegun(true); }}>
+              <strong>{template.icon} {template.name}</strong>
+              <span>{template.tagline}</span>
+            </button>
+          ))}
+        </div>
+        <button type="button" className="outline-btn" onClick={() => setStage("name")}>← Back to the name</button>
         <Link href="/projects">Back to projects</Link>
       </main>
     );
