@@ -8,3 +8,19 @@ export function adviceOnlyRequest(request: string): boolean {
   const explicitExecution = /\b(?:and|then)\s+(?:please\s+)?(?:generate|create|edit|configure|connect|implement|apply|make|set up)\b|\b(?:please\s+)?(?:apply|implement)\s+(?:it|that|your recommendation|the suggested)\b/i.test(text);
   return !explicitExecution;
 }
+
+/**
+ * Inventory questions ("What assets do I have?", "What's in my project?")
+ * ask about the actual project, so they must run through the project
+ * executor — the same path the in-project assistant uses — instead of
+ * being answered conversationally, which produced a different (summary)
+ * answer in the floating help panel than in the project panel.
+ */
+export function inventoryRequest(text: string): boolean {
+  const t = text.toLowerCase();
+  if (/\bhow\b/.test(t)) return false;
+  return /\b(?:what|which)\b[^.?!]*\b(?:assets?|files?|media|images?|pictures?|photos?|videos?|music|songs?|sounds?|clips?)\b/.test(t)
+    || /^\s*(?:list|show me|show)\b[^.?!]*\b(?:assets?|files?|media|project)\b/.test(t)
+    || /\bwhat(?:'s| is) in (?:my|the|this) project\b/.test(t)
+    || /\bwhat do i have\b/.test(t);
+}

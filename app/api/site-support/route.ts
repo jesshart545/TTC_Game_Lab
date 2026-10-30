@@ -1,4 +1,4 @@
-import { adviceOnlyRequest } from "../../../lib/assistant-intent";
+import { adviceOnlyRequest, inventoryRequest } from "../../../lib/assistant-intent";
 import { assistantProvider } from "../../../lib/assistant-provider";
 import { NextResponse } from "next/server";
 import { checkedSupportContext, checkedSupportHistory, checkedSupportReply, checkedSupportText, SUPPORT_TARGETS, supportCatalogExcerpts, fallbackSupport } from "../../../lib/site-support";
@@ -69,6 +69,7 @@ export async function POST(request: Request) {
     if (/^[\x00-\x7f]+$/.test(text) && /[\u3400-\u9fff]/.test(result.reply)) {
       return NextResponse.json(result.kind === 'task' ? { ...result, reply: 'I will carry out your requested draft task using the existing project tools.' } : { ...fallbackSupport(text, context), offline: true }, { headers });
     }
+    if (result.kind === "help" && allowTask && inventoryRequest(text)) return NextResponse.json({kind:"task",reply:"I will pass your original request to the project executor. It has not run yet.",targets:[]}, {headers});
     if (result.kind === "task" && adviceOnlyRequest(text)) return NextResponse.json({kind:"help",reply:"No task has run. Your message asked for suggestions, so I will wait for you to ask me to carry out a specific step.",targets:[]}, {headers});
     return NextResponse.json(result, { headers });
   } catch (error) {

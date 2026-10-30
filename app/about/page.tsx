@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SiteHeader from "../../components/SiteHeader";
 
 /**
  * Donation link configuration.
@@ -35,13 +36,7 @@ const list: React.CSSProperties = { color: "#9aa3b5", lineHeight: 1.8, paddingLe
 export default function AboutPage() {
   return (
     <div style={shell}>
-      <nav style={nav}>
-        <Link href="/" style={brand}>TTC Game Lab</Link>
-        <div>
-          <Link href="/guide" style={navLink}>How it works</Link>
-          <Link href="/auth/sign-in" style={navLink}>Log in</Link>
-        </div>
-      </nav>
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 24px" }}><SiteHeader /></div>
 
       <main style={wrap}>
         <h1 style={h1}>Who we are</h1>
