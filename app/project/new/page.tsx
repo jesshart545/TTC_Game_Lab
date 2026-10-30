@@ -17,7 +17,6 @@ export default function NewProject() {
   const [plain, setPlain] = useState<boolean | null>(null);
   const [stage, setStage] = useState<"name" | "template">("name");
   const [chosenTemplate, setChosenTemplate] = useState("");
-  const [entitled, setEntitled] = useState(false);
 
   // Template and idea links carry their own starting point, so they create
   // immediately. A plain New Project visit asks for a name first.
@@ -26,11 +25,6 @@ export default function NewProject() {
     const hasStart = !!(params.get("template")?.trim() || params.get("idea")?.trim());
     setPlain(!hasStart);
     if (hasStart) setBegun(true);
-    // The template gallery hides restricted templates unless this account is entitled.
-    fetch("/api/me", { cache: "no-store" }).then(res => res.json()).then(me => {
-      const email = String(me?.email || "").toLowerCase();
-      setEntitled(["biscoe1972@gmail.com", "ladylovelace0627@gmail.com"].includes(email));
-    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -118,7 +112,9 @@ export default function NewProject() {
   }
 
   if (plain && !begun && !error && stage === "template") {
-    const visibleTemplates = GAME_TEMPLATES.filter(template => !template.restricted || entitled);
+    // City Crime Scene is not a template — it has its own builder inside a
+    // project — so restricted entries never appear in this gallery.
+    const visibleTemplates = GAME_TEMPLATES.filter(template => !template.restricted);
     return (
       <main className="loading-page">
         <div className="ai-orb">✦</div>
