@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "../../../lib/auth/client";
 
 export default function AuthPage({ params }: { params: Promise<{ path: string }> }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const { path } = use(params);
+  const [mode, setModeState] = useState<"sign-in" | "sign-up">(path === "sign-up" ? "sign-up" : "sign-in");
+
+  function setMode(next: "sign-in" | "sign-up") {
+    setModeState(next);
+    window.history.replaceState(null, "", `/auth/${next}`);
+  }
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +38,7 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
   return <main className="auth-page" style={{minHeight:"100vh",display:"grid",placeItems:"center",background:"#05060a",color:"white",padding:24}}>
     <section style={{width:"min(440px,100%)",border:"1px solid #262b3b",borderRadius:20,padding:32,background:"#0b0d14"}}>
       <div style={{fontWeight:800,fontSize:22,marginBottom:6}}>Welcome to TTCGameLab</div>
-      <p style={{color:"#9aa3b5",marginTop:0}}>Sign in to your private creator workspace</p>
+      <p style={{color:"#9aa3b5",marginTop:0}}>{mode === "sign-up" ? "Create your private creator workspace" : "Sign in to your private creator workspace"}</p>
       <div className="auth-tabs" role="group" aria-label="Account access">
         <button aria-pressed={mode === "sign-in"} disabled={busy} onClick={()=>setMode("sign-in")} type="button">Sign in</button>
         <button aria-pressed={mode === "sign-up"} disabled={busy} onClick={()=>setMode("sign-up")} type="button">Create account</button>
@@ -41,6 +47,7 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
         {mode === "sign-up" && <label htmlFor="auth-name">Display name<input id="auth-name" name="name" autoComplete="name" required value={name} onChange={e=>setName(e.target.value)} placeholder="Your display name" /></label>}
         <label htmlFor="auth-email">Email<input id="auth-email" name="email" autoComplete="email" required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" /></label>
         <label htmlFor="auth-password">Password<input id="auth-password" name="password" autoComplete={mode === "sign-up" ? "new-password" : "current-password"} required minLength={8} type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" /></label>
+        {mode === "sign-up" && <p style={{color:"#7f8797",fontSize:12,margin:"-6px 0 0"}}>Use at least 8 characters.</p>}
         {error && <p role="alert" style={{color:"#ff7b91",margin:0}}>{error}</p>}
         <button className="auth-submit" disabled={busy} type="submit">{busy ? "Please wait…" : mode === "sign-up" ? "Create account" : "Sign in"}</button>
       </form>
