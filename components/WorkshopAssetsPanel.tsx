@@ -4,6 +4,7 @@ import { Dispatch, SetStateAction, useState } from "react";
 import GameToolEditor from "./GameToolEditor";
 import { isImage } from "../lib/workshop-libraries";
 import { assetCategory } from "../lib/asset-folders";
+import { downloadAssetToDevice } from "../lib/download-asset";
 import { savedListEntries } from "../lib/card-lists";
 import type { Project, ProjectAsset, AssetPool } from "../lib/project";
 import Link from "next/link";
@@ -114,36 +115,12 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
 
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
 
+  const [downloadNote, setDownloadNote] = useState("");
   async function downloadSelectedAsset() {
-    if (!selectedAsset?.url && !selectedAsset?.storageKey) return;
-    const ext = (selectedAsset.url || "").split("?")[0].match(/\.([a-z0-9]+)$/i)?.[1] || (selectedAsset.type.includes("/") ? selectedAsset.type.split("/")[1] : "");
-    const fileName = /\.[a-z0-9]+$/i.test(selectedAsset.name) || !ext ? selectedAsset.name : `${selectedAsset.name}.${ext.replace("jpeg", "jpg")}`;
-    if (selectedAsset.storageKey) {
-      // Same-origin attachment route: saves straight to the device, no
-      // cross-origin fetch that can silently fail into a new tab.
-      const link = document.createElement("a");
-      link.href = `/api/assets/content?key=${encodeURIComponent(selectedAsset.storageKey)}&download=1&name=${encodeURIComponent(fileName)}`;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      return;
-    }
-    if (!selectedAsset.url) return;
-    try {
-      const response = await fetch(selectedAsset.url);
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
-    } catch {
-      window.open(selectedAsset.url, "_blank");
-    }
+    if (!selectedAsset) return;
+    setDownloadNote("");
+    const ok = await downloadAssetToDevice(selectedAsset);
+    if (!ok) setDownloadNote("The download could not be completed. Please try again.");
   }
 
   return (
@@ -234,6 +211,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
         {renameDraft===null ? <button type="button" className="outline-btn" onClick={()=>setRenameDraft(selectedAsset.name)}>Rename</button> : <span className="asset-rename-row"><input aria-label="New asset name" value={renameDraft} onChange={e=>setRenameDraft(e.target.value)} /><button type="button" className="build-btn" onClick={()=>{onRenameAsset(selectedAssetIndex, renameDraft);setRenameDraft(null);}}>Save name</button><button type="button" className="outline-btn" onClick={()=>setRenameDraft(null)}>Cancel</button></span>}
         {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);setSelectedAssetKey(null);}}>Position and size on overlay</button>}
       </div>
+      {downloadNote&&<p role="status">{downloadNote}</p>}
       {isAudio(selectedAsset)&&selectedAsset.url&&<audio controls src={selectedAsset.url} style={{width:"100%"}} aria-label={`Play ${selectedAsset.name}`}/>}
       {(isVideo(selectedAsset)||isAudio(selectedAsset))&&<details className="asset-playback-options"><summary>Playback options</summary><label>Repeat this media<input type="checkbox" checked={selectedAsset.edits?.loop??isVideo(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,loop:event.target.checked}}:asset)})}/></label><label>Play sound<input type="checkbox" checked={selectedAsset.edits?.sound??isAudio(selectedAsset)} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,sound:event.target.checked}}:asset)})}/></label><label>Volume <span>{selectedAsset.edits?.volume??80}%</span><input type="range" min="0" max="100" value={selectedAsset.edits?.volume??80} onChange={event=>persist({...project,assets:project.assets.map((asset,index)=>index===selectedAssetIndex?{...asset,edits:{...asset.edits,volume:+event.target.value}}:asset)})}/></label></details>}
       {(isImage(selectedAsset)||isVideo(selectedAsset))&&<details className="asset-more-options"><summary>Other ways to use this</summary><BackgroundDestination project={project} asset={selectedAsset} onChange={persist}/>{(project.gameTools||[]).some(tool=>tool.type==="blank-board"&&tool.enabled)&&<button type="button" className="outline-btn" onClick={()=>useImageAsBlankBoardBackground(selectedAssetIndex)}>Use as board background</button>}</details>}

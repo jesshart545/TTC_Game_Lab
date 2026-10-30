@@ -27,6 +27,9 @@ export async function GET(request: Request) {
     const keyExt = key.match(/\.([a-z0-9]+)$/i)?.[1];
     if (keyExt && !/\.[a-z0-9]+$/i.test(fileName)) fileName = `${fileName}.${keyExt}`;
     headers["Content-Disposition"] = `attachment; filename="${fileName}"`;
+    // A streamed body with a forwarded Content-Length aborts the download if
+    // the byte counts ever disagree; attachment responses stream chunked.
+    delete headers["Content-Length"];
   }
   return new Response(source.body,{headers});
 }
