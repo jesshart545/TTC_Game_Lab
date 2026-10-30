@@ -224,6 +224,7 @@ export default function ProjectWorkspace() {
   const [publishing, setPublishing] = useState(false);
   const [hostKey, setHostKey] = useState("");
   const [dashboardLinkStatus, setDashboardLinkStatus] = useState("");
+  const [publishNotice, setPublishNotice] = useState("");
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showTriviaListGenerator, setShowTriviaListGenerator] = useState(false);
@@ -1309,6 +1310,7 @@ export default function ProjectWorkspace() {
       setHostKey(saved.hostKey);
       setProject(next);
       setAssetStatus("Approved preview published to the host dashboard and audience overlay.");
+      setPublishNotice("Published — your experience is live. Your two URLs are shown above.");
     } catch (error) {
       setAssetStatus(error instanceof Error ? `Publish failed: ${error.message}` : "Publish failed. Your draft is still available.");
     } finally { setPublishing(false); }
@@ -1489,9 +1491,23 @@ export default function ProjectWorkspace() {
         ["scoring","Points and scoring","How are points awarded or taken away?"],
         ["winning","Winning and ties","How does the game end? How are ties resolved?"]
       ].map(([key,label,placeholder]) => <label key={key} htmlFor={"game-"+key}>{label}{key === "theme" && <span id="game-theme-help">Describe the world, mood and visual style of your game. What is it about, and how should it look and feel? For example: a futuristic neon music gameshow, a spooky haunted-hotel mystery, or a colorful tropical trivia night.</span>}<textarea aria-describedby={key === "theme" ? "game-theme-help" : undefined} id={"game-"+key} value={project.gamePlan?.[key] || ""} placeholder={placeholder} onChange={event => persist({...project,gamePlan:{...project.gamePlan,[key]:event.target.value},updatedAt:"just now"})}/></label>)}</div><button type="button" className="outline-btn" onClick={() => {setDraft("Help develop the framework and play-through for this game plan: " + JSON.stringify({title:project.name,...project.gamePlan}));promptRef.current?.focus();}}>Discuss this game plan with AI</button></details>}
-      {workflowStep === 2 && <div className="workshop-publish-links">{project.publishedSnapshot ? <><h3>Your published experience</h3><p>The dashboard controls your overlay. Keep its host link private.</p><div><button type="button" className="outline-btn" onClick={copyDashboardLink}>Copy private dashboard URL</button><Link className="outline-btn" href={privateDashboardUrl} target="_blank" rel="noreferrer">Open dashboard</Link><Link className="outline-btn" href={projectUrl + "/overlay"} target="_blank" rel="noreferrer">Open overlay</Link><button type="button" className="outline-btn" onClick={async () => {try {await navigator.clipboard.writeText(new URL(projectUrl + "/overlay",window.location.origin).toString());setDashboardLinkStatus("Overlay URL copied. Add it as a browser source in your streaming software.");} catch {setDashboardLinkStatus("Open the overlay and copy its address.");}}}>Copy overlay URL</button></div></> : <p>Your two URLs will be available after publishing.</p>}{dashboardLinkStatus && <p role="status">{dashboardLinkStatus}</p>}</div>}
+      {workflowStep === 2 && <div className="workshop-publish-links">{project.publishedSnapshot ? <><h3>Your published experience</h3><p>The dashboard controls your overlay. Keep its host link private.</p><div><button type="button" className="outline-btn" onClick={copyDashboardLink}>Copy private dashboard URL</button><Link className="outline-btn" href={privateDashboardUrl} target="_blank" rel="noreferrer">Open dashboard</Link><Link className="outline-btn" href={projectUrl + "/overlay"} target="_blank" rel="noreferrer">Open overlay</Link><button type="button" className="outline-btn" onClick={async () => {try {await navigator.clipboard.writeText(new URL(projectUrl + "/overlay",window.location.origin).toString());setDashboardLinkStatus("Overlay URL copied. Add it as a browser source in your streaming software.");} catch {setDashboardLinkStatus("Open the overlay and copy its address.");}}}>Copy overlay URL</button></div><p className="publish-url-line">Overlay URL (for your streaming software): <code>{new URL(projectUrl + "/overlay", window.location.origin).toString()}</code></p><p className="publish-url-line">Private dashboard URL (keep it secret): <code>{new URL(privateDashboardUrl, window.location.origin).toString()}</code></p></> : <p>Your two URLs will be available after publishing.</p>}{publishNotice && <p role="status">{publishNotice}</p>}{dashboardLinkStatus && <p role="status">{dashboardLinkStatus}</p>}</div>}
       {workflowStep === 2 && <section className="publish-review" aria-label="Before publishing" tabIndex={-1}>
-        <h3>Before you publish</h3>
+        <h3>{project.publishedSnapshot ? "Publishing checks" : "Before you publish"}</h3>
+        {project.publishedSnapshot && <p>Your experience is live. Publishing again updates it with your latest draft — and these checks run on that draft.</p>}
+        {(() => {
+          const issues = buildReadiness(project);
+          const titleOk = !!project.name.trim() && !["New Project", "New LIVE Experience"].includes(project.name.trim()) && !["", "YOUR LIVESTREAM", "YOUR LIVE EXPERIENCE"].includes((project.overlay.title || "").trim().toUpperCase());
+          const buttonsOk = project.controls.length > 0;
+          const hasBackground = project.assets.some(asset => asset.role === "background" && asset.inProject);
+          return <ul className="publish-checklist">
+            <li><span aria-hidden="true">{titleOk ? "✓" : "!"}</span><span>{titleOk ? `Title is set: "${project.name}".` : "Your project still has a placeholder title — give it its real name so viewers and your library show it."}</span>{!titleOk && <button type="button" className="outline-btn" onClick={() => chooseWorkflowStep(0)}>Fix in Workshop</button>}</li>
+            <li><span aria-hidden="true">{buttonsOk ? "✓" : "!"}</span><span>{buttonsOk ? `${project.controls.length} dashboard button${project.controls.length === 1 ? "" : "s"} ready for the host.` : "No dashboard buttons yet — the host will have nothing to press during the show."}</span>{!buttonsOk && <button type="button" className="outline-btn" onClick={() => chooseWorkflowStep(1)}>Fix in Build Space</button>}</li>
+            {issues.map(issue => <li key={issue.id}><span aria-hidden="true">!</span><span>{issue.message}</span></li>)}
+            {!hasBackground && <li><span aria-hidden="true">–</span><span>No background set — the overlay starts as a plain dark screen. Fine if that is the look you want.</span></li>}
+            {titleOk && buttonsOk && issues.length === 0 && <li><span aria-hidden="true">✓</span><span>Everything checks out — you are ready to publish.</span></li>}
+          </ul>;
+        })()}
         <p>Rehearse a complete round in Build Space. Check the appearance of your overlay, your host buttons, media playback, and how each item is cleared or stopped.</p>
         <p>You stay in control: only publishing updates the live experience. You can return to Workshop or Build Space to make more edits.</p>
         <div className="publish-review-actions"><button type="button" className="outline-btn" onClick={() => chooseWorkflowStep(1)}>Return to Build Space</button><button className="build-btn" type="button" onClick={publish} disabled={publishing || assetBusy || building}>{publishing ? "Publishing…" : project.publishedSnapshot ? "Publish latest changes" : "Publish experience"}</button></div>
