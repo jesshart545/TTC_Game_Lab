@@ -5,6 +5,11 @@ import { ProjectAsset, ProjectAssetEdits } from "../lib/project";
 import { imageLayout, imageAspectRatio } from "../lib/image-layout";
 import { pollForEditedVideoUrl } from "../lib/video-edit-poll";
 
+function isAudioAsset(asset: ProjectAsset) {
+  const name = asset.name.toLowerCase();
+  return asset.type.toLowerCase().includes("audio") || name.startsWith("voice") || name.startsWith("music") || name.startsWith("sfx") || /\.(mp3|wav|m4a|oga|flac)$/i.test(asset.name);
+}
+
 function isVideo(asset: ProjectAsset) {
   return asset.type.toLowerCase().includes("video") || /\.(mp4|webm|mov|m4v)$/i.test(asset.name);
 }
@@ -16,6 +21,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   onClose: () => void;
 }) {
   const video = isVideo(asset);
+  const audio = !video && isAudioAsset(asset);
   const modalRef = useRef<HTMLDivElement>(null);
   const [showFullImage, setShowFullImage] = useState(false);
   const [edits, setEdits] = useState<ProjectAssetEdits>(asset.edits || {});
@@ -66,6 +72,16 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   async function saveCopy() {
     if(working || !onSaveAsNew)return;
     setWorking(true);setError("");
+    if (video) {
+      // A video save renders at page level and asks the user to press
+      // "Start video trim" on the banner there. Close this editor first so
+      // the banner is actually reachable; progress and any failure are
+      // reported in the page's status line.
+      const pending = onSaveAsNew({...asset,edits});
+      onClose();
+      pending.catch(()=>{});
+      return;
+    }
     try {await onSaveAsNew({...asset,edits});onClose();}catch(e){setError(e instanceof Error?e.message:"Could not save the edited copy.");}finally{setWorking(false);}
   }
   const previewRatio=showFullImage||video?originalRatio:layout.ratio;
@@ -74,19 +90,19 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true">
     <div className="media-editor-modal" ref={modalRef}>
       <div className="media-editor-head">
-        <div><small>EDIT ASSET</small><h2>Crop, adjust or request an AI edit.</h2></div>
+        <div><small>EDIT ASSET</small><h2>{audio ? "Trim your audio clip." : video ? "Trim or request an AI edit." : "Resize, adjust or request an AI edit."}</h2></div>
         <button className="media-editor-close" onClick={onClose}>×</button>
       </div>
       <div className="media-editor-preview-wrap">
         <div className={`media-editor-preview ${cropped?"crop-selected":"crop-original"}`} style={{aspectRatio:previewRatio,width:`min(100%, ${previewRatio*48}vh)`}}>
-          {video ? <video src={asset.url} controls style={style} onLoadedMetadata={e=>{setDuration(e.currentTarget.duration);if(e.currentTarget.videoWidth&&e.currentTarget.videoHeight)setOriginalRatio(e.currentTarget.videoWidth/e.currentTarget.videoHeight);}} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : <img src={asset.url} alt={asset.name} style={showFullImage ? undefined : {...style,objectFit:layout.fit,transform:`translate(${(edits.offsetX||0)/layout.width*100}%,${(edits.offsetY||0)/layout.height*100}%) scale(${edits.zoom||1}) rotate(${edits.rotation||0}deg) scaleX(${edits.flipX?-1:1}) scaleY(${edits.flipY?-1:1})`}} onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight){setOriginalRatio(image.naturalWidth/image.naturalHeight);setSourceSize({width:image.naturalWidth,height:image.naturalHeight});}}}/>}
+          {video ? <video src={asset.url} controls style={style} onLoadedMetadata={e=>{setDuration(e.currentTarget.duration);if(e.currentTarget.videoWidth&&e.currentTarget.videoHeight)setOriginalRatio(e.currentTarget.videoWidth/e.currentTarget.videoHeight);}} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : audio ? <audio src={asset.url} controls style={{width:"100%"}} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)} onPlay={e=>{if(e.currentTarget.currentTime<(edits.trimStart || 0))e.currentTarget.currentTime=edits.trimStart || 0;}} onTimeUpdate={e=>{if(edits.trimEnd && e.currentTarget.currentTime>=edits.trimEnd)e.currentTarget.pause();}} /> : <img src={asset.url} alt={asset.name} style={showFullImage ? undefined : {...style,objectFit:layout.fit,transform:`translate(${(edits.offsetX||0)/layout.width*100}%,${(edits.offsetY||0)/layout.height*100}%) scale(${edits.zoom||1}) rotate(${edits.rotation||0}deg) scaleX(${edits.flipX?-1:1}) scaleY(${edits.flipY?-1:1})`}} onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight){setOriginalRatio(image.naturalWidth/image.naturalHeight);setSourceSize({width:image.naturalWidth,height:image.naturalHeight});}}}/>}
         </div>
       </div>
-      {!video&&<div className="media-editor-view-options"><button type="button" disabled={working} aria-pressed={showFullImage} onClick={()=>{setShowFullImage(value=>!value);modalRef.current?.scrollTo({top:0,behavior:"instant"});}}>{showFullImage?"Return to edit preview":"Show full image"}</button><p>{showFullImage?"Full original image. Your edits are preserved; return to the edit preview to see them.":cropped?"Crop preview: parts outside this shape will be removed in the edited copy.":"Fit preview: the whole image keeps its proportions inside the output size. Empty space is transparent in the saved PNG. Zoom and position can move parts outside it."}</p></div>}
+      {!video&&!audio&&<div className="media-editor-view-options"><button type="button" disabled={working} aria-pressed={showFullImage} onClick={()=>{setShowFullImage(value=>!value);modalRef.current?.scrollTo({top:0,behavior:"instant"});}}>{showFullImage?"Return to edit preview":"Show full image"}</button><p>{showFullImage?"Full original image. Your edits are preserved; return to the edit preview to see them.":cropped?"Crop preview: parts outside this shape will be removed in the edited copy.":"Fit preview: the whole image keeps its proportions inside the output size. Empty space is transparent in the saved PNG. Zoom and position can move parts outside it."}</p></div>}
       <div className="media-editor-fields">
         <fieldset disabled={working} style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,padding:16}}>
           <legend>Direct edits · save as a new copy</legend>
-          {video ? <>
+          {video || audio ? <>
             <label>Trim start (seconds)<input type="number" min="0" max={duration || undefined} step=".1" value={edits.trimStart || 0} onChange={e=>update({trimStart:Math.max(0,Number(e.target.value))})}/></label>
             <label>Trim end (seconds)<input type="number" min=".1" max={duration || undefined} step=".1" value={edits.trimEnd || duration || ""} onChange={e=>update({trimEnd:Number(e.target.value)})}/></label>
           </> : <>
@@ -109,7 +125,11 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
           </>}
           <button type="button" disabled={working} onClick={()=>void saveCopy()}>{working?"Saving edit…":"Save edited copy"}</button>
         </fieldset>
-        <div className="media-editor-ai">
+        {audio ? <div className="media-editor-ai">
+          <span>AUDIO EDITING</span>
+          <small>Trimming is saved as a new copy, so your original stays safe. AI editing is not available for audio.</small>
+          {error && <small className="media-editor-error">{error}</small>}
+        </div> : <div className="media-editor-ai">
           <span>WHAT SHOULD I CHANGE?</span>
           {!video&&<button type="button" disabled={working} onClick={()=>{update({width:1920,height:1080,crop:"landscape",fit:"contain",zoom:1,offsetX:0,offsetY:0});setPrompt("Adapt this artwork for a horizontal 16:9 livestream overlay. Extend or recompose the background naturally to fill the widescreen scene. Preserve the original subjects, identity, important details and exact text. Do not stretch the subjects or crop important content. Keep text readable and away from the outer edges.");}}>Adapt artwork for full overlay</button>}
           <div>
@@ -122,7 +142,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
           </div>
           <small>For layout changes, describe what to preserve and where to leave space. “Adapt artwork” prepares an AI request to extend or recompose the scene; review the result before using it. The edited result is saved as a new asset so your original stays safe.</small>
           {error && <small className="media-editor-error">{error}</small>}
-        </div>
+        </div>}
       </div>
       <div className="media-editor-actions"><button className="outline-btn" onClick={onClose}>Cancel</button></div>
     </div>
