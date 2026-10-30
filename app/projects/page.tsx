@@ -25,7 +25,17 @@ export default function ProjectsPage() {
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<"recent" | "name">("recent");
   const [duplicatingId, setDuplicatingId] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/me", { cache: "no-store" }).then(async response => {
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!cancelled && typeof data?.email === "string") setAccountEmail(data.email);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     setLoading(true);setLoadError("");
     let cancelled = false;
@@ -87,7 +97,7 @@ export default function ProjectsPage() {
     <main className="projects-page">
       <header className="projects-top">
         <Link href="/" className="back">← TTCGameLab</Link>
-        <div><small>PROJECT LIBRARY</small><h1>My Projects</h1></div>
+        <div><small>PROJECT LIBRARY</small><h1>My Projects</h1>{accountEmail && <p style={{ margin: "4px 0 0", color: "#9aa7ba", fontSize: 12 }}>Signed in as {accountEmail}</p>}</div>
         <div style={{ display: "flex", gap: 8 }}>
           <Link href="/projects/trash" className="outline-btn">Trash</Link>
           <Link href="/project/new" className="build-btn">＋ New Project</Link>
@@ -121,7 +131,7 @@ export default function ProjectsPage() {
               </div>
               <div className="library-info">
                 <div><h2>{project.name}</h2><p>{project.description}</p></div>
-                <span>{formatUpdatedAt(project.updatedAt)}</span>
+                <span>{formatUpdatedAt(project.updatedAt, project.id)}</span>
               </div>
             </Link>
             <div className="project-card-actions">
