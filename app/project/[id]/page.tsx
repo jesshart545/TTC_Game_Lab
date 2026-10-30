@@ -63,6 +63,7 @@ import RuntimeActionLayers, { useRuntimeActions } from "../../../components/Runt
 import WorkshopAiPanel from "../../../components/WorkshopAiPanel";
 import WorkshopAssetsPanel from "../../../components/WorkshopAssetsPanel";
 import { GENERATORS, BOARD_LIBRARY, TOOL_LIBRARY, isImage, isVideo, isAudio, type GeneratorType, type LibraryItem } from "../../../lib/workshop-libraries";
+import { trimAudioToWav } from "../../../lib/audio-trim";
 
 
 
@@ -803,6 +804,17 @@ export default function ProjectWorkspace() {
   }
 
   async function saveAssetAsNew(nextAsset: ProjectAsset) {
+    try {
+      await saveAssetAsNewImpl(nextAsset);
+    } catch (error) {
+      // Never leave a stale "Rendering…" / "Preparing…" status behind after
+      // a failed save: the status line must say what actually happened.
+      setAssetStatus(error instanceof Error ? error.message : "The edited copy could not be saved.");
+      throw error;
+    }
+  }
+
+  async function saveAssetAsNewImpl(nextAsset: ProjectAsset) {
     if (!project || !nextAsset.url) throw new Error("The media source is unavailable.");
     const origin = project.id;
     const checkCopyScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin || activeProjectId.current !== params.id) throw new Error("Return to the original project to finish this copy. No other project was changed."); };
@@ -867,6 +879,18 @@ export default function ProjectWorkspace() {
       const latest=projectRef.current || project;
       persist({...latest,assets:[...latest.assets,{...stored,name:file.name,edits:undefined}],updatedAt:"just now"});
       setAssetStatus(file.name+" saved as a new permanent video asset.");
+      return;
+    }
+    if (isAudio(nextAsset)) {
+      setAssetStatus("Trimming audio…");
+      const blob = await trimAudioToWav(renderUrl, Math.max(0, nextAsset.edits?.trimStart || 0), nextAsset.edits?.trimEnd || 0);
+      const file = new File([blob], (nextAsset.name.replace(/\.[^.]+$/, "") || "trimmed-audio") + "-trimmed.wav", { type: "audio/wav" });
+      checkCopyScope();
+      const stored = await storeUploadedAsset(project.id, file);
+      checkCopyScope();
+      const latest = projectRef.current || project;
+      persist({ ...latest, assets: [...latest.assets, { ...stored, name: file.name, edits: undefined }], updatedAt: "just now" });
+      setAssetStatus(file.name + " saved as a new permanent audio asset.");
       return;
     }
     setAssetStatus("Rendering edited image…");

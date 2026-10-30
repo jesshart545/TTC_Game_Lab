@@ -1,6 +1,6 @@
 import { capMusicWav } from "../../../lib/music-wav";
 import { NextResponse } from "next/server";
-import { deleteAssetsByPrefix, getAssetUrl, putAsset } from "../../../lib/object-storage";
+import { deleteAssetsByPrefix, getAssetUploadUrl, getAssetUrl, putAsset } from "../../../lib/object-storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -13,6 +13,12 @@ export async function POST(request: Request) {
   try {
     if ((request.headers.get("content-type") || "").includes("application/json")) {
       const body = await request.json();
+      if (body.presign === true) {
+        const name = String(body.name || "asset");
+        const type = String(body.type || "application/octet-stream");
+        const key = `projects/${safeName(String(body.projectId || "unassigned"))}/${crypto.randomUUID()}-${safeName(name)}`;
+        return NextResponse.json({ name, type, storageKey: key, uploadUrl: await getAssetUploadUrl(key, type), url: await getAssetUrl(key) });
+      }
       const source = new URL(String(body.sourceUrl || ""));
       if (source.protocol !== "https:" || source.username || source.password ||
           !(source.hostname === "fal.media" || source.hostname.endsWith(".fal.media"))) {

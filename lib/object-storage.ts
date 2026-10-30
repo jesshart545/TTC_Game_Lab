@@ -35,6 +35,14 @@ export async function deleteAsset(key: string) {
   }));
 }
 
+export async function getAssetUploadUrl(key: string, contentType: string, expiresIn = 60 * 10) {
+  return getSignedUrl(
+    getAssetStorage(),
+    new PutObjectCommand({ Bucket: ASSET_BUCKET, Key: key, ContentType: contentType || "application/octet-stream" }),
+    { expiresIn },
+  );
+}
+
 export async function getAssetUrl(key: string, expiresIn = 60 * 60 * 24 * 7) {
   return getSignedUrl(
     getAssetStorage(),

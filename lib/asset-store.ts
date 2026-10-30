@@ -60,6 +60,23 @@ async function getStoredAsset(id: string): Promise<StoredAsset | null> {
 }
 
 async function uploadBlob(projectId: string, name: string, blob: Blob): Promise<ProjectAsset> {
+  // Preferred: upload the bytes directly to object storage with a presigned
+  // URL. The multipart route below passes through the web server, whose
+  // request-size limit rejects large files (the 413 behind "The upload
+  // exceeds the server limit."). Any failure here falls back to multipart.
+  try {
+    const presignResponse = await fetch("/api/assets", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ presign: true, projectId, name, type: blob.type || "application/octet-stream" }),
+    });
+    if (presignResponse.ok) {
+      const data = await presignResponse.json().catch(() => ({}));
+      if (data.uploadUrl && data.storageKey) {
+        const put = await fetch(String(data.uploadUrl), { method: "PUT", headers: { "Content-Type": blob.type || "application/octet-stream" }, body: blob });
+        if (put.ok) return { name: data.name || name, type: blob.type || "application/octet-stream", storageKey: data.storageKey, url: data.url };
+      }
+    }
+  } catch { /* fall through to the multipart upload */ }
   const form = new FormData();
   form.append("projectId", projectId);
   form.append("file", blob, name);
