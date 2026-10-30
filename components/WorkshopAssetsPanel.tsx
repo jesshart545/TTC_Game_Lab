@@ -115,15 +115,28 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
 
   async function downloadSelectedAsset() {
-    if (!selectedAsset?.url) return;
+    if (!selectedAsset?.url && !selectedAsset?.storageKey) return;
+    const ext = (selectedAsset.url || "").split("?")[0].match(/\.([a-z0-9]+)$/i)?.[1] || (selectedAsset.type.includes("/") ? selectedAsset.type.split("/")[1] : "");
+    const fileName = /\.[a-z0-9]+$/i.test(selectedAsset.name) || !ext ? selectedAsset.name : `${selectedAsset.name}.${ext.replace("jpeg", "jpg")}`;
+    if (selectedAsset.storageKey) {
+      // Same-origin attachment route: saves straight to the device, no
+      // cross-origin fetch that can silently fail into a new tab.
+      const link = document.createElement("a");
+      link.href = `/api/assets/content?key=${encodeURIComponent(selectedAsset.storageKey)}&download=1&name=${encodeURIComponent(fileName)}`;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+    if (!selectedAsset.url) return;
     try {
       const response = await fetch(selectedAsset.url);
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const ext = selectedAsset.url.split("?")[0].match(/\.([a-z0-9]+)$/i)?.[1] || (selectedAsset.type.includes("/") ? selectedAsset.type.split("/")[1] : "");
       link.href = objectUrl;
-      link.download = /\.[a-z0-9]+$/i.test(selectedAsset.name) || !ext ? selectedAsset.name : `${selectedAsset.name}.${ext.replace("jpeg", "jpg")}`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -140,19 +153,27 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       <small>PROJECT</small>
       <h2>{workshopStep === 2 ? "Scenes & effects" : "Your assets & tools"}</h2>
     </div>
-    <button type="button" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => fileInputRef.current?.click()}>＋</button>
+    <button type="button" className="assets-upload-btn" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>＋ Upload</button>
   </div>
-{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 11 : 10} description="All creation options: uploads, media, cards, boards and tools" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools"><strong>CREATE IN WORKSHOP</strong>
-  <button type="button" onClick={() => openWorkshopTool("media",true)}>Create background artwork</button>
-  <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload background image</button>
-  <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload other assets</button>
-  <button type="button" onClick={() => openWorkshopTool("media")}>Generate media</button>
-  <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
-  <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>
-  <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button><button type="button" onClick={openNewList}>Create list and cards</button>
-  {ccssEntitled && <button type="button" onClick={openCityCrimeScene}>City Crime Scene</button>}
-  <button type="button" onClick={() => {setSideBySideTesting(false);requestAnimationFrame(()=>document.getElementById("workshop-assets")?.scrollIntoView({behavior:"smooth",block:"start"}));}}>Organize assets &amp; pools</button>
-  <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
+{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 11 : 10} description="Grouped: create, upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools">
+  <div className="creation-group"><strong>CREATE</strong><div>
+    <button type="button" onClick={() => openWorkshopTool("media")}>Generate media</button>
+    <button type="button" onClick={() => openWorkshopTool("media",true)}>Create background artwork</button>
+    <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
+  </div></div>
+  <div className="creation-group"><strong>UPLOAD</strong><div>
+    <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload assets</button>
+  </div></div>
+  <div className="creation-group"><strong>BUILD</strong><div>
+    <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>
+    <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button>
+    <button type="button" onClick={openNewList}>Create list and cards</button>
+    {ccssEntitled && <button type="button" onClick={openCityCrimeScene}>City Crime Scene</button>}
+  </div></div>
+  <div className="creation-group"><strong>MORE</strong><div>
+    <button type="button" onClick={() => {setSideBySideTesting(false);requestAnimationFrame(()=>document.getElementById("workshop-assets")?.scrollIntoView({behavior:"smooth",block:"start"}));}}>Organize assets &amp; pools</button>
+    <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
+  </div></div>
 </div></CollapsibleFolder></div>}
 {workflowStep === 0 && showBoardGuide && <section hidden={workshopStep !== 1} className="workshop-help" aria-label="Artwork and interactive board guide">
   <button type="button" className="outline-btn" aria-expanded={showBoardGuide} onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(!showBoardGuide);}}>Combine artwork with an interactive board</button>
@@ -174,11 +195,17 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   <div className="detail-block" id="workshop-assets" hidden={workflowStep === 0 && workshopStep !== 1}>
     <h3>Media library</h3>
     <p className="asset-library-help">Open a media folder to find your assets. Select an item to edit, place it on the overlay, or add it to a game pool.</p>
+    <button type="button" className="workshop-upload-box" onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>
+      <span aria-hidden="true">⬆</span>
+      <strong>Upload from your device</strong>
+      <small>Add images, video, or audio. After uploading, select a file to place it on the overlay or use it as the background.</small>
+    </button>
     <CollapsibleFolder title="Asset pools" count={(project.assetPools || []).length} description="Named groups used by your game controls" storageKey={`${project.id}:pools`} keepMounted><AssetPoolManager pools={project.assetPools || []} assets={project.assets} onChange={saveAssetPools} saveStatus={saveStatus} /></CollapsibleFolder>
     <div className="workshop-assets-toolbar">
       <label className="workshop-assets-search">Find an asset<input type="search" value={assetSearch} onChange={event => setAssetSearch(event.target.value)} placeholder="Search by name" /></label>
       <label className="workshop-assets-filter">Show<select value={assetKindFilter} onChange={event => setAssetKindFilter(event.target.value as typeof assetKindFilter)}><option value="all">All media</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="other">Other files</option></select></label>
     </div>
+    {assetSearch.trim() === "" && assetKindFilter === "all" && project.assets.length > 0 && <div className="recent-assets"><h4>Recently added</h4><div className="workshop-assets-grid">{[...project.assets].slice(-6).reverse().map(asset => { const key = asset.storageKey || asset.name; const kind = assetCategory(asset); return <button type="button" key={key} className="workshop-asset-tile" aria-label={`Select ${asset.name}`} onClick={() => setSelectedAssetKey(key)}><AssetThumbnail asset={asset} kind={kind} /><span className="workshop-asset-name">{asset.name}</span><small>{kind === "sfx" ? "Sound effect" : kind === "other" ? asset.type : kind[0].toUpperCase() + kind.slice(1)}</small></button>; })}</div></div>}
     {visibleAssets.length > 0 ? <AssetFolders
       assets={visibleAssets} scope={`workshop:${project.id}`} selectedAssetKey={selectedAssetKey}
       searchKey={assetSearch.trim() || (assetKindFilter !== "all" ? `filter:${assetKindFilter}` : "")}
@@ -186,7 +213,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
         const key=asset.storageKey||asset.name,kind=assetCategory(asset),selected=key===selectedAssetKey;
         return <button type="button" key={key} className={`workshop-asset-tile${selected?" selected":""}`} aria-pressed={selected} aria-label={`Select ${asset.name}, ${kind}`} onClick={()=>setSelectedAssetKey(key)}>
           <AssetThumbnail key={asset.url||key} asset={asset} kind={kind}/>
-          <span className="workshop-asset-name">{asset.name}</span><small>{kind==="audio"?"Audio":kind==="other"?asset.type:kind[0].toUpperCase()+kind.slice(1)}</small>
+          <span className="workshop-asset-name">{asset.name}</span><small>{kind==="audio"?"Audio":kind==="sfx"?"Sound effect":kind==="other"?asset.type:kind[0].toUpperCase()+kind.slice(1)}</small>
         </button>;
       }}
     /> : <p className="empty-note">{project.assets.length===0?"Your saved assets will appear here. Create or upload something to get started.":"No assets match that search. Try a different name or media type."}</p>}
@@ -196,13 +223,14 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       <p role="status">{saveStatus}</p>
       <div className="asset-detail-actions">
         <button type="button" className="build-btn" onClick={()=>{setSelectedAssetKey(null);chooseWorkflowStep(1);}}>Use with dashboard buttons</button>
+        {(selectedAsset.url||selectedAsset.storageKey)&&<button type="button" className="build-btn" onClick={()=>void downloadSelectedAsset()}>Download to your device</button>}
         {(isImage(selectedAsset)||isVideo(selectedAsset)||isAudio(selectedAsset))&&<button type="button" className="outline-btn" onClick={()=>{setSelectedAssetKey(null);setEditingAssetIndex(selectedAssetIndex);}}>Edit {isImage(selectedAsset)?"image":isVideo(selectedAsset)?"video":"audio"}</button>}
         {isAudio(selectedAsset)&&<button type="button" className="outline-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
         {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"background");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"layer");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
         {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&!isAudio(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
         {selectedAsset.generation?.prompt&&<p className="asset-dialog-prompt"><small>Generated from: “{selectedAsset.generation.prompt}”{selectedAsset.generation.voice ? ` · Voice: ${selectedAsset.generation.voice}` : ""}</small></p>}
         {selectedAsset.generation&&<button type="button" className="outline-btn" onClick={()=>{setSelectedAssetKey(null);setRenameDraft(null);onMakeVariation(selectedAsset);}}>Make a variation</button>}
-        {selectedAsset.url&&<button type="button" className="outline-btn" onClick={()=>void downloadSelectedAsset()}>Download</button>}
+        
         {renameDraft===null ? <button type="button" className="outline-btn" onClick={()=>setRenameDraft(selectedAsset.name)}>Rename</button> : <span className="asset-rename-row"><input aria-label="New asset name" value={renameDraft} onChange={e=>setRenameDraft(e.target.value)} /><button type="button" className="build-btn" onClick={()=>{onRenameAsset(selectedAssetIndex, renameDraft);setRenameDraft(null);}}>Save name</button><button type="button" className="outline-btn" onClick={()=>setRenameDraft(null)}>Cancel</button></span>}
         {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);setSelectedAssetKey(null);}}>Position and size on overlay</button>}
       </div>
@@ -222,13 +250,14 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   <div id="workshop-scenes" hidden={workflowStep === 0 && workshopStep !== 2}><CollapsibleFolder title="Scenes & effects" count={(project.compositions || []).length} description="Open Asset Composer or edit a saved scene" storageKey={`${project.id}:scenes`} expandKey={workshopStep === 2 ? "scenes-section" : ""} keepMounted><div className="detail-block asset-composer-launch">
     <span>ASSET COMPOSER</span>
     <p className="empty-note">Combine video, voice, music, SFX, text and effects on a synchronized multi-track timeline.</p>
+    <button type="button" className="build-btn" onClick={() => {setEditingComposition(undefined);setShowAssetComposer(true);}}>Open Asset Composer</button>
     {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="outline-btn build-only" onClick={()=>toggleComposition(comp.id)}>{comp.inProject?"✓ In Preview":"+ Add to Preview"}</button><button className="outline-btn" onClick={()=>{setEditingComposition(comp);setShowAssetComposer(true)}}>Edit</button><button className="build-btn build-only" disabled={!comp.inProject} onClick={()=>addCompositionControl(comp)}>Assign button</button><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
   </div></CollapsibleFolder></div>
   <div id="workshop-tools" hidden={workflowStep === 0 && workshopStep !== 1}><CollapsibleFolder title="Game tools & cards" count={project.gameTools.filter(tool => tool.type !== "youtube").length} description="Cards, boards, questions and customized tools" storageKey={`${project.id}:tools`} keepMounted><div className="detail-block">
     <span>WORKSPACE CREATIONS</span>
     <p className="empty-note">Choose templates from Creation Tools above. Edit appearance and settings below, or customize them in chat, then add finished boards to the overlay and finished tools to the dashboard toolbox.</p>
     <div className="tool-config-list">
-      <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={openNewList}>Create list and cards</button><button type="button" onClick={()=>createWorkshopCard("question")}>Create question and answer cards</button><button type="button" onClick={()=>createWorkshopCard("blank")}>Create blank card</button></div>{(project.gameTools || []).filter(tool => tool.type !== "youtube").map(tool => (
+      <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={()=>createWorkshopCard("question")}>Create question and answer cards</button><button type="button" onClick={()=>createWorkshopCard("blank")}>Create blank card</button></div>{(project.gameTools || []).filter(tool => tool.type !== "youtube").map(tool => (
         <CollapsibleFolder key={tool.id} title={tool.name} description={tool.type.replace(/-/g," ")} storageKey={`${project.id}:tool:${tool.id}`} keepMounted><div className="tool-config">
           <div>
             <b>{tool.name}</b>
@@ -289,7 +318,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       </div>
     )}
   </div></CollapsibleFolder></div>
-  <CollapsibleFolder title="Wheel settings" storageKey={`${project.id}:wheel`} keepMounted><div className="detail-block">
+  {(project.wheel?.enabled || (project.gameTools || []).some(tool => tool.type === "wheel" || tool.type === "prize-wheel")) && <CollapsibleFolder title="Wheel settings" storageKey={`${project.id}:wheel`} keepMounted><div className="detail-block">
     <span>WHEEL SETTINGS</span>
     {project.wheel?.enabled ? (
       <>
@@ -300,7 +329,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     ) : (
       <p className="empty-note">Add the Game Wheel from the library when you need it.</p>
     )}
-  </div></CollapsibleFolder>
+  </div></CollapsibleFolder>}
   <div className="detail-block">
     <span>NEW PROJECT</span>
     <button className="outline-btn" onClick={beginBlank}>＋ Start fresh</button>

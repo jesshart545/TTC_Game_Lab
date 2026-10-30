@@ -7,7 +7,7 @@ import MediaEditor from "../../components/MediaEditor";
 import { Project, ProjectAsset, saveProjectToServer } from "../../lib/project";
 import AssetFolders from "../../components/AssetFolders";
 import CollapsibleFolder, { rememberFolderState, type FolderBulkAction } from "../../components/CollapsibleFolder";
-import { assetCategory, mediaFolders } from "../../lib/asset-folders";
+import { assetCategory, categoryMatchesFilter, mediaFolders } from "../../lib/asset-folders";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string; assetIndex: number };
 type Filter = "all" | "image" | "video" | "audio" | "other";
@@ -92,7 +92,7 @@ export default function AssetLibraryPage() {
 
   const filtered=useMemo(()=>assets.filter(a=>{
     const q=query.trim().toLowerCase(); const matches=!q||(a.name+" "+a.type+" "+a.projectName).toLowerCase().includes(q);
-    return matches&&(filter==="all"||assetCategory(a)===filter);
+    return matches&&categoryMatchesFilter(assetCategory(a),filter);
   }),[assets,query,filter]);
 
   const projectFolders=useMemo(()=>projects.map(project=>({
@@ -121,7 +121,7 @@ export default function AssetLibraryPage() {
       <div className="library-body"><strong>{asset.name}</strong><span>{category.toUpperCase()} · {asset.projectName}</span>
         <div className="library-action-grid"><button className="outline-btn" onClick={()=>void toggleInProject(asset)}>{asset.inProject?"✓ In Project":"+ Add to Project"}</button><button className="outline-btn" onClick={()=>void rename(asset)}>Rename</button>{category==="image"&&<button className="outline-btn library-edit-btn" onClick={()=>setEditing(asset)}>✦ Edit / AI Edit</button>}</div>
         <select className="library-project-select" defaultValue="" onChange={e=>{void copyToProject(asset,e.target.value);e.currentTarget.value=""}}><option value="">Copy to another project…</option>{projects.filter(p=>p.id!==asset.projectId).map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select>
-        <Link href={"/project/"+asset.projectId} className="outline-btn library-open-btn">{category==="image"?"Open project to edit":"Open project"}</Link>
+        {(asset.storageKey||asset.url)&&<a className="outline-btn" href={asset.storageKey?`/api/assets/content?key=${encodeURIComponent(asset.storageKey)}&download=1&name=${encodeURIComponent(asset.name)}`:asset.url} download={asset.name}>Download</a>}<Link href={"/project/"+asset.projectId} className="outline-btn library-open-btn">{category==="image"?"Open project to edit":"Open project"}</Link>
         <button type="button" className="danger-btn" onClick={()=>void handleDelete(asset)}>Delete asset</button>
       </div>
     </article>;

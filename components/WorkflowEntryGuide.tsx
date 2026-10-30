@@ -28,7 +28,7 @@ export default function WorkflowEntryGuide({
       {primary && <button type="button" className="build-btn" onClick={primary.onClick}>{primary.label}</button>}
       {!started && <span className="entry-guide-note">This opens the work area; it does not complete the step.</span>}
       {started && <details className="entry-guide-options" key={stage}>
-        <summary>Other options &amp; help</summary>
+        <summary>More options</summary>
         {nextActions.slice(1).map(action => <button type="button" key={action.label} className="outline-btn" onClick={action.onClick}>{action.label}</button>)}
         <button type="button" className="entry-guide-replay" onClick={onShowFirst}>Show the first step</button>
       </details>}
