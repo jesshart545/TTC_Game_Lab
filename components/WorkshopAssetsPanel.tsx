@@ -155,7 +155,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     </div>
     <button type="button" className="assets-upload-btn" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>＋ Upload</button>
   </div>
-{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 11 : 10} description="Grouped: create, upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools">
+{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 10 : 9} description="Grouped: create, upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools">
   <div className="creation-group"><strong>CREATE</strong><div>
     <button type="button" onClick={() => openWorkshopTool("media")}>Generate media</button>
     <button type="button" onClick={() => openWorkshopTool("media",true)}>Create background artwork</button>
