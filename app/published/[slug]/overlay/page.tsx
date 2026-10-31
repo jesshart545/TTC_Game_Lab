@@ -27,6 +27,7 @@ export default function PublishedProject() {
   const runtime = useRuntimeActions(project);
   const cards=useLiveCards(slug);
   const fireRef = useRef(runtime.fire); fireRef.current = runtime.fire;
+  const resetRef = useRef(runtime.resetGame); resetRef.current = runtime.resetGame;
   const [activePackage, setActivePackage] = useState<{ control: ProjectEvent; at: number } | null>(null);
   const [flash, setFlash] = useState(false); const [activeBackgroundKey, setActiveBackgroundKey] = useState<string | null>(null); const [spinning, setSpinning] = useState(false); const [wheelVisible, setWheelVisible] = useState(false); const [activeTools, setActiveTools] = useState<any[]>([]); const [chainAsset, setChainAsset] = useState<ProjectAsset | null>(null); const [triviaQuestion, setTriviaQuestion] = useState<any>(null); const [triviaRevealed, setTriviaRevealed] = useState(false); const [triviaTool, setTriviaTool] = useState<any>(null); const [usedTrivia, setUsedTrivia] = useState<Record<string, boolean>>({});
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function PublishedProject() {
           initialized = true;
           cursor = data.cursor;
           for (const event of data.events || []) {
+            if (event.type === "reset") { resetRef.current(); setYoutubeState(null); setTriviaQuestion(null); setTriviaRevealed(false); setUsedTrivia({}); setActivePackage(null); setWheelVisible(false); setSpinning(false); continue; }
             if (event.type === "youtube" && event.payload) { setYoutubeState(event.payload as YouTubeState); continue; }
             if (event.type === "youtube-feedback") continue;
             if (event.type === "trivia" && event.payload) {
