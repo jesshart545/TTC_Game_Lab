@@ -33,6 +33,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const sequenceProgress=useRef<SequenceProgress>({});
   const [sequenceRunning,setSequenceRunning]=useState(false),[sequenceError,setSequenceError]=useState("");
   const stopSequence=useCallback(()=>{sequence.current?.abort();setSequenceRunning(false);},[]);
+  const resetGame=useCallback(()=>{const p=latest.current;if(!p)return;sequence.current?.abort();setSequenceRunning(false);setSequenceError('');timers.current.forEach(clearTimeout);timers.current=[];timerStates.current={};coinPhases.current={};trivia.current={};setRuns([]);setBackgroundKey(null);setFlash(false);const next={...cardRef.current};for(const tool of p.gameTools){if(tool.enabled&&(infoTypes.includes(tool.type)||['question-card','blank-card','random-picker'].includes(tool.type)))next[tool.id]=cardTransition(p,tool,cardRef.current[tool.id]||freshCardState(),'new-game',Date.now());}cardRef.current=next;setCardStates(next);savedCallback.current?.(next);},[]);
   useEffect(()=>()=>sequence.current?.abort(),[]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
@@ -133,7 +134,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     }
     if (!control.toolIds?.length && !control.compositionId && !control.chain?.length) { setFlash(true); later(() => setFlash(false), 700); }
   }, [remove,cardCommand]);
-  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand,sequenceRunning,sequenceError,stopSequence };
+  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand,sequenceRunning,sequenceError,stopSequence,resetGame };
 }
 
 

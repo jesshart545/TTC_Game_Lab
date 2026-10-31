@@ -322,6 +322,10 @@
 .library-create-tools{margin-top:14px}
 .library-create-tools h4{margin:0 0 8px}
 .library-create-row{display:flex;flex-wrap:wrap;gap:8px}
+.build-reset-row{margin:10px 0}
+.build-reset-confirm{display:grid;gap:8px;padding:10px;border:1px solid #6b4a2f;border-radius:8px;background:#1d1608}
+.build-reset-confirm p{margin:0}
+.build-reset-actions{display:flex;gap:8px;flex-wrap:wrap}
 .fx-row{display:flex;gap:8px;flex-wrap:wrap}
 .fx-seconds{display:flex;align-items:center;gap:8px;color:#cfe3f5}
 .fx-seconds input{width:76px;padding:6px;color:#fff;background:#102132;border:1px solid #49677c;border-radius:6px}
