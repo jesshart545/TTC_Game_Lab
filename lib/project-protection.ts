@@ -1,5 +1,6 @@
 import { getDb } from "./db";
-import { deleteAsset, putAsset } from "./object-storage";
+import { assetExists, deleteAsset, getAssetBytes, putAsset } from "./object-storage";
+import { BACKUP_ASSET_PREFIX, backupAssetKey, getBackupMediaStorage, type BackupMediaStorage } from "./backup-storage";
 
 // Project deletion protection: soft-delete (trash), a deletion audit log,
 // nightly full-project backups, and restore-from-backup.
@@ -34,6 +35,7 @@ export function ensureProtectionSchema(db: Db) {
       await db`ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS export_key TEXT`;
       await db`ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS exported_at TIMESTAMPTZ`;
       await db`ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS export_error TEXT`;
+      await db`ALTER TABLE project_backups ADD COLUMN IF NOT EXISTS asset_backup JSONB`;
     })().catch(error => { schema = null; throw error; });
   }
   return schema;
@@ -154,6 +156,65 @@ export function backupExportKey(snapshotId: number, createdAt: string | Date) {
   return `backups/snapshot-${snapshotId}-${iso}.json`;
 }
 
+
+// ---- Off-site media backup ----
+//
+// A snapshot's JSON names every media file but does not hold the files
+// themselves, so a restore used to bring back projects pointing at missing
+// pictures, videos, and sounds. When a separate backup storage is configured
+// (lib/backup-storage.ts — Oracle Object Storage), every snapshot ALSO
+// copies each referenced media file there, once per file (storage keys are
+// unique and never overwritten, so a file already copied is skipped), plus
+// the snapshot JSON itself and a manifest. Restores copy any missing files
+// back. Pruning never deletes these copies: a kept snapshot may still point
+// at them, and they are the last resort in a disaster.
+
+export type AssetBackupSummary = { configured: boolean; snapshotExported: boolean; total: number; copied: number; alreadyPresent: number; totalBytes: number; failed: string[] };
+export const EMPTY_ASSET_BACKUP: AssetBackupSummary = { configured: false, snapshotExported: false, total: 0, copied: 0, alreadyPresent: 0, totalBytes: 0, failed: [] };
+
+export type AssetSource = {
+  read: (key: string) => Promise<{ bytes: Uint8Array; contentType: string }>;
+  exists: (key: string) => Promise<boolean>;
+  write: (key: string, bytes: Uint8Array, contentType: string) => Promise<void>;
+};
+const defaultAssetSource: AssetSource = {
+  read: key => getAssetBytes(key),
+  exists: key => assetExists(key),
+  write: (key, bytes, contentType) => putAsset(key, bytes, contentType),
+};
+
+export function collectAssetKeys(projects: Array<Record<string, unknown>>): string[] {
+  const keys = new Set<string>();
+  for (const project of projects) {
+    const data = project.data as { assets?: Array<{ storageKey?: unknown }> } | undefined;
+    for (const asset of data?.assets ?? []) {
+      if (typeof asset?.storageKey === "string" && asset.storageKey.startsWith("projects/")) keys.add(asset.storageKey);
+    }
+  }
+  return [...keys].sort();
+}
+
+export async function backupSnapshotAssets(payload: BackupPayload, media: BackupMediaStorage | null, source: AssetSource = defaultAssetSource): Promise<AssetBackupSummary> {
+  if (!media) return { ...EMPTY_ASSET_BACKUP };
+  const keys = collectAssetKeys(payload.projects);
+  const summary: AssetBackupSummary = { configured: true, snapshotExported: false, total: keys.length, copied: 0, alreadyPresent: 0, totalBytes: 0, failed: [] };
+  let existing = new Set<string>();
+  try { existing = new Set((await media.listKeys(BACKUP_ASSET_PREFIX)).map(k => k.slice(BACKUP_ASSET_PREFIX.length))); } catch { /* treated as empty; the copies below surface real failures per file */ }
+  const present: string[] = [];
+  for (const key of keys) {
+    if (existing.has(key)) { summary.alreadyPresent++; present.push(key); continue; }
+    try {
+      const { bytes, contentType } = await source.read(key);
+      await media.put(backupAssetKey(key), bytes, contentType);
+      summary.copied++; summary.totalBytes += bytes.length; present.push(key);
+    } catch { summary.failed.push(key); }
+  }
+  try {
+    await media.put("backups/manifest.json", JSON.stringify({ updatedAt: new Date().toISOString(), assets: present.sort() }), "application/json");
+  } catch { /* the manifest is bookkeeping; the copies themselves are the backup */ }
+  return summary;
+}
+
 // Prune to the newest `keep` snapshots. The DELETE only ever removes rows
 // outside the newest `keep`, so it can never remove the last remaining
 // snapshot. Exports belonging to pruned snapshots are deleted too (best
@@ -169,7 +230,7 @@ export async function pruneBackups(db: Db, keep = BACKUP_RETENTION, storage: Bac
   return removed.length;
 }
 
-export async function createBackupSnapshot(db: Db, storage: BackupExportStorage = defaultBackupExportStorage) {
+export async function createBackupSnapshot(db: Db, storage: BackupExportStorage = defaultBackupExportStorage, media: BackupMediaStorage | null = getBackupMediaStorage(), source: AssetSource = defaultAssetSource) {
   await ensureProtectionSchema(db);
   const payload = await buildBackupPayload(db);
   const rows = await db`INSERT INTO project_backups (project_count, payload) VALUES (${payload.projects.length}, ${JSON.stringify(payload)}::jsonb) RETURNING id, created_at`;
@@ -192,13 +253,27 @@ export async function createBackupSnapshot(db: Db, storage: BackupExportStorage 
   try {
     await db`UPDATE project_backups SET export_key = ${exportKey}, exported_at = ${exportedAt}, export_error = ${exportError} WHERE id = ${id}`;
   } catch { /* bookkeeping only — the snapshot itself already succeeded */ }
+  // Off-site full backup: the snapshot JSON and every media file it
+  // references are copied to the separate backup storage, when configured.
+  // A media-backup failure never fails the snapshot — it is recorded on the
+  // snapshot row instead, the same policy as the export above.
+  let assetBackup: AssetBackupSummary = { ...EMPTY_ASSET_BACKUP };
+  try {
+    assetBackup = await backupSnapshotAssets(payload, media, source);
+    if (media) {
+      try { await media.put(backupExportKey(Number(id), rows[0].created_at as string | Date), JSON.stringify(payload), "application/json"); assetBackup.snapshotExported = true; } catch { /* the summary still records the media copies */ }
+    }
+  } catch { assetBackup = { ...EMPTY_ASSET_BACKUP, configured: !!media, failed: ["media-backup-failed"] }; }
+  if (assetBackup.configured) {
+    try { await db`UPDATE project_backups SET asset_backup = ${JSON.stringify(assetBackup)}::jsonb WHERE id = ${id}`; } catch { /* bookkeeping only */ }
+  }
   const pruned = await pruneBackups(db, BACKUP_RETENTION, storage);
-  return { id, createdAt: rows[0].created_at, projectCount: payload.projects.length, pruned, exportKey, exportedAt, exportError };
+  return { id, createdAt: rows[0].created_at, projectCount: payload.projects.length, pruned, exportKey, exportedAt, exportError, assetBackup };
 }
 
 export async function listBackupSnapshots(db: Db) {
   await ensureProtectionSchema(db);
-  return db`SELECT id, created_at, project_count, export_key, exported_at, export_error FROM project_backups ORDER BY created_at DESC, id DESC`;
+  return db`SELECT id, created_at, project_count, export_key, exported_at, export_error, asset_backup FROM project_backups ORDER BY created_at DESC, id DESC`;
 }
 
 export async function getBackupSnapshot(db: Db, id: number) {
@@ -212,7 +287,7 @@ export async function getBackupSnapshot(db: Db, id: number) {
 // with that id or slug currently exists. If one does — live or trashed —
 // nothing is overwritten and a conflict is reported; the admin can restore
 // the trashed copy from Trash, or delete it forever, and then retry.
-export async function restoreProjectFromBackup(db: Db, snapshotId: number, projectId: string, actor: ProtectionActor) {
+export async function restoreProjectFromBackup(db: Db, snapshotId: number, projectId: string, actor: ProtectionActor, media: BackupMediaStorage | null = getBackupMediaStorage(), source: AssetSource = defaultAssetSource) {
   await ensureProtectionSchema(db);
   const snapshot = await getBackupSnapshot(db, snapshotId);
   if (!snapshot) return { ok: false as const, reason: "snapshot-not-found" as const };
@@ -235,7 +310,24 @@ export async function restoreProjectFromBackup(db: Db, snapshotId: number, proje
     }
   }
   await recordDeletionAudit(db, { projectId, projectTitle: String(entry.name ?? ""), ownerId: (entry.owner_id as string | null) ?? null, actor, action: "restore-backup" });
-  return { ok: true as const, id: projectId };
+  // Bring back any of the project's media files that are missing from live
+  // storage, using the off-site backup copies, when backup storage is set
+  // up. A file that cannot be brought back is reported, never fatal: the
+  // project row itself is already restored.
+  let assetsRestored = 0;
+  const assetsMissing: string[] = [];
+  if (media) {
+    for (const key of collectAssetKeys([entry])) {
+      try {
+        if (await source.exists(key)) continue;
+        const backed = await media.get(backupAssetKey(key));
+        if (!backed) { assetsMissing.push(key); continue; }
+        await source.write(key, backed.bytes, backed.contentType);
+        assetsRestored++;
+      } catch { assetsMissing.push(key); }
+    }
+  }
+  return { ok: true as const, id: projectId, assetsRestored, assetsMissing };
 }
 
 // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` when the CRON_SECRET

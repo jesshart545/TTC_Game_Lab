@@ -125,7 +125,7 @@ const objectStorageStub = {
   putAsset: async (key, body, contentType) => { if (defaultExportHook) return defaultExportHook.put(key, body, contentType); },
   deleteAsset: async key => { if (defaultExportHook) return defaultExportHook.remove(key); },
 };
-const protection = load('lib/project-protection.ts', id => id === './db' ? {} : id === './object-storage' ? objectStorageStub : require(id));
+const protection = load('lib/project-protection.ts', id => id === './db' ? {} : id === './object-storage' ? objectStorageStub : id === './backup-storage' ? { getBackupMediaStorage: () => null, backupAssetKey: k => 'backups/assets/' + k, BACKUP_ASSET_PREFIX: 'backups/assets/' } : require(id));
 function recordingStorage() {
   const objects = new Map(); const removed = [];
   return {
@@ -417,7 +417,7 @@ const params = id => ({ params: Promise.resolve({ id }) });
   {
     const sql = [];
     const recordingDb = async (parts, ...values) => { sql.push(parts.join('?').replace(/\s+/g, ' ').trim()); return []; };
-    const fresh = load('lib/project-protection.ts', id => id === './db' ? {} : id === './object-storage' ? objectStorageStub : require(id));
+    const fresh = load('lib/project-protection.ts', id => id === './db' ? {} : id === './object-storage' ? objectStorageStub : id === './backup-storage' ? { getBackupMediaStorage: () => null, backupAssetKey: k => 'backups/assets/' + k, BACKUP_ASSET_PREFIX: 'backups/assets/' } : require(id));
     await fresh.ensureProtectionSchema(recordingDb);
     await fresh.ensureProtectionSchema(recordingDb); // second call: memoized, no duplicate DDL
     await Promise.all([fresh.ensureProtectionSchema(recordingDb), fresh.ensureProtectionSchema(recordingDb)]);
