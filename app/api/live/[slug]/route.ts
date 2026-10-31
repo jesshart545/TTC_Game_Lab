@@ -233,7 +233,9 @@ export async function GET(request: Request, context: Context) {
   if(wheelId){
     const tool=live.project.gameTools.find(t=>t.id===wheelId&&t.type==="wheel"&&t.enabled);
     if(!tool)return NextResponse.json({error:"Wheel not found."},{status:404});
-    const rows=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='wheel-slots' AND control_id=${wheelId} ORDER BY id DESC LIMIT 1`;
+    const resetRows=await live.db`SELECT COALESCE(MAX(id), 0) AS reset_id FROM live_events WHERE project_id = ${live.project.id} AND event_type = 'reset' AND payload->>'wipe' = 'true'`;
+    const resetId=Number(resetRows[0].reset_id);
+    const rows=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='wheel-slots' AND control_id=${wheelId} AND id>${resetId} ORDER BY id DESC LIMIT 1`;
     return NextResponse.json({segments:rows[0]?.payload?.segments||tool.config.segments||[]},{headers:{"Cache-Control":"no-store"}});
   }
   const since = Number(new URL(request.url).searchParams.get("since") || 0);
@@ -318,7 +320,7 @@ export async function POST(request: Request, context: Context) {
         try{ await changeCard(live.db,live.project,tool.id,'new-game'); }catch{}
       }
     }
-    const payload=JSON.stringify({at:Date.now()});
+    const payload=JSON.stringify({at:Date.now(),wipe:!!body.wipeEdits});
     const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},'reset-game','reset',${payload}::jsonb) RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id)});
   }
@@ -519,7 +521,8 @@ export async function POST(request: Request, context: Context) {
     if(tool.type==="wheel"){
       let entries=tool.type==="wheel"?tool.config.segments:tool.config.items;
       if(tool.type==="wheel"){
-        const saved=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='wheel-slots' AND control_id=${tool.id} ORDER BY id DESC LIMIT 1`;
+        const resetRows=await live.db`SELECT COALESCE(MAX(id), 0) AS reset_id FROM live_events WHERE project_id = ${live.project.id} AND event_type = 'reset' AND payload->>'wipe' = 'true'`;
+        const saved=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='wheel-slots' AND control_id=${tool.id} AND id>${Number(resetRows[0].reset_id)} ORDER BY id DESC LIMIT 1`;
         entries=saved[0]?.payload?.segments||entries;
       }
       if(!Array.isArray(entries)||!entries.length)return NextResponse.json({error:"Add choices before spinning or picking."},{status:400});
