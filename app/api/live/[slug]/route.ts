@@ -239,20 +239,22 @@ export async function GET(request: Request, context: Context) {
   const since = Number(new URL(request.url).searchParams.get("since") || 0);
   if (!Number.isSafeInteger(since) || since < 0) return NextResponse.json({ error: "Invalid cursor." }, { status: 400 });
   if (new URL(request.url).searchParams.has("init")) {
+    const resetRows = await live.db`SELECT COALESCE(MAX(id), 0) AS reset_id FROM live_events WHERE project_id = ${live.project.id} AND event_type = 'reset'`;
+    const resetId = Number(resetRows[0].reset_id);
     const rows = await live.db`SELECT COALESCE(MAX(id), 0) AS cursor FROM live_events WHERE project_id = ${live.project.id}`;
-    const usedRows = await live.db`SELECT payload FROM live_events WHERE project_id = ${live.project.id} AND event_type = 'trivia' AND payload->>'action' = 'question' ORDER BY id ASC`;
+    const usedRows = await live.db`SELECT payload FROM live_events WHERE project_id = ${live.project.id} AND event_type = 'trivia' AND payload->>'action' = 'question' AND id > ${resetId} ORDER BY id ASC`;
     const usedTrivia = usedRows.map(row => {
       const payload = row.payload as { categoryIndex?: number; questionIndex?: number } | null;
       return Number.isInteger(payload?.categoryIndex) && Number.isInteger(payload?.questionIndex) ? `${payload!.categoryIndex}:${payload!.questionIndex}` : null;
     }).filter(Boolean);
     const pollControls=live.project.controls.filter(control=>control.toolIds?.some(id=>live.project.gameTools.some(tool=>tool.id===id && tool.enabled && tool.inToolbox && tool.type==="poll")));
     const activePolls=(await Promise.all(pollControls.map(async control=>{
-      const latest=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${control.id} AND event_type='control' AND created_at > NOW() - INTERVAL '1 hour' ORDER BY id DESC LIMIT 1`;
+      const latest=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${control.id} AND event_type='control' AND created_at > NOW() - INTERVAL '1 hour' AND id > ${resetId} ORDER BY id DESC LIMIT 1`;
       return latest[0];
     }))).filter(Boolean);
-    const latestTrivia=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='trivia' ORDER BY id DESC LIMIT 1`;
+    const latestTrivia=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='trivia' AND id > ${resetId} ORDER BY id DESC LIMIT 1`;
     const activeTrivia=latestTrivia[0]?.payload?.action !== "close" ? latestTrivia.filter(Boolean) : [];
-    const youtube = await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube' AND created_at > NOW() - INTERVAL '4 hours' ORDER BY id DESC LIMIT 1`;
+    const youtube = await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube' AND created_at > NOW() - INTERVAL '4 hours' AND id > ${resetId} ORDER BY id DESC LIMIT 1`;
     if (youtube[0]?.payload) {
       const state=youtube[0].payload as YouTubeState;
       const reports=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND event_type='youtube-feedback' AND payload->>'playbackId'=${state.playbackId} ORDER BY id DESC LIMIT 1`;
@@ -266,14 +268,14 @@ export async function GET(request: Request, context: Context) {
         else youtube[0].payload={...state,position,at:Date.now(),action:reported && report.status==="paused" ? "pause" : state.action};
       }
     }
-    const background=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${live.project.controls.filter(c=>c.action.startsWith("background.show.")).map(c=>c.id)}) ORDER BY id DESC LIMIT 1`;
+    const background=await live.db`SELECT id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND id > ${resetId} AND control_id=ANY(${live.project.controls.filter(c=>c.action.startsWith("background.show.")).map(c=>c.id)}) ORDER BY id DESC LIMIT 1`;
     const coinControlIds=live.project.controls.filter(control=>control.action.startsWith('coin.cycle.')).map(control=>control.id);
-    const coinEvents=coinControlIds.length?await live.db`SELECT DISTINCT ON(control_id) id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${coinControlIds}) ORDER BY control_id,id DESC`:[];
+    const coinEvents=coinControlIds.length?await live.db`SELECT DISTINCT ON(control_id) id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND id > ${resetId} AND control_id=ANY(${coinControlIds}) ORDER BY control_id,id DESC`:[];
     const activeCoins=coinEvents.filter(event=>Object.values(event.payload?.outcomes||{}).some((outcome:any)=>outcome.phase==='show'||outcome.phase==='flip'));
     const timerIds=live.project.controls.filter(c=>timerAction(c.action)).map(c=>c.id);
-    const activeTimers=timerIds.length?await live.db`SELECT DISTINCT ON(payload->>'timerId') id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${timerIds}) ORDER BY payload->>'timerId',id DESC`:[];
+    const activeTimers=timerIds.length?await live.db`SELECT DISTINCT ON(payload->>'timerId') id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND id > ${resetId} AND control_id=ANY(${timerIds}) ORDER BY payload->>'timerId',id DESC`:[];
     const ccssToolIds=live.project.gameTools.filter(t=>t.type==='city-crime-scene'&&t.enabled).map(t=>t.id);
-    const ccssEvents=ccssToolIds.length?await live.db`SELECT DISTINCT ON(control_id) id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND control_id=ANY(${ccssToolIds}) ORDER BY control_id,id DESC`:[];
+    const ccssEvents=ccssToolIds.length?await live.db`SELECT DISTINCT ON(control_id) id,control_id,event_type,payload FROM live_events WHERE project_id=${live.project.id} AND event_type='control' AND id > ${resetId} AND control_id=ANY(${ccssToolIds}) ORDER BY control_id,id DESC`:[];
     const activeCcss=ccssEvents.filter(event=>{try{return JSON.parse(String(event.payload?.outcomes?.[event.control_id]?.result||'{}')).kind!=='hide';}catch{return true;}});
     const events=[...activeTimers,...activeCcss,...background,...activePolls,...activeTrivia,...youtube,...activeCoins].sort((a,b)=>Number(a.id)-Number(b.id)).map(row=>({id:Number(row.id),controlId:row.control_id,type:row.event_type,payload:row.payload}));
     return NextResponse.json({ cursor: Number(rows[0].cursor), events, usedTrivia }, { headers: { "Cache-Control": "no-store" } });
@@ -307,6 +309,18 @@ export async function POST(request: Request, context: Context) {
     const payload=JSON.stringify({segments});
     await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${tool.id},'wheel-slots',${payload}::jsonb)`;
     return NextResponse.json({ok:true,segments});
+  }
+
+  if(body.resetGame){
+    const cardTypes=['question-card','blank-card','random-picker','scoreboard','prize-list','game-tool-list'];
+    for(const tool of live.project.gameTools){
+      if(tool.enabled&&tool.inOverlayBuild&&cardTypes.includes(tool.type)){
+        try{ await changeCard(live.db,live.project,tool.id,'new-game'); }catch{}
+      }
+    }
+    const payload=JSON.stringify({at:Date.now()});
+    const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},'reset-game','reset',${payload}::jsonb) RETURNING id`;
+    return NextResponse.json({ok:true,id:Number(rows[0].id)});
   }
 
   // ---- Cliffhanger: price guess from host panel (no controlId, like wheelSlots) ----
