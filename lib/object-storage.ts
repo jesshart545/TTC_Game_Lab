@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const ASSET_BUCKET = "ttcgamelab";
@@ -73,4 +73,19 @@ export async function deleteAssetsByPrefix(prefix: string) {
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
   } while (continuationToken);
   return deleted;
+}
+
+export async function getAssetBytes(key: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  const out = await getAssetStorage().send(new GetObjectCommand({ Bucket: ASSET_BUCKET, Key: key }));
+  const bytes = out.Body ? await out.Body.transformToByteArray() : new Uint8Array();
+  return { bytes, contentType: out.ContentType || "application/octet-stream" };
+}
+
+export async function assetExists(key: string): Promise<boolean> {
+  try {
+    await getAssetStorage().send(new HeadObjectCommand({ Bucket: ASSET_BUCKET, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
 }

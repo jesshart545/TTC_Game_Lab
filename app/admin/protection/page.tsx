@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Snapshot = { id: number; createdAt: string | null; projectCount: number; exportKey: string | null; exportedAt: string | null; exportError: string | null };
+type Snapshot = { id: number; createdAt: string | null; projectCount: number; exportKey: string | null; exportedAt: string | null; exportError: string | null; assetBackup: { configured: boolean; snapshotExported: boolean; total: number; copied: number; alreadyPresent: number; totalBytes: number; failed: string[] } | null };
 type AuditEntry = { id: number; projectId: string; projectTitle: string; ownerId: string | null; actorEmail: string | null; action: string; createdAt: string | null };
 type SnapshotProject = { id: string; name: string; status: string; ownerId: string | null; trashedAtBackup: string | null };
 
@@ -79,7 +79,7 @@ export default function AdminProtectionPage() {
     {admin === false && <p role="alert">Admin access required. Sign in with an admin account to manage backups.</p>}
     {admin === true && <>
       <section><h2>Backups</h2>
-        <p>Every night all project data is backed up automatically; the newest {14} snapshots are kept. Each snapshot is also copied to external object storage, so a copy survives even if the database itself is lost — the newest snapshot's storage key is shown below, which is what you would retrieve in a disaster. A backup can recreate a project exactly as it was — use it when a project disappears outside the normal delete flow.</p>
+        <p>Every night all project data is backed up automatically; the newest {14} snapshots are kept. Each snapshot is also copied to external object storage, and every project's media files — every picture, video, and sound — are copied to the separate off-site backup storage as part of the same backup, so a restore brings back the whole project, files included. A backup can recreate a project exactly as it was — use it when a project disappears outside the normal delete flow.</p>
         <button type="button" className="build-btn" disabled={busy} onClick={backUpNow}>Back up now</button>
         {snapshots.length === 0 && <p>No backups yet. Run one now, or wait for tonight's automatic backup.</p>}
         <ul>
@@ -94,6 +94,12 @@ export default function AdminProtectionPage() {
                   ? <>External copy: saved {new Date(snapshot.exportedAt).toLocaleString()}{snapshot.exportKey ? <> · <code>{snapshot.exportKey}</code></> : null}</>
                   : <>External copy: none recorded</>}
             </small></div>
+            {snapshot.assetBackup?.configured && <div><small>
+              Off-site media backup: {snapshot.assetBackup.total === 0
+                ? "no media files in this snapshot"
+                : <>{snapshot.assetBackup.alreadyPresent + snapshot.assetBackup.copied} of {snapshot.assetBackup.total} file(s) held off-site{snapshot.assetBackup.failed.length ? <> · <strong>{snapshot.assetBackup.failed.length} could not be copied</strong></> : null}</>}
+              {snapshot.assetBackup.snapshotExported ? " · snapshot data copied off-site too" : ""}
+            </small></div>}
             {openSnapshot === snapshot.id && <ul>
               {snapshotProjects.map(project => <li key={project.id}>
                 {project.name} <small>({project.status}{project.trashedAtBackup ? ", was in Trash" : ""})</small>{" "}
