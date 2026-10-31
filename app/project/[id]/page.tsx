@@ -356,8 +356,11 @@ export default function ProjectWorkspace() {
     setYoutubeFeedback(null); setYoutubePreview(next); if(action==="play") setAssetStatus("Testing YouTube in the audience preview. Use the controls below to pause, resume or hide it before publishing.");
     return next;
   }
-  function resetDraftGame(){
+  const builtWheels=useRef<{projectId:string;segments:Record<string,string[]>}|null>(null);
+  useEffect(()=>{ if(project&&(!builtWheels.current||builtWheels.current.projectId!==project.id)){ const segments:Record<string,string[]>={}; for(const t of project.gameTools){ if(t.type==="wheel") segments[t.id]=[...((t.config.segments as string[]|undefined)||[])]; } builtWheels.current={projectId:project.id,segments}; } },[project]);
+  function resetDraftGame(wipeEdits:boolean){
     runtime.resetGame();
+    if(wipeEdits){ const snap=builtWheels.current; const current=projectRef.current; if(snap&&current&&snap.projectId===current.id){ const restored=current.gameTools.map(t=>t.type==="wheel"&&snap.segments[t.id]?{...t,config:{...t.config,segments:[...snap.segments[t.id]]}}:t); if(restored.some((t,i)=>t!==current.gameTools[i])) persist({...current,gameTools:restored}); } }
     if(youtubePreview&&youtubePreview.action!=="stop"){void previewYoutube({action:"stop"}).catch(()=>{});}
     setPreviewAction(null);setActiveTrivia(null);setTriviaAnswerRevealed(false);setTriviaConfig(null);
   }
