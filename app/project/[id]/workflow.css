@@ -319,6 +319,9 @@
 .library-audio-tile audio{width:100%;height:32px}
 .library-effects{display:grid;gap:8px;max-width:520px}
 .library-effects h4{margin:6px 0 0}
+.library-create-tools{margin-top:14px}
+.library-create-tools h4{margin:0 0 8px}
+.library-create-row{display:flex;flex-wrap:wrap;gap:8px}
 .fx-row{display:flex;gap:8px;flex-wrap:wrap}
 .fx-seconds{display:flex;align-items:center;gap:8px;color:#cfe3f5}
 .fx-seconds input{width:76px;padding:6px;color:#fff;background:#102132;border:1px solid #49677c;border-radius:6px}
