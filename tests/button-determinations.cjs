@@ -89,3 +89,16 @@ const runtime = fs.readFileSync('components/RuntimeActionLayers.tsx', 'utf8');
 const toolRun = runtime.slice(runtime.indexOf('function ToolRun'), runtime.indexOf('function motionStyle'));
 assert(toolRun.includes('...motionStyle(run)'), 'tool layers honor the entrance/exit effect the strip sets');
 console.log('PASS: the strip renders at the selected button and tool layers honor the effect it sets.');
+
+// The strip sits at the TOP of the selected item's settings panel for every button:
+// immediately under the "Set up:" header, above the tool setup editor and all other controls.
+const panelIdx = buildSpace.indexOf('aria-label="Selected item settings"');
+const stripIdx = buildSpace.indexOf('className="button-facts"');
+assert.equal(buildSpace.split('className="button-facts"').length - 1, 1, 'the strip renders exactly once');
+assert(panelIdx !== -1 && stripIdx > panelIdx, 'the strip is inside the selected item settings panel');
+const headerEnd = buildSpace.indexOf('</h3>', panelIdx);
+assert(headerEnd !== -1 && stripIdx > headerEnd && stripIdx - headerEnd < 600, 'the strip comes immediately after the panel header');
+assert(stripIdx < buildSpace.indexOf('<GameToolEditor'), 'the strip renders before the tool setup editor');
+assert(stripIdx < buildSpace.indexOf('<QuestionCardEditor'), 'the strip renders before the card editor');
+assert(stripIdx < buildSpace.indexOf('Button name on your dashboard'), 'the strip renders before the button name field');
+console.log('PASS: the strip sits at the top of the settings panel, above the tool setup editor and every other control.');
