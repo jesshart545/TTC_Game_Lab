@@ -10,8 +10,8 @@ import { cardDesign, questionPool } from '../lib/question-cards';
 import { FittedCard, StyledTimer } from './QuestionCards';
 const steps=['Content','Look','Size & position','Review'];
 const fonts=fontFamilies;
-export default function QuestionCardEditor({project,tool,onSave,individual=false}:{project:Project;tool:GameTool;onSave:(tool:GameTool)=>void;individual?:boolean}){
- const {draft,commit,patchConfig,patchTool,patchDesign}=useEditableTool(tool,onSave);
+export default function QuestionCardEditor({project,tool,onSave,individual=false,deferSave=false}:{project:Project;tool:GameTool;onSave:(tool:GameTool)=>void;individual?:boolean;deferSave?:boolean}){
+ const {draft,commit,patchConfig,patchTool,patchDesign}=useEditableTool(tool,onSave,deferSave);
  const [answer,setAnswer]=useState(false),[sample,setSample]=useState(''),[saved,setSaved]=useState(false),[step,setStep]=useState(0),[replay,setReplay]=useState(0);
  const paired=draft.type==='question-card',key=answer?'answerCard':'questionCard',cfg=cardDesign(draft,answer);
  const update=(patch:Record<string,unknown>)=>{patchConfig(patch);setSaved(true);};

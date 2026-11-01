@@ -246,16 +246,18 @@ export default function ProjectWorkspace() {
   const [triviaListQuestions, setTriviaListQuestions] = useState<any[]>([]);
   const [triviaListBusy, setTriviaListBusy] = useState(false);
   const [newCardEditorId,setNewCardEditorId]=useState("");
+  const [cardDraft,setCardDraft]=useState<{tool:GameTool;controls:Project["controls"]}|null>(null);
   const newCardDialog=useRef<HTMLDialogElement>(null);
   const [listEditorId,setListEditorId]=useState("");
+  const [listDraft,setListDraft]=useState<GameTool|null>(null);
   const listDialog=useRef<HTMLDialogElement>(null);
   useEffect(()=>{if(listEditorId&&listDialog.current&&!listDialog.current.open){listDialog.current.showModal();listDialog.current.querySelector<HTMLInputElement>('input')?.focus();}},[listEditorId]);
-  function openNewList(){const current=projectRef.current;if(!current)return;const list=createCardList();persist({...current,gameTools:[...current.gameTools,list]});setListEditorId(list.id);}
+  function openNewList(){const current=projectRef.current;if(!current)return;const list=createCardList();setListDraft(list);setListEditorId(list.id);}
 
   useEffect(()=>{if(newCardEditorId&&newCardDialog.current&&!newCardDialog.current.open){newCardDialog.current.showModal();newCardDialog.current.querySelector<HTMLInputElement>('input')?.focus();}},[newCardEditorId]);
   function createWorkshopCard(kind:'question'|'blank'){
     const current=projectRef.current||project;if(!current)return;
-    try{const next=createCardSystem(current,undefined,kind);const card=next.gameTools[next.gameTools.length-1];persist(next);setNewCardEditorId(card.id);setAssetStatus(kind==='blank'?'Blank card created. Customize it in the editor.':'Question and answer cards created. Choose their question pool and customize their appearance.');}
+    try{const next=createCardSystem(current,undefined,kind);const card=next.gameTools[next.gameTools.length-1];setCardDraft({tool:card,controls:next.controls.filter(c=>!current.controls.some(x=>x.id===c.id))});setNewCardEditorId(card.id);setAssetStatus(kind==='blank'?'Blank card created. Customize it in the editor.':'Question and answer cards created. Choose their question pool and customize their appearance.');}
     catch(error){setAssetStatus(error instanceof Error?error.message:'Card creation failed. Please try again.');}
   }
   const [showBoardTemplates, setShowBoardTemplates] = useState(false);
@@ -290,6 +292,7 @@ export default function ProjectWorkspace() {
     void queueOrGenerate(job.type, job.prompt, job.options);
   }, [assetBusy, generationQueue]);
   const [boardDesignerId,setBoardDesignerId]=useState("");
+  const [boardDraft,setBoardDraft]=useState<GameTool|null>(null);
   const [backgroundDestinationKey,setBackgroundDestinationKey]=useState("");
   const [triviaConfig, setTriviaConfig] = useState<any>(null);
   const [activeTrivia, setActiveTrivia] = useState<string | null>(null);
@@ -516,7 +519,9 @@ export default function ProjectWorkspace() {
     const config = {...toolDefaults(type),...(type==='youtube'?{placement:youtubePlacement}:type==='trivia-board'?TRIVIA_CONFIG:{})};
     const tool: GameTool = { id: `${type}-${Date.now()}`, type, name: info.name, enabled:true, inToolbox: type !== "trivia-board" && type !== "blank-board", config };
     const next = { ...latest, gameTools:[...existing,tool], updatedAt:"just now" };
-    persist(next);
+    // Boards open in the Board Designer first: the tool stays a draft (held outside the
+    // project) until the designer explicitly saves it, so backing out creates nothing.
+    if (type !== "blank-board" && type !== "trivia-board") persist(next);
 
     if(type === "youtube") { setPreviewMode("dashboard");setSideBySideTesting(true); setAssetStatus("YouTube tool is in your dashboard toolbox. Choose where it belongs and what dashboard control should open it, then test in the paired previews."); return; }
 
@@ -527,12 +532,14 @@ export default function ProjectWorkspace() {
     }
 
     if (type === "blank-board") {
+      setBoardDraft(tool);
       setBoardDesignerId(tool.id);
       setPreviewMode("overlay");
       setAssetStatus("Blank Board is ready in the workspace. Add or generate its background and describe interactive areas to the AI Creative Director, then use Add to Overlay Build when it is finished.");
       return;
     }
 
+    setBoardDraft(tool);
     setBoardDesignerId(tool.id);
     // Trivia Board starts with a sourced 5×5 board.
     // Seed it with a real sourced board immediately so Add never creates an invisible empty board.
@@ -546,8 +553,15 @@ export default function ProjectWorkspace() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trivia generation failed.");
       const nextConfig = { categories: Array.isArray(data.categories) ? data.categories : [] };
-      const current = projectRef.current || next;
-      persist({ ...current, gameTools:(current.gameTools || []).map(t=>t.id===tool.id ? { ...t, config:nextConfig } : t), updatedAt:"just now" });
+      const current = projectRef.current;
+      if (current && (current.gameTools || []).some(t=>t.id===tool.id)) {
+        // The board was explicitly saved while generation ran: seed its questions in place.
+        persist({ ...current, gameTools:(current.gameTools || []).map(t=>t.id===tool.id ? { ...t, config:nextConfig } : t), updatedAt:"just now" });
+      } else {
+        // Not saved yet: seed the draft the designer is holding. If the designer was
+        // backed out of, the draft is gone and the generated board is discarded.
+        setBoardDraft(draftTool => draftTool && draftTool.id===tool.id ? { ...draftTool, config:nextConfig } : draftTool);
+      }
       setTriviaConfig(nextConfig);
       setTriviaTopics(nextConfig.categories.map((category:any)=>String(category.name || "")));
       setAssetStatus("5×5 Trivia Board is ready in the workspace. Customize its categories, questions, visuals and interactive areas with the AI Creative Director. Push it to the audience overlay only when it is finished.");
@@ -1500,10 +1514,12 @@ export default function ProjectWorkspace() {
   });
   const selectedAssetIndex=project.assets.findIndex(asset=>(asset.storageKey||asset.name)===selectedAssetKey);
   const selectedAsset=selectedAssetIndex>=0?project.assets[selectedAssetIndex]:null;
-  const editingBoard=project.gameTools.find(t=>t.id===boardDesignerId);
+  const editingBoard=project.gameTools.find(t=>t.id===boardDesignerId)||(boardDraft&&boardDraft.id===boardDesignerId?boardDraft:undefined);
+  const listEditorTool=listEditorId?project.gameTools.find(t=>t.id===listEditorId)||(listDraft&&listDraft.id===listEditorId?listDraft:undefined):undefined;
+  const cardEditorTool=newCardEditorId?project.gameTools.find(t=>t.id===newCardEditorId)||(cardDraft&&cardDraft.tool.id===newCardEditorId?cardDraft.tool:undefined):undefined;
   const ccssBuilderView=ccssBuilder.renderBuilder();
   if(ccssBuilderView)return ccssBuilderView;
-  if(editingBoard)return <main className="workspace-page"><div className="jewel-access-bar"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={()=>{setBoardDesignerId("");openJewel();}}>✦ Ask Jewel</button></div><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t)});}} onClose={()=>setBoardDesignerId("")} onCreateArtwork={()=>{setBoardDesignerId("");setShowGenerator(true);setGeneratorType("video");setGeneratorPrompt("Create a seamless animated game board background. Keep game spaces readable. ");setBackgroundIntent(true);}}/></main>;
+  if(editingBoard)return <main className="workspace-page"><div className="jewel-access-bar"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={()=>{setBoardDesignerId("");setBoardDraft(null);openJewel();}}>✦ Ask Jewel</button></div><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} deferSave={!project.gameTools.some(t=>t.id===editingBoard.id)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist({...current,gameTools:exists?current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t):[...current.gameTools,next]});}} onClose={()=>{setBoardDesignerId("");setBoardDraft(null);}} onCreateArtwork={()=>{setBoardDesignerId("");setBoardDraft(null);setShowGenerator(true);setGeneratorType("video");setGeneratorPrompt("Create a seamless animated game board background. Keep game spaces readable. ");setBackgroundIntent(true);}}/></main>;
   const draftOverlay = <>{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">${q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}<RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
   return <main className="workspace-page">
     <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span></div><div className="workspace-actions"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={openJewel}>✦ Ask Jewel</button>{workflowStep===1&&<div className="workspace-history-group" role="group" aria-label="Undo and redo"><button type="button" className="outline-btn" onClick={undoManualEdit} disabled={historyDepth.undo===0} title="Undo (Ctrl+Z)">&#8617; Undo</button><button type="button" className="outline-btn" onClick={redoManualEdit} disabled={historyDepth.redo===0} title="Redo (Ctrl+Y)">&#8618; Redo</button></div>}<div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : "Save progress"}</button><small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small></div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
@@ -1718,8 +1734,8 @@ export default function ProjectWorkspace() {
     {confirmingProjectDelete && <ConfirmDialog title="Move project to Trash?" message={`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash in the project library, or delete it forever there.`} confirmLabel="Move to Trash" danger onConfirm={() => { setConfirmingProjectDelete(false); void doDeleteProject(); }} onCancel={() => setConfirmingProjectDelete(false)} />}
     {assetPendingDelete && <ConfirmDialog title="Delete this asset?" message={`Delete "${assetPendingDelete.name}" from this project?`} confirmLabel="Delete asset" danger onConfirm={() => { const asset = assetPendingDelete; setAssetPendingDelete(null); void doDeleteAsset(asset); }} onCancel={() => setAssetPendingDelete(null)} />}
     {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}
-    {listEditorId&&project.gameTools.find(t=>t.id===listEditorId)&&<dialog ref={listDialog} className="card-creation-dialog" aria-label="List and card creator" onCancel={()=>setListEditorId("")}><button type="button" onClick={()=>{listDialog.current?.close();setListEditorId("");}}>Close list creator</button><CardListEditor key={listEditorId} project={project} tool={project.gameTools.find(t=>t.id===listEditorId)!} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)});}}/></dialog>}
-    {newCardEditorId&&project.gameTools.find(t=>t.id===newCardEditorId)&&<dialog ref={newCardDialog} className="card-creation-dialog" aria-label="Card designer" onCancel={()=>setNewCardEditorId("")}><button type="button" className="outline-btn" onClick={()=>{newCardDialog.current?.close();setNewCardEditorId("");}}>Close card editor</button><p role="status">Follow the steps below to customize your card, then save your changes.</p><QuestionCardEditor key={newCardEditorId} project={project} tool={project.gameTools.find(t=>t.id===newCardEditorId)!} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)});}}/></dialog>}
+    {listEditorId&&listEditorTool&&<dialog ref={listDialog} className="card-creation-dialog" aria-label="List and card creator" onCancel={()=>{setListEditorId("");setListDraft(null);}}><button type="button" onClick={()=>{listDialog.current?.close();setListEditorId("");setListDraft(null);}}>Close list creator</button><CardListEditor key={listEditorId} project={project} tool={listEditorTool} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.some(t=>t.id===next.id)?current.gameTools.map(t=>t.id===next.id?next:t):[...current.gameTools,next]});}}/></dialog>}
+    {newCardEditorId&&cardEditorTool&&<dialog ref={newCardDialog} className="card-creation-dialog" aria-label="Card designer" onCancel={()=>{setNewCardEditorId("");setCardDraft(null);}}><button type="button" className="outline-btn" onClick={()=>{newCardDialog.current?.close();setNewCardEditorId("");setCardDraft(null);}}>Close card editor</button><p role="status">Follow the steps below to customize your card, then save your changes.</p><QuestionCardEditor key={newCardEditorId} project={project} tool={cardEditorTool} deferSave={!project.gameTools.some(t=>t.id===newCardEditorId)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist(exists?{...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)}:{...current,gameTools:[...current.gameTools,next],controls:[...current.controls,...(cardDraft&&cardDraft.tool.id===next.id?cardDraft.controls.filter(c=>!current.controls.some(x=>x.id===c.id)):[])]});}}/></dialog>}
   </main>;
 }
 
