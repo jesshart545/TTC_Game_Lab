@@ -16,6 +16,7 @@ import QuestionCardEditor from "../../../components/QuestionCardEditor";
 import QuestionHostPanel from "../../../components/QuestionHostPanel";
 import GoogleSearch from "../../../components/GoogleSearch";
 import {createCardSystem} from "../../../lib/question-cards";
+import { uniqueTriviaListName } from "../../../lib/trivia-list-name";
 import BuildSpace, { type BuildEntryRequest } from "../../../components/BuildSpace";
 import ProjectWorkflowNav from "../../../components/ProjectWorkflowNav";
 import WorkflowEntryGuide from "../../../components/WorkflowEntryGuide";
@@ -496,8 +497,8 @@ export default function ProjectWorkspace() {
       const questions=[...all,...review];
       if(!questions.length)throw new Error(lastError||"No source-backed questions could be found. Try another category.");
       setTriviaListQuestions(questions);
-      const tool:any={id:`trivia-list-${Date.now()}`,type:"trivia-list",name:`Trivia Question List (${questions.length})`,enabled:true,inToolbox:true,config:{title:"Trivia Question List",requestedCount:target,suggestedCategories:categories,questions,verifiedCount:all.length,reviewCount:review.length}};
       const base = projectRef.current || options?.baseProject || project;
+      const tool:any={id:`trivia-list-${Date.now()}`,type:"trivia-list",name:uniqueTriviaListName((base.gameTools||[]).filter(t=>t.type==="trivia-list").map(t=>t.name),`Trivia Question List (${questions.length})`),enabled:true,inToolbox:true,config:{title:"Trivia Question List",requestedCount:target,suggestedCategories:categories,questions,verifiedCount:all.length,reviewCount:review.length}};
       const saved = {...base,gameTools:[...(base.gameTools||[]),tool],updatedAt:"just now"};
       persist(saved);
       const summary = `${all.length} verified; ${review.length} * need manual verification; ${target-questions.length} still missing. Review starred questions against their linked sources before use.`;
