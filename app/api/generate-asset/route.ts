@@ -2,6 +2,7 @@ import { videoDuration } from "../../../lib/video-duration";
 import { musicDuration } from "../../../lib/music-duration";
 import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
 import { ACE_STEP_MODEL, KOKORO_MODEL, generateKokoroVoice, submitAceStepMusic } from "../../../lib/gradio-space";
+import { AGNES_IMAGE_MODEL, AGNES_VIDEO_MODEL, encodeAgnesImageResultId, generateAgnesImage, submitAgnesVideo } from "../../../lib/agnes-media";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -86,22 +87,69 @@ export async function POST(request: Request) {
     // Caliber: 2K default so full-bleed overlay art stays sharp on the 1920×1080 canvas.
     const allowedResolutions = ["0.5K", "1K", "2K", "4K"];
     const resolution = allowedResolutions.includes(String(body?.resolution)) ? String(body.resolution) : "2K";
-    const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
-      method: "POST",
-      headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt,
-        ...(referenceImage ? { image_urls: [referenceImage] } : {}),
-        num_images: 1,
-        aspect_ratio: body?.aspectRatio || "16:9",
-        output_format: "png",
-        resolution,
-        limit_generations: true,
-      }),
-      cache: "no-store",
-    });
-    const submitPayload = await submitResponse.json().catch(() => ({}));
-    if (!submitResponse.ok) return falError("image", submitResponse.status, submitPayload, "Nano Banana 2 image generation failed.");
+    let submitResponse: Response | null = null;
+    let submitPayload: any = {};
+    let connectionFailed = false;
+    try {
+      submitResponse = await fetch(`https://queue.fal.run/${model}`, {
+        method: "POST",
+        headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          ...(referenceImage ? { image_urls: [referenceImage] } : {}),
+          num_images: 1,
+          aspect_ratio: body?.aspectRatio || "16:9",
+          output_format: "png",
+          resolution,
+          limit_generations: true,
+        }),
+        cache: "no-store",
+      });
+      submitPayload = await submitResponse.json().catch(() => ({}));
+    } catch { connectionFailed = true; }
+    if (connectionFailed || !submitResponse || !submitResponse.ok) {
+      const status = submitResponse?.status ?? 0;
+      const message = providerMessage(submitPayload);
+      // Same fallback discipline as music/voice: provider outages switch
+      // to the Agnes image model; billing failures alert the admin once,
+      // here, even when Agnes serves the creator; input-class failures
+      // stay on the fal path byte-for-byte.
+      const billingFailure = isCreditError(status, message) || isLockError(message);
+      if (connectionFailed || isProviderOutage(status, message)) {
+        if (billingFailure) {
+          await notifyAdminOfCreditIssue("generate-asset/image", `fal.ai request failed (HTTP ${status}): ${message || "no detail"}`);
+        }
+        try {
+          const fallback = await generateAgnesImage({
+            prompt,
+            ...(referenceImage ? { referenceImage } : {}),
+            resolution,
+            aspectRatio: typeof body?.aspectRatio === "string" ? body.aspectRatio : undefined,
+          });
+          if (fallback.url.startsWith("data:")) {
+            // Base64 result: hand it to the client directly, like the
+            // synchronous voice/music results — there is no job to poll.
+            return NextResponse.json({ type: "image", url: fallback.url, model: AGNES_IMAGE_MODEL, provider: "agnes" });
+          }
+          // URL result: the clients poll image-status by request id, so
+          // the finished URL travels as the id and that route's Agnes
+          // branch answers completed — no client change needed.
+          return NextResponse.json({
+            type: "image",
+            status: "processing",
+            requestId: encodeAgnesImageResultId(fallback.url),
+            statusUrl: "",
+            responseUrl: "",
+            model: AGNES_IMAGE_MODEL,
+            provider: "agnes",
+          });
+        } catch { /* the primary failure below is the honest answer */ }
+        if (connectionFailed || billingFailure) {
+          return jsonError("This generation is temporarily unavailable. The site administrator has been notified.", 502);
+        }
+      }
+      return falError("image", status, submitPayload, "Nano Banana 2 image generation failed.");
+    }
     const requestId = submitPayload?.request_id;
     if (!requestId) return jsonError("fal accepted the image request but returned no request id.", 502);
     return NextResponse.json({
@@ -123,40 +171,86 @@ export async function POST(request: Request) {
     let durationSeconds: number;
     try { durationSeconds = videoDuration(prompt, body?.durationSeconds); }
     catch (error) { return jsonError(error instanceof Error ? error.message : "Invalid video length.", 400); }
-    async function submitFalVideo() {
+    /**
+     * One attempt at the fal video rung. Returns { response } when the
+     * outcome is final exactly as it has always been (success, missing
+     * configuration, input-class failures, incomplete tasks), or an
+     * outage description when fal failed provider-side. On an outage the
+     * caller alerts the admin once on billing failures and tries the
+     * Agnes Flash rung before surfacing failureResponse, which is
+     * byte-identical to what this rung used to return on its own.
+     */
+    async function attemptFalVideo(): Promise<
+      | { response: NextResponse; outage?: undefined }
+      | { response?: undefined; outage: { status: number; message: string; billing: boolean; failureResponse: NextResponse } }
+    > {
       const key = readSecret("FAL_KEY");
-      if (!key) return jsonError("Video generation at this length is unavailable because fal.ai is not configured.", 503);
+      if (!key) return { response: jsonError("Video generation at this length is unavailable because fal.ai is not configured.", 503) };
       const turbo = Boolean(promptImage) && durationSeconds === 5;
       const model = turbo ? "fal-ai/wan/v2.2-a14b/image-to-video/turbo"
         : `alibaba/wan-3.0/${promptImage ? "image-to-video" : "text-to-video"}`;
-      if (!turbo && prompt.length > 5000) return jsonError("Keep the video description to 5,000 characters or fewer.", 400);
-      const response = await fetch(`https://queue.fal.run/${model}`, {
-        method: "POST",
-        headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          // Caliber: full 1080p on wan-3.0 so clips match the 1920×1080 overlay; turbo tops out at 720p, so push its quality to maximum instead.
-          ...(promptImage ? turbo ? { image_url: promptImage } : { start_image_url: promptImage } : {}), prompt, resolution: turbo ? "720p" : "1080p",
-          aspect_ratio: "16:9",
-          ...(turbo ? { enable_output_safety_checker: true, video_quality: "maximum" } : { duration: durationSeconds, audio: false }),
-          enable_safety_checker: true,
-          enable_prompt_expansion: false,
-        }),
-        cache: "no-store",
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const providerMessage = String(payload?.detail || payload?.error || payload?.message || "");
-        if (isCreditError(response.status, providerMessage)) {
-          await notifyAdminOfCreditIssue("generate-asset/video", `fal.ai request failed (HTTP ${response.status}): ${providerMessage || "no detail"}`);
-          return jsonError("Video generation is temporarily unavailable. The site administrator has been notified.", 502);
+      if (!turbo && prompt.length > 5000) return { response: jsonError("Keep the video description to 5,000 characters or fewer.", 400) };
+      let response: Response | null = null;
+      let payload: any = {};
+      let connectionFailed = false;
+      try {
+        response = await fetch(`https://queue.fal.run/${model}`, {
+          method: "POST",
+          headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            // Caliber: full 1080p on wan-3.0 so clips match the 1920×1080 overlay; turbo tops out at 720p, so push its quality to maximum instead.
+            ...(promptImage ? turbo ? { image_url: promptImage } : { start_image_url: promptImage } : {}), prompt, resolution: turbo ? "720p" : "1080p",
+            aspect_ratio: "16:9",
+            ...(turbo ? { enable_output_safety_checker: true, video_quality: "maximum" } : { duration: durationSeconds, audio: false }),
+            enable_safety_checker: true,
+            enable_prompt_expansion: false,
+          }),
+          cache: "no-store",
+        });
+        payload = await response.json().catch(() => ({}));
+      } catch { connectionFailed = true; }
+      if (connectionFailed || !response || !response.ok) {
+        const status = response?.status ?? 0;
+        const message = String(payload?.detail || payload?.error || payload?.message || "");
+        const billing = isCreditError(status, message) || isLockError(message);
+        if (connectionFailed || isProviderOutage(status, message)) {
+          return {
+            outage: {
+              status, message, billing,
+              failureResponse: billing || connectionFailed
+                ? jsonError("Video generation is temporarily unavailable. The site administrator has been notified.", 502)
+                : jsonError(payload?.detail || payload?.error || payload?.message || "Image animation failed.", status),
+            },
+          };
         }
-        return jsonError(payload?.detail || payload?.error || payload?.message || "Image animation failed.", response.status);
+        return { response: jsonError(payload?.detail || payload?.error || payload?.message || "Image animation failed.", status) };
       }
-      if (!payload?.request_id || !payload?.status_url || !payload?.response_url) return jsonError("The animation provider returned an incomplete task.", 502);
+      if (!payload?.request_id || !payload?.status_url || !payload?.response_url) return { response: jsonError("The animation provider returned an incomplete task.", 502) };
       const videoId = Buffer.from(JSON.stringify({
         id: payload.request_id, status: payload.status_url, result: payload.response_url,
       })).toString("base64url");
-      return NextResponse.json({ type, status: "processing", videoId, model, provider: "fal", durationSeconds });
+      return { response: NextResponse.json({ type, status: "processing", videoId, model, provider: "fal", durationSeconds }) };
+    }
+    /**
+     * The fal video rung with the Agnes Flash rung behind it (the chain
+     * is Runway → fal → Agnes Flash): a provider-side fal failure alerts
+     * the admin once when it is a billing failure, then Agnes gets its
+     * chance; only when Agnes cannot take the request does the fal
+     * failure surface, unchanged.
+     */
+    async function submitFalVideo() {
+      const outcome = await attemptFalVideo();
+      if (outcome.response) return outcome.response;
+      const { outage } = outcome;
+      if (outage.billing) {
+        await notifyAdminOfCreditIssue("generate-asset/video", `fal.ai request failed (HTTP ${outage.status}): ${outage.message || "no detail"}`);
+      }
+      const fallback = await submitAgnesVideo({ prompt, promptImage, durationSeconds });
+      if (fallback) {
+        const url = `/api/generate-asset/video?id=${encodeURIComponent(fallback.videoId)}&model=${encodeURIComponent(AGNES_VIDEO_MODEL)}&provider=agnes`;
+        return NextResponse.json({ type, status: "processing", videoId: fallback.videoId, url, model: AGNES_VIDEO_MODEL, provider: "agnes", durationSeconds: fallback.durationSeconds });
+      }
+      return outage.failureResponse;
     }
     if (promptImage || durationSeconds > 10) return submitFalVideo();
     const runwayKey = readSecret("RUNWAYML_API_SECRET");
