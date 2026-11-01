@@ -1,6 +1,7 @@
 import { videoDuration } from "../../../lib/video-duration";
 import { musicDuration } from "../../../lib/music-duration";
 import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-alerts";
+import { ACE_STEP_MODEL, KOKORO_MODEL, generateKokoroVoice, submitAceStepMusic } from "../../../lib/gradio-space";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -20,6 +21,23 @@ async function falError(source: string, status: number, payload: any, fallback: 
     return jsonError("This generation is temporarily unavailable. The site administrator has been notified.", 502);
   }
   return jsonError(message || fallback, status);
+}
+
+/**
+ * Provider-side failures that justify switching a generation to the free
+ * fallback: payment/lock/quota responses and provider 5xx (callers add
+ * connection failures, where fetch itself throws). Input problems
+ * (400/422), unknown models (404), and bad keys (401) are NOT outages —
+ * they stay on the primary path and surface exactly as before.
+ */
+function isProviderOutage(status: number, message: string): boolean {
+  if (status === 402 || status === 403 || status === 429 || status >= 500) return true;
+  return isCreditError(status, message);
+}
+
+/** Account-lock failures (e.g. fal's "User is locked. Reason: TOP_UP"). */
+function isLockError(message: string): boolean {
+  return /lock|top.?up/i.test(message);
 }
 
 function jsonError(message: unknown, status = 500) {
@@ -189,20 +207,45 @@ export async function POST(request: Request) {
 
     const model = "fal-ai/elevenlabs/tts/eleven-v3";
     const voice = typeof body?.voice === "string" && body.voice.trim() ? body.voice.trim() : "Aria";
-    const response = await fetch(`https://fal.run/${model}`, {
-      method: "POST",
-      headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: prompt,
-        voice,
-        stability: typeof body?.stability === "number" ? body.stability : 0.4,
-        language_code: "en",
-        apply_text_normalization: "auto",
-      }),
-      cache: "no-store",
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return falError("voice", response.status, payload, "Eleven v3 voice generation through fal failed.");
+    let response: Response | null = null;
+    let payload: any = {};
+    let connectionFailed = false;
+    try {
+      response = await fetch(`https://fal.run/${model}`, {
+        method: "POST",
+        headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: prompt,
+          voice,
+          stability: typeof body?.stability === "number" ? body.stability : 0.4,
+          language_code: "en",
+          apply_text_normalization: "auto",
+        }),
+        cache: "no-store",
+      });
+      payload = await response.json().catch(() => ({}));
+    } catch { connectionFailed = true; }
+    if (connectionFailed || !response || !response.ok) {
+      const status = response?.status ?? 0;
+      const message = providerMessage(payload);
+      // Credit and account-lock failures are billing events: the admin is
+      // alerted once (here, not again in falError), and the creator is
+      // served by the free Kokoro fallback when it can answer.
+      const billingFailure = isCreditError(status, message) || isLockError(message);
+      if (connectionFailed || isProviderOutage(status, message)) {
+        if (billingFailure) {
+          await notifyAdminOfCreditIssue("generate-asset/voice", `fal.ai request failed (HTTP ${status}): ${message || "no detail"}`);
+        }
+        try {
+          const fallback = await generateKokoroVoice(prompt, voice, 150000);
+          return NextResponse.json({ type, url: fallback.url, voice: fallback.voice, model: KOKORO_MODEL, provider: "huggingface-kokoro" });
+        } catch { /* the primary failure below is the honest answer */ }
+        if (connectionFailed || billingFailure) {
+          return jsonError("This generation is temporarily unavailable. The site administrator has been notified.", 502);
+        }
+      }
+      return falError("voice", status, payload, "Eleven v3 voice generation through fal failed.");
+    }
     const url = payload?.audio?.url || "";
     if (!url) return jsonError("Eleven v3 returned no audio output.", 502);
     return NextResponse.json({ type, url, voice, model, provider: "fal-elevenlabs" });
@@ -243,29 +286,67 @@ export async function POST(request: Request) {
 
     if (duration !== null && !instrumental && !lyrics) return jsonError("Paste the lyrics for your short song into the Lyrics field, or request instrumental music.", 400);
 
-    const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Key ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ...(duration !== null ? {
-          prompt: `${stylePrompt}. Create a complete short intro of no more than ${duration} seconds, with a concise ending.`,
-          lyrics: instrumental ? "[instrumental]" : lyrics,
-          duration,
-        } : {
-          prompt: stylePrompt, lyrics,
-          lyrics_optimizer: !lyrics && !instrumental, is_instrumental: instrumental,
-          audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
+    let submitResponse: Response | null = null;
+    let submitPayload: any = {};
+    let connectionFailed = false;
+    try {
+      submitResponse = await fetch(`https://queue.fal.run/${model}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Key ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...(duration !== null ? {
+            prompt: `${stylePrompt}. Create a complete short intro of no more than ${duration} seconds, with a concise ending.`,
+            lyrics: instrumental ? "[instrumental]" : lyrics,
+            duration,
+          } : {
+            prompt: stylePrompt, lyrics,
+            lyrics_optimizer: !lyrics && !instrumental, is_instrumental: instrumental,
+            audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
+          }),
         }),
-      }),
-      cache: "no-store",
-    });
+        cache: "no-store",
+      });
+      submitPayload = await submitResponse.json().catch(() => ({}));
+    } catch { connectionFailed = true; }
 
-    const submitPayload = await submitResponse.json().catch(() => ({}));
-    if (!submitResponse.ok) {
-      return falError("music", submitResponse.status, submitPayload, "fal music generation failed.");
+    if (connectionFailed || !submitResponse || !submitResponse.ok) {
+      const status = submitResponse?.status ?? 0;
+      const message = providerMessage(submitPayload);
+      // Credit and account-lock failures are billing events: the admin is
+      // alerted once (here, not again in falError), and the creator is
+      // served by the free ACE-Step fallback when it can answer. Polling a
+      // fallback job works exactly like a fal job — the music-status route
+      // recognizes the fallback model id.
+      const billingFailure = isCreditError(status, message) || isLockError(message);
+      if (connectionFailed || isProviderOutage(status, message)) {
+        if (billingFailure) {
+          await notifyAdminOfCreditIssue("generate-asset/music", `fal.ai request failed (HTTP ${status}): ${message || "no detail"}`);
+        }
+        try {
+          const fallback = await submitAceStepMusic(
+            stylePrompt,
+            instrumental ? "[instrumental]" : lyrics,
+            duration !== null ? Math.min(duration, 240) : 240,
+          );
+          return NextResponse.json({
+            type: "music",
+            status: "processing",
+            requestId: fallback.requestId,
+            statusUrl: fallback.statusUrl,
+            responseUrl: "",
+            model: ACE_STEP_MODEL,
+            provider: "huggingface",
+            durationSeconds: duration,
+          });
+        } catch { /* the primary failure below is the honest answer */ }
+        if (connectionFailed || billingFailure) {
+          return jsonError("This generation is temporarily unavailable. The site administrator has been notified.", 502);
+        }
+      }
+      return falError("music", status, submitPayload, "fal music generation failed.");
     }
 
     const requestId = submitPayload?.request_id;
