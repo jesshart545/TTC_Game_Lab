@@ -272,6 +272,10 @@
  .build-space-compact .paired-canvases{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr)}
  .build-space-compact .assembly-canvas>.stage{width:min(100%,calc(32dvh * 16 / 9));margin:0 auto}
 }
+@media(min-width:1200px){
+ /* The overlay stage is sized by width alone, so on a shorter window its 16:9 height overruns the height-capped work area and the frame's bottom is cut off behind the canvas scroll area. Cap the width by the screen height left under the Build Space chrome (~320px: toolbar, task steps, status line, preview toggle, canvas heading and padding), so the whole frame fits on screen at once; the width cap keeps the frame exactly 16:9, scaled down, never cropped. */
+ .build-space-compact .assembly-canvas>.stage{width:min(100%,calc((100dvh - 320px) * 16 / 9));margin:0 auto}
+}
 @media(max-width:999px){
  .build-work-area{grid-template-columns:1fr}
  .build-space-compact .paired-canvases{grid-row:1}
