@@ -103,6 +103,9 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
  const flashFixHighlight=(el:HTMLElement)=>{el.classList.add("fix-highlight");window.setTimeout(()=>el.classList.remove("fix-highlight"),1900);};
  useEffect(()=>{if(selection&&!testing)settings.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[selection,testing]);
  useEffect(()=>{if(!fixFlashRequest||testing||!selection)return;const target=settings.current;if(!target)return;target.scrollIntoView({behavior:"smooth",block:"center"});flashFixHighlight(target);},[fixFlashRequest,selection,testing]);
+ // When the button review opens in this panel, scroll it so its Add/Cancel
+ // controls land in view instead of below the panel's edge (usability item 4).
+ useEffect(()=>{if(!pendingAddition)return;assemblyRef.current?.querySelector<HTMLElement>(".dashboard-button-review")?.scrollIntoView({behavior:"smooth",block:"end"});},[pendingAddition]);
  useEffect(()=>{if(!focusControl)return;setActiveCreation(null);setTesting(false);setStep(2);setSelection({kind:'control',id:focusControl.id});},[focusControl]);
  useEffect(()=>{
   if(!entryRequest)return;

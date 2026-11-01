@@ -194,8 +194,18 @@ export default function ProjectWorkspace() {
     setShowToolTemplates(tool === "tools");
     requestAnimationFrame(() => {
       const target = document.getElementById({ media: "generator-prompt", trivia: "trivia-list-count", boards: "board-templates", tools: "tool-templates" }[tool]);
-      target?.scrollIntoView({ behavior: "smooth", block: "center" });
-      (target?.matches("input,textarea") ? target : target?.querySelector<HTMLElement>("button,input,textarea"))?.focus({ preventScroll: true });
+      if (!target) return;
+      // The form opens in the Jewel column, across from the Creation tools
+      // click: bring the whole form panel along, flash it with the shared
+      // fix highlight, and land with its Generate button in view too, so
+      // the click and its form read as one chain (usability items 2 and 4).
+      const panel = target.closest<HTMLElement>(".idea-card") || target;
+      panel.scrollIntoView({ behavior: "smooth", block: "center" });
+      panel.classList.add("fix-highlight");
+      window.setTimeout(() => panel.classList.remove("fix-highlight"), 1900);
+      (target.matches("input,textarea") ? target : target.querySelector<HTMLElement>("button,input,textarea"))?.focus({ preventScroll: true });
+      const commit = panel.querySelector<HTMLElement>("button.build-btn");
+      if (commit) window.setTimeout(() => commit.scrollIntoView({ behavior: "smooth", block: "nearest" }), 450);
     });
   }
   async function saveProgress() {

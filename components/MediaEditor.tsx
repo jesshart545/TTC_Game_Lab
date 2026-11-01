@@ -123,7 +123,6 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
             <label><input type="checkbox" checked={Boolean(edits.flipX)} onChange={e=>update({flipX:e.target.checked})}/>Flip horizontally</label>
             <label><input type="checkbox" checked={Boolean(edits.flipY)} onChange={e=>update({flipY:e.target.checked})}/>Flip vertically</label>
           </>}
-          <button type="button" disabled={working} onClick={()=>void saveCopy()}>{working?"Saving edit…":"Save edited copy"}</button>
         </fieldset>
         {audio ? <div className="media-editor-ai">
           <span>AUDIO EDITING</span>
@@ -144,7 +143,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
           {error && <small className="media-editor-error">{error}</small>}
         </div>}
       </div>
-      <div className="media-editor-actions"><button className="outline-btn" onClick={onClose}>Cancel</button></div>
+      <div className="media-editor-actions"><button type="button" disabled={working} onClick={()=>void saveCopy()}>{working?"Saving edit…":"Save edited copy"}</button><button className="outline-btn" onClick={onClose}>Cancel</button></div>
     </div>
   </div>;
 }
