@@ -265,6 +265,7 @@
  .build-space-compact .assembly-canvas{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain}
  .build-space-compact .assembly-canvas:nth-child(2){display:flex;flex-direction:column;overflow:hidden}
  .build-space-compact .dashboard-canvas{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+ .build-space-compact .build-library{max-height:min(100%,calc(100dvh - 24px))}
 }
 @media(min-width:1000px) and (max-width:1199px){
  .build-work-area{grid-template-columns:310px minmax(0,1fr)}
@@ -307,12 +308,13 @@
 .build-stage-toggle{display:flex;gap:8px;margin-bottom:10px}
 .build-stage-toggle button{flex:1;padding:10px 14px;font-size:14px}
 .build-stage-toggle button.active{border-color:#4ce3ee;background:#194a58;color:#e7faff}
-.build-library{border:1px solid #30465a;border-radius:12px;background:#0d1826;padding:14px}
+.build-library{border:1px solid #30465a;border-radius:12px;background:#0d1826;padding:14px;display:flex;flex-direction:column;min-height:0;max-height:calc(100dvh - 24px)}
 .build-library-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
 .build-library-head h3{margin:0}
 .build-library-head span{color:#aac3d4;font-size:12px}
 .build-library-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
 .build-library-tabs button.active{border-color:#4ce3ee;background:#194a58}
+.build-library-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .library-grid{display:flex;flex-wrap:wrap;gap:12px}
 .library-tile{display:grid;gap:6px;padding:10px;background:#152338;border-radius:8px;min-width:180px;max-width:240px}
 .library-tile small{color:#aac3d4}
