@@ -120,8 +120,12 @@ export function decodeAgnesImageResultId(id: string): string {
  * range — a shorter clip beats a failed generation while the primary
  * provider is down), or null when Agnes is unconfigured, unreachable, or
  * cannot take this request (including a reference image it cannot fetch).
- * Polling the task is the existing /api/generate-asset/status route's
- * Agnes branch, keyed by model exactly like its other Agnes jobs.
+ * Every null path logs its reason server-side (an "[agnes-video]" line in
+ * the Vercel logs): this rung used to swallow all failures, which made a
+ * refused create — e.g. an account not eligible for the Flash promotion —
+ * indistinguishable from a code defect. Polling the task is the existing
+ * /api/generate-asset/status route's Agnes branch, keyed by model exactly
+ * like its other Agnes jobs.
  */
 export async function submitAgnesVideo(input: {
   prompt: string;
@@ -130,12 +134,19 @@ export async function submitAgnesVideo(input: {
 }): Promise<{ videoId: string; durationSeconds: number } | null> {
   const key = agnesKey();
   const base = agnesBase();
-  if (!key || !base) return null;
+  if (!key || !base) {
+    console.error("[agnes-video] create skipped: Agnes media is not configured (no API key or base URL).");
+    return null;
+  }
   const reference = String(input.promptImage || "");
-  if (reference && !/^https:\/\//i.test(reference)) return null;
+  if (reference && !/^https:\/\//i.test(reference)) {
+    console.error("[agnes-video] create skipped: the reference image is not an HTTPS URL Agnes can fetch, so it is not silently dropped.");
+    return null;
+  }
   const seconds = Math.min(12, Math.max(4, Math.round(input.durationSeconds)));
+  let response: Response;
   try {
-    const response = await fetch(`${base}/videos`, {
+    response = await fetch(`${base}/videos`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -151,12 +162,19 @@ export async function submitAgnesVideo(input: {
       signal: AbortSignal.timeout(30000),
       cache: "no-store",
     });
-    if (!response.ok) return null;
-    const payload = await response.json().catch(() => ({}));
-    const videoId = payload?.video_id || payload?.id || payload?.task_id;
-    if (!videoId) return null;
-    return { videoId: String(videoId), durationSeconds: seconds };
-  } catch {
+  } catch (error) {
+    console.error(`[agnes-video] create request never reached Agnes: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error(`[agnes-video] create refused (HTTP ${response.status}): ${providerMessage(payload) || "no provider message"}`);
+    return null;
+  }
+  const videoId = payload?.video_id || payload?.id || payload?.task_id;
+  if (!videoId) {
+    console.error(`[agnes-video] create answered HTTP ${response.status} without a video id: ${JSON.stringify(payload).slice(0, 400)}`);
+    return null;
+  }
+  return { videoId: String(videoId), durationSeconds: seconds };
 }

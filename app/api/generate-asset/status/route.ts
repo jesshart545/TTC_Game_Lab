@@ -89,7 +89,10 @@ async function readVideoStatus(request: Request) {
     cache: "no-store", signal: AbortSignal.timeout(20000),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) return NextResponse.json({ error: payload?.error || payload?.message || "Unable to read video generation status." }, { status: response.status });
+  if (!response.ok) {
+    console.error(`[agnes-video-status] status request refused (HTTP ${response.status}) for video ${id}: ${payload?.error?.message || payload?.error || payload?.message || "no provider message"}`);
+    return NextResponse.json({ error: payload?.error || payload?.message || "Unable to read video generation status." }, { status: response.status });
+  }
 
   const outputUrl = extractVideoUrl(payload);
 
@@ -97,6 +100,10 @@ async function readVideoStatus(request: Request) {
   const status = ["completed","complete","succeeded","success","finished","done"].includes(rawStatus) ? "completed"
     : ["failed","error","cancelled","canceled"].includes(rawStatus) ? "failed"
     : rawStatus || (outputUrl ? "completed" : "processing");
+  if (status === "failed") {
+    const reason = payload?.error?.message || payload?.error || payload?.data?.error || "no provider message";
+    console.error(`[agnes-video-status] Agnes reported video ${id} failed: ${typeof reason === "string" ? reason : JSON.stringify(reason).slice(0, 400)}`);
+  }
   const rawProgress = payload?.progress ?? payload?.data?.progress ?? 0;
   const progress = typeof rawProgress === "string" ? Number(rawProgress.replace("%","")) : Number(rawProgress || 0);
 

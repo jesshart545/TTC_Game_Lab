@@ -6,6 +6,16 @@ import { AGNES_IMAGE_MODEL, AGNES_VIDEO_MODEL, encodeAgnesImageResultId, generat
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+// The fallback branches wait synchronously on their providers: an Agnes
+// image generation can take up to its 150s abort bound (lib/agnes-media)
+// and a Kokoro voice generation up to 150s (the voice branch below). This
+// route previously exported no maxDuration, so those waits ran under the
+// platform default and the function was killed mid-wait — the client saw
+// a dropped connection ("Failed to fetch"), never a response. 300s is
+// the same ceiling the other long-wait routes use (music-status, assets);
+// both generate-asset clients allow the image/voice POST 180s, which
+// exceeds the 150s worst-case fallback wait.
+export const maxDuration = 300;
 
 function providerMessage(payload: any): string {
   return String(payload?.detail || payload?.error || payload?.message || "");
@@ -143,7 +153,12 @@ export async function POST(request: Request) {
             model: AGNES_IMAGE_MODEL,
             provider: "agnes",
           });
-        } catch { /* the primary failure below is the honest answer */ }
+        } catch (fallbackError) {
+          // The primary failure below is the honest answer for the
+          // creator, but the fallback's own reason belongs in the server
+          // log so the next outage is diagnosable from Vercel logs.
+          console.error(`[agnes-image] fallback failed after fal image failure (HTTP ${status}): ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+        }
         if (connectionFailed || billingFailure) {
           return jsonError("This generation is temporarily unavailable. The site administrator has been notified.", 502);
         }

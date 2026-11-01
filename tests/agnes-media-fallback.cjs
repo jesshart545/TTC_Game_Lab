@@ -13,7 +13,7 @@ function load(file, mocks = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   vm.runInNewContext(code, {
-    exports, Buffer, URL, AbortSignal, AbortController, setTimeout, clearTimeout, console, Blob,
+    exports, Buffer, URL, AbortSignal, AbortController, setTimeout, clearTimeout, console: mocks.console || console, Blob,
     process: { env: mocks.env || { FAL_KEY: 'test-fal', AGNES_API_KEY: 'test-agnes' } },
     require(name) {
       if (mocks.modules && Object.prototype.hasOwnProperty.call(mocks.modules, name)) return mocks.modules[name];
@@ -408,4 +408,142 @@ test('video with a non-HTTPS reference never silently drops it for Agnes', async
   assert.equal(data.error, 'Video generation is temporarily unavailable. The site administrator has been notified.');
   assert.equal(calls.some(url => url.includes('apihub.agnes-ai.com')), false);
   assert.equal(alerts.length, 1);
+});
+
+test('the generate-asset route carries a maxDuration ceiling above the synchronous fallback waits', async () => {
+  // Diagnosis of the live image failure: generateAgnesImage waits
+  // synchronously for up to its 150s abort bound, but this route exported
+  // no maxDuration, so the platform default killed the function mid-wait
+  // and the browser fetch died with no response ("Failed to fetch"). The
+  // ceiling must cover the wait; both clients allow the POST 180s, which
+  // is itself above the 150s worst-case Agnes wait.
+  const route = loadRoute([], async () => { throw new Error('no fetch expected'); });
+  assert.equal(route.maxDuration, 300);
+  const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
+  assert.match(page, /AbortSignal\.timeout\(type === "video" \? 60000 : 180000\)/);
+  const ccs = fs.readFileSync('lib/city-crime-scene-media.ts', 'utf8');
+  assert.match(ccs, /AbortSignal\.timeout\(request\.kind === "video" \? 60000 : 180000\)/);
+});
+
+test('a refused Agnes video create is logged with its HTTP status and provider reason', async () => {
+  // The rung used to swallow every failure, so a refused create (e.g. an
+  // account not eligible for the Flash promotion) was invisible. The
+  // client still sees only the fal failure, exactly as before, but the
+  // server log now names the Agnes status and message.
+  const alerts = [];
+  const errorLines = [];
+  const fakeConsole = { error: (...args) => errorLines.push(args.join(' ')), log() {}, warn() {} };
+  const route = load('app/api/generate-asset/route.ts', {
+    env: { FAL_KEY: 'test-fal', AGNES_API_KEY: 'test-agnes', RUNWAYML_API_SECRET: 'test-runway' },
+    console: fakeConsole,
+    fetch: async (url) => {
+      const target = String(url);
+      if (target.startsWith('https://queue.fal.run/')) {
+        return Response.json({ detail: 'User is locked. Reason: TOP_UP' }, { status: 403 });
+      }
+      if (target === AGNES_VIDEO_URL) {
+        return Response.json({ error: { message: 'Video model is not available for this account.' } }, { status: 403 });
+      }
+      throw new Error(`Unexpected fetch ${target}`);
+    },
+    modules: { '../../../lib/admin-alerts': alertMock(alerts) },
+  });
+  const response = await post(route, { type: 'video', prompt: 'Golden confetti over a stage', durationSeconds: 15 });
+  assert.equal(response.status, 502);
+  const data = await response.json();
+  assert.equal(data.error, 'Video generation is temporarily unavailable. The site administrator has been notified.');
+  assert.equal(alerts.length, 1);
+  const logged = errorLines.join('\n');
+  assert.match(logged, /\[agnes-video\] create refused \(HTTP 403\): Video model is not available for this account\./);
+});
+
+test('the status route logs Agnes poll refusals and failed tasks with their reasons', async () => {
+  const errorLines = [];
+  const fakeConsole = { error: (...args) => errorLines.push(args.join(' ')), log() {}, warn() {} };
+  let poll = 0;
+  const status = load('app/api/generate-asset/status/route.ts', {
+    env: { AGNES_API_KEY: 'test-agnes' },
+    console: fakeConsole,
+    fetch: async (url) => {
+      const target = String(url);
+      assert.ok(target.startsWith('https://apihub.agnes-ai.com/agnesapi?'), `poll target ${target}`);
+      poll += 1;
+      if (poll === 1) return Response.json({ error: { message: 'Video ID does not exist' } }, { status: 404 });
+      return Response.json({ id: 'task-9', status: 'failed', error: { message: 'generation failed upstream' } });
+    },
+  });
+  const refused = await status.GET(new Request('https://test/api/generate-asset/status?id=vid-gone&model=agnes-video-2.5-flash&provider=agnes'));
+  assert.equal(refused.status, 404);
+  const failed = await status.GET(new Request('https://test/api/generate-asset/status?id=vid-999&model=agnes-video-2.5-flash&provider=agnes'));
+  assert.equal(failed.status, 200);
+  assert.equal((await failed.json()).status, 'failed');
+  const logged = errorLines.join('\n');
+  assert.match(logged, /\[agnes-video-status\] status request refused \(HTTP 404\) for video vid-gone: Video ID does not exist/);
+  assert.match(logged, /\[agnes-video-status\] Agnes reported video vid-999 failed: generation failed upstream/);
+});
+
+test('video seam: a fallback submit flows through the real client poller and status route to the finished URL', async () => {
+  // PR #119's tests mocked the pieces separately; this one proves the
+  // seams fit end to end with the REAL client code and the REAL status
+  // route: generate-asset submit response -> the exact status URL
+  // lib/video-generation.ts builds from it -> the status route's Agnes
+  // branch -> Agnes /agnesapi answers -> the finished video URL.
+  const alerts = [];
+  const RESULT_URL = 'https://media.agnes-ai.com/generated/confetti.mp4';
+  const route = loadRoute(alerts, async (url, options) => {
+    const target = String(url);
+    if (target.startsWith('https://queue.fal.run/')) {
+      return Response.json({ detail: 'User is locked. Reason: TOP_UP' }, { status: 403 });
+    }
+    if (target === AGNES_VIDEO_URL) {
+      const body = JSON.parse(options.body);
+      assert.equal(body.model, 'agnes-video-2.5-flash');
+      assert.equal(body.mode, 'text');
+      assert.equal(body.seconds, '12'); // the 15s request clamps to the Flash ceiling
+      // The documented create response shape (wiki.agnes-ai.com Agnes
+      // Video 2.5): id/task_id identify the task, video_id retrieves it.
+      return Response.json({ id: 'task-9', task_id: 'task-9', video_id: 'vid-999', object: 'video', model: 'agnes-video-2.5-flash', status: 'queued', progress: 0, created_at: 1, seconds: '12', size: '720P' });
+    }
+    throw new Error(`Unexpected fetch ${target}`);
+  });
+  const response = await post(route, { type: 'video', prompt: 'Golden confetti falling over a concert stage', durationSeconds: 15 });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.provider, 'agnes');
+  assert.equal(data.videoId, 'vid-999');
+  assert.equal(data.model, 'agnes-video-2.5-flash');
+  assert.equal(data.durationSeconds, 12);
+  assert.equal(alerts.length, 1);
+
+  let agnesPolls = 0;
+  const status = load('app/api/generate-asset/status/route.ts', {
+    env: { AGNES_API_KEY: 'test-agnes' },
+    fetch: async (url, options) => {
+      const target = String(url);
+      agnesPolls += 1;
+      assert.equal(target, 'https://apihub.agnes-ai.com/agnesapi?video_id=vid-999&model_name=agnes-video-2.5-flash');
+      assert.equal(options.headers.Authorization, 'Bearer test-agnes');
+      if (agnesPolls === 1) return Response.json({ id: 'task-9', object: 'video', status: 'in_progress', progress: 40 });
+      // The documented completed shape: the finished video is the
+      // top-level `url` field.
+      return Response.json({ id: 'task-9', object: 'video', status: 'completed', progress: 100, url: RESULT_URL, seconds: '12', size: '720P', error: null });
+    },
+  });
+
+  const poller = load('lib/video-generation.ts', {});
+  const pollUrls = [];
+  const url = await poller.waitForGeneratedVideo(String(data.videoId), String(data.model), undefined, {
+    sleep: async () => {},
+    pollIntervalMs: 1,
+    fetchImpl: async (pollUrl) => {
+      pollUrls.push(pollUrl);
+      return status.GET(new Request(`https://test${pollUrl}`));
+    },
+  });
+  assert.equal(url, RESULT_URL);
+  assert.deepEqual(pollUrls, [
+    '/api/generate-asset/status?id=vid-999&model=agnes-video-2.5-flash&provider=agnes',
+    '/api/generate-asset/status?id=vid-999&model=agnes-video-2.5-flash&provider=agnes',
+  ]);
+  assert.equal(agnesPolls, 2);
 });
