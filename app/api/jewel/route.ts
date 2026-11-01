@@ -17,6 +17,7 @@ import { requireCreator } from "../../../lib/auth/server";
 import { canUseCityCrimeScene, checkedCcssAttach } from "../../../lib/city-crime-scene";
 import { getGameTemplate } from "../../../lib/game-templates";
 import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured } from "../../../lib/muse-client";
+import { assistantChatCompletion, assistantConfigured } from "../../../lib/assistant-provider";
 
 /**
  * Jewel — the conversational creative mode (Muse Spark via the Meta Model
@@ -24,7 +25,9 @@ import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured }
  * same draft context, the same system prompt (DRAFT_SYSTEM below is a
  * verbatim copy of the one in app/api/ai/route.ts), and the same validation
  * pipeline, so responses use the identical contract and the existing client
- * executor works unchanged. The differences are the provider (Muse instead
+ * executor works unchanged. When Muse cannot produce a message, the route
+ * falls back to the original Agnes-backed AI chat with the same messages, so
+ * creators are still served during a Muse outage. The differences are the provider (Muse instead
  * of Agnes), the Jewel persona/fallback addendum appended to the system
  * prompt, and support for generationFeedback turns and editResult turns
  * (layered video edits: Jewel splits a multi-change edit into sequential
@@ -73,11 +76,11 @@ EDIT RESULT — This request includes editResult: one step of a layered video ed
 export const maxDuration = 180;
 
 export async function GET() {
-  return NextResponse.json({ configured: museConfigured() });
+  return NextResponse.json({ configured: museConfigured() || assistantConfigured() });
 }
 
 export async function POST(request: Request) {
-  if (!museConfigured()) return NextResponse.json({ configured: false, error: "META_API_KEY is not configured." }, { status: 503 });
+  if (!museConfigured() && !assistantConfigured()) return NextResponse.json({ configured: false, error: "META_API_KEY is not configured." }, { status: 503 });
   const body = await request.json();
   if (Array.isArray(body.searchEvidence)) body.searchEvidence = body.searchEvidence.map((source: any, sourceId: number) => ({ ...source, sourceId }));
   // City Crime Scene is restricted to select accounts.
@@ -109,9 +112,46 @@ Attaching media to the case: media already saved in this project attaches by set
     ...(editResult ? { editResult } : {}),
   };
   if (!adviceOnlyRequest(String(body.request || "")) && body.project?.gameTools && body.project?.controls) { const timer = timerControlRequest(String(body.request || ""), body.history, body.project, body.selectedItem); if (timer) return NextResponse.json({ configured: true, ...timer }); const cycle = coinCycleRequest(String(body.request || ""), body.history, body.project, body.selectedItem); if (cycle) return NextResponse.json({ configured: true, ...cycle }); }
+  // Every model call goes through this helper: Muse first, and when Muse
+  // cannot produce a message (not configured, unreachable, or any provider
+  // HTTP failure) the original AI chat provider answers with the same
+  // messages instead, so a Muse outage never leaves the creator unserved.
+  // A Muse credit failure still alerts the admin — once per request, as
+  // before — even when the fallback goes on to serve the creator. When the
+  // fallback cannot produce a message either, the original Muse failure is
+  // rethrown so the error responses below keep their exact prior meaning.
+  let creditAlertSent = false;
+  const jewelChatCompletion = async (
+    completionMessages: { role: "system" | "user" | "assistant"; content: string }[],
+    completionOptions: { jsonObject: boolean; temperature: number; maxTokens: number; timeoutMs: number },
+  ): Promise<string> => {
+    let museError: unknown = null;
+    if (museConfigured()) {
+      try {
+        return await museChatCompletion(completionMessages, completionOptions);
+      } catch (error) {
+        museError = error;
+        if (!creditAlertSent && error instanceof MuseApiError) {
+          const providerMessage = error.providerMessage || error.message;
+          if (isCreditError(error.status, String(providerMessage))) {
+            creditAlertSent = true;
+            await notifyAdminOfCreditIssue("jewel/muse", `Muse request failed (HTTP ${error.status || "unknown"}): ${providerMessage}`);
+          }
+        }
+      }
+    }
+    if (assistantConfigured()) {
+      try {
+        const fallbackMessage = await assistantChatCompletion(completionMessages, completionOptions);
+        if (fallbackMessage) return fallbackMessage;
+      } catch { /* the original Muse failure below decides the response */ }
+    }
+    if (museError) throw museError;
+    throw new MuseApiError("META_API_KEY is not configured.", 503);
+  };
   let message = "";
   try {
-    message = await museChatCompletion(
+    message = await jewelChatCompletion(
       [{ role: "system", content: draftSystem }, { role: "user", content: JSON.stringify(draftContext) }],
       { jsonObject: true, temperature: 0.3, maxTokens: 16384, timeoutMs: 80000 },
     );
@@ -120,7 +160,6 @@ Attaching media to the case: media already saved in this project attaches by set
     if (error instanceof MuseApiError) {
       const providerMessage = error.providerMessage || error.message;
       if (isCreditError(error.status, String(providerMessage))) {
-        await notifyAdminOfCreditIssue("jewel/muse", `Muse request failed (HTTP ${error.status || "unknown"}): ${providerMessage}`);
         return NextResponse.json({ configured: true, error: "The AI assistant is temporarily unavailable. The site administrator has been notified. No changes were made." }, { status: 502 });
       }
       return NextResponse.json({ configured: true, error: `Jewel request failed: ${providerMessage}` }, { status: error.status || 502 });
@@ -233,7 +272,7 @@ Attaching media to the case: media already saved in this project attaches by set
     } catch (validationError) {
       if (attempt === 0) {
         try {
-          const retryMessage = await museChatCompletion([
+          const retryMessage = await jewelChatCompletion([
             { role: "system", content: DRAFT_SYSTEM + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM },
             { role: "user", content: JSON.stringify(draftContext) },
             { role: "assistant", content: String(message) },
