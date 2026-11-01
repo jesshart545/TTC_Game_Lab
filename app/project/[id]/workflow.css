@@ -264,8 +264,6 @@
  .build-space-compact .paired-canvases{height:100%;min-height:0;grid-template-columns:minmax(0,1fr)}
  .build-space-compact .assembly-canvas{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain}
  .build-space-compact .assembly-canvas:nth-child(2){display:flex;flex-direction:column;overflow:hidden}
- /* The overlay canvas (the first canvas in the stage area, nth-child(2) after the preview toggle) becomes a size container, so the band rules below can size the stage from the canvas's real height instead of viewport estimates. Only here, at >=1000px, does the height:100% chain give the canvas a definite height to measure. */
- .build-space-compact .assembly-canvas:nth-child(2){container-type:size}
  .build-space-compact .dashboard-canvas{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
  .build-space-compact .build-library{height:100%;max-height:min(100%,calc(100dvh - 24px))}
 }
@@ -273,13 +271,10 @@
  .build-work-area{grid-template-columns:310px minmax(0,1fr) 340px}
  .build-space-compact .paired-canvases{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr)}
  .build-space-compact .assembly-canvas>.stage{width:min(100%,calc(32dvh * 16 / 9));margin:0 auto}
- /* Measured fit, layered over the dvh estimate above (same selector, declared later, so it wins where container queries are supported and the dvh rule remains the fallback): frame height = canvas height - 54px (canvas padding 20 + the "Draft overlay" heading block ~29 + slack), so the whole frame sits inside the canvas with no scrolling. */
- .build-space-compact .assembly-canvas>.stage{width:min(100%,calc((100cqh - 54px) * 16 / 9))}
 }
 @media(min-width:1200px){
- /* The overlay stage is sized by width alone, so on a shorter window its 16:9 height overruns the height-capped work area and the frame's bottom is cut off. Fallback: cap the width by the screen height left under the Build Space chrome (~320px). Measured fit, declared after so it wins where container queries are supported: cap the width by the overlay canvas's own height (100cqh - 54px: canvas padding 20 + the "Draft overlay" heading block ~29 + slack), so the whole frame fits inside the canvas at any window size; the width cap keeps the frame exactly 16:9, scaled down, never cropped. */
+ /* The overlay stage is sized by width alone, so on a shorter window its 16:9 height overruns the height-capped work area and the frame's bottom is cut off behind the canvas scroll area. Cap the width by the screen height left under the Build Space chrome (~320px: toolbar, task steps, status line, preview toggle, canvas heading and padding), so the whole frame fits on screen at once; the width cap keeps the frame exactly 16:9, scaled down, never cropped. */
  .build-space-compact .assembly-canvas>.stage{width:min(100%,calc((100dvh - 320px) * 16 / 9));margin:0 auto}
- .build-space-compact .assembly-canvas>.stage{width:min(100%,calc((100cqh - 54px) * 16 / 9))}
 }
 @media(max-width:999px){
  .build-work-area{grid-template-columns:1fr}
