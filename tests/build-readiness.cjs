@@ -52,5 +52,10 @@ assert(pageSource.includes('onClick={() => fixChecklistIssue(issue)}'),'every re
 assert(pageSource.includes('onClick={() => requestBuildEntry("background", true)}>Fix in Build Space'),'the no-background row has a Fix button');
 // Build Space accepts a fix entry request and selects the exact item.
 assert(buildSource.includes('"fix"')&&buildSource.includes('fixTarget'),'Build Space fix entries select the named tool or control');
+// Build Space's own step-4 readiness panel: its Fix connection button selects
+// the issue's item AND lands with the same .fix-highlight ring the Publish
+// checklist fixes use, instead of selecting silently.
+assert(buildSource.includes('setSelection({kind:issue.kind,id:issue.targetId});setFixFlashRequest'),'the Fix connection button selects the issue target and requests the landing highlight');
+assert(buildSource.includes('if(!fixFlashRequest||testing||!selection)return;')&&buildSource.includes('flashFixHighlight(target)'),'the Fix connection landing flashes the settings panel with the shared fix highlight');
 console.log('PASS: publish outcomes render in the Publish panel and checklist Fix buttons target the Game plan title field, the named Build Space item, and the background picker.');
 
