@@ -96,6 +96,12 @@ test('muse-client targets the Meta API with the Standard model and types HTTP er
   );
   const fallback = makeStack({ env: { MODEL_API_KEY: 'fallback-key' } });
   assert.equal(fallback.client.museConfigured(), true);
+  const playgroundOnly = makeStack({ env: { META_PLAYGROUND: 'playground-key' } });
+  assert.equal(playgroundOnly.client.museConfigured(), true);
+  const playgroundFirst = makeStack({ env: { META_PLAYGROUND: 'playground-key', META_API_KEY: 'main-key', MODEL_API_KEY: 'fallback-key' } });
+  playgroundFirst.respond(okMuse('hi'));
+  await playgroundFirst.client.museChatCompletion([{ role: 'user', content: 'hi' }]);
+  assert.equal(playgroundFirst.calls[0].options.headers.Authorization, 'Bearer playground-key');
 });
 
 test('a valid Muse draft-edit response flows through validation into the standard contract', async () => {
