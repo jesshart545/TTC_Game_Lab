@@ -56,3 +56,41 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
  if(!next.controls.some(c=>c.action===hideAction))next={...next,controls:[...next.controls,{id:crypto.randomUUID(),label:(playsMedia?'Stop ':'Hide ')+name,action:hideAction,detail:playsMedia?'Stop playing '+name:'Remove '+name+' from the overlay',...(tool?.type==='blank-card'?{toolIds:[id]}:{})}]};
  return {project:next,controlId:control.id};
 }
+export type ButtonFacts={does:string;clicks:string;effect:boolean};
+const factInfoTypes=['scoreboard','prize-list','game-tool-list'];
+function factObject(label:string):string{return label.replace(/^(show|hide|stop|play|roll|spin|flip|drop|open|start|clear|draw|reveal)\s+/i,'');}
+export function buttonFacts(control:ProjectEvent,project:Project):ButtonFacts{
+ const action=control.action||'';
+ const tool=control.toolIds?.length===1?project.gameTools.find(t=>t.id===control.toolIds![0]):undefined;
+ const card=action.match(/^cards\.(toggle|score|award|draw|show|reveal|clear|new-game|blank)\.(.+)$/);
+ if(action==='sequence')return {does:'Runs its steps',clicks:control.sequenceMode==='per-press'?'One step per click':'One click runs all its steps',effect:false};
+ if(action.startsWith('result.hide.')){const stop=/^stop/i.test(control.label);return {does:(stop?'Stops: ':'Hides: ')+factObject(control.label),clicks:stop?'One click stops it':'One click hides it',effect:false};}
+ if(action.startsWith('coin.cycle.'))return {does:'Coin: show, flip, hide',clicks:'One step per click',effect:false};
+ if(action.startsWith('timer.')){const op=action.split('.')[1];return {does:op==='toggle'?'Starts / pauses the timer':op==='reset'?'Resets the timer':op==='hide'?'Hides the timer':'Shows the timer',clicks:op==='toggle'?'Click to start · click again to pause':op==='reset'?'One click resets it':op==='hide'?'One click hides it':'One click shows it',effect:false};}
+ if(card){const kind=card[1];const name=tool?.name||factObject(control.label);
+  if(kind==='toggle')return {does:'Shows: '+name,clicks:'Click to show · click again to hide',effect:false};
+  if(kind==='draw')return {does:'Draws: '+name,clicks:'Click to draw · click again to remove',effect:false};
+  if(kind==='reveal')return {does:'Reveals the answer',clicks:'One click reveals it',effect:false};
+  if(kind==='clear')return {does:'Clears the card',clicks:'One click clears it',effect:false};
+  if(kind==='new-game')return {does:'Starts a new game',clicks:'One click starts it',effect:false};
+  if(kind==='score'||kind==='award')return {does:control.label,clicks:'One click does it',effect:false};
+  return {does:'Shows the card',clicks:'One click shows it',effect:false};}
+ if(action.startsWith('asset.show.')){const asset=project.assets.find(a=>(a.storageKey||a.name)===action.slice(11));const plays=!!asset&&['audio','video'].includes(mediaKind(asset));return {does:(plays?'Plays: ':'Shows: ')+(asset?.name||factObject(control.label)),clicks:plays?'One click plays it':'One click shows it',effect:!!asset&&mediaKind(asset)!=='audio'};}
+ if(control.compositionId||action.startsWith('composition.play.')){const composition=project.compositions?.find(c=>c.id===control.compositionId||action===`composition.play.${c.id}`);return {does:'Plays: '+(composition?.name||factObject(control.label)),clicks:'One click plays it',effect:true};}
+ if(action.startsWith('background.show.'))return {does:'Changes the background',clicks:'One click changes it',effect:false};
+ if(action.startsWith('tool.')&&tool){
+  if(tool.type==='youtube')return {does:'Opens YouTube search',clicks:'Search stays on the dashboard',effect:false};
+  if(tool.type==='dice')return {does:'Rolls the dice',clicks:'Every click rolls again',effect:true};
+  if(tool.type==='wheel'||tool.type==='prize-wheel')return {does:'Spins: '+tool.name,clicks:'Every click spins again',effect:true};
+  if(tool.type==='coin-toss')return {does:'Flips the coin',clicks:'Every click flips again',effect:true};
+  if(tool.type==='plinko')return {does:'Drops a ball',clicks:'Every click drops again',effect:true};
+  if(tool.type==='trivia-list')return {does:'Next question, then its answer',clicks:'Every click: next one',effect:true};
+  return {does:control.label,clicks:'Every click does it again',effect:!factInfoTypes.includes(tool.type)};}
+ return {does:control.label||'Not set yet',clicks:'One click',effect:false};
+}
+export function controlEffectResult(control:ProjectEvent,project:Project,entrance:OverlayResult['entrance']):OverlayResult{
+ const tool=control.toolIds?.length===1?project.gameTools.find(t=>t.id===control.toolIds![0]):undefined;
+ const placed=tool?.config.placement as Partial<OverlayResult>|undefined;
+ const base:OverlayResult=control.overlayResult?{...control.overlayResult}:tool?{...initialResult,x:placed?.x??initialResult.x,y:placed?.y??initialResult.y,width:placed?.width??initialResult.width,height:placed?.height??initialResult.height}:{x:0,y:0,width:100,height:100,entrance:'fade',exit:'fade',entranceSeconds:.3,exitSeconds:.3,layer:10};
+ return {...base,entrance,entranceSeconds:entrance!=='none'&&!base.entranceSeconds?0.3:base.entranceSeconds};
+}
