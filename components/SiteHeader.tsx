@@ -31,7 +31,7 @@ export default function SiteHeader() {
     <nav style={nav} aria-label="Site">
       <Link href="/" style={brand}>
         <span style={brandMark}>TT</span>
-        <span><strong>TTCGameLab</strong><br /><small style={{ color: "#7f8797", fontSize: 11, letterSpacing: ".12em" }}>LIVE CREATIVE STUDIO</small></span>
+        <span><strong>TTCGameLab™</strong><br /><small style={{ color: "#7f8797", fontSize: 11, letterSpacing: ".12em" }}>LIVE CREATIVE STUDIO</small></span>
       </Link>
       <div style={navLinks}>
         <Link href="/guide" style={navLink}>How it works</Link>
