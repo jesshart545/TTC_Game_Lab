@@ -331,6 +331,10 @@
 .library-create-tools{margin-top:14px}
 .library-create-tools h4{margin:0 0 8px}
 .library-create-row{display:flex;flex-wrap:wrap;gap:8px}
+.library-add-backdrop{position:fixed;inset:0;z-index:70}
+.library-add-popup{position:fixed;z-index:71;display:flex;flex-direction:column;gap:8px;min-width:210px;max-width:calc(100vw - 16px);padding:12px;border:1px solid #20e8ff66;border-radius:12px;background:#101827;box-shadow:0 16px 40px #000c}
+.library-add-popup strong{padding-right:26px}
+.library-add-close{position:absolute;top:6px;right:6px;padding:2px 8px;line-height:1.2}
 .build-reset-row{margin:10px 0}
 .build-reset-confirm{display:grid;gap:8px;padding:10px;border:1px solid #6b4a2f;border-radius:8px;background:#1d1608}
 .build-reset-confirm p{margin:0}
