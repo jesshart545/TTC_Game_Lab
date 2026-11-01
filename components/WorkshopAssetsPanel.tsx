@@ -17,6 +17,17 @@ import AssetDetailsDialog from "./AssetDetailsDialog";
 import AssetThumbnail from "./AssetThumbnail";
 import { isAudio, isVideo } from "../lib/workshop-libraries";
 
+/**
+ * The questions saved inside a trivia-list tool, shown in the item itself.
+ * Same information the Generate Trivia panel shows — numbered question,
+ * "✓ Verified" or "* Needs verification", the answer, and the category ·
+ * source link when present — in a scrollable block.
+ */
+export function SavedTriviaQuestions({ questions }: { questions: any[] }) {
+  if (!questions.length) return <p className="empty-note">No questions saved in this list yet.</p>;
+  return <div style={{maxHeight:320,overflow:"auto"}}>{questions.map((q:any,i:number)=><div key={`${q.question}-${i}`} style={{padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.12)"}}><strong>{i+1}. {q.question}{q.verificationStatus==="needs-review" ? " * Needs verification" : " ✓ Verified"}</strong><div>Answer: {q.answer}</div>{(q.category||q.source||q.sourceUrl)&&<small>{q.category}{q.sourceUrl ? <>{q.category ? " · " : ""}<a href={q.sourceUrl} target="_blank" rel="noreferrer">{q.source || q.sourceUrl}</a></> : q.source ? `${q.category ? " · " : ""}${q.source}` : ""}</small>}</div>)}</div>;
+}
+
 export type WorkshopAssetsPanelProps = {
   workflowStep: number;
   workshopStep: number;
@@ -241,6 +252,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
             <b>{tool.name}</b>
             <em>{tool.type}</em>{(tool.type==="blank-board"||tool.type==="trivia-board")&&<button type="button" onClick={()=>setBoardDesignerId(tool.id)}>Open board designer</button>}
             {tool.type==="trivia-list" && <button type="button" onClick={()=>{setTriviaListQuestions(Array.isArray(tool.config.questions)?tool.config.questions:[]);setTriviaListCount(Number(tool.config.requestedCount)||10);setTriviaListCategories(Array.isArray(tool.config.suggestedCategories)?tool.config.suggestedCategories.join(", "):"");setShowTriviaListGenerator(true);promptRef.current?.scrollIntoView({behavior:"smooth",block:"center"});}}>Review saved questions</button>}
+            {tool.type==="trivia-list" && <SavedTriviaQuestions questions={Array.isArray(tool.config.questions)?tool.config.questions:[]}/>}
             {tool.type==="card-list"?<><p>{savedListEntries(tool).length} pool entries · {Array.isArray(tool.config.cards)?tool.config.cards.length:0} cards</p><button type="button" onClick={()=>setListEditorId(tool.id)}>Open pool and card designer</button></>: (tool.type==="question-card"||tool.type==="blank-card")?<button type="button" onClick={()=>setNewCardEditorId(tool.id)}>Customize cards</button>:<GameToolEditor key={tool.id} tool={tool} project={project} assets={project.assets} onSave={next=>persist({...project,gameTools:(project.gameTools||[]).map(x=>x.id===next.id?next:x),updatedAt:"just now"})} onRegisterAsset={asset=>persist({...project,assets:[...(project.assets||[]),asset],updatedAt:"just now"})}/>}
           </div>
           <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small>{(tool.type === "trivia-board" || tool.type === "blank-board") ? <button className="build-btn build-only" disabled={tool.inOverlayBuild} onClick={()=>pushWorkspaceCreation(tool)}>{tool.inOverlayBuild ? "Added to Overlay Build" : "Add to Overlay Build"}</button> : <small>{tool.type === "youtube" ? "Connected to dashboard and overlay · test in the preview before publishing" : "Saved in Toolbox · connect to a button in Build Space when needed"}</small>}
