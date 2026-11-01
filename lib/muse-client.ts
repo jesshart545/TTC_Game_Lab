@@ -1,8 +1,9 @@
 /**
  * Minimal client for the Meta Model API (Muse Spark), used by the Jewel
  * agent route. The API is OpenAI-compatible and the model returns text only.
- * The key is read from META_API_KEY (MODEL_API_KEY is accepted as a fallback
- * name) and is never logged or returned anywhere.
+ * The key is read from META_PLAYGROUND first (the owner's temporary primary
+ * key, 2026-11-01), then META_API_KEY (MODEL_API_KEY is accepted as a
+ * fallback name), and is never logged or returned anywhere.
  */
 
 export class MuseApiError extends Error {
@@ -24,7 +25,11 @@ export class MuseConnectionError extends Error {
 }
 
 function readKey(): string {
-  const raw = process.env.META_API_KEY || process.env.MODEL_API_KEY || "";
+  // Temporary (owner-directed, 2026-11-01): the Meta Playground key in
+  // META_PLAYGROUND is the primary Muse key while the main META_API_KEY
+  // account is credit-blocked. Remove META_PLAYGROUND from this chain once
+  // the main account is restored.
+  const raw = process.env.META_PLAYGROUND || process.env.META_API_KEY || process.env.MODEL_API_KEY || "";
   return raw.trim().replace(/^(['"])|(['"])$/g, "");
 }
 
