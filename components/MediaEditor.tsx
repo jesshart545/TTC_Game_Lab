@@ -89,6 +89,8 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   const style={transform:`translate(${edits.offsetX || 0}px,${edits.offsetY || 0}px) scale(${edits.zoom || 1}) rotate(${edits.rotation || 0}deg) scaleX(${edits.flipX?-1:1}) scaleY(${edits.flipY?-1:1})`,opacity:edits.opacity??1,filter:`brightness(${edits.brightness??100}%) contrast(${edits.contrast??100}%) saturate(${edits.saturation??100}%)`};
   return <div className="media-editor-backdrop" role="dialog" aria-modal="true">
     <div className="media-editor-modal" ref={modalRef}>
+      {/* The sticky actions bar is constrained to its containing block, so it must live inside this full-content-height wrapper: as a direct child of the scrolling modal its containing block was only the modal's own visible box, the bar's natural position sat outside it, and sticky could never pull the bar into view. */}
+      <div className="media-editor-scroll-content">
       <div className="media-editor-head">
         <div><small>EDIT ASSET</small><h2>{audio ? "Trim your audio clip." : video ? "Trim or request an AI edit." : "Resize, adjust or request an AI edit."}</h2></div>
         <button className="media-editor-close" onClick={onClose}>×</button>
@@ -144,6 +146,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
         </div>}
       </div>
       <div className="media-editor-actions"><button type="button" disabled={working} onClick={()=>void saveCopy()}>{working?"Saving edit…":"Save edited copy"}</button><button className="outline-btn" onClick={onClose}>Cancel</button></div>
+      </div>
     </div>
   </div>;
 }
