@@ -185,6 +185,7 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
     {youtubeOpen&&youtube&&<div className="youtube-draft-testing"><button type="button" className="outline-btn" onClick={onCloseYoutube}>Close YouTube search</button><p>Private search stays on this dashboard. Choose a video, then send it to the overlay when ready.</p><YouTubeHostPanel canShow={true} onCommand={async(command:Record<string,unknown>)=>{const result=await onYoutubeCommand(command);if(command.action==="play")setStageSide("overlay");return result;}} previewState={youtubeState} previewFeedback={youtubeFeedback} placement={safeYoutubePlacement(youtube.config.placement)}/></div>}
    </div>{!testing&&<p>Choose a button to edit it in the panel beside these previews.</p>}</section>
    </div>
+  </div>
    <section className="build-library" aria-label="Library for staging your live">
     <div className="build-library-head"><h3>Library</h3><span>Everything you need while staging — pick it and it goes on the stage.</span></div>
     <div className="build-library-tabs" role="tablist" aria-label="Library sections">{([["pictures","Pictures"],["video","Video"],["music","Music & voice"],["sounds","Sound effects"],["tools","Tools"],["features","Features & scenes"],["templates","Templates"],["effects","Effects"]] as const).map(([id,label])=><button key={id} type="button" role="tab" aria-selected={libraryFamily===id} className={libraryFamily===id?"active":""} onClick={()=>setLibraryFamily(id)}>{label}</button>)}</div>
@@ -206,7 +207,6 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
     </>:<p>Select a button on the Dashboard preview, then pick how it appears and leaves here. Effects apply to picture, video and scene buttons.</p>}</div>}
     </div>
    </section>
-  </div>
   </div>
  </section>;
 }
