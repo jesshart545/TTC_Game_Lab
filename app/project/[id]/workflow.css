@@ -346,4 +346,7 @@
 .fx-row{display:flex;gap:8px;flex-wrap:wrap}
 .fx-seconds{display:flex;align-items:center;gap:8px;color:#cfe3f5}
 .fx-seconds input{width:76px;padding:6px;color:#fff;background:#102132;border:1px solid #49677c;border-radius:6px}
+.button-facts{display:grid;gap:6px;padding:10px;border:1px solid #345064;border-radius:8px;background:#0b1320}
+.button-facts p{margin:0}
+.button-facts label{display:grid;gap:6px}
 .build-library-pointer{color:#cfc3f5}
