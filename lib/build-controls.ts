@@ -94,3 +94,26 @@ export function controlEffectResult(control:ProjectEvent,project:Project,entranc
  const base:OverlayResult=control.overlayResult?{...control.overlayResult}:tool?{...initialResult,x:placed?.x??initialResult.x,y:placed?.y??initialResult.y,width:placed?.width??initialResult.width,height:placed?.height??initialResult.height}:{x:0,y:0,width:100,height:100,entrance:'fade',exit:'fade',entranceSeconds:.3,exitSeconds:.3,layer:10};
  return {...base,entrance,entranceSeconds:entrance!=='none'&&!base.entranceSeconds?0.3:base.entranceSeconds};
 }
+// --- Measured stage fit (Build Space overlay preview) ---
+// The overlay stage is sized by width alone (width + aspect-ratio:16/9), so on
+// shorter screens its height overruns the overlay canvas and the frame's
+// bottom is cut off. The CSS dvh caps estimate the space; this helper instead
+// computes the stage width from the canvas's REAL content box, measured in
+// BuildSpace: the widest 16:9 frame whose height still leaves room for the
+// stage's siblings inside the canvas (the "Draft overlay" heading and the
+// placed-items row), so the whole frame and the row below it fit inside the
+// canvas on any screen.
+// Returns undefined when there is no usable measurement (the canvas is hidden
+// behind the Dashboard preview, or not laid out yet) — the caller keeps its
+// last fitted width. Returns null when the canvas is measurable but cannot
+// fit a stage at least 200px wide — the caller clears its inline width and
+// the CSS caps govern, rather than squeezing the stage into a sliver.
+// Otherwise returns the fitted width in px, floored so the derived height
+// (width x 9 / 16) never exceeds the room available.
+export function stageFitWidth(contentWidth:number,contentHeight:number,siblingsHeight:number):number|null|undefined{
+ if(!(contentWidth>0)||!(contentHeight>0))return undefined;
+ const availableHeight=contentHeight-siblingsHeight;
+ if(!(availableHeight>0))return null;
+ const width=Math.min(contentWidth,Math.floor(availableHeight*16/9));
+ return width>=200?width:null;
+}

@@ -4,7 +4,7 @@ import DashboardSequenceEditor from "./DashboardSequenceEditor";
 import {normalizePlacement,toolShapePlacement} from '../lib/overlay-placement';
 import FontPicker from './FontPicker';
 import CountdownDuration from "./CountdownDuration";
-import { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, type ReactNode } from "react";
 import type { Project, ProjectEvent, ProjectAsset, GameTool, OverlayResult } from "../lib/project";
 import {controlLabel,controlButtonStyle,toolDefaults,infoTypes} from "../lib/game-tools";
 import type {CardState} from "../lib/question-cards";
@@ -18,7 +18,7 @@ import TemplateBrowser from "./TemplateBrowser";
 import QuestionCardEditor from "./QuestionCardEditor";
 import GameToolEditor from "./GameToolEditor";
 import {assignControlAction} from "../lib/control-connections";
-import {addCreationControl,buttonFacts,controlEffectResult} from "../lib/build-controls";
+import {addCreationControl,buttonFacts,controlEffectResult,stageFitWidth} from "../lib/build-controls";
 import {additionTypes,creationsForType,creationControls,type AdditionType,type BuildCreation} from "../lib/build-guide";
 import {mediaKind} from "../lib/board-design";
 import {assetCategory} from "../lib/asset-folders";
@@ -60,6 +60,33 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
  useEffect(()=>setPositionYoutube(false),[selection?.id,testing]);
  const [additionType,setAdditionType]=useState<AdditionType>("image");
  const [stageSide,setStageSide]=useState<"overlay"|"dashboard">("overlay");
+ const overlayCanvasRef=useRef<HTMLElement>(null);
+ const [fittedStageWidth,setFittedStageWidth]=useState<number|null>(null);
+ const placedFitCount=project.assets.filter(a=>a.inProject).length+project.gameTools.filter(t=>t.inOverlayBuild).length;
+ useLayoutEffect(()=>{
+  const canvas=overlayCanvasRef.current;if(!canvas)return;
+  const view=canvas.ownerDocument.defaultView;if(!view)return;
+  const measure=()=>{
+   if(!canvas.clientWidth||!canvas.clientHeight)return; // Hidden behind the Dashboard preview, or not laid out yet: keep the last fitted width.
+   if(!view.matchMedia?.('(min-width: 1000px)').matches){setFittedStageWidth(previous=>previous===null?previous:null);return;} // Below the desktop frame the canvas height is content-driven and the page scrolls; the CSS caps govern there, untouched.
+   const canvasStyle=view.getComputedStyle(canvas);
+   const contentWidth=canvas.clientWidth-(parseFloat(canvasStyle.paddingLeft)||0)-(parseFloat(canvasStyle.paddingRight)||0);
+   const contentHeight=canvas.clientHeight-(parseFloat(canvasStyle.paddingTop)||0)-(parseFloat(canvasStyle.paddingBottom)||0);
+   let siblingsHeight=0;
+   for(const child of Array.from(canvas.children)){
+    if(child.classList.contains('stage'))continue;
+    const childStyle=view.getComputedStyle(child);
+    siblingsHeight+=child.getBoundingClientRect().height+(parseFloat(childStyle.marginTop)||0)+(parseFloat(childStyle.marginBottom)||0);
+   }
+   const next=stageFitWidth(contentWidth,contentHeight,siblingsHeight);
+   if(next!==undefined)setFittedStageWidth(previous=>previous===next?previous:next);
+  };
+  measure();
+  const Observer=view.ResizeObserver;if(!Observer)return;
+  const observer=new Observer(measure);observer.observe(canvas);
+  const placed=canvas.querySelector(':scope > .placed-items');if(placed)observer.observe(placed);
+  return()=>observer.disconnect();
+ },[testing,stageSide,placedFitCount]);
  const [libraryFamily,setLibraryFamily]=useState<"pictures"|"video"|"music"|"sounds"|"tools"|"features"|"templates"|"effects">("pictures");
  const [activeCreation,setActiveCreation]=useState<BuildCreation|null>(null);
  const [pendingAddition,setPendingAddition]=useState<{creation:BuildCreation;controls:ProjectEvent[];newTool?:GameTool}|null>(null);
@@ -191,7 +218,7 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
   <div className="paired-canvases build-stage-column">
    <div className="build-stage-area">
     <div className="build-stage-toggle" role="tablist" aria-label="Preview side"><button type="button" role="tab" aria-selected={stageSide==="overlay"} className={stageSide==="overlay"?"active":""} onClick={()=>setStageSide("overlay")}>Overlay preview</button><button type="button" role="tab" aria-selected={stageSide==="dashboard"} className={stageSide==="dashboard"?"active":""} onClick={()=>setStageSide("dashboard")}>Dashboard preview</button></div>
-   <section className="assembly-canvas" style={{display:stageSide==="overlay"?undefined:"none"}}><h3>Draft overlay{testing?" preview":""}</h3><div className="stage" ><BuildOverlayPreview>{overlay}{!testing&&tool&&!control&&!(infoTypes.includes(tool.type)&&cardStates[tool.id]&&!cardStates[tool.id].cleared)&&!['question-card','blank-card','card-list','youtube','random-picker'].includes(tool.type)&&<ControlAppearancePreview state={cardStates[tool.id]} control={{id:'editing-'+tool.id,label:tool.name,detail:'Editing preview',action:`tool.${tool.id}`,toolIds:[tool.id],overlayResult:{...defaultOverlayResult,...(tool.config.placement as Partial<typeof defaultOverlayResult>||{})}}} project={project}/>}{!testing&&control&&hasVisualResult&&!(tool&&infoTypes.includes(tool.type)&&cardStates[tool.id]&&!cardStates[tool.id].cleared)&&(!cardControl(control.action)||!!tool&&infoTypes.includes(tool.type))&&<ControlAppearancePreview state={tool?cardStates[tool.id]:undefined} control={{...control,overlayResult:control.overlayResult||defaultOverlayResult}} project={project}/>}
+   <section ref={overlayCanvasRef} className="assembly-canvas" style={{display:stageSide==="overlay"?undefined:"none"}}><h3>Draft overlay{testing?" preview":""}</h3><div className="stage" style={fittedStageWidth?{width:fittedStageWidth}:undefined}><BuildOverlayPreview>{overlay}{!testing&&tool&&!control&&!(infoTypes.includes(tool.type)&&cardStates[tool.id]&&!cardStates[tool.id].cleared)&&!['question-card','blank-card','card-list','youtube','random-picker'].includes(tool.type)&&<ControlAppearancePreview state={cardStates[tool.id]} control={{id:'editing-'+tool.id,label:tool.name,detail:'Editing preview',action:`tool.${tool.id}`,toolIds:[tool.id],overlayResult:{...defaultOverlayResult,...(tool.config.placement as Partial<typeof defaultOverlayResult>||{})}}} project={project}/>}{!testing&&control&&hasVisualResult&&!(tool&&infoTypes.includes(tool.type)&&cardStates[tool.id]&&!cardStates[tool.id].cleared)&&(!cardControl(control.action)||!!tool&&infoTypes.includes(tool.type))&&<ControlAppearancePreview state={tool?cardStates[tool.id]:undefined} control={{...control,overlayResult:control.overlayResult||defaultOverlayResult}} project={project}/>}
     </BuildOverlayPreview>
     {!testing&&!project.assets.some(a=>a.inProject)&&!project.gameTools.some(t=>t.inOverlayBuild)&&!project.controls.length&&<p className="canvas-empty">Start with a background, or add an item first — either order works. Everything you add appears here through its dashboard buttons.</p>}
     {!testing&&!project.assets.some(a=>a.inProject)&&!project.gameTools.some(t=>t.inOverlayBuild)&&project.controls.length>0&&<p className="canvas-empty">Your buttons are ready — items appear here when you press them in Test. A background is optional; add one anytime from Background.</p>}
