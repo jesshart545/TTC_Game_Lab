@@ -117,7 +117,13 @@ function typedGeneratedBlob(blob: Blob, sourceUrl: string): Blob {
 
 export async function storeGeneratedAsset(projectId: string, asset: { name: string; type: string; url: string; durationSeconds?: number | null }): Promise<ProjectAsset> {
   const source = new URL(asset.url);
-  if (source.protocol === "https:" && (source.hostname === "fal.media" || source.hostname.endsWith(".fal.media"))) {
+  // fal.media results and Agnes results (platform-outputs.agnes-ai.space)
+  // are stored server-side through the /api/assets sourceUrl branch: the
+  // browser download below needs CORS access to the file's host, which the
+  // Agnes outputs host does not grant — a browser fetch of a finished Agnes
+  // image dies with "Failed to fetch" and the picture is never saved.
+  if (source.protocol === "https:" && (source.hostname === "fal.media" || source.hostname.endsWith(".fal.media") ||
+      source.hostname === "platform-outputs.agnes-ai.space" || source.hostname.endsWith(".platform-outputs.agnes-ai.space"))) {
     const response = await fetch("/api/assets", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, name: asset.name, sourceUrl: asset.url, durationSeconds: asset.durationSeconds }),

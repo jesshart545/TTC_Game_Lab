@@ -20,8 +20,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ name, type, storageKey: key, uploadUrl: await getAssetUploadUrl(key, type), url: await getAssetUrl(key) });
       }
       const source = new URL(String(body.sourceUrl || ""));
+      // Server-side store allowlist — mirrors the server-stored hosts in
+      // lib/asset-store.ts (fal.media + the Agnes outputs host). Anything
+      // else is rejected: this fetch must never become a general proxy.
       if (source.protocol !== "https:" || source.username || source.password ||
-          !(source.hostname === "fal.media" || source.hostname.endsWith(".fal.media"))) {
+          !(source.hostname === "fal.media" || source.hostname.endsWith(".fal.media") ||
+            source.hostname === "platform-outputs.agnes-ai.space" || source.hostname.endsWith(".platform-outputs.agnes-ai.space"))) {
         return NextResponse.json({ error: "Unsupported generated media source." }, { status: 400 });
       }
       const response = await fetch(source, { redirect: "error", signal: AbortSignal.timeout(120000) });
