@@ -48,6 +48,21 @@ function ruleBody(source, selector) {
 }
 const actionsRule = ruleBody(globals, '.media-editor-actions');
 assert(actionsRule.includes('position:sticky') && actionsRule.includes('bottom:0'), 'MediaEditor footer bar is sticky at the bottom of the scrolling modal');
+// Sticky geometry precondition (the PR #115 false pass): a sticky element is
+// constrained to its containing block — the content box of its parent. When
+// the footer was a direct child of the scrolling modal, that box was only the
+// modal's visible height sitting at the top of the scrollable content, so the
+// footer's natural position at the end of the content lay outside it and
+// sticky could never pull it into view — the CSS said "sticky" and jsdom
+// (no layout) passed, while the live dialog showed no pinned footer. The
+// footer must therefore live inside a plain full-content-height wrapper (see
+// the behavioral checks below). If a rule for the wrapper ever appears, it
+// must not reintroduce a containing-block breaker.
+const wrapRuleStart = globals.indexOf('.media-editor-scroll-content{');
+if (wrapRuleStart >= 0) {
+  const wrapRule = ruleBody(globals, '.media-editor-scroll-content');
+  assert(!/overflow|transform|position/.test(wrapRule), 'The MediaEditor scroll-content wrapper stays a plain block box (no overflow/transform/position), so the sticky footer keeps the wrapper as its containing block');
+}
 const modalRule = ruleBody(globals, '.media-editor-modal');
 assert(modalRule.includes('padding:22px 22px 0') && modalRule.includes('overflow:auto'), 'MediaEditor modal keeps its own scroll and drops bottom padding so the sticky footer sits flush');
 const composerRule = ruleBody(globals, '.asset-composer');
@@ -155,10 +170,47 @@ const setValue = (dom, element, value) => {
     assert(inFooter('Save edited copy') && inFooter('Cancel'), 'Save edited copy and Cancel both live in the footer bar');
     const fieldset = document.querySelector('.media-editor-fields fieldset');
     assert(fieldset && ![...fieldset.querySelectorAll('button')].some(b => b.textContent === 'Save edited copy'), 'Save edited copy no longer sits mid-form inside the fieldset');
+    // The geometry that makes sticky actually pin (what the live check proved
+    // missing): the footer must NOT be a direct child of the scrolling modal.
+    // Its parent must be a plain wrapper that wraps ALL of the modal's
+    // content, so the wrapper's height spans the full scrollable content and
+    // the footer's containing block spans it too; the modal itself remains
+    // the direct scroll container (the media-full-image scroll contract).
+    const modal = document.querySelector('.media-editor-modal');
+    const wrap = actions.parentElement;
+    assert(wrap && wrap !== modal, 'The footer is not a direct child of the scrolling modal');
+    assert(wrap.classList.contains('media-editor-scroll-content'), 'The footer lives in the scroll-content wrapper');
+    assert(wrap.parentElement === modal, 'The wrapper is the modal\'s direct child, keeping the modal as the scroll container');
+    for (const section of ['.media-editor-head', '.media-editor-preview-wrap', '.media-editor-fields'])
+      assert(wrap.querySelector(section), `The wrapper spans the whole dialog content (${section} inside it), so its height is the full scrollable height`);
+    assert(wrap.lastElementChild === actions, 'The footer bar is the last element inside the wrapper');
     await React.act(async () => [...actions.querySelectorAll('button')].find(b => b.textContent === 'Save edited copy').click());
     assert(saved && saved.name === 'Portrait.png', 'The footer Save button still saves the edited copy');
     await React.act(async () => root.unmount());
     console.log('PASS: MediaEditor footer holds Save edited copy and Cancel (the sticky bar), and Save still saves.');
+
+    // The editor's other modes share this dialog: video and audio assets get
+    // the same wrapper + footer structure (their fieldsets differ, the
+    // footer does not).
+    for (const modeAsset of [
+      { name: 'Clip.mp4', url: 'https://example.test/clip.mp4', type: 'video/mp4' },
+      { name: 'Theme.mp3', url: 'https://example.test/theme.mp3', type: 'audio/mpeg' },
+    ]) {
+      const modeRoot = createRoot(container);
+      await React.act(async () => modeRoot.render(React.createElement(MediaEditor, {
+        asset: modeAsset, onSave: () => {}, onClose: () => {}, onSaveAsNew: async () => {},
+      })));
+      const modeActions = document.querySelector('.media-editor-actions');
+      assert(modeActions, `MediaEditor footer bar renders for ${modeAsset.type}`);
+      assert([...modeActions.querySelectorAll('button')].some(b => b.textContent === 'Save edited copy')
+        && [...modeActions.querySelectorAll('button')].some(b => b.textContent === 'Cancel'),
+        `Save edited copy and Cancel live in the footer bar for ${modeAsset.type}`);
+      assert(modeActions.parentElement && modeActions.parentElement.classList.contains('media-editor-scroll-content')
+        && modeActions.parentElement.parentElement === document.querySelector('.media-editor-modal'),
+        `The footer sits in the scroll-content wrapper for ${modeAsset.type}, like the image branch the live path uses`);
+      await React.act(async () => modeRoot.unmount());
+    }
+    console.log('PASS: MediaEditor sticky geometry holds in the rendered DOM — footer inside the full-height scroll-content wrapper (not a direct child of the scroller), for image, video, and audio assets.');
   }
 
   // ----- 4c behavioral: AssetComposer footer stays outside the scrolling body -----
