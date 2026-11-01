@@ -52,4 +52,38 @@ for (const h of [900, 800, 700]) {
   assert(stageHeight(h) <= h - 320, `At ${h}px tall the whole frame height fits the space under the chrome`);
 }
 
-console.log('PASS: Build Space overlay stage is width-capped by the screen height left under the chrome on wide desktops (16:9 preserved, never cropped); the 1000-1199px and <=760px caps, the Dashboard preview internal scroll, and the Library column height behaviour are unchanged.');
+// --- Measured fit: on desktop the stage width is ALSO fitted from the canvas's
+// real rendered size (ResizeObserver in BuildSpace), because the dvh estimates
+// above cannot know the true space on any given screen. (PR #102 tried CSS
+// container queries for this and broke the live preview; it was reverted, and
+// container queries are banned here.)
+const load = require('./load.cjs');
+const { stageFitWidth } = load('lib/build-controls.ts');
+const buildSpace = fs.readFileSync('components/BuildSpace.tsx', 'utf8');
+
+assert(!css.includes('container-type') && !css.includes('cqh') && !css.includes('cqw'), 'workflow.css uses no container queries or container units');
+assert(!buildSpace.includes('container-type') && !buildSpace.includes('cqh') && !buildSpace.includes('cqw'), 'BuildSpace uses no container queries or container units');
+
+// The helper's contract: undefined = no usable measurement (keep the last
+// width); null = measurable but no room (fall back to the CSS width); a number
+// = the widest 16:9 stage that fits beside its siblings, never under 200px.
+assert.equal(stageFitWidth(0, 420, 68), undefined, 'Hidden canvas (zero width) yields no measurement');
+assert.equal(stageFitWidth(636, 0, 68), undefined, 'Hidden canvas (zero height) yields no measurement');
+assert.equal(stageFitWidth(636, 60, 68), null, 'Canvas shorter than its siblings falls back to the CSS width');
+assert.equal(stageFitWidth(636, 180, 68), null, 'Room for only a sub-200px stage falls back instead of squeezing');
+assert.equal(stageFitWidth(300, 900, 68), 300, 'Width-bound canvas: the stage takes the full content width');
+assert.equal(stageFitWidth(1182, 860, 68), 1182, 'Tall 1080p-class canvas: the fit does not shrink the stage below its column width');
+assert.equal(stageFitWidth(636, 398, 68), 586, "Owner's 1366x768 laptop (canvas content ~398px tall, stage column ~636px wide): the fitted width is height-bound");
+assert(586 * 9 / 16 + 68 <= 398, 'At the fitted width, the whole frame plus its heading and placed-items row fit inside the canvas content box');
+
+// The wiring: refs and state in BuildSpace, scoped to the compact overlay canvas.
+assert(buildSpace.includes('stageFitWidth(contentWidth,contentHeight,siblingsHeight)'), 'BuildSpace computes the fit through the tested helper');
+assert(buildSpace.includes('const overlayCanvasRef=useRef<HTMLElement>(null)'), 'BuildSpace holds a ref for the overlay canvas');
+assert.equal((buildSpace.match(/ref=\{overlayCanvasRef\}/g) || []).length, 1, 'Exactly one element — the overlay canvas — carries the measuring ref; the dashboard canvas is untouched');
+assert(buildSpace.includes('style={fittedStageWidth?{width:fittedStageWidth}:undefined}'), 'The stage takes the fitted width as an inline style, and no inline width until a fit is measured (CSS caps govern first paint)');
+assert(buildSpace.includes('new Observer(measure);observer.observe(canvas)'), 'A ResizeObserver on the canvas keeps the fit live as the canvas resizes');
+assert(buildSpace.includes("canvas.querySelector(':scope > .placed-items')"), 'The placed-items row is observed too, so its growth refits the stage');
+assert(buildSpace.includes("if(!canvas.clientWidth||!canvas.clientHeight)return;"), 'Zero-size (hidden) measurements are ignored, keeping the last fitted width');
+assert(buildSpace.includes("matchMedia?.('(min-width: 1000px)')"), 'The measured fit stays scoped to the desktop compact frame; narrower layouts keep the CSS behaviour');
+
+console.log('PASS: Build Space overlay stage is width-capped by the screen height left under the chrome on wide desktops (16:9 preserved, never cropped); the 1000-1199px and <=760px caps, the Dashboard preview internal scroll, and the Library column height behaviour are unchanged; on desktop the width is additionally fitted from the overlay canvas\u2019s measured content box (heading + placed-items row keep their room, 200px floor with CSS fallback, no container queries).');
