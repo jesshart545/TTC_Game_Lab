@@ -21,7 +21,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
-  if (path === "/" || path === "/guide" || path === "/about" || path.startsWith("/fonts/") || (path === "/api/web-search" || path === "/api/web-research" || path === "/api/site-support") || ["/practice-circle.svg","/practice-star.svg"].includes(path) || path === "/help" || path === "/api/help" || path === "/reference" || path === "/api/reference" || path.startsWith("/published/") || (path.startsWith("/api/live/") || path.startsWith("/api/published/")) || path === "/api/cron/backup" || path.startsWith("/api/auth/") || path.startsWith("/auth/")) return NextResponse.next();
+  if (path === "/" || path === "/guide" || path === "/about" || path === "/terms" || path.startsWith("/fonts/") || (path === "/api/web-search" || path === "/api/web-research" || path === "/api/site-support") || ["/practice-circle.svg","/practice-star.svg"].includes(path) || path === "/help" || path === "/api/help" || path === "/reference" || path === "/api/reference" || path.startsWith("/published/") || (path.startsWith("/api/live/") || path.startsWith("/api/published/")) || path === "/api/cron/backup" || path.startsWith("/api/auth/") || path.startsWith("/auth/")) return NextResponse.next();
   return protectCreator(request);
 }
 export const config = { matcher: ["/((?!_next/static|_next/image).*)"] };
