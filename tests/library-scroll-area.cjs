@@ -24,7 +24,15 @@ assert(libraryRule.includes('min-height:0'), 'Library panel can shrink within it
 const scrollRule = ruleBody('.build-library-scroll');
 assert(scrollRule.includes('overflow-y:auto'), 'Library content area scrolls vertically');
 assert(scrollRule.includes('min-height:0'), 'Library content area can shrink inside the capped panel');
-assert(css.includes('.build-space-compact .build-library{max-height:min(100%,calc(100dvh - 24px))}'), 'On desktop the Library cap is also tied to the area beside the stage');
+assert(css.includes('.build-space-compact .build-library{height:100%;max-height:min(100%,calc(100dvh - 24px))}'), 'On desktop the Library fills its own column height and its cap is also tied to the area beside the stage');
+
+// --- CSS contract: on desktop the Library is a third column of the work area, beside the stage ---
+const workAreaRule = ruleBody('.build-work-area');
+assert(workAreaRule.includes('grid-template-columns:330px minmax(0,1fr) 340px'), 'Desktop work area has three columns: inspector, stage, Library');
+assert(css.includes('.build-work-area{grid-template-columns:310px minmax(0,1fr) 340px}'), 'In the 1000-1199px band the work area keeps its narrower inspector and still gives the Library its own column');
+assert(css.includes('.build-space-compact .build-library{grid-row:2}'), 'Stacked layouts place the Library directly under the stage column, as before');
+assert(css.includes('@media(min-width:761px) and (max-width:999px)'), 'The 761-999px band keeps its side-by-side stage/Library arrangement explicitly');
+assert(css.includes('.build-space-compact .build-library{grid-row:1;grid-column:2;align-self:start}'), 'In the 761-999px band the Library sits beside the stage area, as before');
 
 // --- Source structure: head and tabs live outside the scroll area; tab content lives inside it ---
 const source = fs.readFileSync('components/BuildSpace.tsx', 'utf8');
@@ -105,11 +113,19 @@ const noop = () => {};
   assert(!container.querySelector('.build-library-scroll .build-library-tabs'), 'Library tab row is not inside the scroll area');
   assert(container.querySelector('.build-library-scroll .library-grid'), 'Pictures content renders inside the scroll area');
 
+  const workArea = container.querySelector('.build-work-area');
+  const stageColumn = container.querySelector('.build-stage-column');
+  const libraryPanel = container.querySelector('.build-library');
+  assert(workArea && stageColumn && libraryPanel, 'Work area, stage column and Library all render');
+  assert(container.querySelector('.build-work-area > .build-library'), 'Library is a direct child of the work area');
+  assert(!container.querySelector('.build-stage-column .build-library'), 'Library is no longer inside the stage column');
+  assert(stageColumn.compareDocumentPosition(libraryPanel) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'Library comes after the stage column in the work area');
+
   const toolsTab = [...container.querySelectorAll('.build-library-tabs [role="tab"]')].find(button => button.textContent === 'Tools');
   assert(toolsTab, 'Tools tab still present');
   await React.act(async () => toolsTab.click());
   assert(container.querySelector('.build-library-scroll .library-create-tools'), 'Tools create row renders inside the scroll area');
 
   await React.act(async () => root.unmount());
-  console.log('PASS: Library panel is height-capped with a flex column; head and tabs stay outside the single scroll area; tab content (Pictures grid, Tools create row) renders inside it.');
+  console.log('PASS: Library panel is height-capped with a flex column; head and tabs stay outside the single scroll area; tab content (Pictures grid, Tools create row) renders inside it; the Library is a direct child of the work area after the stage column, with a three-column desktop grid.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
