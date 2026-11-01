@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { ACE_STEP_MODEL, pollAceStepMusic } from "../../../../lib/gradio-space";
 
 export const runtime = "nodejs";
 const DEFAULT_MODEL = "fal-ai/minimax-music/v2.6";
-const ALLOWED_MODELS = ["fal-ai/minimax-music/v2.6", "minimax/music-3"];
+const ALLOWED_MODELS = ["fal-ai/minimax-music/v2.6", "minimax/music-3", ACE_STEP_MODEL];
 
 function errorText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -17,6 +18,22 @@ function errorText(value: unknown): string {
 }
 
 export async function GET(request: Request) {
+  // Fallback jobs (submitted when fal was down) live on the ACE-Step Space,
+  // not fal: poll its queue instead. These need no FAL_KEY, so this branch
+  // runs before the fal key check below.
+  const params = new URL(request.url).searchParams;
+  if ((params.get("model") || "") === ACE_STEP_MODEL) {
+    const spaceId = params.get("id");
+    if (!spaceId || !/^[\w-]+$/.test(spaceId)) {
+      return NextResponse.json({ error: "Valid music request ID required." }, { status: 400 });
+    }
+    const result = await pollAceStepMusic(spaceId, 25000);
+    if (result.state === "completed") return NextResponse.json({ status: "completed", url: result.url });
+    if (result.state === "failed") return NextResponse.json({ status: "failed", error: result.error });
+    if (result.state === "unreachable") return NextResponse.json({ error: "Unable to reach the fallback service. Please check again." }, { status: 502 });
+    return NextResponse.json({ status: "processing", queuePosition: result.queuePosition });
+  }
+
   const key = (process.env.FAL_KEY || "").trim().replace(/^(['"])|(['"])$/g, "");
   if (!key) return NextResponse.json({ error: "FAL_KEY is not configured." }, { status: 503 });
 
