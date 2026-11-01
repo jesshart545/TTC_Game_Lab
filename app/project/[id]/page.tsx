@@ -257,7 +257,7 @@ export default function ProjectWorkspace() {
   useEffect(()=>{if(newCardEditorId&&newCardDialog.current&&!newCardDialog.current.open){newCardDialog.current.showModal();newCardDialog.current.querySelector<HTMLInputElement>('input')?.focus();}},[newCardEditorId]);
   function createWorkshopCard(kind:'question'|'blank'){
     const current=projectRef.current||project;if(!current)return;
-    try{const next=createCardSystem(current,undefined,kind);const card=next.gameTools[next.gameTools.length-1];setCardDraft({tool:card,controls:next.controls.filter(c=>!current.controls.some(x=>x.id===c.id))});setNewCardEditorId(card.id);setAssetStatus(kind==='blank'?'Blank card created. Customize it in the editor.':'Question and answer cards created. Choose their question pool and customize their appearance.');}
+    try{const next=createCardSystem(current,undefined,kind);const card=next.gameTools[next.gameTools.length-1];setCardDraft({tool:card,controls:next.controls.filter(c=>!current.controls.some(x=>x.id===c.id))});setNewCardEditorId(card.id);setAssetStatus(kind==='blank'?'New blank card — customize it in the editor, then save to create it.':'New question and answer cards — choose their question pool and customize their appearance, then save to create them.');}
     catch(error){setAssetStatus(error instanceof Error?error.message:'Card creation failed. Please try again.');}
   }
   const [showBoardTemplates, setShowBoardTemplates] = useState(false);
@@ -547,7 +547,7 @@ export default function ProjectWorkspace() {
     setTriviaTopics([]);
     setPreviewMode("overlay");
     setTriviaBusy(true);
-    setAssetStatus("Trivia Board added. Building its default sourced 5×5 board for the audience overlay…");
+    setAssetStatus("Trivia Board draft started. Building its default sourced 5×5 board for the audience overlay…");
     try {
       const response = await fetch("/api/trivia", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ mode:"generate" }) });
       const data = await response.json();
@@ -557,16 +557,17 @@ export default function ProjectWorkspace() {
       if (current && (current.gameTools || []).some(t=>t.id===tool.id)) {
         // The board was explicitly saved while generation ran: seed its questions in place.
         persist({ ...current, gameTools:(current.gameTools || []).map(t=>t.id===tool.id ? { ...t, config:nextConfig } : t), updatedAt:"just now" });
+        setAssetStatus("5×5 Trivia Board is ready in the workspace. Customize its categories, questions, visuals and interactive areas with the AI Creative Director. Push it to the audience overlay only when it is finished.");
       } else {
         // Not saved yet: seed the draft the designer is holding. If the designer was
         // backed out of, the draft is gone and the generated board is discarded.
         setBoardDraft(draftTool => draftTool && draftTool.id===tool.id ? { ...draftTool, config:nextConfig } : draftTool);
+        setAssetStatus("5×5 Trivia Board draft is ready. Customize its categories, questions, visuals and interactive areas in the board designer, then save the board to add it to your project.");
       }
       setTriviaConfig(nextConfig);
       setTriviaTopics(nextConfig.categories.map((category:any)=>String(category.name || "")));
-      setAssetStatus("5×5 Trivia Board is ready in the workspace. Customize its categories, questions, visuals and interactive areas with the AI Creative Director. Push it to the audience overlay only when it is finished.");
     } catch (error) {
-      setAssetStatus(error instanceof Error ? `Trivia Board was added to the overlay workspace, but its default sourced questions could not be generated: ${error.message}` : "Trivia Board was added, but its default questions could not be generated.");
+      setAssetStatus(error instanceof Error ? `Trivia Board draft started, but its default sourced questions could not be generated: ${error.message}` : "Trivia Board draft started, but its default questions could not be generated.");
     } finally { setTriviaBusy(false); }
   }
   function pushWorkspaceCreation(tool: GameTool) {
@@ -1735,7 +1736,7 @@ export default function ProjectWorkspace() {
     {assetPendingDelete && <ConfirmDialog title="Delete this asset?" message={`Delete "${assetPendingDelete.name}" from this project?`} confirmLabel="Delete asset" danger onConfirm={() => { const asset = assetPendingDelete; setAssetPendingDelete(null); void doDeleteAsset(asset); }} onCancel={() => setAssetPendingDelete(null)} />}
     {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}
     {listEditorId&&listEditorTool&&<dialog ref={listDialog} className="card-creation-dialog" aria-label="List and card creator" onCancel={()=>{setListEditorId("");setListDraft(null);}}><button type="button" onClick={()=>{listDialog.current?.close();setListEditorId("");setListDraft(null);}}>Close list creator</button><CardListEditor key={listEditorId} project={project} tool={listEditorTool} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.some(t=>t.id===next.id)?current.gameTools.map(t=>t.id===next.id?next:t):[...current.gameTools,next]});}}/></dialog>}
-    {newCardEditorId&&cardEditorTool&&<dialog ref={newCardDialog} className="card-creation-dialog" aria-label="Card designer" onCancel={()=>{setNewCardEditorId("");setCardDraft(null);}}><button type="button" className="outline-btn" onClick={()=>{newCardDialog.current?.close();setNewCardEditorId("");setCardDraft(null);}}>Close card editor</button><p role="status">Follow the steps below to customize your card, then save your changes.</p><QuestionCardEditor key={newCardEditorId} project={project} tool={cardEditorTool} deferSave={!project.gameTools.some(t=>t.id===newCardEditorId)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist(exists?{...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)}:{...current,gameTools:[...current.gameTools,next],controls:[...current.controls,...(cardDraft&&cardDraft.tool.id===next.id?cardDraft.controls.filter(c=>!current.controls.some(x=>x.id===c.id)):[])]});}}/></dialog>}
+    {newCardEditorId&&cardEditorTool&&<dialog ref={newCardDialog} className="card-creation-dialog" aria-label="Card designer" onCancel={()=>{setNewCardEditorId("");setCardDraft(null);}}><button type="button" className="outline-btn" onClick={()=>{newCardDialog.current?.close();setNewCardEditorId("");setCardDraft(null);}}>Close card editor</button><p role="status">Follow the steps below to customize your card, then save your changes.</p><QuestionCardEditor key={newCardEditorId} project={project} tool={cardEditorTool} deferSave={!project.gameTools.some(t=>t.id===newCardEditorId)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist(exists?{...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)}:{...current,gameTools:[...current.gameTools,next],controls:[...current.controls,...(cardDraft&&cardDraft.tool.id===next.id?cardDraft.controls.filter(c=>!current.controls.some(x=>x.id===c.id)):[])]});if(!exists)setAssetStatus(next.type==='blank-card'?'Blank card created. Customize it in the editor.':'Question and answer cards created. Choose their question pool and customize their appearance.');}}/></dialog>}
   </main>;
 }
 
