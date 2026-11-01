@@ -86,4 +86,24 @@ assert(buildSpace.includes("canvas.querySelector(':scope > .placed-items')"), 'T
 assert(buildSpace.includes("if(!canvas.clientWidth||!canvas.clientHeight)return;"), 'Zero-size (hidden) measurements are ignored, keeping the last fitted width');
 assert(buildSpace.includes("matchMedia?.('(min-width: 1000px)')"), 'The measured fit stays scoped to the desktop compact frame; narrower layouts keep the CSS behaviour');
 
+// --- Placed-items row: it renders inside the overlay canvas, directly after
+// the stage, so the measured fit above reserves its height. But the reservation
+// only helps if the canvas itself is fully visible: the stage area stacks the
+// preview toggle OVER the canvases, so a canvas taking the full stage-area
+// height (height:100%) starts a toggle-height lower and its bottom band — the
+// row — falls past the work area's overflow-hidden edge, unreachable by any
+// scroll (the canvas itself is overflow:hidden). On desktop the stage area is
+// therefore a flex column: the toggle keeps its own height, the overlay canvas
+// flexes into what is left, and the dashboard canvas keeps its full-height box.
+const desktopBlock = css.slice(css.indexOf('@media(min-width:1000px){'), css.indexOf('@media(min-width:1000px) and (max-width:1199px)'));
+assert(desktopBlock.includes('.build-space-compact .build-stage-area{display:flex;flex-direction:column;height:100%;min-height:0}'), 'On desktop the stage area is a full-height flex column, so the toggle takes its height off the top');
+assert(desktopBlock.includes('.build-space-compact .assembly-canvas:nth-child(2){flex:1}'), 'The overlay canvas flexes into the space left under the toggle instead of taking the full stage-area height');
+assert(desktopBlock.includes('.build-space-compact .assembly-canvas:nth-child(3){flex:none}'), 'The dashboard canvas keeps its existing full-height box (flex:none), untouched');
+const canvasStart = buildSpace.indexOf('ref={overlayCanvasRef}');
+assert(canvasStart >= 0, 'The overlay canvas section is present in BuildSpace');
+const canvasJsx = buildSpace.slice(canvasStart, buildSpace.indexOf('</section>', canvasStart));
+assert(canvasJsx.includes('className="stage"') && canvasJsx.includes('className="placed-items"'), 'The placed-items row renders inside the overlay canvas the fit measures');
+assert(canvasJsx.indexOf('className="stage"') < canvasJsx.indexOf('className="placed-items"'), 'The placed-items row renders directly after the stage inside that canvas');
+assert(canvasJsx.includes('aria-label="Placed overlay items"'), 'The row inside the canvas is the Placed overlay items row');
+
 console.log('PASS: Build Space overlay stage is width-capped by the screen height left under the chrome on wide desktops (16:9 preserved, never cropped); the 1000-1199px and <=760px caps, the Dashboard preview internal scroll, and the Library column height behaviour are unchanged; on desktop the width is additionally fitted from the overlay canvas\u2019s measured content box (heading + placed-items row keep their room, 200px floor with CSS fallback, no container queries).');
