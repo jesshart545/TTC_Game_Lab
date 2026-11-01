@@ -289,11 +289,12 @@ export default function LandingPage() {
         </section>
 
         <footer style={footer}>
-          <span>© TTCGameLab</span>
+          <span>© 2026 TTF Creators Group — TTC Game Lab™. Creators own what they create here.</span>
           <Link href="/guide" style={navLink}>How it works</Link>
           <Link href="/reference" style={navLink}>Practice project</Link>
           <Link href="/about" style={navLink}>Who we are</Link>
           <Link href="/help" style={navLink}>Help</Link>
+          <Link href="/terms" style={navLink}>Ownership &amp; Takedowns</Link>
           <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={navLink}>Donate</a>
           <a href="mailto:admin@ttcgamelab.com" style={navLink}>Contact</a>
           <Link href="/auth/sign-in" style={navLink}>Log in</Link>
