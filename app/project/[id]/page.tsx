@@ -48,7 +48,7 @@ import { ccssMediaAttachPatch } from "../../../lib/city-crime-scene";
 import {addCreationControl,clarifyYoutubeSearch} from "../../../lib/build-controls";
 import {toolDefaults,infoTypes} from "../../../lib/game-tools";
 import {GameInfoHostPanel} from "../../../components/GameInfoTools";
-import {buildReadiness} from "../../../lib/build-readiness";
+import {buildReadiness, type BuildIssue} from "../../../lib/build-readiness";
 import "./workflow.css";
 import CardListEditor from "../../../components/CardListEditor";
 import PickerHostPanel from "../../../components/PickerHostPanel";
@@ -127,12 +127,23 @@ export default function ProjectWorkspace() {
       if (plan) plan.open = true;
       document.getElementById("game-title")?.scrollIntoView({ behavior: "smooth", block: "center" });
       document.getElementById("game-title")?.focus({ preventScroll: true });
+      const titleField = document.getElementById("game-title");
+      if (titleField) { titleField.classList.add("fix-highlight"); window.setTimeout(() => titleField.classList.remove("fix-highlight"), 1900); }
     });
   }
-  function requestBuildEntry(task: BuildEntryRequest["task"]) {
+  function requestBuildEntry(task: BuildEntryRequest["task"], highlight = false) {
     setAiControlFocus(null);
-    setBuildEntryRequest({ task, request: ++buildEntryCounter.current });
+    setBuildEntryRequest({ task, request: ++buildEntryCounter.current, highlight });
     if (workflowStep !== 1) chooseWorkflowStep(1);
+  }
+  function requestBuildFix(kind: "tool" | "control", id: string) {
+    setAiControlFocus(null);
+    setBuildEntryRequest({ task: "fix", request: ++buildEntryCounter.current, fixTarget: { kind, id }, highlight: true });
+    if (workflowStep !== 1) chooseWorkflowStep(1);
+  }
+  function fixChecklistIssue(issue: BuildIssue) {
+    if (issue.kind === "asset") { setSelectedAssetKey(issue.targetId); openSavedWorkshop(1); return; }
+    requestBuildFix(issue.kind, issue.targetId);
   }
   function finishBuildEntry(request: number) {
     setBuildEntryRequest(current => current?.request === request ? null : current);
@@ -226,6 +237,7 @@ export default function ProjectWorkspace() {
   const [hostKey, setHostKey] = useState("");
   const [dashboardLinkStatus, setDashboardLinkStatus] = useState("");
   const [publishNotice, setPublishNotice] = useState("");
+  const [publishOutcome, setPublishOutcome] = useState("");
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [showGenerator, setShowGenerator] = useState(false);
   const [showTriviaListGenerator, setShowTriviaListGenerator] = useState(false);
@@ -1309,9 +1321,11 @@ export default function ProjectWorkspace() {
   }
   async function publish() {
     if (!project || publishing) return;
-    const issues=buildReadiness(project);if(issues.length){setAssetStatus("Before publishing: "+issues.map(i=>i.message).join(" "));return;}
+    setPublishOutcome("");
+    const issues=buildReadiness(project);if(issues.length){const outcome="Before publishing: "+issues.map(i=>i.message).join(" ");setAssetStatus(outcome);setPublishOutcome(outcome);return;}
     if (project.assets.some(asset => (asset.inProject || project.controls.some(c=>c.action===`background.show.${asset.storageKey||asset.name}`)) && asset.storageKey && !asset.storageKey.startsWith("projects/"))) {
       setAssetStatus("Publish needs cloud-stored assets. Re-upload any browser-only asset before publishing.");
+      setPublishOutcome("Publish needs cloud-stored assets. Re-upload any browser-only asset before publishing.");
       return;
     }
     const { publishedSnapshot: _previous, cardPreviewStates:_previewCards, pendingVideos:_pendingVideos, ...draft } = project;
@@ -1326,9 +1340,12 @@ export default function ProjectWorkspace() {
       setHostKey(saved.hostKey);
       setProject(next);
       setAssetStatus("Approved preview published to the host dashboard and audience overlay.");
+      setPublishOutcome("Approved preview published to the host dashboard and audience overlay.");
       setPublishNotice("Published — your experience is live. Your two URLs are shown above.");
     } catch (error) {
-      setAssetStatus(error instanceof Error ? `Publish failed: ${error.message}` : "Publish failed. Your draft is still available.");
+      const outcome = error instanceof Error ? `Publish failed: ${error.message}` : "Publish failed. Your draft is still available.";
+      setAssetStatus(outcome);
+      setPublishOutcome(outcome);
     } finally { setPublishing(false); }
   }
   function saveComposition(composition: AssetComposition) {
@@ -1518,15 +1535,16 @@ export default function ProjectWorkspace() {
           const buttonsOk = project.controls.length > 0;
           const hasBackground = project.assets.some(asset => asset.role === "background" && asset.inProject);
           return <ul className="publish-checklist">
-            <li><span aria-hidden="true">{titleOk ? "✓" : "!"}</span><span>{titleOk ? `Title is set: "${project.name}".` : "Your project still has a placeholder title — give it its real name so viewers and your library show it."}</span>{!titleOk && <button type="button" className="outline-btn" onClick={() => chooseWorkflowStep(0)}>Fix in Workshop</button>}</li>
-            <li><span aria-hidden="true">{buttonsOk ? "✓" : "!"}</span><span>{buttonsOk ? `${project.controls.length} dashboard button${project.controls.length === 1 ? "" : "s"} ready for the host.` : "No dashboard buttons yet — the host will have nothing to press during the show."}</span>{!buttonsOk && <button type="button" className="outline-btn" onClick={() => chooseWorkflowStep(1)}>Fix in Build Space</button>}</li>
-            {issues.map(issue => <li key={issue.id}><span aria-hidden="true">!</span><span>{issue.message}</span></li>)}
-            {!hasBackground && <li><span aria-hidden="true">–</span><span>No background set — the overlay starts as a plain dark screen. Fine if that is the look you want.</span></li>}
+            <li><span aria-hidden="true">{titleOk ? "✓" : "!"}</span><span>{titleOk ? `Title is set: "${project.name}".` : "Your project still has a placeholder title — give it its real name so viewers and your library show it."}</span>{!titleOk && <button type="button" className="outline-btn" onClick={openGamePlanEntry}>Fix in Workshop</button>}</li>
+            <li><span aria-hidden="true">{buttonsOk ? "✓" : "!"}</span><span>{buttonsOk ? `${project.controls.length} dashboard button${project.controls.length === 1 ? "" : "s"} ready for the host.` : "No dashboard buttons yet — the host will have nothing to press during the show."}</span>{!buttonsOk && <button type="button" className="outline-btn" onClick={() => requestBuildEntry("add", true)}>Fix in Build Space</button>}</li>
+            {issues.map(issue => <li key={issue.id}><span aria-hidden="true">!</span><span>{issue.message}</span><button type="button" className="outline-btn" onClick={() => fixChecklistIssue(issue)}>{issue.kind === "asset" ? "Fix in Workshop" : "Fix in Build Space"}</button></li>)}
+            {!hasBackground && <li><span aria-hidden="true">–</span><span>No background set — the overlay starts as a plain dark screen. Fine if that is the look you want.</span><button type="button" className="outline-btn" onClick={() => requestBuildEntry("background", true)}>Fix in Build Space</button></li>}
             {titleOk && buttonsOk && issues.length === 0 && <li><span aria-hidden="true">✓</span><span>Everything checks out — you are ready to publish.</span></li>}
           </ul>;
         })()}
         <p>Rehearse a complete round in Build Space. Check the appearance of your overlay, your host buttons, media playback, and how each item is cleared or stopped.</p>
         <p>You stay in control: only publishing updates the live experience. You can return to Workshop or Build Space to make more edits.</p>
+        {publishOutcome && <p className="publish-outcome" role="status">{publishOutcome}</p>}
         <div className="publish-review-actions"><button type="button" className="outline-btn" onClick={() => chooseWorkflowStep(1)}>Return to Build Space</button><button className="build-btn" type="button" onClick={publish} disabled={publishing || assetBusy || building}>{publishing ? "Publishing…" : project.publishedSnapshot ? "Publish latest changes" : "Publish experience"}</button></div>
       </section>}
       {workflowStep === 2 && <section className="publish-review" aria-label="TikTok LIVE Studio setup">

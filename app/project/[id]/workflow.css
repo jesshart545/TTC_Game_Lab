@@ -132,6 +132,9 @@
 .publish-review h3{margin:0 0 10px;font-size:18px}
 .publish-review p{max-width:850px;color:#c0ccdc;font-size:15px;line-height:1.6}
 .publish-review .outline-btn{margin-top:8px}
+.publish-outcome{padding:10px 12px;border:1px solid #48dce8;border-radius:8px;background:#0d2b33;color:#dff7fa}
+.fix-highlight{outline:3px solid #48dce8!important;outline-offset:2px;animation:fix-highlight-pulse .95s ease-in-out 2}
+@keyframes fix-highlight-pulse{0%,100%{outline-color:#48dce8}50%{outline-color:#ffd166}}
 .workshop-progress{align-items:center}
 .workshop-progress span{font-size:13px;line-height:1.5}
 @media(max-width:760px){

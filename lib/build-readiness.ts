@@ -40,5 +40,9 @@ export function buildReadiness(project: Project): BuildIssue[] {
  for(const asset of project.assets.filter(a=>a.inProject||project.controls.some(c=>c.action==='asset.show.'+(a.storageKey||a.name))||project.gameTools.some(t=>t.inOverlayBuild&&t.config.backgroundAssetKey===(a.storageKey||a.name)))){
   if(!asset.url||asset.url.startsWith('blob:')||asset.url.startsWith('data:'))issues.push({id:'asset-'+(asset.storageKey||asset.name),message:asset.name+': upload a saved media file in Workshop before publishing.',kind:'asset',targetId:asset.storageKey||asset.name,fix:'background'});
  }
+ for(const asset of project.assets.filter(a=>a.inProject||project.controls.some(c=>c.action==='background.show.'+(a.storageKey||a.name)))){
+  const assetKey=asset.storageKey||asset.name;
+  if(asset.storageKey&&!asset.storageKey.startsWith('projects/')&&!issues.some(i=>i.id==='asset-'+assetKey))issues.push({id:'cloud-'+assetKey,message:asset.name+': this file is saved only in your browser. Re-upload it in Workshop before publishing.',kind:'asset',targetId:assetKey,fix:'background'});
+ }
  return issues;
 }
