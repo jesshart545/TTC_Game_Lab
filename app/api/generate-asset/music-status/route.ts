@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { ACE_STEP_MODEL, pollAceStepMusic } from "../../../../lib/gradio-space";
 
 export const runtime = "nodejs";
+// A fallback music poll holds the Space's queue stream open until the job
+// finishes (disconnecting mid-run destroys the session), so this route
+// needs the same long ceiling as the asset routes.
+export const maxDuration = 300;
 const DEFAULT_MODEL = "fal-ai/minimax-music/v2.6";
 const ALLOWED_MODELS = ["fal-ai/minimax-music/v2.6", "minimax/music-3", ACE_STEP_MODEL];
 
@@ -27,7 +31,10 @@ export async function GET(request: Request) {
     if (!spaceId || !/^[\w-]+$/.test(spaceId)) {
       return NextResponse.json({ error: "Valid music request ID required." }, { status: 400 });
     }
-    const result = await pollAceStepMusic(spaceId, 25000);
+    // Hold the job's stream until it finishes: 280s, just under
+    // maxDuration. A short peek-and-reconnect poll can never see a song
+    // complete — the first disconnect destroys the session.
+    const result = await pollAceStepMusic(spaceId, 280000);
     if (result.state === "completed") return NextResponse.json({ status: "completed", url: result.url });
     if (result.state === "failed") return NextResponse.json({ status: "failed", error: result.error });
     if (result.state === "unreachable") return NextResponse.json({ error: "Unable to reach the fallback service. Please check again." }, { status: 502 });
