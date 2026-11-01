@@ -9,6 +9,13 @@
  * stays open while a job runs, so reads are bounded: collect events for a
  * budget, then interpret what arrived. Anonymous calls work; when HF_TOKEN
  * is configured it is sent along for the higher ZeroGPU quota.
+ *
+ * One hard rule for MUSIC jobs (proven live 2026-11-01): a job's stream
+ * must be held open until the job finishes. An unread session buffers its
+ * events, but once a reader disconnects mid-run the session is destroyed —
+ * the next read returns session_not_found and the result is unrecoverable.
+ * pollAceStepMusic therefore holds a single read for the caller's whole
+ * budget instead of peeking and reconnecting.
  */
 
 export const ACE_STEP_HOST = "https://ace-step-ace-step-v1-5.hf.space";
@@ -55,16 +62,19 @@ export async function joinSpaceQueue(host: string, fnIndex: number, data: unknow
   if (!payload?.event_id) throw new Error("Fallback service accepted the request but returned no job id.");
 }
 
-type SpaceRead = { events: any[]; httpStatus: number };
+type SpaceRead = { events: any[]; httpStatus: number; streamEnded: boolean };
 
 /**
  * Read a job's queue stream for up to budgetMs, collecting every event that
  * arrives (the stream is aborted at the budget; a still-running job simply
- * yields its progress events so far).
+ * yields its progress events so far). streamEnded reports whether the
+ * server closed the stream itself (job finished) as opposed to our budget
+ * abort cutting it — callers must treat the two very differently.
  */
 export async function readSpaceQueue(host: string, sessionHash: string, budgetMs: number): Promise<SpaceRead> {
   const events: any[] = [];
   let httpStatus = 0;
+  let streamEnded = false;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), budgetMs);
   try {
@@ -84,7 +94,7 @@ export async function readSpaceQueue(host: string, sessionHash: string, budgetMs
       let pending = Buffer.alloc(0);
       for (;;) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) { streamEnded = true; break; }
         if (value) {
           pending = Buffer.concat([pending, Buffer.from(value as Uint8Array)]);
           let newline = pending.indexOf(10);
@@ -98,6 +108,7 @@ export async function readSpaceQueue(host: string, sessionHash: string, budgetMs
       if (pending.length) handleLine(pending.toString("utf8"));
     } else {
       const text = await response.text();
+      streamEnded = true;
       for (const line of text.split("\n")) handleLine(line);
     }
   } catch {
@@ -105,7 +116,7 @@ export async function readSpaceQueue(host: string, sessionHash: string, budgetMs
   } finally {
     clearTimeout(timer);
   }
-  return { events, httpStatus };
+  return { events, httpStatus, streamEnded };
 }
 
 function spaceFileUrl(host: string, item: any): string {
@@ -121,7 +132,11 @@ function spaceFileUrl(host: string, item: any): string {
 }
 
 function spaceErrorText(event: any): string {
-  const raw = event?.error ?? event?.message ?? "";
+  // Gradio reports a failed job's message in output.error on the
+  // process_completed event (captured verbatim from the ACE-Step Space,
+  // 2026-11-01); event.error/event.message are only fallbacks.
+  const outputError = typeof event?.output?.error === "string" ? event.output.error : "";
+  const raw = event?.error || outputError || event?.message || "";
   const text = typeof raw === "string" ? raw : String(raw?.message || raw?.detail || "");
   // Quota/billing detail from the fallback is an admin concern, mirroring
   // the primary provider's handling: creators get the generic message.
@@ -225,11 +240,24 @@ export async function submitAceStepMusic(prompt: string, lyrics: string, duratio
   return { requestId: sessionHash, statusUrl: `${ACE_STEP_HOST}/gradio_api/queue/data?session_hash=${sessionHash}` };
 }
 
-/** One bounded poll of a fallback music job, in music-status route terms. */
+/**
+ * Poll a fallback music job by holding its queue stream open until the
+ * job reaches a terminal state (see the header: disconnecting mid-run
+ * destroys the session, so peeking is not an option). The caller budgets
+ * this to just under the route's maxDuration. If the budget runs out
+ * mid-run the job is abandoned by the disconnect, so the outcome is an
+ * honest timeout failure — never "processing", which would send the
+ * client back to a session that no longer exists.
+ */
 export async function pollAceStepMusic(sessionHash: string, budgetMs: number): Promise<SpaceJobResult> {
-  const { events, httpStatus } = await readSpaceQueue(ACE_STEP_HOST, sessionHash, budgetMs);
+  const { events, httpStatus, streamEnded } = await readSpaceQueue(ACE_STEP_HOST, sessionHash, budgetMs);
   const result = interpretSpaceEvents(ACE_STEP_HOST, events);
-  if (result) return result;
+  if (result && result.state !== "processing") return result;
+  // The server closed the stream without a terminal event: the job's
+  // record is gone (also the shape of a session that never existed).
+  if (streamEnded) return { state: "failed", error: "The fallback generation job could not be found." };
+  // Our own budget abort cut a still-running job loose.
+  if (result) return { state: "failed", error: "The fallback generation timed out. Please try again shortly." };
   if (httpStatus === 0) return { state: "unreachable" };
   if (httpStatus < 200 || httpStatus >= 300) return { state: "failed", error: `The fallback service returned HTTP ${httpStatus}.` };
   return { state: "processing", queuePosition: null };

@@ -13,9 +13,10 @@ function load(file, mocks = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   vm.runInNewContext(code, {
-    exports, Buffer, URL, AbortSignal, AbortController, setTimeout, clearTimeout, console,
+    exports, Buffer, URL, AbortSignal, AbortController, setTimeout, clearTimeout, console, Blob,
     process: { env: mocks.env || { FAL_KEY: 'test-fal' } },
     require(name) {
+      if (mocks.modules && Object.prototype.hasOwnProperty.call(mocks.modules, name)) return mocks.modules[name];
       if (name === 'next/server') return { NextResponse: { json: (body, init) => Response.json(body, init) } };
       if (name.startsWith('.')) return load(path.resolve(path.dirname(file), name + '.ts'), mocks);
       return require(name);
@@ -34,6 +35,19 @@ function sseResponse(events) {
     },
   });
   return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+}
+
+// An SSE stream that emits its events and then hangs open, exactly like a
+// still-running job's stream, until the caller's abort signal cuts it —
+// the way a real fetch behaves when readSpaceQueue's budget expires.
+function hangingSseFetch(events) {
+  const encoder = new TextEncoder();
+  return async (url, options) => new Response(new ReadableStream({
+    start(controller) {
+      for (const event of events) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      options?.signal?.addEventListener('abort', () => { try { controller.error(new Error('The operation was aborted.')); } catch { /* already closed */ } });
+    },
+  }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
 }
 
 const ACE_JOIN = 'https://ace-step-ace-step-v1-5.hf.space/gradio_api/queue/join';
@@ -150,30 +164,74 @@ test('HF_TOKEN is sent to the Space when configured', async () => {
   assert.equal(joinHeaders.Authorization, 'Bearer hf_test_token');
 });
 
-test('music-status polls a fallback Space job: processing, then completed', async () => {
+test('music-status holds a fallback Space job stream until it completes', async () => {
   const route = load('app/api/generate-asset/music-status/route.ts', {
     fetch: async (url) => {
       assert.ok(String(url).startsWith('https://ace-step-ace-step-v1-5.hf.space/gradio_api/queue/data'));
       return sseResponse([
-        { msg: 'estimation', rank: 2, queue_size: 3 },
+        { msg: 'estimation', rank: 0, queue_size: 1 },
         { msg: 'process_starts' },
+        { msg: 'process_completed', success: true, output: { data: [{ path: '/tmp/gradio/xyz/song.mp3', url: 'https://ace-step-ace-step-v1-5.hf.space/gradio_api/file=/tmp/gradio/xyz/song.mp3' }, null] } },
       ]);
     },
   });
-  const processing = await route.GET(new Request('https://test/api/generate-asset/music-status?id=ttcmusicabc123&model=ace-step%2Face-step-v1.5'));
-  assert.equal(processing.status, 200);
-  assert.deepEqual(await processing.json(), { status: 'processing', queuePosition: 2 });
-
-  const done = load('app/api/generate-asset/music-status/route.ts', {
-    fetch: async () => sseResponse([
-      { msg: 'estimation', rank: 0, queue_size: 1 },
-      { msg: 'process_starts' },
-      { msg: 'process_completed', success: true, output: { data: [{ path: '/tmp/gradio/xyz/song.mp3', url: 'https://ace-step-ace-step-v1-5.hf.space/gradio_api/file=/tmp/gradio/xyz/song.mp3' }, null] } },
-    ]),
-  });
-  const completed = await done.GET(new Request('https://test/api/generate-asset/music-status?id=ttcmusicabc123&model=ace-step%2Face-step-v1.5'));
+  const completed = await route.GET(new Request('https://test/api/generate-asset/music-status?id=ttcmusicabc123&model=ace-step%2Face-step-v1.5'));
   assert.equal(completed.status, 200);
   assert.deepEqual(await completed.json(), { status: 'completed', url: 'https://ace-step-ace-step-v1-5.hf.space/gradio_api/file=/tmp/gradio/xyz/song.mp3' });
+});
+
+test('music-status fails a fallback job whose stream ends mid-run instead of reporting processing', async () => {
+  // Proven live 2026-11-01: once a reader disconnects, this Space destroys
+  // the session, so a job whose stream ends without a terminal event is
+  // gone — answering "processing" would send the client back to a session
+  // that answers session_not_found.
+  const route = load('app/api/generate-asset/music-status/route.ts', {
+    fetch: async () => sseResponse([
+      { msg: 'estimation', rank: 2, queue_size: 3 },
+      { msg: 'process_starts' },
+    ]),
+  });
+  const response = await route.GET(new Request('https://test/api/generate-asset/music-status?id=ttcmusicabc123&model=ace-step%2Face-step-v1.5'));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.status, 'failed');
+  assert.match(data.error, /could not be found/);
+});
+
+test('music-status reads a Space failure from output.error and maps quota to the generic message', async () => {
+  // The verbatim ZeroGPU failure captured from the ACE-Step Space
+  // (2026-11-01): Gradio puts the message in output.error on the
+  // process_completed event; event.error stays empty.
+  const route = load('app/api/generate-asset/music-status/route.ts', {
+    fetch: async () => sseResponse([
+      { msg: 'process_starts' },
+      { msg: 'process_completed', success: false, title: 'ZeroGPU quota exceeded', output: { error: 'You have exceeded your ZeroGPU quota (180s requested vs. 153s left). Try again in 18:09:14. Authenticate with a Hugging Face token for more quota - https://huggingface.co/settings/tokens', duration: 10, visible: true, title: 'ZeroGPU quota exceeded' } },
+    ]),
+  });
+  const response = await route.GET(new Request('https://test/api/generate-asset/music-status?id=ttcmusicabc123&model=ace-step%2Face-step-v1.5'));
+  const data = await response.json();
+  assert.equal(data.status, 'failed');
+  assert.equal(data.error, 'This generation is temporarily unavailable. The site administrator has been notified.');
+});
+
+test('fallback music poll abandons a still-running job at its budget with an honest timeout', async () => {
+  const lib = load('lib/gradio-space.ts', {
+    fetch: hangingSseFetch([
+      { msg: 'estimation', rank: 0, queue_size: 1 },
+      { msg: 'process_starts' },
+      { msg: 'progress', progress_data: [{ index: null, length: null, unit: 'steps', progress: 0.1, desc: 'Phase 1: Generating CoT metadata (once for all items)...' }] },
+    ]),
+  });
+  const result = await lib.pollAceStepMusic('ttcmusichang', 60);
+  assert.equal(result.state, 'failed');
+  assert.match(result.error, /timed out/);
+});
+
+test('fallback music poll reports processing only for a silent stream cut by the budget', async () => {
+  const lib = load('lib/gradio-space.ts', { fetch: hangingSseFetch([]) });
+  const result = await lib.pollAceStepMusic('ttcmusicsilent', 60);
+  assert.equal(result.state, 'processing');
+  assert.equal(result.queuePosition, null);
 });
 
 test('music-status reports a lost fallback job as failed and an unreachable Space as 502', async () => {
@@ -269,4 +327,83 @@ test('voice uses fal when fal succeeds and never touches Kokoro', async () => {
   assert.equal(data.provider, 'fal-elevenlabs');
   assert.equal(data.url, 'https://fal.media/voice.mp3');
   assert.equal(calls.some(url => url.includes('hf.space')), false);
+});
+
+const KOKORO_WAV_URL = 'https://hexgrad-kokoro-tts.hf.space/gradio_api/file=/tmp/gradio/v/out.wav';
+
+// The client-side half of a fallback voice save: the Space file is
+// downloaded and re-uploaded through /api/assets presigning, exactly as
+// storeGeneratedAsset does for every non-fal source.
+function assetStoreFetch(download) {
+  const calls = [];
+  const fetch = async (url, options = {}) => {
+    const target = String(url);
+    calls.push({ url: target, options });
+    if (target === KOKORO_WAV_URL) return download;
+    if (target === '/api/assets' && options.body && JSON.parse(options.body).presign === true) {
+      const body = JSON.parse(options.body);
+      return Response.json({ uploadUrl: 'https://storage.test/put', storageKey: 'projects/p1/stored', name: body.name, url: 'https://storage.test/get' });
+    }
+    if (target === 'https://storage.test/put') return { ok: true };
+    throw new Error(`Unexpected fetch ${target}`);
+  };
+  return { fetch, calls };
+}
+
+test('a Kokoro voice download served as application/octet-stream is stored as audio/wav and files under Voice', async () => {
+  // The exact shape the live run produced: the download's blob type is the
+  // generic application/octet-stream, and that type is what used to be
+  // stored — sorting the clip into "Other files" and out of Build Space's
+  // Music & voice tab, whose filters read the stored type.
+  const { fetch, calls } = assetStoreFetch({ ok: true, blob: async () => new Blob([new Uint8Array([82, 73, 70, 70])], { type: 'application/octet-stream' }) });
+  const store = load('lib/asset-store.ts', { fetch, modules: { './project': {} } });
+  const stored = await store.storeGeneratedAsset('p1', { name: 'Welcome to the show — Voice', type: 'hexgrad/Kokoro-82M', url: KOKORO_WAV_URL });
+  assert.equal(stored.type, 'audio/wav');
+  const presign = calls.find(call => call.url === '/api/assets');
+  assert.equal(JSON.parse(presign.options.body).type, 'audio/wav', 'the upload itself carries the repaired type');
+
+  // The classification the Workshop folders and Build Space tabs apply.
+  const folders = load('lib/asset-folders.ts', { fetch });
+  const board = load('lib/board-design.ts', { fetch });
+  const asSaved = { ...stored, generation: { type: 'voice' } };
+  assert.equal(board.mediaKind(asSaved), 'audio');
+  assert.equal(folders.assetCategory(asSaved), 'voice');
+  // The pre-fix stored shape — same asset, generic type kept — is "other":
+  // that is the whole mechanism of the live misclassification.
+  assert.equal(folders.assetCategory({ ...asSaved, type: 'application/octet-stream' }), 'other');
+  assert.equal(board.mediaKind({ ...asSaved, type: 'application/octet-stream' }), 'unknown');
+});
+
+test('a generated download that already carries a real media type is stored untouched', async () => {
+  const mp3Url = 'https://hexgrad-kokoro-tts.hf.space/gradio_api/file=/tmp/gradio/v/out.mp3';
+  const calls = [];
+  const fetch = async (url, options = {}) => {
+    const target = String(url);
+    calls.push({ url: target, options });
+    if (target === mp3Url) return { ok: true, blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/mpeg' }) };
+    if (target === '/api/assets') return Response.json({ uploadUrl: 'https://storage.test/put', storageKey: 'projects/p1/stored', name: 'clip', url: 'https://storage.test/get' });
+    if (target === 'https://storage.test/put') return { ok: true };
+    throw new Error(`Unexpected fetch ${target}`);
+  };
+  const store = load('lib/asset-store.ts', { fetch, modules: { './project': {} } });
+  const stored = await store.storeGeneratedAsset('p1', { name: 'Clip — Voice', type: 'hexgrad/Kokoro-82M', url: mp3Url });
+  assert.equal(stored.type, 'audio/mpeg');
+});
+
+test('fal-generated media still stores through the server route with the server-reported type', async () => {
+  const calls = [];
+  const fetch = async (url, options = {}) => {
+    const target = String(url);
+    calls.push({ url: target, options });
+    if (target === '/api/assets') {
+      const body = JSON.parse(options.body);
+      assert.equal(body.sourceUrl, 'https://fal.media/files/voice.mp3');
+      return Response.json({ name: body.name, type: 'audio/mpeg', storageKey: 'projects/p1/fal', url: 'https://storage.test/fal' });
+    }
+    throw new Error(`Unexpected fetch ${target}`);
+  };
+  const store = load('lib/asset-store.ts', { fetch, modules: { './project': {} } });
+  const stored = await store.storeGeneratedAsset('p1', { name: 'Welcome — Voice', type: 'fal-ai/elevenlabs/tts/eleven-v3', url: 'https://fal.media/files/voice.mp3' });
+  assert.equal(stored.type, 'audio/mpeg');
+  assert.equal(calls.length, 1, 'the fal path never downloads the source in the browser');
 });

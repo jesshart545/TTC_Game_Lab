@@ -90,6 +90,31 @@ export async function storeUploadedAsset(projectId: string, file: File): Promise
   return uploadBlob(projectId, file.name, file);
 }
 
+/**
+ * Media types by file extension, used to repair generated downloads whose
+ * source served them with a generic type (application/octet-stream) or
+ * none at all — the Hugging Face Spaces' file endpoint does this for the
+ * Kokoro fallback's WAV output. The stored asset type is what sorts an
+ * asset into its library folder and Build Space tab, so a generic type
+ * strands a perfectly good voice clip under "Other files".
+ */
+const GENERATED_TYPE_BY_EXTENSION: Record<string, string> = {
+  wav: "audio/wav", mp3: "audio/mpeg", ogg: "audio/ogg", m4a: "audio/mp4",
+  aac: "audio/aac", flac: "audio/flac",
+  mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+  gif: "image/gif", avif: "image/avif", svg: "image/svg+xml",
+};
+
+function typedGeneratedBlob(blob: Blob, sourceUrl: string): Blob {
+  if (blob.type && blob.type !== "application/octet-stream") return blob;
+  let pathname = "";
+  try { pathname = decodeURIComponent(new URL(sourceUrl).pathname); } catch { return blob; }
+  const extension = /\.([a-z0-9]+)$/i.exec(pathname)?.[1]?.toLowerCase() || "";
+  const type = GENERATED_TYPE_BY_EXTENSION[extension];
+  return type ? new Blob([blob], { type }) : blob;
+}
+
 export async function storeGeneratedAsset(projectId: string, asset: { name: string; type: string; url: string; durationSeconds?: number | null }): Promise<ProjectAsset> {
   const source = new URL(asset.url);
   if (source.protocol === "https:" && (source.hostname === "fal.media" || source.hostname.endsWith(".fal.media"))) {
@@ -104,7 +129,7 @@ export async function storeGeneratedAsset(projectId: string, asset: { name: stri
   const response = await fetch(asset.url);
   if (!response.ok) throw new Error("Unable to download generated asset.");
   const blob = await response.blob();
-  return uploadBlob(projectId, asset.name, blob);
+  return uploadBlob(projectId, asset.name, typedGeneratedBlob(blob, asset.url));
 }
 
 /** The local file bytes for a browser-stored asset (legacy uploads whose
