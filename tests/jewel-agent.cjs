@@ -8,8 +8,9 @@ const repoLoad = require('./load.cjs');
 
 const root = path.resolve(__dirname, '..');
 
-// Loads lib/muse-client.ts and app/api/jewel/route.ts in a shared sandbox so
-// the route uses the REAL Muse client against a mocked fetch. Heavy pure
+// Loads lib/muse-client.ts, lib/assistant-provider.ts and
+// app/api/jewel/route.ts in a shared sandbox so the route uses the REAL Muse
+// client and the REAL fallback provider against a mocked fetch. Heavy pure
 // libs are loaded through the repo's own tests/load.cjs; next/server, the
 // creator auth, and admin-alerts are stubbed (admin-alerts with its exact
 // credit pattern, recording notifications instead of touching the database).
@@ -40,6 +41,7 @@ function makeStack({ env = {}, email = 'creator@example.com' } = {}) {
     fetch: async (url, options) => { calls.push({ url: String(url), options }); return handler(String(url), options); },
   };
   const client = loadModule(path.join(root, 'lib/muse-client.ts'), sandbox, {});
+  const provider = loadModule(path.join(root, 'lib/assistant-provider.ts'), sandbox, {});
   const stubs = {
     'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
     '../../../lib/auth/server': { requireCreator: async () => ({ email }) },
@@ -48,9 +50,10 @@ function makeStack({ env = {}, email = 'creator@example.com' } = {}) {
       notifyAdminOfCreditIssue: async (source, detail) => { alerts.push({ source, detail }); },
     },
     '../../../lib/muse-client': client,
+    '../../../lib/assistant-provider': provider,
   };
   const route = loadModule(path.join(root, 'app/api/jewel/route.ts'), sandbox, stubs);
-  return { client, route, calls, alerts, respond(fn) { handler = fn; } };
+  return { client, provider, route, calls, alerts, respond(fn) { handler = fn; } };
 }
 
 const okMuse = (content) => async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: typeof content === 'string' ? content : JSON.stringify(content) } }] }) });
@@ -64,6 +67,21 @@ function queueMuse(responses) {
 }
 const post = (route, body) => route.POST(new Request('https://test/api/jewel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
 const project = { id: 'project-1', assets: [], controls: [], gameTools: [] };
+
+const META_URL = 'https://api.meta.ai/v1/chat/completions';
+const AGNES_URL = 'https://apihub.agnes-ai.com/v1/chat/completions';
+// Routes the mocked fetch by provider URL so a test can fail Muse and serve
+// the fallback (or the reverse) independently. A provider left undefined
+// throws if it is called at all.
+function byProvider({ muse, agnes }) {
+  return async (url, options) => {
+    if (url === META_URL) { if (!muse) throw new Error('Muse was called unexpectedly.'); return muse(url, options); }
+    if (url === AGNES_URL) { if (!agnes) throw new Error('The fallback provider was called unexpectedly.'); return agnes(url, options); }
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+}
+const creditDown = async () => ({ ok: false, status: 402, json: async () => ({ error: { message: 'Insufficient credit balance for this account' } }) });
+const answer = (reply) => ({ reply, changes: {}, manualSteps: [], needsClarification: false, outcome: 'answer', action: null });
 
 test('POST with no Meta key returns 503 configured:false, and GET reports unconfigured', async () => {
   const { route } = makeStack({ env: {} });
@@ -169,7 +187,7 @@ test('an identical resubmission of the failed generation is rejected, then the a
   assert.equal(stack.calls.length, 2, 'identical answer triggered exactly one validation retry');
 });
 
-test('a Muse credit failure alerts the admin and returns the generic unavailable response', async () => {
+test('a Muse credit failure with no fallback configured alerts the admin and returns the generic unavailable response', async () => {
   const stack = makeStack({ env: { META_API_KEY: 'test-key' } });
   stack.respond(async () => ({ ok: false, status: 402, json: async () => ({ error: { message: 'Insufficient credit balance for this account' } }) }));
   const response = await post(stack.route, { mode: 'draft-edit', request: 'Make a wheel', history: [], project });
@@ -178,6 +196,85 @@ test('a Muse credit failure alerts the admin and returns the generic unavailable
   assert.equal(data.error, 'The AI assistant is temporarily unavailable. The site administrator has been notified. No changes were made.');
   assert.equal(stack.alerts.length, 1);
   assert.equal(stack.alerts[0].source, 'jewel/muse');
+});
+
+test('a Muse credit failure falls back to the original AI chat, and the admin credit alert still fires once', async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key', AGNES_API_KEY: 'agnes-key' } });
+  stack.respond(byProvider({
+    muse: creditDown,
+    agnes: okMuse(answer('The fallback kept your streak going.')),
+  }));
+  const response = await post(stack.route, { mode: 'draft-edit', request: 'Give me an encouraging line for my show open', history: [], project });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.configured, true);
+  assert.equal(data.outcome, 'answer');
+  assert.equal(data.reply, 'The fallback kept your streak going.');
+  assert.deepEqual(data.changes, {});
+  assert.equal(data.action, null);
+  assert.equal(stack.alerts.length, 1, 'the credit alert fires once even though the fallback served the creator');
+  assert.equal(stack.alerts[0].source, 'jewel/muse');
+  const metaCall = stack.calls.find((call) => call.url === META_URL);
+  const agnesCall = stack.calls.find((call) => call.url === AGNES_URL);
+  assert.ok(metaCall && agnesCall, 'Muse was tried and the fallback was called');
+  assert.ok(stack.calls.indexOf(metaCall) < stack.calls.indexOf(agnesCall), 'Muse first, fallback second');
+  assert.equal(agnesCall.options.headers.Authorization, 'Bearer agnes-key');
+  const sentToFallback = JSON.parse(agnesCall.options.body);
+  assert.match(sentToFallback.messages[0].content, /You are Jewel/, 'the fallback receives the same Jewel system prompt');
+  assert.equal(sentToFallback.model, 'agnes-2.5-flash');
+  assert.deepEqual(sentToFallback.response_format, { type: 'json_object' });
+});
+
+test('with no Meta key configured, the original AI chat serves Jewel and GET reports configured', async () => {
+  const stack = makeStack({ env: { AGNES_API_KEY: 'agnes-key' } });
+  const getResponse = await stack.route.GET();
+  assert.equal(getResponse.status, 200);
+  assert.deepEqual(await getResponse.json(), { configured: true });
+  stack.respond(byProvider({ agnes: okMuse(answer('Served without Muse.')) }));
+  const response = await post(stack.route, { mode: 'draft-edit', request: 'Give me an encouraging line for my show open', history: [], project });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.reply, 'Served without Muse.');
+  assert.equal(stack.calls.filter((call) => call.url === META_URL).length, 0, 'Muse is never called while unconfigured');
+  assert.equal(stack.alerts.length, 0);
+});
+
+test('a Muse connection failure falls back to the original AI chat without an admin alert', async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key', AGNES_API_KEY: 'agnes-key' } });
+  stack.respond(byProvider({
+    muse: async () => { throw new Error('socket hang up'); },
+    agnes: okMuse(answer('Still here — the fallback answered.')),
+  }));
+  const response = await post(stack.route, { mode: 'draft-edit', request: 'Give me an encouraging line for my show open', history: [], project });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.reply, 'Still here — the fallback answered.');
+  assert.equal(stack.alerts.length, 0, 'connection failures never raised a credit alert');
+});
+
+test('when both providers fail on credit, the route keeps the unavailable response and alerts exactly once', async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key', AGNES_API_KEY: 'agnes-key' } });
+  stack.respond(byProvider({ muse: creditDown, agnes: creditDown }));
+  const response = await post(stack.route, { mode: 'draft-edit', request: 'Make a wheel', history: [], project });
+  assert.equal(response.status, 502);
+  const data = await response.json();
+  assert.equal(data.error, 'The AI assistant is temporarily unavailable. The site administrator has been notified. No changes were made.');
+  assert.equal(stack.alerts.length, 1);
+  assert.equal(stack.alerts[0].source, 'jewel/muse');
+});
+
+test('when Muse answers, the fallback provider is never called', async () => {
+  const stack = makeStack({ env: { META_API_KEY: 'test-key', AGNES_API_KEY: 'agnes-key' } });
+  stack.respond(byProvider({
+    muse: okMuse(answer('Muse handled this one.')),
+    agnes: okMuse(answer('The fallback must not answer.')),
+  }));
+  const response = await post(stack.route, { mode: 'draft-edit', request: 'Give me an encouraging line for my show open', history: [], project });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.reply, 'Muse handled this one.');
+  assert.equal(stack.calls.filter((call) => call.url === AGNES_URL).length, 0, 'the fallback stays idle while Muse is healthy');
+  assert.equal(stack.alerts.length, 0);
 });
 
 const layeredProject = { id: 'project-1', controls: [], gameTools: [], assets: [
