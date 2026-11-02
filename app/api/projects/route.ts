@@ -38,9 +38,26 @@ export async function POST(request: Request) {
   const status = String(body.status ?? "Draft");
   const theme = String(body.theme ?? "cyan");
   const prompt = String(body.prompt ?? "");
+  // City Crime Scene follows the PROJECT OWNER, not whoever happens to save.
+  // The saver's own entitlement is the starting verdict (it is exactly right
+  // for a first insert, where the saver becomes the owner, for legacy rows
+  // with no recorded owner, and whenever the saver IS the owner). Only a
+  // cross-account save re-decides by the stored owner's entitlement — so an
+  // entitled admin saving someone else's project cannot leave CCS in it, and
+  // a non-entitled admin saving an entitled owner's project cannot strip it.
+  // If the owner lookup itself fails, the saver's verdict stands.
+  const existingRows = await db`SELECT id, name, owner_id FROM projects WHERE id = ${id} LIMIT 1`;
+  const storedOwnerId = existingRows[0]?.owner_id ? String(existingRows[0].owner_id) : null;
+  let keepCcss = canUseCityCrimeScene(user?.email);
+  if (storedOwnerId && storedOwnerId !== user.id) {
+    try {
+      const ownerUsers = await db`SELECT email FROM neon_auth.user WHERE id = ${storedOwnerId} LIMIT 1`;
+      keepCcss = canUseCityCrimeScene(ownerUsers[0]?.email ? String(ownerUsers[0].email) : null);
+    } catch { /* owner lookup unavailable: keep the saver's own verdict */ }
+  }
   const data = (() => {
-    // City Crime Scene is restricted to select accounts: strip it on save for everyone else.
-    const payload = canUseCityCrimeScene(user?.email) ? (body.data ?? body) : stripCityCrimeSceneTools(body.data ?? body);
+    // City Crime Scene is restricted to projects owned by select accounts: strip it on save otherwise.
+    const payload = keepCcss ? (body.data ?? body) : stripCityCrimeSceneTools(body.data ?? body);
     // Strip host-only City Crime Scene fields (guilt, case truth, twists, detective intel)
     // from the published snapshot BEFORE persisting: the overlay endpoint serves it without auth.
     // The host dashboard fetches the full case file via the host-key-gated live casefile endpoint.

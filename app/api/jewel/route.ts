@@ -15,6 +15,7 @@ import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-aler
 import { NextResponse } from "next/server";
 import { requireCreator } from "../../../lib/auth/server";
 import { canUseCityCrimeScene, checkedCcssAttach } from "../../../lib/city-crime-scene";
+import { getDb } from "../../../lib/db";
 import { getGameTemplate } from "../../../lib/game-templates";
 import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured } from "../../../lib/muse-client";
 import { assistantChatCompletion, assistantConfigured } from "../../../lib/assistant-provider";
@@ -79,13 +80,41 @@ export async function GET() {
   return NextResponse.json({ configured: museConfigured() || assistantConfigured() });
 }
 
+/**
+ * City Crime Scene is scoped to the project owner: when the acted-on project
+ * is stored, its owner must also be entitled. Returns null when no stored
+ * project row exists (a new unsaved draft) or ownership cannot be checked, so
+ * the acting user's own entitlement governs.
+ */
+async function storedProjectOwnerCcssEntitled(projectId: string): Promise<boolean | null> {
+  try {
+    const db = getDb();
+    if (!db) return null;
+    const rows = await db`SELECT owner_id FROM projects WHERE id = ${projectId} OR slug = ${projectId} LIMIT 1`;
+    if (!rows.length) return null;
+    const ownerId = rows[0].owner_id ? String(rows[0].owner_id) : null;
+    if (!ownerId) return false;
+    const ownerUsers = await db`SELECT email FROM neon_auth.user WHERE id = ${ownerId} LIMIT 1`;
+    return canUseCityCrimeScene(ownerUsers[0]?.email ? String(ownerUsers[0].email) : null);
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   if (!museConfigured() && !assistantConfigured()) return NextResponse.json({ configured: false, error: "META_API_KEY is not configured." }, { status: 503 });
   const body = await request.json();
   if (Array.isArray(body.searchEvidence)) body.searchEvidence = body.searchEvidence.map((source: any, sourceId: number) => ({ ...source, sourceId }));
-  // City Crime Scene is restricted to select accounts.
+  // City Crime Scene is restricted to select accounts — and scoped to the
+  // PROJECT OWNER: an entitled account acting in someone else's stored project
+  // does not unlock it there. A project that is not stored yet (new unsaved
+  // draft) is governed by the acting user's own entitlement.
   const aiUser = await requireCreator().catch(() => null);
-  const ccssEntitled = canUseCityCrimeScene(aiUser?.email);
+  let ccssEntitled = canUseCityCrimeScene(aiUser?.email);
+  if (ccssEntitled) {
+    const actedProjectId = typeof body.project?.id === "string" ? body.project.id : "";
+    if (actedProjectId && (await storedProjectOwnerCcssEntitled(actedProjectId)) === false) ccssEntitled = false;
+  }
   const draftSystemBase = ccssEntitled
     ? DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is an improv whodunnit mystery game builder available to this user. When they mention mysteries, crimes, detective games, or whodunnits — or ask what you can build — proactively offer to create a City Crime Scene game. Create it with changes.newTools [{type:"city-crime-scene",name,config:{},connect:true}]; the dedicated editor opens for full customization.
 Editing this user's existing City Crime Scene case: use changes.gameTools [{id:"the existing city-crime-scene tool id",config:{mystery:PATCH}}]. PATCH is a partial case — include ONLY the items and fields you are changing. Scalar fields (title, premise, crime, victim, backstory, plot, suspectCount, detectiveCount, interrogationSeconds, courtroomSeconds) replace when included. Collections (locations, clues, flashbacks, suspects, witnesses, helperWitnesses, timeline, twists) match by each item's existing id: include an item's id plus only its changed fields — every other field and every other item is preserved exactly; an item with a new unique id is added to the case. Keep the case coherent or the edit is refused: exactly one suspect may be guilty (marking one suspect guilty in your patch automatically clears the others), every suspect keeps a motive and an alibi, and a clue's summary stays GENERALIZED — the specific detail lives only in its description, revealed during play. Host-only truth (isGuilty, actualCrimeDetails, twists, demeanor, tells, extraInfo, questions) belongs in the case file only: never name the guilty party or quote the actual crime details in your reply.
