@@ -5,6 +5,7 @@ import CityCrimeSceneEditor from "./CityCrimeSceneEditor";
 import { hydrateAsset } from "../lib/asset-store";
 import type { CcssMediaContext } from "../lib/city-crime-scene-media";
 import type { GameTool, Project } from "../lib/project";
+import { titleFromToolSave } from "../lib/project";
 import type { GameToolType } from "../lib/project";
 
 type Deps = {
@@ -60,7 +61,7 @@ export function useCityCrimeSceneBuilder(deps: Deps) {
             onSave={next => {
               const current = projectRef.current || project;
               if (!current) return;
-              persist({ ...current, gameTools: (current.gameTools || []).map(t => t.id === next.id ? next : t), updatedAt: "just now" });
+              persist({ ...current, name: titleFromToolSave(current, next), gameTools: (current.gameTools || []).map(t => t.id === next.id ? next : t), updatedAt: "just now" });
             }}
           />
         </div>
