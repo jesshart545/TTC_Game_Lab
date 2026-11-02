@@ -6,6 +6,7 @@ import FontPicker from './FontPicker';
 import CountdownDuration from "./CountdownDuration";
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, type ReactNode } from "react";
 import type { Project, ProjectEvent, ProjectAsset, GameTool, OverlayResult } from "../lib/project";
+import { titleFromToolSave } from "../lib/project";
 import {controlLabel,controlButtonStyle,toolDefaults,infoTypes} from "../lib/game-tools";
 import type {CardState} from "../lib/question-cards";
 import type { YouTubeState } from "../lib/youtube";
@@ -154,7 +155,7 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
   const p=next.config.placement as {x:number;y:number;width:number;height:number}|undefined;
   const placement=p?toolShapePlacement(p,String((next.config.appearance as Record<string,unknown>|undefined)?.shape||'')):undefined;
   const updated=placement?{...next,config:{...next.config,placement}}:next;
-  save({...current,gameTools:current.gameTools.map(t=>t.id===next.id?updated:t),controls:placement?current.controls.map(c=>c.toolIds?.length===1&&c.toolIds[0]===next.id?{...c,overlayResult:{...(c.overlayResult||defaultOverlayResult),...placement}}:c):current.controls});
+  save({...current,name:titleFromToolSave(current,updated),gameTools:current.gameTools.map(t=>t.id===next.id?updated:t),controls:placement?current.controls.map(c=>c.toolIds?.length===1&&c.toolIds[0]===next.id?{...c,overlayResult:{...(c.overlayResult||defaultOverlayResult),...placement}}:c):current.controls});
  }
  function updateControl(id:string,patch:Partial<ProjectEvent>){
   const current=currentProject.current,target=current.controls.find(c=>c.id===id),t=target?.toolIds?.length===1?current.gameTools.find(t=>t.id===target.toolIds![0]):undefined;

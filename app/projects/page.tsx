@@ -125,7 +125,7 @@ export default function ProjectsPage() {
                 {thumb && <img src={thumb.url} alt="" onError={event => { event.currentTarget.style.display = "none"; }} />}
                 <div className="library-preview-text">
                   <span>{project.status.toUpperCase()}</span>
-                  <strong>{project.overlay.title}</strong>
+                  <strong>{project.name || project.overlay.title}</strong>
                   <em>{project.overlay.subtitle}</em>
                 </div>
               </div>

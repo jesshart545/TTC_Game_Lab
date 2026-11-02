@@ -129,6 +129,21 @@ export function createProject(prompt: string): Project {
 }
 
 
+// The title a creator gives their game inside the tool that IS the game is
+// the project's title too. City Crime Scene is the case in point: the case
+// title typed in its editor (stored at config.mystery.title) is the game's
+// title, so saving that tool names the project after it — the library then
+// lists the game by the title its creator gave it, not the "City Crime
+// Scene" template name the project started from. Only a title actually
+// stored on the tool counts; a never-titled tool (and every other tool
+// type) leaves the project name exactly as it was.
+export function titleFromToolSave(project: Project, tool: GameTool): string {
+  if (tool.type !== "city-crime-scene") return project.name;
+  const stored = (tool.config?.mystery as { title?: unknown } | undefined)?.title;
+  const title = typeof stored === "string" ? stored.trim().slice(0, 100) : "";
+  return title || project.name;
+}
+
 export async function saveProjectToServer(project: Project, publish = false, hostKey?: string): Promise<{ ok: boolean; hostKey?: string }> {
   const response = await fetch("/api/projects", {
     method: "POST",
