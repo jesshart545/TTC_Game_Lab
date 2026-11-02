@@ -111,6 +111,11 @@ export default function WorkspaceHome() {
   const [retry, setRetry] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [accountEmail, setAccountEmail] = useState("");
+  // Creator identification is admin-only: the API sends creatorEmail solely
+  // to admins (null for everyone else), and the line renders only when this
+  // viewer is an admin — regular users see no change at all.
+  const [creatorById, setCreatorById] = useState<Record<string, string | null>>({});
+  const [viewerIsAdmin, setViewerIsAdmin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +132,14 @@ export default function WorkspaceHome() {
     void fetch("/api/projects", { cache: "no-store" }).then(async response => {
       if (!response.ok) throw new Error("Could not load projects.");
       const data = await response.json();
-      setProjects(Array.isArray(data.projects) ? data.projects.map((row: any) => row.data as Project).filter(Boolean) : []);
+      const rows = Array.isArray(data.projects) ? data.projects : [];
+      setProjects(rows.map((row: any) => row.data as Project).filter(Boolean));
+      const creators: Record<string, string | null> = {};
+      for (const row of rows as any[]) {
+        if (row && typeof row.id !== "undefined") creators[String(row.id)] = typeof row.creatorEmail === "string" ? row.creatorEmail : null;
+      }
+      setCreatorById(creators);
+      setViewerIsAdmin(data.viewerIsAdmin === true);
     }).catch(() => setLoadError("Your saved projects could not be loaded. Please try again.")).finally(() => setLoading(false));
   }, [retry]);
 
@@ -191,6 +203,9 @@ export default function WorkspaceHome() {
                         <span className={`rd-tag ${project.status === "Published" ? "live" : "draft"}`}>{project.status}</span>
                         {kind && <span className="rd-tag">{kind.tagLabel}</span>}
                         <span className="rd-edited">{editedLabel(project)}</span>
+                        {viewerIsAdmin && (creatorById[project.id]
+                          ? <span className="rd-edited">by {creatorById[project.id]}</span>
+                          : <span className="rd-edited">Creator unknown</span>)}
                       </div>
                     </div>
                   </Link>
