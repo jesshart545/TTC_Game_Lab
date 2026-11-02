@@ -16,6 +16,7 @@ import { isCreditError, notifyAdminOfCreditIssue } from "../../../lib/admin-aler
 import { NextResponse } from "next/server";
 import { requireCreator } from "../../../lib/auth/server";
 import { canUseCityCrimeScene } from "../../../lib/city-crime-scene";
+import { getDb } from "../../../lib/db";
 import { getGameTemplate } from "../../../lib/game-templates";
 
 const SYSTEM = `You are TTCGameLab AI, a creative director and application builder for interactive TikTok LIVE experiences. Do not merely return a specification. Interpret the creator's request and propose concrete changes to the project's dashboard, overlay, scenes, controls, assets, and interactions. Keep the existing project context intact and make incremental edits when the user asks for changes.`;
@@ -36,6 +37,28 @@ Timer visibility and running state are separate. A request to ONLY show/add a ti
 
 export const maxDuration = 180;
 
+
+/**
+ * City Crime Scene is scoped to the project owner: when the acted-on project
+ * is stored, its owner must also be entitled. Returns null when no stored
+ * project row exists (a new unsaved draft) or ownership cannot be checked, so
+ * the acting user's own entitlement governs.
+ */
+async function storedProjectOwnerCcssEntitled(projectId: string): Promise<boolean | null> {
+  try {
+    const db = getDb();
+    if (!db) return null;
+    const rows = await db`SELECT owner_id FROM projects WHERE id = ${projectId} OR slug = ${projectId} LIMIT 1`;
+    if (!rows.length) return null;
+    const ownerId = rows[0].owner_id ? String(rows[0].owner_id) : null;
+    if (!ownerId) return false;
+    const ownerUsers = await db`SELECT email FROM neon_auth.user WHERE id = ${ownerId} LIMIT 1`;
+    return canUseCityCrimeScene(ownerUsers[0]?.email ? String(ownerUsers[0].email) : null);
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const provider = assistantProvider();
   const key = provider.key;
@@ -43,9 +66,16 @@ export async function POST(request: Request) {
   const body = await request.json();
   if(Array.isArray(body.searchEvidence))body.searchEvidence=body.searchEvidence.map((source:any,sourceId:number)=>({...source,sourceId}));
   const draftEdit = body.mode === "draft-edit";
-  // City Crime Scene is restricted to select accounts.
+  // City Crime Scene is restricted to select accounts — and scoped to the
+  // PROJECT OWNER: an entitled account acting in someone else's stored project
+  // does not unlock it there. A project that is not stored yet (new unsaved
+  // draft) is governed by the acting user's own entitlement.
   const aiUser = await requireCreator().catch(() => null);
-  const ccssEntitled = canUseCityCrimeScene(aiUser?.email);
+  let ccssEntitled = canUseCityCrimeScene(aiUser?.email);
+  if (ccssEntitled) {
+    const actedProjectId = typeof body.project?.id === "string" ? body.project.id : "";
+    if (actedProjectId && (await storedProjectOwnerCcssEntitled(actedProjectId)) === false) ccssEntitled = false;
+  }
   const draftSystemBase = ccssEntitled
     ? DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is an improv whodunnit mystery game builder available to this user. When they mention mysteries, crimes, detective games, or whodunnits — or ask what you can build — proactively offer to create a City Crime Scene game. Create it with changes.newTools [{type:"city-crime-scene",name,config:{},connect:true}]; the dedicated editor opens for full customization.`
     : DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool. If the user asks for it, explain briefly that it is not available for their account.`;

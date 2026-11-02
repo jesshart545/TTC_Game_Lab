@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { assistantProvider } from "../../../../lib/assistant-provider";
 import { validateCityCrimeScene, validateCityCrimeSceneStandards, readCityCrimeSceneConfig, type CityCrimeSceneConfig, canUseCityCrimeScene } from "../../../../lib/city-crime-scene";
+import { getDb } from "../../../../lib/db";
 import { requireCreator } from "../../../../lib/auth/server";
 
 export const maxDuration = 180;
@@ -41,12 +42,42 @@ function extractJson(text: string): string {
   return candidate.slice(start, end + 1);
 }
 
+
+/**
+ * City Crime Scene is scoped to the project owner: when the acted-on project
+ * is stored, its owner must also be entitled. Returns null when no stored
+ * project row exists (a new unsaved draft) or ownership cannot be checked, so
+ * the acting user's own entitlement governs.
+ */
+async function storedProjectOwnerCcssEntitled(projectId: string): Promise<boolean | null> {
+  try {
+    const db = getDb();
+    if (!db) return null;
+    const rows = await db`SELECT owner_id FROM projects WHERE id = ${projectId} OR slug = ${projectId} LIMIT 1`;
+    if (!rows.length) return null;
+    const ownerId = rows[0].owner_id ? String(rows[0].owner_id) : null;
+    if (!ownerId) return false;
+    const ownerUsers = await db`SELECT email FROM neon_auth.user WHERE id = ${ownerId} LIMIT 1`;
+    return canUseCityCrimeScene(ownerUsers[0]?.email ? String(ownerUsers[0].email) : null);
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const me = await requireCreator();
-  if (!canUseCityCrimeScene(me?.email)) return NextResponse.json({ error: "City Crime Scene is only available to select accounts." }, { status: 403 });
+  const body = await request.json().catch(() => ({}));
+  // City Crime Scene is scoped to the PROJECT OWNER: an entitled account
+  // generating for someone else's stored project is refused. When no stored
+  // project is involved, the acting user's own entitlement governs.
+  let ccssEntitled = canUseCityCrimeScene(me?.email);
+  if (ccssEntitled) {
+    const actedProjectId = typeof body.projectId === "string" ? body.projectId : typeof body.project?.id === "string" ? body.project.id : "";
+    if (actedProjectId && (await storedProjectOwnerCcssEntitled(actedProjectId)) === false) ccssEntitled = false;
+  }
+  if (!ccssEntitled) return NextResponse.json({ error: "City Crime Scene is only available to select accounts." }, { status: 403 });
   const provider = assistantProvider();
   if (!provider.key) return NextResponse.json({ error: "AGNES_API_KEY is not configured." }, { status: 503 });
-  const body = await request.json().catch(() => ({}));
   // Step 0 — the host pitches first. Their ideas/plots/characters/framework are
   // the foundation; only when the host pitches nothing does the builder formulate.
   const premise = String(body.premise || "").trim();

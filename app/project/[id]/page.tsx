@@ -96,16 +96,31 @@ export default function ProjectWorkspace() {
   const [workflowStep, setWorkflowStep] = useState(0);
   const [workshopStep, setWorkshopStep] = useState(0);
   const [planOpen, setPlanOpen] = useState<boolean | null>(null);
-  const [ccssEntitled, setCcssEntitled] = useState(false);
+  const [viewerCcssEntitled, setViewerCcssEntitled] = useState(false);
+  const [ownerCcssEntitled, setOwnerCcssEntitled] = useState(false);
+  // City Crime Scene is scoped to the PROJECT OWNER: it is offered only when
+  // the signed-in viewer is entitled AND this project belongs to an entitled
+  // account. Both facts default to false until known, so an entitled account
+  // opening someone else's project never sees it there — not even briefly.
+  const ccssEntitled = viewerCcssEntitled && ownerCcssEntitled;
 
-  // Check City Crime Scene entitlement
+  // Check City Crime Scene entitlement (the signed-in viewer)
   useEffect(() => {
     fetch("/api/me", {cache:"no-store"}).then(r=>r.json()).then(d=>{
       const email = (d.email||"").toLowerCase();
       const allowed = ["biscoe1972@gmail.com","ladylovelace0627@gmail.com"];
-      setCcssEntitled(allowed.includes(email));
+      setViewerCcssEntitled(allowed.includes(email));
     }).catch(()=>{});
   }, []);
+
+  // Check City Crime Scene entitlement (this project's owner, computed
+  // server-side by the project endpoint; only the boolean is ever returned)
+  useEffect(() => {
+    setOwnerCcssEntitled(false);
+    fetch(`/api/projects/${encodeURIComponent(params.id)}`, {cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{
+      setOwnerCcssEntitled(d?.ownerCcssEntitled===true);
+    }).catch(()=>{});
+  }, [params.id]);
   const [entryStages, setEntryStages] = useState<EntryStages>({});
   const entryStagesRef = useRef<EntryStages>({});
   const [buildEntryRequest, setBuildEntryRequest] = useState<BuildEntryRequest | null>(null);

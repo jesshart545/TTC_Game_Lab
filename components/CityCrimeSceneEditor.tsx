@@ -188,7 +188,7 @@ export default function CityCrimeSceneEditor({ tool, onSave, media }: { tool: Ga
     if (m.suspects.some(s => s.name.trim() || s.characterBrief.trim()) && !window.confirm("Replace the current case with a newly generated one? Your edits will be lost.")) return;
     setBusy(true); setStatus("Drafting your case…");
     try {
-      const res = await fetch("/api/city-crime-scene/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ premise, pitch: pitchMode === "pitch" ? pitch : "", notes, suspectCount: genSuspects, detectiveCount: genDetectives }) });
+      const res = await fetch("/api/city-crime-scene/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ premise, pitch: pitchMode === "pitch" ? pitch : "", notes, suspectCount: genSuspects, detectiveCount: genDetectives, projectId: media?.projectId }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed.");
       // New draft: the pipeline restarts at the read-and-approve gate. Map and

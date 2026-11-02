@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { requireCreator, isAdmin } from "../../../../lib/auth/server";
 import { ensureProtectionSchema, trashProject } from "../../../../lib/project-protection";
+import { canUseCityCrimeScene } from "../../../../lib/city-crime-scene";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireCreator();
@@ -17,7 +18,21 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     ? await db`SELECT data FROM projects WHERE (id = ${id} OR slug = ${id}) AND deleted_at IS NULL LIMIT 1`
     : await db`SELECT data FROM projects WHERE (id = ${id} OR slug = ${id}) AND owner_id = ${user.id} AND deleted_at IS NULL LIMIT 1`;
   if (!rows.length) return NextResponse.json({ error: "Project not found." }, { status: 404 });
-  return NextResponse.json({ project: rows[0].data });
+  // City Crime Scene is scoped to the project owner. Resolve the owner's
+  // entitlement server-side (owner_id -> neon_auth.user) and report only the
+  // computed boolean — never the owner's email — so the project page can
+  // require BOTH an entitled viewer and an entitled owner before offering it.
+  // Any failure resolves closed (false): the feature stays hidden.
+  let ownerCcssEntitled = false;
+  try {
+    const ownerRows = await db`SELECT id, name, owner_id FROM projects WHERE (id = ${id} OR slug = ${id}) AND deleted_at IS NULL LIMIT 1`;
+    const ownerId = ownerRows[0]?.owner_id ? String(ownerRows[0].owner_id) : null;
+    if (ownerId) {
+      const ownerUsers = await db`SELECT email FROM neon_auth.user WHERE id = ${ownerId} LIMIT 1`;
+      ownerCcssEntitled = canUseCityCrimeScene(ownerUsers[0]?.email ? String(ownerUsers[0].email) : null);
+    }
+  } catch { ownerCcssEntitled = false; }
+  return NextResponse.json({ project: rows[0].data, ownerCcssEntitled });
 }
 
 
