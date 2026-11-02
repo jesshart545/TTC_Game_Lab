@@ -144,11 +144,26 @@ export function titleFromToolSave(project: Project, tool: GameTool): string {
   return title || project.name;
 }
 
+// The project-wide form of titleFromToolSave: a case title stored on any
+// City Crime Scene tool in the project names the whole project. Applied on
+// EVERY save (see saveProjectToServer below), so the name syncs no matter
+// which screen, button or flow saved — the topbar "Save progress", publish,
+// Jewel's edits, undo — not only when the case editor itself saved. Before
+// this, a case title stored before the sync existed (or between editor
+// saves) never reached the project name through an ordinary project save.
+export function titleFromProjectTools(project: Project): string {
+  for (const tool of project.gameTools || []) {
+    const name = titleFromToolSave(project, tool);
+    if (name !== project.name) return name;
+  }
+  return project.name;
+}
+
 export async function saveProjectToServer(project: Project, publish = false, hostKey?: string): Promise<{ ok: boolean; hostKey?: string }> {
   const response = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ project: { ...project, updatedAt: new Date().toISOString() }, publish, hostKey }),
+    body: JSON.stringify({ project: { ...project, name: titleFromProjectTools(project), updatedAt: new Date().toISOString() }, publish, hostKey }),
   });
   if (!response.ok) throw new Error("Could not save project to Neon.");
   return response.json();
