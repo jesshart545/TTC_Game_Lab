@@ -3,6 +3,7 @@ import { getDb } from "../../../../lib/db";
 import { requireCreator, isAdmin } from "../../../../lib/auth/server";
 import { ensureProtectionSchema, trashProject } from "../../../../lib/project-protection";
 import { canUseCityCrimeScene } from "../../../../lib/city-crime-scene";
+import { creatorEmailForViewer } from "../../../../lib/creator-identity";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireCreator();
@@ -22,17 +23,26 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   // entitlement server-side (owner_id -> neon_auth.user) and report only the
   // computed boolean — never the owner's email — so the project page can
   // require BOTH an entitled viewer and an entitled owner before offering it.
-  // Any failure resolves closed (false): the feature stays hidden.
+  // Any failure resolves closed (false): the feature stays hidden. (The
+  // creatorEmail field below is a separate, admin-only disclosure — see
+  // lib/creator-identity; the CCS verdict itself stays boolean-only.)
   let ownerCcssEntitled = false;
+  let ownerEmail: string | null = null;
   try {
     const ownerRows = await db`SELECT id, name, owner_id FROM projects WHERE (id = ${id} OR slug = ${id}) AND deleted_at IS NULL LIMIT 1`;
     const ownerId = ownerRows[0]?.owner_id ? String(ownerRows[0].owner_id) : null;
     if (ownerId) {
       const ownerUsers = await db`SELECT email FROM neon_auth.user WHERE id = ${ownerId} LIMIT 1`;
-      ownerCcssEntitled = canUseCityCrimeScene(ownerUsers[0]?.email ? String(ownerUsers[0].email) : null);
+      ownerEmail = ownerUsers[0]?.email ? String(ownerUsers[0].email) : null;
+      ownerCcssEntitled = canUseCityCrimeScene(ownerEmail);
     }
   } catch { ownerCcssEntitled = false; }
-  return NextResponse.json({ project: rows[0].data, ownerCcssEntitled });
+  // Creator identification is admin-only: an admin viewer learns which
+  // account created this project; every other requester — the owner
+  // included — receives null.
+  const admin = isAdmin(user);
+  const creatorEmail = creatorEmailForViewer(admin, ownerEmail);
+  return NextResponse.json({ project: rows[0].data, ownerCcssEntitled, creatorEmail, viewerIsAdmin: admin });
 }
 
 

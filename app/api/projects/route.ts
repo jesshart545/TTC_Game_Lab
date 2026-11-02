@@ -4,6 +4,7 @@ import { requireCreator, isAdmin } from "../../../lib/auth/server";
 import { ensureProtectionSchema } from "../../../lib/project-protection";
 import { createHash, randomBytes } from "node:crypto";
 import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, canUseCityCrimeScene, stripCityCrimeSceneTools } from "../../../lib/city-crime-scene";
+import { creatorEmailForViewer } from "../../../lib/creator-identity";
 
 export async function GET() {
   const user = await requireCreator();
@@ -15,10 +16,30 @@ export async function GET() {
   await db`CREATE INDEX IF NOT EXISTS projects_owner_id_idx ON projects(owner_id)`;
   await ensureProtectionSchema(db);
   // Trashed (soft-deleted) projects never appear in the library.
-  const rows = isAdmin(user)
-    ? await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data FROM projects WHERE deleted_at IS NULL ORDER BY updated_at DESC`
-    : await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data FROM projects WHERE owner_id = ${user.id} AND deleted_at IS NULL ORDER BY updated_at DESC`;
-  return NextResponse.json({ configured: true, projects: rows });
+  const admin = isAdmin(user);
+  const rows = admin
+    ? await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data, owner_id FROM projects WHERE deleted_at IS NULL ORDER BY updated_at DESC`
+    : await db`SELECT id, slug, name, description, status, theme, updated_at, prompt, data, owner_id FROM projects WHERE owner_id = ${user.id} AND deleted_at IS NULL ORDER BY updated_at DESC`;
+  // Creator identification is admin-only: for an admin requester, resolve
+  // every project's owner_id to the creating account's email in ONE batched
+  // lookup. For everyone else the emails are never even queried — the
+  // response carries creatorEmail: null — and owner_id itself is stripped
+  // from the payload rather than sent to the client.
+  let emailByOwnerId = new Map<string, string>();
+  if (admin) {
+    const ownerIds = [...new Set(rows.map(row => (row as { owner_id?: unknown }).owner_id).filter((id): id is string => typeof id === "string" && !!id))];
+    if (ownerIds.length) {
+      try {
+        const ownerUsers = await db`SELECT id, email FROM neon_auth.user WHERE id = ANY(${ownerIds})`;
+        emailByOwnerId = new Map(ownerUsers.map(owner => [String(owner.id), owner.email ? String(owner.email) : ""]));
+      } catch { emailByOwnerId = new Map(); }
+    }
+  }
+  const projects = rows.map(row => {
+    const { owner_id, ...rest } = row as { owner_id?: string | null } & Record<string, unknown>;
+    return { ...rest, creatorEmail: creatorEmailForViewer(admin, owner_id ? emailByOwnerId.get(String(owner_id)) : null) };
+  });
+  return NextResponse.json({ configured: true, projects, viewerIsAdmin: admin });
 }
 
 export async function POST(request: Request) {

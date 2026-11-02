@@ -26,6 +26,11 @@ export default function ProjectsPage() {
   const [sortMode, setSortMode] = useState<"recent" | "name">("recent");
   const [duplicatingId, setDuplicatingId] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
+  // Creator identification is admin-only: the API sends creatorEmail solely
+  // to admins (null for everyone else), and the line renders only when this
+  // viewer is an admin — regular users see no change at all.
+  const [creatorById, setCreatorById] = useState<Record<string, string | null>>({});
+  const [viewerIsAdmin, setViewerIsAdmin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +52,17 @@ export default function ProjectsPage() {
         const serverProjects: Project[] = Array.isArray(data.projects)
           ? data.projects.map((row: any) => row.data as Project).filter(Boolean)
           : [];
-        if (!cancelled) setProjects(serverProjects);
+        const creators: Record<string, string | null> = {};
+        if (Array.isArray(data.projects)) {
+          for (const row of data.projects as any[]) {
+            if (row && typeof row.id !== "undefined") creators[String(row.id)] = typeof row.creatorEmail === "string" ? row.creatorEmail : null;
+          }
+        }
+        if (!cancelled) {
+          setProjects(serverProjects);
+          setCreatorById(creators);
+          setViewerIsAdmin((data as any).viewerIsAdmin === true);
+        }
       } catch (error) {
         console.error("Project library load failed:", error);
         if (!cancelled) setLoadError("Your projects could not be loaded. Please try again.");
@@ -130,7 +145,9 @@ export default function ProjectsPage() {
                 </div>
               </div>
               <div className="library-info">
-                <div><h2>{project.name}</h2><p>{project.description}</p></div>
+                <div><h2>{project.name}</h2><p>{project.description}</p>{viewerIsAdmin && (creatorById[project.id]
+                  ? <p style={{ margin: "2px 0 0", color: "#9aa7ba", fontSize: 12 }}>by {creatorById[project.id]}</p>
+                  : <p style={{ margin: "2px 0 0", color: "#9aa7ba", fontSize: 12 }}>Creator unknown</p>)}</div>
                 <span>{formatUpdatedAt(project.updatedAt, project.id)}</span>
               </div>
             </Link>
