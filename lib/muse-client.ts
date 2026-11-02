@@ -1,5 +1,5 @@
 /**
- * Minimal client for the Meta Model API (Muse Spark), used by the Jewel
+ * Minimal client for the Meta Model API (Muse Wonder), used by the Jewel
  * agent route. The API is OpenAI-compatible and the model returns text only.
  * The key is read from META_PLAYGROUND first (the owner's temporary primary
  * key, 2026-11-01), then META_API_KEY (MODEL_API_KEY is accepted as a
@@ -52,7 +52,7 @@ export async function museChatCompletion(
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         // Standard tier only: the -contributor variant trains on user data.
-        model: "muse-spark-1.3",
+        model: "muse-wonder-1.0",
         messages,
         temperature: options.temperature ?? 0.3,
         ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),

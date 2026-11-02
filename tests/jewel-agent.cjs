@@ -104,7 +104,7 @@ test('muse-client targets the Meta API with the Standard model and types HTTP er
   assert.equal(stack.calls.length, 1);
   assert.equal(stack.calls[0].url, 'https://api.meta.ai/v1/chat/completions');
   const sent = JSON.parse(stack.calls[0].options.body);
-  assert.equal(sent.model, 'muse-spark-1.3');
+  assert.equal(sent.model, 'muse-wonder-1.0');
   assert.deepEqual(sent.response_format, { type: 'json_object' });
   assert.equal(stack.calls[0].options.headers.Authorization, 'Bearer test-key-123');
   stack.respond(async () => ({ ok: false, status: 402, json: async () => ({ error: { message: 'You do not have enough credits' } }) }));
