@@ -33,7 +33,7 @@ import type { YouTubeState } from "../../../lib/youtube";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, ProjectAssetGeneration, saveProjectToServer, loadProjectFromServer, GameTool, GameToolType } from "../../../lib/project";
+import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, ProjectAssetGeneration, saveProjectToServer, loadProjectFromServer, titleFromProjectTools, GameTool, GameToolType } from "../../../lib/project";
 
 type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number] };
 import { deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
@@ -227,7 +227,7 @@ export default function ProjectWorkspace() {
   async function saveProgress() {
     if (!project || saveBusy) return;
     setSaveBusy(true); setSaveStatus("Saving your progress…");
-    const next = { ...project, workflow: { stage: workflowStep, workshopStep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" };
+    const next = { ...project, name: titleFromProjectTools(project), workflow: { stage: workflowStep, workshopStep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" };
     try {
       await saveQueue.current;
       await saveProjectToServer({ ...next, assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
@@ -634,6 +634,10 @@ export default function ProjectWorkspace() {
 
   const historyRef = useRef<ReturnType<typeof useManualHistory> | null>(null);
   function persist(next: Project) {
+    // A stored City Crime Scene case title names the project: sync it here,
+    // at the page's central save, so every flow that persists through this
+    // page carries the title its creator gave the game.
+    next = { ...next, name: titleFromProjectTools(next) };
     const prev = projectRef.current;
     if (prev && prev.id === next.id) historyRef.current?.recordHistory(prev);
     const revision=++saveRevision.current;
