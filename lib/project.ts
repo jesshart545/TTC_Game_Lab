@@ -42,9 +42,11 @@ export type AssetComposition = { id:string; name:string; duration:number; clips:
 export type GameWheel = { enabled: boolean; title: string; segments: string[]; spinning: boolean; visible: boolean };
 export type GameToolType = "wheel" | "random-picker" | "card-list" | "countdown" | "poll" | "dice" | "coin-toss" | "plinko" | "higher-lower" | "cliffhanger" | "prize-wheel" | "trivia-board" | "blank-board" | "trivia-list" | "youtube" | "question-card" | "blank-card" | "scoreboard" | "prize-list" | "game-tool-list" | "city-crime-scene";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown>; inToolbox?: boolean; inOverlayBuild?: boolean };
+export type ProjectKind = "gameshow" | "talk" | "radio" | "multiplayer";
 export type Project = {
   pendingVideos?: { videoId: string; model: string; prompt: string; durationSeconds?: number }[];
   id: string;
+  kind?: ProjectKind;
   name: string;
   slug: string;
   description: string;
