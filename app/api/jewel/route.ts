@@ -20,7 +20,7 @@ import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured }
 import { assistantChatCompletion, assistantConfigured } from "../../../lib/assistant-provider";
 
 /**
- * Jewel — the conversational creative mode (Muse Spark via the Meta Model
+ * Jewel — the conversational creative mode (Muse Wonder via the Meta Model
  * API). This route deliberately mirrors /api/ai's draft-edit behavior: the
  * same draft context, the same system prompt (DRAFT_SYSTEM below is a
  * verbatim copy of the one in app/api/ai/route.ts), and the same validation
@@ -153,7 +153,7 @@ Attaching media to the case: media already saved in this project attaches by set
   try {
     message = await jewelChatCompletion(
       [{ role: "system", content: draftSystem }, { role: "user", content: JSON.stringify(draftContext) }],
-      { jsonObject: true, temperature: 0.3, maxTokens: 16384, timeoutMs: 80000 },
+      { jsonObject: true, temperature: 0.3, maxTokens: 16384, timeoutMs: 85000 },
     );
   } catch (error) {
     if (error instanceof MuseConnectionError) return NextResponse.json({ configured: true, error: "The AI service did not respond in time. No changes were made. Please try your request again." }, { status: 504 });
@@ -277,7 +277,7 @@ Attaching media to the case: media already saved in this project attaches by set
             { role: "user", content: JSON.stringify(draftContext) },
             { role: "assistant", content: String(message) },
             { role: "user", content: (validationError instanceof Error ? "Correct this missing setting: " + validationError.message + " " : "") + "Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. Describe the final proposal in plain language, never the validation repair or JSON correction. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories." },
-          ], { jsonObject: true, temperature: 0, maxTokens: 16384, timeoutMs: 80000 });
+          ], { jsonObject: true, temperature: 0, maxTokens: 16384, timeoutMs: 85000 });
           if (retryMessage) { message = retryMessage; continue; }
         } catch {}
       }
