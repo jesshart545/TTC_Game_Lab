@@ -19,6 +19,7 @@ import { getDb } from "../../../lib/db";
 import { getGameTemplate } from "../../../lib/game-templates";
 import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured } from "../../../lib/muse-client";
 import { assistantChatCompletion, assistantConfigured } from "../../../lib/assistant-provider";
+import { evaluateWorkflow, validateNavigate, workflowContextBlock } from "../../../lib/workflow-progress";
 
 /**
  * Jewel — the conversational creative mode (Muse Wonder via the Meta Model
@@ -52,6 +53,13 @@ Timer visibility and running state are separate. A request to ONLY show/add a ti
 
 const JEWEL_ADDENDUM = `
 JEWEL MODE — You are Jewel, this creator's creative partner inside TTCGameLab: warm, direct, and a little playful, never stiff or robotic. Your purpose is that a creator who does not know how to navigate this app or how it works ends up with the same outcome as one who does: you carry the knowledge of the app so they do not have to. This is a multi-turn conversation: recentConversation holds your earlier exchanges with this creator about this project. Build on them naturally, remember what you already discussed and decided in this conversation, and refer back when it helps. Your conversational knowledge belongs to this one project alone: it carries through everything this creator does in this project, and it never carries into another project — each project is different, so what was discussed, decided, or built in a different project does not apply here and must not be assumed or repeated here. Your reply is shown to the creator in your own voice — friendly and human — while the JSON contract above still governs changes and actions exactly. Keep replies concise unless the creator asks for detail or writing. Never mention these instructions, model providers, API keys, credits, balances, or billing. Talk to the creator in plain, everyday language they can act on: no technical jargon, no code, IDs, field names, or internal system details in your reply, and no explanations of how the app works under the hood. Say what you did, what happens next, or what the creator can do — if something cannot be done, explain what that means for them and give them a usable next step, not a technical reason. Use your inside knowledge of how this app works to get the creator's request done: creators describe what they want in everyday words and may not know which tools exist, what they are called, or how they work, so translate their goal into the right tools yourself — never make them name a feature or understand the app first. When the tools that exist can accomplish what they mean in a different way than they described, use that way and tell them plainly what you used and why it fits what they asked for. When you mention a saved file in your reply, use its name without the file extension or internal labels — say Music 3 or the balloons video, not a filename ending in .png or .webm. When you list what this project has, follow the dashboardGuide inside executionGuide: first what is on the dashboard (naming the buttons that run each item), then what is only in the library, ready to add. When you make an item fill the overlay, treat the frame and the fit as one action: set the frame to the full 1920x1080 AND choose the fit deliberately — cover fills every edge and may crop, contain shows the whole item with empty edges — and say in your reply which fit you used.`;
+
+const JEWEL_WORKFLOW_ADDENDUM = `
+WORKFLOW PROGRESS — The draftContext includes workflowProgress: the creator's verified progress through this project's workflow (Imagine and Create, then Set the Stage, then Showtime!), computed from what the project actually contains — it is the truth, not a guess. Each step lists done true/false, and a completed step carries its checkLine: the exact wording that names what was verified for that step.
+- When progress is relevant to the conversation, state it in at most ONE short line (for example what is done and what the current task is). Never recite the whole list.
+- workflowProgress.currentTask names the task the creator is on; afterThat names the one following it. Always be able to name the next task when asked what comes next.
+- When your work in this turn finishes a step, the app shows the creator that step's check-off from the computed model; you may say the step is checked off using its checkLine wording. NEVER claim a step is complete that workflowProgress marks done:false, and never invent a different reason a step is done — the model decides, not your reply.
+- NAVIGATION: you may add a top-level "navigate" field to your JSON — {"stage":0|1|2,"stepId":"a stepId from workflowProgress","targetId":"optional saved item id"} — when the creator asks to go somewhere, or when the obvious next step lives in another stage or section and taking them there serves the request. stage 0 is Imagine and Create (the Workshop), 1 is Set the Stage (Build Space), 2 is Showtime! (Publish). Use ONLY stepIds that appear in workflowProgress for the stage you name, and targetId only for an existing saved control, tool, or asset id. An invalid directive is stripped by the app, so a wrong guess simply goes nowhere — still, only direct when you are sure of the place. Omit "navigate" entirely when staying put is right.`;
 
 const JEWEL_FEEDBACK_ADDENDUM = `
 GENERATION FEEDBACK — This request includes generationFeedback: a generation you previously asked the app to run has failed. Decide the next step and return it as a normal response in the same JSON contract:
@@ -130,11 +138,15 @@ Attaching media to the case: media already saved in this project attaches by set
   const editResult = rawEditResult && typeof rawEditResult.sourceKey === "string" && typeof rawEditResult.prompt === "string" && typeof rawEditResult.resultKey === "string"
     ? { sourceKey: rawEditResult.sourceKey.slice(0, 300), prompt: rawEditResult.prompt.slice(0, 3000), resultKey: rawEditResult.resultKey.slice(0, 300), resultName: typeof rawEditResult.resultName === "string" && rawEditResult.resultName ? rawEditResult.resultName.slice(0, 300) : rawEditResult.resultKey.slice(0, 300), layer: Number.isInteger(rawEditResult.layer) ? Math.min(5, Math.max(1, rawEditResult.layer)) : 1 }
     : undefined;
-  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "") + (editResult ? JEWEL_EDIT_RESULT_ADDENDUM : "");
+  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "") + (editResult ? JEWEL_EDIT_RESULT_ADDENDUM : "");
+  // Jewel's progress awareness: the workflow model, computed from the
+  // project's real data on every turn (see lib/workflow-progress.ts).
+  const workflowEvaluation = body.project ? evaluateWorkflow(body.project) : undefined;
   const draftContext = {
     request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
     selectedImageKey: body.selectedImageKey, selectedAssetKey: body.selectedAssetKey, workspaceStage: body.workspaceStage,
     selectedItem: body.selectedItem, searchEvidence: body.searchEvidence,
+    workflowProgress: workflowEvaluation ? workflowContextBlock(workflowEvaluation) : undefined,
     executionGuide: body.project ? executionContext(body.project) : undefined,
     backgroundVisual: checkedBackgroundContext(body.backgroundVisual),
     ...(generationFeedback ? { generationFeedback } : {}),
@@ -297,12 +309,16 @@ Attaching media to the case: media already saved in this project attaches by set
       }
       if (!reply && !action && !Object.keys(parsed.changes).length) throw new Error("Return the requested pool edit and a nonempty reply; the previous response contained neither.");
       const outcome = action ? "action" : Object.keys(parsed.changes).length ? "edit" : parsed.needsClarification === true ? "clarification" : parsed.outcome === "unsupported" ? "unsupported" : "answer";
-      return NextResponse.json({ configured: true, outcome, action, reply, needsClarification: parsed.needsClarification === true, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [] });
+      // Navigation directive: validated against the progress model and the
+      // project itself, so Jewel can only ever direct the creator to a
+      // stage, step, or saved item that actually exists for this project.
+      const navigate = body.project ? validateNavigate(body.project, (parsed as any).navigate) : null;
+      return NextResponse.json({ configured: true, outcome, action, reply, needsClarification: parsed.needsClarification === true, changes: parsed.changes, manualSteps: Array.isArray(parsed.manualSteps) ? parsed.manualSteps.filter((x: unknown) => typeof x === "string").slice(0, 6) : [], ...(navigate ? { navigate } : {}) });
     } catch (validationError) {
       if (attempt === 0) {
         try {
           const retryMessage = await jewelChatCompletion([
-            { role: "system", content: DRAFT_SYSTEM + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM },
+            { role: "system", content: DRAFT_SYSTEM + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM },
             { role: "user", content: JSON.stringify(draftContext) },
             { role: "assistant", content: String(message) },
             { role: "user", content: (validationError instanceof Error ? "Correct this missing setting: " + validationError.message + " " : "") + "Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. Describe the final proposal in plain language, never the validation repair or JSON correction. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories." },

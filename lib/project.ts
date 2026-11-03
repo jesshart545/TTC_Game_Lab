@@ -43,6 +43,19 @@ export type GameWheel = { enabled: boolean; title: string; segments: string[]; s
 export type GameToolType = "wheel" | "random-picker" | "card-list" | "countdown" | "poll" | "dice" | "coin-toss" | "plinko" | "higher-lower" | "cliffhanger" | "prize-wheel" | "trivia-board" | "blank-board" | "trivia-list" | "youtube" | "question-card" | "blank-card" | "scoreboard" | "prize-list" | "game-tool-list" | "city-crime-scene";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown>; inToolbox?: boolean; inOverlayBuild?: boolean };
 export type ProjectKind = "gameshow" | "talk" | "radio" | "multiplayer";
+/**
+ * The few workflow facts that cannot be derived from project data (see
+ * lib/workflow-progress.ts): the creator opened the toolbox review, a
+ * rehearsal happened in Test, and the check-offs Jewel has already spoken
+ * (so a check, once issued in her voice, is not repeated). Everything else
+ * about progress is computed from the project itself — a stored record can
+ * never make a step complete when its evaluator says it is not.
+ */
+export type WorkflowProgressRecord = {
+  toolboxOpened?: boolean;
+  rehearsed?: boolean;
+  issuedChecks?: string[];
+};
 export type Project = {
   pendingVideos?: { videoId: string; model: string; prompt: string; durationSeconds?: number }[];
   id: string;
@@ -65,6 +78,7 @@ export type Project = {
   gamePlan?: Record<string, string>;
   cardPreviewStates?:Record<string,CardState>;
   workflow?: { stage: number; workshopStep: number; promptDraft: string; generatorPrompt?: string };
+  workflowProgress?: WorkflowProgressRecord;
   templateId?: string;
   publishedSnapshot?: Omit<Project, "publishedSnapshot">;
 };

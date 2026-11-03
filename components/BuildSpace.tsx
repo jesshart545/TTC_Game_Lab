@@ -39,7 +39,7 @@ function BuildAssetThumbnail({asset,label,onSelect,selected}:{asset?:ProjectAsse
  return <button type="button" className="build-asset-thumbnail" aria-label={label} aria-pressed={selected} onClick={e=>onSelect(e)}><AssetThumbnail key={asset.url||asset.storageKey||asset.name} asset={asset} kind={kind}/></button>;
 }
 
-export type BuildEntryRequest = { task: "background" | "add" | "test" | "fix"; request: number; fixTarget?: { kind: "asset" | "tool" | "control"; id: string }; highlight?: boolean };
+export type BuildEntryRequest = { task: "background" | "add" | "test" | "fix" | "review"; request: number; fixTarget?: { kind: "asset" | "tool" | "control"; id: string }; highlight?: boolean };
 
 type Props={onAskAi?:()=>void;entryRequest?:BuildEntryRequest|null;onEntryHandled?:(request:number)=>void;showNextGuidance?:boolean;focusControl?:{id:string;request:number}|null;sequenceRunning:boolean;sequenceError:string;onStopSequence:()=>void;onResetGame?:(wipeEdits:boolean)=>void;cardStates:Record<string,CardState>;onSelect:(selection:{kind:string;id:string}|null)=>void;project:Project;onChange:(project:Project)=>void;overlay:ReactNode;onTrigger:(control:ProjectEvent)=>void;onWorkshop:()=>void;youtubeOpen:boolean;onOpenYoutube:()=>void;onCloseYoutube:()=>void;onYoutubeCommand:(command:Record<string,unknown>)=>Promise<YouTubeState>;youtubeState:YouTubeState|null;youtubeFeedback:{playbackId:string;status:string;errorCode?:number}|null;dashboardExtras?:(toolId?:string)=>ReactNode;feedback?:string;onPublishStep:()=>void;ccssEntitled?:boolean;onAddTemplate:(templateId:string)=>void};
 export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNextGuidance=true,focusControl,sequenceRunning,sequenceError,onStopSequence,onResetGame,cardStates,onSelect,project,onChange,overlay,onTrigger,onWorkshop,youtubeOpen,onOpenYoutube,onCloseYoutube,onYoutubeCommand,youtubeState,youtubeFeedback,dashboardExtras,feedback,onPublishStep,ccssEntitled=false,onAddTemplate}:Props){
@@ -112,11 +112,11 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
   if(!entryRequest)return;
   setActiveCreation(null);
   if(entryRequest.task==="fix"&&entryRequest.fixTarget){setTesting(false);setStep(2);setSelection({kind:entryRequest.fixTarget.kind,id:entryRequest.fixTarget.id});return;}
-  goStep(entryRequest.task==="background"?0:entryRequest.task==="add"?1:3);
+  goStep(entryRequest.task==="background"?0:entryRequest.task==="add"?1:entryRequest.task==="review"?4:3);
  },[entryRequest]);
  useEffect(()=>{
   if(!entryRequest)return;
-  const expected=entryRequest.task==="background"?0:entryRequest.task==="add"?1:entryRequest.task==="fix"?2:3;
+  const expected=entryRequest.task==="background"?0:entryRequest.task==="add"?1:entryRequest.task==="fix"?2:entryRequest.task==="review"?4:3;
   if(step!==expected)return;
   if(entryRequest.task==="fix"){
    const target=settings.current;
@@ -125,7 +125,7 @@ export default function BuildSpace({onAskAi,entryRequest,onEntryHandled,showNext
    onEntryHandled?.(entryRequest.request);
    return;
   }
-  const selector=entryRequest.task==="background"?'.build-background-browser input':entryRequest.task==="add"?'[aria-label="Addition type"]':'.dashboard-preview-buttons button';
+  const selector=entryRequest.task==="background"?'.build-background-browser input':entryRequest.task==="add"?'[aria-label="Addition type"]':entryRequest.task==="review"?'.build-readiness':'.dashboard-preview-buttons button';
   const target=assemblyRef.current?.querySelector<HTMLElement>(selector)||assemblyRef.current?.querySelector<HTMLElement>('.build-guidance');
   target?.scrollIntoView({behavior:"smooth",block:"center"});
   target?.focus({preventScroll:true});
