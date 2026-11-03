@@ -66,6 +66,7 @@ import GameToolEditor, { overlayToolPlacement } from "../../../components/GameTo
 import { useCityCrimeSceneBuilder } from "../../../components/CityCrimeSceneBuilder";
 import RuntimeActionLayers, { useRuntimeActions } from "../../../components/RuntimeActionLayers";
 import WorkshopAiPanel from "../../../components/WorkshopAiPanel";
+import GameshowWorkshop from "../../../components/GameshowWorkshop";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import WorkshopAssetsPanel from "../../../components/WorkshopAssetsPanel";
 import { GENERATORS, BOARD_LIBRARY, TOOL_LIBRARY, isImage, isVideo, isAudio, type GeneratorType, type LibraryItem } from "../../../lib/workshop-libraries";
@@ -98,6 +99,14 @@ export default function ProjectWorkspace() {
   const [workflowStep, setWorkflowStep] = useState(0);
   const [workshopStep, setWorkshopStep] = useState(0);
   const [planOpen, setPlanOpen] = useState<boolean | null>(null);
+  const [gameshowStep, setGameshowStep] = useState("plan");
+  const gameshowStepInit = useRef<string | null>(null);
+  useEffect(() => {
+    if (!project || project.kind !== "gameshow" || gameshowStepInit.current === project.id) return;
+    gameshowStepInit.current = project.id;
+    const current = evaluateWorkflow(project).current;
+    if (current && current.stageIndex === 0) setGameshowStep(current.stepId);
+  }, [project]);
   const [viewerCcssEntitled, setViewerCcssEntitled] = useState(false);
   const [ownerCcssEntitled, setOwnerCcssEntitled] = useState(false);
   // Creator identification is admin-only: the project endpoint sends
@@ -209,6 +218,7 @@ export default function ProjectWorkspace() {
       chooseWorkflowStep(1); return;
     }
     if (stage === 2) { chooseWorkflowStep(2); return; }
+    if (stepId) setGameshowStep(stepId);
     if (stepId === "plan") { openGamePlanEntry(); return; }
     if (stepId === "media") { openJewelForGeneration(); return; }
     if (stepId === "trivia-cards") { openJewelForGeneration(); return; }
@@ -263,6 +273,24 @@ export default function ProjectWorkspace() {
   function openJewelForGeneration() {
     chooseWorkflowStep(0, 1);
     focusJewelPrompt();
+  }
+  // Demonstrations route every ask to Jewel: an example phrase fills her
+  // real input and focuses it — nothing is sent until the creator sends it.
+  function askJewel(text: string) {
+    setDraft(text);
+    focusJewelPrompt();
+  }
+  // The guided path's own navigation: switching steps only changes which
+  // demonstration screen shows (plus the toolbox fact, since viewing the
+  // Review screen IS opening the toolbox). Stage changes still go through
+  // goToWorkflowStep, and Jewel's directives use it directly as before.
+  function selectGameshowStep(stage: number, stepId?: string) {
+    if (stage === 0 && stepId) {
+      if (stepId === "toolbox") recordWorkflowFact({ toolboxOpened: true });
+      setGameshowStep(stepId);
+      return;
+    }
+    goToWorkflowStep(stage, stepId);
   }
   function openWorkshopTool(tool: "boards" | "tools") {
     chooseWorkflowStep(0, 1);
@@ -1650,6 +1678,34 @@ export default function ProjectWorkspace() {
         entryGuide={<WorkflowEntryGuide {...entryCopy} started={firstActionTaken}
           firstAction={{ ...entryCopy.firstAction, onClick: () => { markEntryStage(workflowStep, true); entryCopy.firstAction.onClick(); } }}
           onShowFirst={() => markEntryStage(workflowStep, false)} />} />
+      {workflowStep === 0 && project.kind === "gameshow" && (
+        <GameshowWorkshop
+          project={project}
+          workflow={evaluateWorkflow(project)}
+          activeStep={gameshowStep}
+          onNavigateStep={selectGameshowStep}
+          onAskJewel={askJewel}
+          onOpenJewel={openJewel}
+          ccssEntitled={ccssEntitled}
+          doors={{
+            openBoardDesigner: id => setBoardDesignerId(id),
+            openCardEditor: id => setNewCardEditorId(id),
+            openListEditor: id => setListEditorId(id),
+            openMediaEditor: index => setEditingAssetIndex(index),
+            openComposer: () => { setEditingComposition(undefined); setShowAssetComposer(true); },
+            applyTemplate: applyTemplateToProject,
+            showTemplates: () => { chooseWorkflowStep(0, 1); requestAnimationFrame(() => document.getElementById("workshop-game-templates")?.scrollIntoView({ behavior: "smooth", block: "center" })); },
+            upload: () => { setBackgroundIntent(false); fileInputRef.current?.click(); },
+            openNewList,
+            openBoardTemplates: () => openWorkshopTool("boards"),
+            openToolTemplates: () => openWorkshopTool("tools"),
+            showAsset: key => { setSelectedAssetKey(key); openSavedWorkshop(1); },
+            openCityCrimeScene: ccssBuilder.openCityCrimeScene,
+            downloadTriviaPdf,
+            showSavedWork: () => openSavedWorkshop(1),
+          }}
+        />
+      )}
       {workflowStep === 0 && <details key="game-plan" hidden={workshopStep !== 0} open={workshopStep === 0 && (planOpen ?? planIsEmpty)} onToggle={event => setPlanOpen(event.currentTarget.open)} className="game-plan" id="game-plan" aria-label="Game plan"><summary style={{cursor:"pointer",fontWeight:700}}>Your game plan{workshopStep !== 0 && <span style={{fontWeight:400}}> · {project.name || "Untitled project"} · Open to review or edit</span>}</summary><div className="game-plan-fields"><label htmlFor="game-title">Project or game title<span id="game-title-help">Give your project a name so you can find it in your saved projects. You can change it later.</span><input id="game-title" type="text" aria-describedby="game-title-help" value={project.name === "New Project" ? "" : project.name} placeholder="Example: Lady Lovelace’s Lyric Showdown" onChange={event => persist({...project,name:event.target.value,updatedAt:"just now"})}/></label>{[
         ["theme","Game theme & style","Example: a futuristic neon music gameshow; a spooky haunted-hotel mystery; or a colorful tropical trivia night."],
         ["purpose","Purpose and goal","What should players or the audience accomplish?"],
