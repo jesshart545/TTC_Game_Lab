@@ -4,19 +4,7 @@ import { useRef, type FormEvent, type RefObject } from "react";
 import CompactConversation from "./CompactConversation";
 import { BOARD_LIBRARY, TOOL_LIBRARY, GENERATORS, isImage, type GeneratorType } from "../lib/workshop-libraries";
 import { VIDEO_DURATIONS } from "../lib/video-duration";
-
-const GENERATOR_VOICES = [
-  { name: "Aria", label: "Aria — warm female" },
-  { name: "Sarah", label: "Sarah — clear female" },
-  { name: "Charlotte", label: "Charlotte — soft female" },
-  { name: "Alice", label: "Alice — bright female" },
-  { name: "Jessica", label: "Jessica — friendly female" },
-  { name: "Roger", label: "Roger — deep male" },
-  { name: "George", label: "George — warm male" },
-  { name: "Brian", label: "Brian — steady male" },
-  { name: "Liam", label: "Liam — young male" },
-  { name: "Bill", label: "Bill — older male" },
-];
+import { GENERATOR_VOICES } from "../lib/generator-voices";
 import type { GameToolType, Project } from "../lib/project";
 import type { WorkflowEvaluation } from "../lib/workflow-progress";
 
