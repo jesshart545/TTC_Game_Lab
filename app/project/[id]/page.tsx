@@ -51,6 +51,7 @@ import {toolDefaults,infoTypes} from "../../../lib/game-tools";
 import {PROJECT_KINDS} from "../../../lib/project-kinds";
 import {GameInfoHostPanel} from "../../../components/GameInfoTools";
 import {buildReadiness, type BuildIssue} from "../../../lib/build-readiness";
+import {evaluateWorkflow, newlyCompletedSteps, resolveNavigateTarget, workflowStepKey, type JewelNavigate} from "../../../lib/workflow-progress";
 import "./workflow.css";
 import CardListEditor from "../../../components/CardListEditor";
 import PickerHostPanel from "../../../components/PickerHostPanel";
@@ -187,6 +188,46 @@ export default function ProjectWorkspace() {
       (folder || area?.querySelector<HTMLInputElement>('input[type="search"]'))?.focus({ preventScroll: true });
     });
   }
+  // Workflow spine (lib/workflow-progress.ts): record one of the few facts
+  // that cannot be derived from project data, through the normal save path.
+  function recordWorkflowFact(patch: { toolboxOpened?: boolean; rehearsed?: boolean }) {
+    const latest = projectRef.current;
+    if (!latest) return;
+    const current = latest.workflowProgress || {};
+    if (Object.entries(patch).every(([key, value]) => (current as Record<string, unknown>)[key] === value)) return;
+    persist({ ...latest, workflowProgress: { ...current, ...patch } });
+  }
+  // Land on the exact screen a workflow step names. Used by Jewel's
+  // validated navigate directives and by her panel's progress strip alike,
+  // so both always take the creator to the same place.
+  function goToWorkflowStep(stage: number, stepId?: string) {
+    if (stage === 1) {
+      if (stepId === "background") { requestBuildEntry("background"); return; }
+      if (stepId === "placed" || stepId === "buttons") { requestBuildEntry("add"); return; }
+      if (stepId === "rehearsed") { requestBuildEntry("test"); return; }
+      if (stepId === "readiness") { requestBuildEntry("review"); return; }
+      chooseWorkflowStep(1); return;
+    }
+    if (stage === 2) { chooseWorkflowStep(2); return; }
+    if (stepId === "plan") { openGamePlanEntry(); return; }
+    if (stepId === "media") { openWorkshopTool("media"); return; }
+    if (stepId === "trivia-cards") { openWorkshopTool("trivia"); return; }
+    if (stepId === "board") { openWorkshopTool("boards"); return; }
+    if (stepId === "tools") { openWorkshopTool("tools"); return; }
+    if (stepId === "scenes") { openSavedWorkshop(2); return; }
+    if (stepId === "toolbox") { recordWorkflowFact({ toolboxOpened: true }); openSavedWorkshop(1); return; }
+    chooseWorkflowStep(0);
+  }
+  function honorJewelNavigate(navigate: JewelNavigate) {
+    const latest = projectRef.current;
+    if (!latest) return;
+    if (navigate.targetId) {
+      const target = resolveNavigateTarget(latest, navigate.targetId);
+      if (target?.kind === "control" || target?.kind === "tool") { requestBuildFix(target.kind, target.id); return; }
+      if (target?.kind === "asset") { setSelectedAssetKey(target.id); if (navigate.stage === 0) { openSavedWorkshop(1); return; } requestBuildEntry("add"); return; }
+    }
+    goToWorkflowStep(navigate.stage, navigate.stepId);
+  }
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [backgroundIntent, setBackgroundIntent] = useState(false);
@@ -196,7 +237,12 @@ export default function ProjectWorkspace() {
     setWorkflowStep(step);
     setWorkshopStep(substep);
     if (step === 1) setPreviewMode("overlay");
-    if (project) persist({ ...project, workflow: { stage: step, workshopStep: substep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" });
+    // Prefer the ref: it is the freshest project even mid-Jewel-task, when
+    // this closure's state still holds the pre-task project and persisting
+    // it would revert the task's edits (Jewel's navigate directives land
+    // here at the end of her turn).
+    const current = projectRef.current || project;
+    if (current) persist({ ...current, workflow: { stage: step, workshopStep: substep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" });
   }
   function focusJewelPrompt() {
     requestAnimationFrame(() => {
@@ -645,7 +691,7 @@ export default function ProjectWorkspace() {
   function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); setTimeout(()=>{ setProject(current => { if (!current?.wheel) return current; const next={ ...current, wheel:{...current.wheel, spinning:false, visible:false}, updatedAt:"just now" }; const storedNext={...next,assets:next.assets.map(asset=>asset.storageKey?.startsWith("projects/")?asset:asset.storageKey?{...asset,url:undefined}:asset)}; saveQueue.current=saveQueue.current.then(()=>saveProjectToServer(storedNext)).then(()=>undefined).catch(error=>{setAssetStatus(error instanceof Error?error.message:"Project save failed.");}); return next; }); }, 3200); }
 
   const historyRef = useRef<ReturnType<typeof useManualHistory> | null>(null);
-  function persist(next: Project) {
+  function persist(next: Project, opts?: { keepAiUndo?: boolean }) {
     // A stored City Crime Scene case title names the project: sync it here,
     // at the page's central save, so every flow that persists through this
     // page carries the title its creator gave the game.
@@ -654,7 +700,7 @@ export default function ProjectWorkspace() {
     if (prev && prev.id === next.id) historyRef.current?.recordHistory(prev);
     const revision=++saveRevision.current;
     queuedSaveRevisions.current.set(next.id,revision);
-    setAiUndo(null);
+    if (!opts?.keepAiUndo) setAiUndo(null);
     setSaveStatus("Saving changes…");
     const storedNext: Project = {
       ...next,
@@ -1105,9 +1151,33 @@ export default function ProjectWorkspace() {
     let savedStepsThisTask = 0;
     let draftChangedThisTask = false;
     const updated: Project = { ...project, updatedAt: "just now", messages: [...project.messages, { role: "user", text }] };
+    // Workflow spine: remember where the project stood before this turn.
+    // When the turn ends, any step that became complete is checked off in
+    // Jewel's voice (the computed checkLine, recorded so it is spoken once)
+    // — the evaluator decides, never her reply text — and a validated
+    // navigate directive from her response is honored.
+    const progressBefore = evaluateWorkflow(project);
+    let jewelNavigate: JewelNavigate | null = null;
+    const surfaceJewelCheckoffs = () => {
+      const latest = projectRef.current;
+      if (!latest || latest.id !== originId || !workspaceMounted.current || activeProjectId.current !== originRoute) return;
+      const issued = latest.workflowProgress?.issuedChecks || [];
+      const fresh = newlyCompletedSteps(progressBefore, evaluateWorkflow(latest))
+        .filter(step => !issued.includes(workflowStepKey(step.stageId, step.stepId)));
+      if (!fresh.length) return;
+      persist({
+        ...latest,
+        messages: [...latest.messages, ...fresh.map(step => ({ role: "assistant" as const, text: `✓ Checked off — ${step.checkLine}` }))],
+        workflowProgress: { ...latest.workflowProgress, issuedChecks: [...issued, ...fresh.map(step => workflowStepKey(step.stageId, step.stepId))] },
+      }, { keepAiUndo: true });
+    };
     setBuilding(true);
     progress?.("Preparing the requested draft task…");
-    const complete = (reply: string, changed = true, status: SupportTaskResult["status"] = "complete") => { outcome = { reply, changed, status }; return outcome; };
+    const complete = (reply: string, changed = true, status: SupportTaskResult["status"] = "complete") => {
+      surfaceJewelCheckoffs();
+      if (status !== "failed" && jewelNavigate) honorJewelNavigate(jewelNavigate);
+      outcome = { reply, changed, status }; return outcome;
+    };
     try {
       const backgroundVisual = wantsBackgroundMatch(text) ? await backgroundContext(project, hydrateAsset) : undefined;
       guard();
@@ -1123,6 +1193,7 @@ export default function ProjectWorkspace() {
         data=await followup.json();if(!followup.ok)throw new Error(data.error||'The search results could not be turned into a pool.');
         if(data.action?.type==='search')throw new Error('The search completed, but a pool could not be created from these results.');
       }
+      if (data?.navigate) jewelNavigate = data.navigate as JewelNavigate;
       guard();
       progress?.("Applying the changes to your draft…");
       const baseProject={...(projectRef.current||updated),messages:updated.messages};
@@ -1371,6 +1442,9 @@ export default function ProjectWorkspace() {
 
   function trigger(control: Project["controls"][number]) {
     if (!project) return;
+    // Pressing a draft control to try it IS the rehearsal the workflow
+    // model tracks (Set the Stage's "Rehearse your show" step).
+    recordWorkflowFact({ rehearsed: true });
     if (control.toolIds?.some(id=>project.gameTools.some(t=>t.id===id && t.type==="youtube" && t.enabled)) || project.gameTools.some(t=>t.type==="youtube" && t.enabled && control.action===`tool.${t.id}`)) {setYoutubeToolOpen(true);setSideBySideTesting(true);setPreviewMode("dashboard");setEventLog(v=>[control.label+" → opened private YouTube search",...v].slice(0,4));return;}
     try{runtime.fire(control);}catch(e){setEventLog(v=>[e instanceof Error?e.message:"Action failed",...v].slice(0,4));return;} setPreviewMode("overlay");
     if (control.action === "wheel.spin") spinWheel();
@@ -1634,6 +1708,8 @@ export default function ProjectWorkspace() {
         fileInputRef={fileInputRef}
         handleFiles={handleFiles}
         project={project}
+        workflow={evaluateWorkflow(project)}
+        onNavigateStep={goToWorkflowStep}
         aiUndo={aiUndo}
         showBoardTemplates={showBoardTemplates}
         showToolTemplates={showToolTemplates}
