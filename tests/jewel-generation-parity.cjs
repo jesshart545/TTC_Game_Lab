@@ -21,11 +21,13 @@ assert.equal(isGeneratorVoice('Morgan'), false);
 assert.equal(isGeneratorVoice(''), false);
 assert.equal(isGeneratorVoice(undefined), false);
 
-// The panel imports the shared catalog and no longer defines its own copy;
-// the Jewel route reads the same catalog and the same action checkers.
+// The Jewel route reads the shared catalog and the action checkers. The
+// panel's own generator — the catalog's other consumer in Half A — was
+// removed in Piece 2 Half B: generation lives in Jewel herself now, so the
+// panel carries no voice picker (and no generator) at all.
 const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
-assert.ok(panel.includes('from "../lib/generator-voices"'), 'panel imports the shared voice catalog');
-assert.ok(!panel.includes('const GENERATOR_VOICES'), 'panel no longer defines a local voice list');
+assert.ok(!panel.includes('GENERATE ASSET'), 'Half B: the panel no longer hosts a generator');
+assert.ok(!panel.includes('generator-voices'), 'Half B: no voice picker remains in the panel for the catalog to feed');
 const route = fs.readFileSync('app/api/jewel/route.ts', 'utf8');
 assert.ok(route.includes('from "../../../lib/jewel-generation"'), 'jewel route uses the generation checkers');
 assert.ok(route.includes('GENERATOR_VOICES'), 'jewel route builds its voice list from the shared catalog');
@@ -129,15 +131,15 @@ assert.equal(checkedBoardRegenerateAction({ type: 'trivia', mode: 'generate' }, 
 assert.equal(checkedBoardRegenerateAction(null, boardProject), null);
 
 // --- Executor wiring: options reach generateAsset; board action runs the
-// --- identical page function the buttons call -------------------------------
+// --- identical page function the removed buttons used to call --------------
 const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
 assert.ok(page.includes('stability: mediaAction.stability'), 'executor passes stability to generateAsset');
 assert.ok(page.includes('instrumental: mediaAction.instrumental'), 'executor passes instrumental to generateAsset');
 assert.ok(page.includes('action.type === "board-regenerate"'), 'executor handles the board-regenerate action');
 assert.ok(page.includes('regenerateTrivia(action.mode === "source" ? "source" : "generate", action.category || undefined)'),
-  'executor runs the same regenerateTrivia function the buttons call');
+  'executor runs the same regenerateTrivia function the removed buttons used to call');
 const assetsPanel = fs.readFileSync('components/WorkshopAssetsPanel.tsx', 'utf8');
-assert.ok(assetsPanel.includes('regenerateTrivia("generate")') && assetsPanel.includes('regenerateTrivia("source")'),
-  'the buttons still call regenerateTrivia directly (no door closed or rerouted)');
+assert.ok(!assetsPanel.includes('regenerateTrivia(') && !assetsPanel.includes('Regenerate sourced board') && !assetsPanel.includes('Refresh sources'),
+  'Half B: the board regenerate/refresh buttons are gone — regeneration runs through Jewel');
 
 console.log('jewel-generation-parity: all assertions passed');

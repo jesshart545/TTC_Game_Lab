@@ -112,12 +112,12 @@ test('the status route still rejects fal task endpoints outside the allowlist', 
   assert.equal(calls, 0);
 });
 
-test('both video edit clients poll against a 60-minute deadline, not a 300-attempt cap', () => {
+test('the video edit client polls against a 60-minute deadline, not a 300-attempt cap', () => {
+  // Jewel Piece 2 Half B removed the MediaEditor's own AI-edit request, so
+  // the project page (Jewel's executor path) is the one video edit client.
   const editor = fs.readFileSync('components/MediaEditor.tsx', 'utf8');
-  const editFlow = editor.slice(editor.indexOf('async function editMedia'), editor.indexOf('async function saveCopy'));
-  assert.ok(editFlow.includes('pollForEditedVideoUrl('), 'MediaEditor polls the edit through the shared poller');
-  assert.ok(!editFlow.includes('attempt < 300'), 'MediaEditor no longer caps the edit at 300 attempts');
-  assert.ok(editFlow.includes('Your edit is still processing. Please try again in a little while.'), 'MediaEditor keeps its still-processing message');
+  assert.ok(!editor.includes('editMedia'), 'Half B: the MediaEditor AI-edit request is gone — video edits run through Jewel');
+  assert.ok(!editor.includes('/api/edit-video'), 'Half B: the MediaEditor no longer submits video edits');
 
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   const submitAt = page.indexOf('fetch("/api/edit-video"');
@@ -131,12 +131,7 @@ test('both video edit clients poll against a 60-minute deadline, not a 300-attem
   assert.ok(poller.includes('Video editing is still processing. Please try again in a little while.'), 'the shared poller keeps the project page still-processing message as its default');
 });
 
-test('both video edit clients submit then poll the status route', () => {
-  const editor = fs.readFileSync('components/MediaEditor.tsx', 'utf8');
-  const editFlow = editor.slice(editor.indexOf('async function editMedia'), editor.indexOf('async function saveCopy'));
-  assert.ok(editFlow.includes('"/api/edit-video"'), 'MediaEditor still submits video edits');
-  assert.ok(editFlow.includes('pollForEditedVideoUrl('), 'MediaEditor polls for the edit result through the shared poller');
-
+test('the video edit client submits then polls the status route', () => {
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   const submitAt = page.indexOf('fetch("/api/edit-video"');
   assert.ok(submitAt > -1, 'project page still submits video edits');

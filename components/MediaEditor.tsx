@@ -2,8 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ProjectAsset, ProjectAssetEdits } from "../lib/project";
-import { imageLayout, imageAspectRatio } from "../lib/image-layout";
-import { pollForEditedVideoUrl } from "../lib/video-edit-poll";
+import { imageLayout } from "../lib/image-layout";
 
 function isAudioAsset(asset: ProjectAsset) {
   const name = asset.name.toLowerCase();
@@ -30,44 +29,8 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
   const [sourceSize,setSourceSize] = useState({width:1920,height:1080});
   const layout=imageLayout(sourceSize.width,sourceSize.height,edits);
   const update=(patch:Partial<ProjectAssetEdits>)=>{setShowFullImage(false);setEdits(value=>({...value,...patch}));};
-  const [prompt, setPrompt] = useState("");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
-
-  async function editMedia() {
-    if (!asset.url || !prompt.trim() || working) return;
-    setWorking(true);
-    setError("");
-    try {
-      const response = await fetch(video ? "/api/edit-video" : "/api/edit-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(video ? { prompt: prompt.trim(), videoUrl: asset.url } : { prompt: prompt.trim(), imageUrl: asset.url, aspectRatio: imageAspectRatio(edits) }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "I couldn't make that edit.");
-      let resultUrl = typeof data.url === "string" ? data.url : "";
-      if (video && !resultUrl && data.videoId) {
-        resultUrl = await pollForEditedVideoUrl(String(data.videoId), String(data.model || "fal-ai/wan-vace-apps/video-edit"), { messages: { progress: "Unable to check on your edit.", failed: "I couldn't make that edit.", stillProcessing: "Your edit is still processing. Please try again in a little while." } });
-      }
-      if (!resultUrl) throw new Error("The image editor returned no image.");
-      const next: ProjectAsset = {
-        ...asset,
-        name: (asset.name.replace(/\.[^.]+$/, "") || (video ? "video" : "image")) + (video ? "-edited.mp4" : "-edited.png"),
-        type: video ? "video/mp4" : "image/png",
-        url: resultUrl,
-        storageKey: undefined,
-        edits: video ? undefined : {width:layout.width,height:layout.height,fit:layout.fit},
-      };
-      if (!onSaveAsNew) throw new Error("This project cannot save edited assets yet.");
-      await onSaveAsNew(next);
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "I couldn't make that edit.");
-    } finally {
-      setWorking(false);
-    }
-  }
 
   async function saveCopy() {
     if(working || !onSaveAsNew)return;
@@ -92,7 +55,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
       {/* The sticky actions bar is constrained to its containing block, so it must live inside this full-content-height wrapper: as a direct child of the scrolling modal its containing block was only the modal's own visible box, the bar's natural position sat outside it, and sticky could never pull the bar into view. */}
       <div className="media-editor-scroll-content">
       <div className="media-editor-head">
-        <div><small>EDIT ASSET</small><h2>{audio ? "Trim your audio clip." : video ? "Trim or request an AI edit." : "Resize, adjust or request an AI edit."}</h2></div>
+        <div><small>EDIT ASSET</small><h2>{audio ? "Trim your audio clip." : video ? "Trim your video clip." : "Resize and adjust your image."}</h2></div>
         <button className="media-editor-close" onClick={onClose}>×</button>
       </div>
       <div className="media-editor-preview-wrap">
@@ -114,7 +77,7 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
             <label>Image fitting<select aria-label="Image fitting" value={layout.fit} onChange={e=>update({fit:e.target.value as ProjectAssetEdits["fit"]})}><option value="contain">Fit whole image · preserve proportions</option><option value="cover">Fill area · crop edges</option><option value="fill">Stretch to size</option></select></label>
             <button type="button" onClick={()=>update({width:1920,height:1080,crop:"landscape",fit:"contain",zoom:1,offsetX:0,offsetY:0})}>Full overlay · 1920 × 1080</button>
             {asset.edits?.placement&&<button type="button" onClick={()=>update({width:Math.round(asset.edits!.placement!.width*19.2),height:Math.round(asset.edits!.placement!.height*10.8),fit:"contain",zoom:1,offsetX:0,offsetY:0})}>Use this image’s overlay area</button>}
-            <small>{layout.width} × {layout.height} pixel copy. Fit keeps all content with transparent space; fill crops edges. AI edits use the selected shape, then save at these dimensions.</small>
+            <small>{layout.width} × {layout.height} pixel copy. Fit keeps all content with transparent space; fill crops edges.</small>
             <label>Zoom<input type="number" min=".1" max="4" step=".1" value={edits.zoom || 1} onChange={e=>update({zoom:Math.max(.1,Math.min(4,Number(e.target.value)))})}/></label>
             <label>Rotation<input type="number" min="-360" max="360" value={edits.rotation || 0} onChange={e=>update({rotation:Number(e.target.value)})}/></label>
             <label>Brightness (%)<input type="number" min="0" max="200" value={edits.brightness ?? 100} onChange={e=>update({brightness:Number(e.target.value)})}/></label>
@@ -126,24 +89,12 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
             <label><input type="checkbox" checked={Boolean(edits.flipY)} onChange={e=>update({flipY:e.target.checked})}/>Flip vertically</label>
           </>}
         </fieldset>
-        {audio ? <div className="media-editor-ai">
+        {audio && <div className="media-editor-ai">
           <span>AUDIO EDITING</span>
           <small>Trimming is saved as a new copy, so your original stays safe. AI editing is not available for audio.</small>
           {error && <small className="media-editor-error">{error}</small>}
-        </div> : <div className="media-editor-ai">
-          <span>WHAT SHOULD I CHANGE?</span>
-          {!video&&<button type="button" disabled={working} onClick={()=>{update({width:1920,height:1080,crop:"landscape",fit:"contain",zoom:1,offsetX:0,offsetY:0});setPrompt("Adapt this artwork for a horizontal 16:9 livestream overlay. Extend or recompose the background naturally to fill the widescreen scene. Preserve the original subjects, identity, important details and exact text. Do not stretch the subjects or crop important content. Keep text readable and away from the outer edges.");}}>Adapt artwork for full overlay</button>}
-          <div>
-            <input value={prompt} onChange={e=>setPrompt(e.target.value)}
-              placeholder={video ? "Example: cut off the first 3 seconds" : "Example: make it darker, remove the text, and add pink neon around the edges"}
-              onKeyDown={e=>{ if(e.key==="Enter") void editMedia(); }} />
-            <button type="button" disabled={!prompt.trim() || working} onClick={()=>void editMedia()}>
-              {working ? "Making your edit…" : "Make this change"}
-            </button>
-          </div>
-          <small>For layout changes, describe what to preserve and where to leave space. “Adapt artwork” prepares an AI request to extend or recompose the scene; review the result before using it. The edited result is saved as a new asset so your original stays safe.</small>
-          {error && <small className="media-editor-error">{error}</small>}
         </div>}
+        {!audio && error && <small className="media-editor-error">{error}</small>}
       </div>
       <div className="media-editor-actions"><button type="button" disabled={working} onClick={()=>void saveCopy()}>{working?"Saving edit…":"Save edited copy"}</button><button className="outline-btn" onClick={onClose}>Cancel</button></div>
       </div>

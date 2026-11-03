@@ -6,12 +6,14 @@ const ts = require('typescript');
 const load = require('./load.cjs');
 
 // Usability items 2 + 4: a click and its commit controls are one chain.
-// Item 2 — Workshop Creation tools buttons open their forms in the opposite
-// (Jewel) column; the opened form must scroll into view and flash the shared
-// fix highlight. Item 4 — when a panel opens, its Add / Save / Generate /
-// Cancel controls are in view: the Build Space button review scrolls its
-// Add/Cancel into view, generator forms land with Generate in view, and the
-// MediaEditor / AssetComposer modals keep their footers visible.
+// Item 2 — Workshop Creation tools buttons open their pickers in the opposite
+// (Jewel) column; the opened panel must scroll into view and flash the shared
+// fix highlight. (The generator forms that also opened this way were removed
+// in Jewel Piece 2 Half B — generation is Jewel herself now; the board/tool
+// template pickers still open here.) Item 4 — when a panel opens, its Add /
+// Save / Cancel controls are in view: the Build Space button review scrolls
+// its Add/Cancel into view, template pickers land with their commit in view,
+// and the MediaEditor / AssetComposer modals keep their footers visible.
 
 // ---------- Item 2 + generator commit (4b): source contract on page.tsx ----------
 const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
@@ -19,7 +21,7 @@ const openStart = page.indexOf('function openWorkshopTool');
 const openEnd = page.indexOf('async function saveProgress', openStart);
 assert(openStart >= 0 && openEnd > openStart, 'openWorkshopTool handler found');
 const openSpan = page.slice(openStart, openEnd);
-for (const id of ['generator-prompt', 'trivia-list-count', 'board-templates', 'tool-templates'])
+for (const id of ['board-templates', 'tool-templates'])
   assert(openSpan.includes(`"${id}"`), `openWorkshopTool still targets #${id}`);
 assert(openSpan.includes('closest<HTMLElement>(".idea-card")'), 'The opened form panel (its .idea-card) is the scroll/highlight target, whichever column it lives in');
 assert(openSpan.includes('panel.scrollIntoView({ behavior: "smooth", block: "center" })'), 'The form panel scrolls into view when it opens');
@@ -29,8 +31,10 @@ assert(openSpan.includes('commit.scrollIntoView({ behavior: "smooth", block: "ne
 assert(openSpan.includes('focus({ preventScroll: true })'), 'Focus still lands on the form field without fighting the scroll');
 
 const assetsPanel = fs.readFileSync('components/WorkshopAssetsPanel.tsx', 'utf8');
-for (const call of ['openWorkshopTool("media")', 'openWorkshopTool("media",true)', 'openWorkshopTool("trivia")', 'openWorkshopTool("boards")', 'openWorkshopTool("tools")'])
+for (const call of ['openWorkshopTool("boards")', 'openWorkshopTool("tools")'])
   assert(assetsPanel.includes(call), `Creation tools entry ${call} still routes through the shared opener`);
+for (const call of ['openWorkshopTool("media")', 'openWorkshopTool("trivia")'])
+  assert(!assetsPanel.includes(call), `Half B: the generation entry ${call} no longer exists — generation is through Jewel`);
 
 // ---------- Item 4a: source contract on BuildSpace.tsx ----------
 const buildSpace = fs.readFileSync('components/BuildSpace.tsx', 'utf8');
@@ -249,5 +253,5 @@ const setValue = (dom, element, value) => {
     console.log('PASS: Asset Composer keeps header and footer outside its scrolling body; Save Composition still saves.');
   }
 
-  console.log('PASS: item 2 forms scroll into view with the shared highlight and their Generate button in view; item 4 review scroll and sticky editor footers verified in source, CSS, and rendered DOM.');
+  console.log('PASS: item 2 panels scroll into view with the shared highlight and their commit button in view; item 4 review scroll and sticky editor footers verified in source, CSS, and rendered DOM.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

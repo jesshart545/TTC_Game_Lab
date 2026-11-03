@@ -13,7 +13,12 @@ const change=(element,value)=>{const setter=Object.getOwnPropertyDescriptor(dom.
  assert.equal(document.querySelector('[aria-label="Image output width"]').value,'1920');assert.equal(document.querySelector('[aria-label="Image output height"]').value,'1080');assert.equal(image.style.objectFit,'contain');
  await React.act(async()=>change(document.querySelector('[aria-label="Image fitting"]'),'cover'));assert.equal(image.style.objectFit,'cover');
  await React.act(async()=>button('Save edited copy').click());assert.equal(saved.edits.width,1920);assert.equal(saved.edits.height,1080);assert.equal(saved.edits.fit,'cover');assert.equal(asset.edits,undefined);
- await React.act(async()=>button('Adapt artwork for full overlay').click());assert.equal(request,undefined);assert.match(document.querySelector('.media-editor-ai input').value,/Preserve the original subjects/);
- await React.act(async()=>button('Make this change').click());assert.equal(request.url,'/api/edit-image');assert.equal(request.body.aspectRatio,'16:9');assert.equal(request.body.imageUrl,asset.url);assert.equal(saved.edits.width,1920);assert.equal(saved.edits.height,1080);assert.equal(saved.edits.fit,'contain');assert.equal(saved.storageKey,undefined);assert.equal(saved.url,'https://example.test/recomposed.png');
- await React.act(async()=>root.unmount());console.log('PASS: editor preview and copy share exact dimensions/fit; adaptation explicitly sends the original and widescreen shape, then saves an exact-size new copy.');
+ // Jewel Piece 2 Half B: the AI-edit request (prompt box + "Make this change"
+ // + "Adapt artwork") is gone from the editor — AI edits run through Jewel.
+ // The editor keeps only its manual, direct edits.
+ assert.equal(button('Make this change'),undefined,'Half B: no AI-edit button in the MediaEditor');
+ assert.equal(button('Adapt artwork for full overlay'),undefined,'Half B: no Adapt-artwork AI request in the MediaEditor');
+ assert.equal(document.querySelector('.media-editor-ai input'),null,'Half B: no AI prompt box in the MediaEditor');
+ assert.equal(request,undefined,'No edit request was sent anywhere');
+ await React.act(async()=>root.unmount());console.log('PASS: editor preview and saved copy share exact dimensions/fit; the manual layout edits save an exact-size new copy, and no AI-edit affordance remains.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
