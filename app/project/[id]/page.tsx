@@ -522,15 +522,20 @@ export default function ProjectWorkspace() {
     if (!project || triviaBusy) return;
     setTriviaBusy(true); setAssetStatus(categoryName ? `Finding sourced ${categoryName} questions…` : "Finding sourced trivia…");
     try {
+      // Read through projectRef (kept in sync with state at render) so the
+      // Jewel executor can run this exact function mid-task — after it has
+      // already persisted this turn's draft changes — without the render
+      // closure's older snapshot overwriting them. Button clicks see the
+      // identical project either way.
+      const latest = projectRef.current || project;
       const current = triviaConfig || TRIVIA_CONFIG;
       const categories = triviaTopics.length===5 ? triviaTopics : current.categories.map((c:any)=>c.name);
-      const response = await fetch("/api/trivia",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode,categories,category:categoryName || "",exclude:[...current.categories.flatMap((c:any)=>c.questions||[]),...project.gameTools.flatMap(t=>Array.isArray(t.config.questions)?t.config.questions:[])]})});
+      const response = await fetch("/api/trivia",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode,categories,category:categoryName || "",exclude:[...current.categories.flatMap((c:any)=>c.questions||[]),...latest.gameTools.flatMap(t=>Array.isArray(t.config.questions)?t.config.questions:[])]})});
       const data = await response.json();
       if(!response.ok) throw new Error(data.error || "Trivia generation failed.");
       const nextConfig = categoryName
         ? { ...current, categories: current.categories.map((c:any)=> data.categories?.[0]?.name===c.name ? data.categories[0] : c) }
         : { categories: data.categories || current.categories };
-      const latest = project;
       const tools = latest.gameTools || [];
       const trivia = tools.find(t=>t.name==="Trivia Board");
       if(trivia) {
@@ -1231,6 +1236,16 @@ export default function ProjectWorkspace() {
           setAiUndo(baseProject);
           return complete(tool.name + " was created in your draft. Its live version has not changed.");
         }
+        if (action.type === "board-regenerate") {
+          // The board's own Regenerate/Refresh buttons, run through Jewel:
+          // the identical page function, so the request, the saved result,
+          // and the status messages are exactly what the buttons produce.
+          if (triviaBusy) throw new Error("The trivia board is already regenerating. Give it a moment, then ask again.");
+          setAiUndo(baseProject);
+          await regenerateTrivia(action.mode === "source" ? "source" : "generate", action.category || undefined);
+          guard();
+          return complete(data.reply || (action.category ? `${action.category} was regenerated with fresh sourced questions.` : "Your trivia board was refreshed with fresh sourced questions."));
+        }
         if (action.type === "edit-video" || action.type === "render-copy") {
           const checked = checkedAssistantMediaAction(action, baseProject.assets);
           if (!checked) throw new Error("That media operation could not be validated.");
@@ -1310,7 +1325,7 @@ export default function ProjectWorkspace() {
         let generationFailure = "";
         const attemptGeneration = async (mediaAction: typeof action) => {
           try {
-            const attempt = await generateAsset(mediaAction.type as GeneratorType, mediaAction.prompt, { sourceKey: mediaAction.sourceKey, voice: mediaAction.voice, baseProject: working, durationSeconds: mediaAction.durationSeconds, lyrics: mediaAction.lyrics, aspectRatio: mediaAction.aspectRatio });
+            const attempt = await generateAsset(mediaAction.type as GeneratorType, mediaAction.prompt, { sourceKey: mediaAction.sourceKey, voice: mediaAction.voice, baseProject: working, durationSeconds: mediaAction.durationSeconds, lyrics: mediaAction.lyrics, aspectRatio: mediaAction.aspectRatio, stability: mediaAction.stability, instrumental: mediaAction.instrumental });
             if (!attempt) throw new Error("Generation could not start. Check whether another generation is already running.");
             return attempt;
           } catch (generationError) {
