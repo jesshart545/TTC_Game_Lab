@@ -210,8 +210,8 @@ export default function ProjectWorkspace() {
     }
     if (stage === 2) { chooseWorkflowStep(2); return; }
     if (stepId === "plan") { openGamePlanEntry(); return; }
-    if (stepId === "media") { openWorkshopTool("media"); return; }
-    if (stepId === "trivia-cards") { openWorkshopTool("trivia"); return; }
+    if (stepId === "media") { openJewelForGeneration(); return; }
+    if (stepId === "trivia-cards") { openJewelForGeneration(); return; }
     if (stepId === "board") { openWorkshopTool("boards"); return; }
     if (stepId === "tools") { openWorkshopTool("tools"); return; }
     if (stepId === "scenes") { openSavedWorkshop(2); return; }
@@ -242,7 +242,7 @@ export default function ProjectWorkspace() {
     // it would revert the task's edits (Jewel's navigate directives land
     // here at the end of her turn).
     const current = projectRef.current || project;
-    if (current) persist({ ...current, workflow: { stage: step, workshopStep: substep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" });
+    if (current) persist({ ...current, workflow: { stage: step, workshopStep: substep, promptDraft: draft }, updatedAt: "just now" });
   }
   function focusJewelPrompt() {
     requestAnimationFrame(() => {
@@ -258,16 +258,18 @@ export default function ProjectWorkspace() {
     if (workflowStep !== 0) setBuildAiOpen(true);
     focusJewelPrompt();
   }
-  function openWorkshopTool(tool: "media" | "trivia" | "boards" | "tools", background = false) {
+  // Generation has no form anymore: the media and trivia steps land on
+  // Jewel herself — she is where generation happens now (Piece 2, Half B).
+  function openJewelForGeneration() {
     chooseWorkflowStep(0, 1);
-    setBackgroundIntent(background);
-    if (background) setGeneratorType("image");
-    setShowGenerator(tool === "media");
-    setShowTriviaListGenerator(tool === "trivia");
+    focusJewelPrompt();
+  }
+  function openWorkshopTool(tool: "boards" | "tools") {
+    chooseWorkflowStep(0, 1);
     setShowBoardTemplates(tool === "boards");
     setShowToolTemplates(tool === "tools");
     requestAnimationFrame(() => {
-      const target = document.getElementById({ media: "generator-prompt", trivia: "trivia-list-count", boards: "board-templates", tools: "tool-templates" }[tool]);
+      const target = document.getElementById({ boards: "board-templates", tools: "tool-templates" }[tool]);
       if (!target) return;
       // The form opens in the Jewel column, across from the Creation tools
       // click: bring the whole form panel along, flash it with the shared
@@ -285,7 +287,7 @@ export default function ProjectWorkspace() {
   async function saveProgress() {
     if (!project || saveBusy) return;
     setSaveBusy(true); setSaveStatus("Saving your progress…");
-    const next = { ...project, name: titleFromProjectTools(project), workflow: { stage: workflowStep, workshopStep, promptDraft: draft, generatorPrompt }, updatedAt: "just now" };
+    const next = { ...project, name: titleFromProjectTools(project), workflow: { stage: workflowStep, workshopStep, promptDraft: draft }, updatedAt: "just now" };
     try {
       await saveQueue.current;
       await saveProjectToServer({ ...next, assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
@@ -323,11 +325,6 @@ export default function ProjectWorkspace() {
   const [publishNotice, setPublishNotice] = useState("");
   const [publishOutcome, setPublishOutcome] = useState("");
   const [eventLog, setEventLog] = useState<string[]>([]);
-  const [showGenerator, setShowGenerator] = useState(false);
-  const [showTriviaListGenerator, setShowTriviaListGenerator] = useState(false);
-  const [triviaListCategories, setTriviaListCategories] = useState("");
-  const [triviaListCount, setTriviaListCount] = useState(25);
-  const [triviaListQuestions, setTriviaListQuestions] = useState<any[]>([]);
   const [triviaListBusy, setTriviaListBusy] = useState(false);
   const [newCardEditorId,setNewCardEditorId]=useState("");
   const [cardDraft,setCardDraft]=useState<{tool:GameTool;controls:Project["controls"]}|null>(null);
@@ -348,19 +345,11 @@ export default function ProjectWorkspace() {
   const [showBoardGuide, setShowBoardGuide] = useState(false);
   const [guideBoardId, setGuideBoardId] = useState("");
   const [showToolTemplates, setShowToolTemplates] = useState(false);
-  const [musicLengthMode, setMusicLengthMode] = useState("short");
-  const [musicDuration, setMusicDuration] = useState(25);
-  const [musicLyrics, setMusicLyrics] = useState("");
-  const [musicInstrumental, setMusicInstrumental] = useState(false);
-  const [videoLength, setVideoLength] = useState("auto");
-  const [imageShape,setImageShape] = useState("16:9");
-  const [generatorType, setGeneratorType] = useState<GeneratorType>("image");
-  const [generatorPrompt, setGeneratorPrompt] = useState("");
-  const [videoReferenceKey, setVideoReferenceKey] = useState("");
-  const [imageReferenceKey, setImageReferenceKey] = useState("");
-  const [generatorVoice, setGeneratorVoice] = useState("Aria");
-  const [generatorStability, setGeneratorStability] = useState(0.4);
-  const [sfxSeconds, setSfxSeconds] = useState(5);
+  // Kept for Jewel's request context: her turns read this as the selected
+  // reference image fallback (see runAssistantTask's selectedImageKey). The
+  // generator form that used to set it is gone (Piece 2, Half B); nothing
+  // writes it now, so it stays empty unless a future surface sets it.
+  const [videoReferenceKey] = useState("");
   const [generationQueue, setGenerationQueue] = useState<{ type: GeneratorType; prompt: string; options?: GenerateOptions; projectId: string }[]>([]);
   const generationBusyRef = useRef(false);
   const [assetBusy, setAssetBusy] = useState(false);
@@ -421,7 +410,6 @@ export default function ProjectWorkspace() {
       setWorkflowStep(Math.max(0, Math.min(2, found.workflow?.stage ?? 0)));
       setWorkshopStep(Math.max(0, Math.min(2, found.workflow?.workshopStep ?? 0)));
       setDraft(found.workflow?.promptDraft || "");
-      setGeneratorPrompt(found.workflow?.generatorPrompt || "");
       setHostKey(window.localStorage.getItem(`ttc-host-key-${found.id}`) || "");
       const tool = (found.gameTools || []).find(t => t.name === "Trivia Board");
       setTriviaConfig(tool?.config || null);
@@ -551,9 +539,9 @@ export default function ProjectWorkspace() {
 
   async function generateTriviaList(options?: { count: number; categories: string[]; baseProject: Project }) {
     if (!project || triviaListBusy) return;
-    const target=Math.max(1,Math.min(500,options?.count || triviaListCount));
-    const categories=options?.categories || triviaListCategories.split(",").map(x=>x.trim()).filter(Boolean);
-    setTriviaListBusy(true);setTriviaListQuestions([]);
+    const target=Math.max(1,Math.min(500,options?.count || 25));
+    const categories=options?.categories || [];
+    setTriviaListBusy(true);
     const all:any[]=[],pending=new Map<string,any>();
     const key=(q:any)=>String(q.question||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
     const previousQuestions=(projectRef.current || options?.baseProject || project).gameTools.flatMap(t=>{const qs=Array.isArray(t.config.questions)?t.config.questions:[];const cats=Array.isArray(t.config.categories)?t.config.categories:[];return [...qs,...cats.flatMap((c:any)=>Array.isArray(c.questions)?c.questions:[])].map((q:any)=>({question:String(q.question||q.prompt||""),answer:String(q.answer||"")}))});
@@ -568,13 +556,11 @@ export default function ProjectWorkspace() {
           if(!response.ok){lastError=data.error||"Source temporarily unavailable.";continue}
           for(const q of data.questions||[]){if(all.length<target && !all.some(x=>key(x)===key(q))){all.push({...q,verificationStatus:"verified"});pending.delete(key(q))}}
           for(const q of data.manualCandidates||[]){if(q.sourceUrl && !all.some(x=>key(x)===key(q)))pending.set(key(q),{...q,verificationStatus:"needs-review"})}
-          setTriviaListQuestions([...all]);
         }catch(error){lastError=error instanceof Error?error.message:"Source request failed."}
       }
       const review=Array.from(pending.values()).filter(q=>!all.some(x=>key(x)===key(q))).slice(0,target-all.length);
       const questions=[...all,...review];
       if(!questions.length)throw new Error(lastError||"No source-backed questions could be found. Try another category.");
-      setTriviaListQuestions(questions);
       const base = projectRef.current || options?.baseProject || project;
       const tool:any={id:`trivia-list-${Date.now()}`,type:"trivia-list",name:uniqueTriviaListName((base.gameTools||[]).filter(t=>t.type==="trivia-list").map(t=>t.name),`Trivia Question List (${questions.length})`),enabled:true,inToolbox:true,config:{title:"Trivia Question List",requestedCount:target,suggestedCategories:categories,questions,verifiedCount:all.length,reviewCount:review.length}};
       const saved = {...base,gameTools:[...(base.gameTools||[]),tool],updatedAt:"just now"};
@@ -585,8 +571,8 @@ export default function ProjectWorkspace() {
     }catch(error){const message=error instanceof Error?error.message:"Trivia generation failed.";setAssetStatus(message);if(options)throw new Error(message)}
     finally{setTriviaListBusy(false)}
   }
-  async function downloadTriviaPdf() {
-    if(!triviaListQuestions.length)return; const response=await fetch("/api/trivia-pdf",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({questions:triviaListQuestions.map(q=>({...q,question:q.question+(q.verificationStatus==="needs-review"?" * NEEDS MANUAL VERIFICATION":"")}))})});
+  async function downloadTriviaPdf(questions: any[] = []) {
+    if(!questions.length)return; const response=await fetch("/api/trivia-pdf",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({questions:questions.map(q=>({...q,question:q.question+(q.verificationStatus==="needs-review"?" * NEEDS MANUAL VERIFICATION":"")}))})});
     if(!response.ok){setAssetStatus("PDF download could not be created.");return;} const blob=await response.blob(); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url;a.download="ttcgamelab-trivia.pdf";a.click();URL.revokeObjectURL(url);
   }
   function addTriviaListToToolbox() {
@@ -840,7 +826,6 @@ export default function ProjectWorkspace() {
     }
     const requested = (explicitPrompt || "").trim();
     if (!requested) { setAssetStatus(`Describe the ${type} you want to generate.`); return; }
-    setShowGenerator(false);
     setAssetBusy(true);
     setAssetStatus(type === "video" && promptImage ? "Generating video from reference image…" : `Generating ${type}…`);
 
@@ -920,10 +905,6 @@ export default function ProjectWorkspace() {
       await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
       if (backgroundIntent && (type === "image"||type === "video")) setBackgroundDestinationKey(asset.storageKey||asset.name);
       setBackgroundIntent(false);
-      // Clear the prompt box only if it still holds the prompt just generated —
-      // with queueing, the creator may already be composing the next request.
-      setGeneratorPrompt(current => current.trim() === requested ? "" : current);
-      setShowGenerator(false);
       setAssetStatus(`${name} generated and saved`);
       return { project: savedProject, name };
     } catch (error) {
@@ -987,15 +968,20 @@ export default function ProjectWorkspace() {
     const generation = asset.generation;
     if (!generation) return;
     const type = generation.type as GeneratorType;
-    setGeneratorType(type);
-    setGeneratorPrompt(generation.prompt);
-    if (type === "image") { setImageShape(generation.aspectRatio || "16:9"); setImageReferenceKey(generation.sourceKey || ""); }
-    if (type === "video") { setVideoLength(generation.durationSeconds ? String(generation.durationSeconds) : "auto"); setVideoReferenceKey(generation.sourceKey || ""); }
-    if (type === "music") { setMusicLengthMode(generation.durationSeconds ? "short" : "auto"); if (generation.durationSeconds) setMusicDuration(generation.durationSeconds); setMusicLyrics(generation.lyrics || ""); setMusicInstrumental(Boolean(generation.instrumental)); }
-    if (type === "voice") { setGeneratorVoice(generation.voice || "Aria"); setGeneratorStability(typeof generation.stability === "number" ? generation.stability : 0.4); }
-    if (type === "sfx" && generation.durationSeconds) setSfxSeconds(generation.durationSeconds);
-    openWorkshopTool("media");
-    setAssetStatus("Variation loaded: the original prompt and settings are in the generator. Adjust anything, then Generate.");
+    // No generator form anymore (Piece 2, Half B): a variation re-runs the
+    // saved prompt and settings through the same queued generation path
+    // Jewel's executor uses. To vary it differently, ask Jewel.
+    const options: GenerateOptions = {
+      ...(generation.aspectRatio ? { aspectRatio: generation.aspectRatio } : {}),
+      ...(generation.durationSeconds ? { durationSeconds: generation.durationSeconds } : {}),
+      ...(generation.lyrics ? { lyrics: generation.lyrics } : {}),
+      ...(generation.instrumental ? { instrumental: true } : {}),
+      ...(generation.voice ? { voice: generation.voice } : {}),
+      ...(typeof generation.stability === "number" ? { stability: generation.stability } : {}),
+      ...(generation.sourceKey ? { sourceKey: generation.sourceKey } : {}),
+    };
+    setAssetStatus(`Making a variation of ${asset.name} with its original prompt and settings…`);
+    void queueOrGenerate(type, generation.prompt, options);
   }
 
   function renameProjectAsset(index: number, name: string) {
@@ -1560,7 +1546,7 @@ export default function ProjectWorkspace() {
       if (target === "add-items") { requestBuildEntry("add"); return true; }
       if (target === "test") { requestBuildEntry("test"); return true; }
       if (target === "publish-review") { chooseWorkflowStep(2); return true; }
-      if (target === "media-generator") { openWorkshopTool("media"); return true; }
+      if (target === "media-generator") { openJewelForGeneration(); return true; }
       if (target === "game-tools") { openWorkshopTool("tools"); return true; }
       if (target === "web-research") {
         requestBuildEntry("test");
@@ -1588,8 +1574,8 @@ export default function ProjectWorkspace() {
   const workshopActions: Record<WorkshopIntent, () => void> = {
     plan: openGamePlanEntry,
     materials: () => chooseWorkflowStep(0, 1),
-    media: () => openWorkshopTool("media", true),
-    generate: () => openWorkshopTool("media"),
+    media: () => openJewelForGeneration(),
+    generate: () => openJewelForGeneration(),
     tools: () => openWorkshopTool("tools"),
     scene: () => { setEditingComposition(undefined); setShowAssetComposer(true); },
     library: () => openSavedWorkshop(1),
@@ -1610,7 +1596,7 @@ export default function ProjectWorkspace() {
         label: backgroundChoicesAvailable ? "Choose my background" : "Create a background in Workshop",
         onClick: () => {
           if (backgroundChoicesAvailable) requestBuildEntry("background");
-          else openWorkshopTool("media", true);
+          else openJewelForGeneration();
         },
       },
       nextQuestion: backgroundChosen ? "What would you like to add to your game?" : "Which background would you like to use?",
@@ -1620,7 +1606,7 @@ export default function ProjectWorkspace() {
         { label: "Open draft rehearsal", onClick: () => requestBuildEntry("test") },
       ] : [
         { label: "Browse saved backgrounds", onClick: () => requestBuildEntry("background") },
-        { label: "Create a background", onClick: () => openWorkshopTool("media", true) },
+        { label: "Create a background", onClick: () => openJewelForGeneration() },
       ],
     },
     {
@@ -1651,7 +1637,7 @@ export default function ProjectWorkspace() {
   const cardEditorTool=newCardEditorId?project.gameTools.find(t=>t.id===newCardEditorId)||(cardDraft&&cardDraft.tool.id===newCardEditorId?cardDraft.tool:undefined):undefined;
   const ccssBuilderView=ccssBuilder.renderBuilder();
   if(ccssBuilderView)return ccssBuilderView;
-  if(editingBoard)return <main className="workspace-page"><div className="jewel-access-bar"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={()=>{setBoardDesignerId("");setBoardDraft(null);openJewel();}}>✦ Ask Jewel</button></div><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} deferSave={!project.gameTools.some(t=>t.id===editingBoard.id)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist({...current,gameTools:exists?current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t):[...current.gameTools,next]});}} onClose={()=>{setBoardDesignerId("");setBoardDraft(null);}} onCreateArtwork={()=>{setBoardDesignerId("");setBoardDraft(null);setShowGenerator(true);setGeneratorType("video");setGeneratorPrompt("Create a seamless animated game board background. Keep game spaces readable. ");setBackgroundIntent(true);}}/></main>;
+  if(editingBoard)return <main className="workspace-page"><div className="jewel-access-bar"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={()=>{setBoardDesignerId("");setBoardDraft(null);openJewel();}}>✦ Ask Jewel</button></div><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} deferSave={!project.gameTools.some(t=>t.id===editingBoard.id)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist({...current,gameTools:exists?current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t):[...current.gameTools,next]});}} onClose={()=>{setBoardDesignerId("");setBoardDraft(null);}} onCreateArtwork={()=>{setBoardDesignerId("");setBoardDraft(null);setDraft("Create a seamless animated game board background. Keep game spaces readable.");openJewel();}}/></main>;
   const draftOverlay = <>{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">${q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}<RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
   return <main className="workspace-page">
     <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>} <span>{project.status}</span><label style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>Kind <select aria-label="Project kind" value={project.kind || ""} onChange={event => { const value = event.target.value; persist({ ...project, kind: value ? (value as Project["kind"]) : undefined, updatedAt: "just now" }); }} style={{ padding: "6px 8px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #2b3a55", fontSize: 12.5 }}><option value="">Not set</option>{PROJECT_KINDS.map(info => <option key={info.id} value={info.id}>{info.title}</option>)}</select></label>{viewerIsAdmin && <span style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>{creatorEmail ? `Created by ${creatorEmail}` : "Creator unknown"}</span>}</div><div className="workspace-actions"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={openJewel}>✦ Ask Jewel</button>{workflowStep===1&&<div className="workspace-history-group" role="group" aria-label="Undo and redo"><button type="button" className="outline-btn" onClick={undoManualEdit} disabled={historyDepth.undo===0} title="Undo (Ctrl+Z)">&#8617; Undo</button><button type="button" className="outline-btn" onClick={redoManualEdit} disabled={historyDepth.redo===0} title="Redo (Ctrl+Y)">&#8618; Redo</button></div>}<div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : "Save progress"}</button><small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small></div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
@@ -1728,49 +1714,9 @@ export default function ProjectWorkspace() {
         aiUndo={aiUndo}
         showBoardTemplates={showBoardTemplates}
         showToolTemplates={showToolTemplates}
-        showTriviaListGenerator={showTriviaListGenerator}
-        showGenerator={showGenerator}
         triviaBusy={triviaBusy}
         addGameTool={addGameTool}
-        triviaListCount={triviaListCount}
-        setTriviaListCount={setTriviaListCount}
-        triviaListCategories={triviaListCategories}
-        setTriviaListCategories={setTriviaListCategories}
-        triviaListBusy={triviaListBusy}
-        generateTriviaList={generateTriviaList}
-        triviaListQuestions={triviaListQuestions}
-        downloadTriviaPdf={downloadTriviaPdf}
-        backgroundIntent={backgroundIntent}
-        generatorType={generatorType}
-        setGeneratorType={setGeneratorType}
-        assetBusy={assetBusy}
-        generatorPrompt={generatorPrompt}
-        setGeneratorPrompt={setGeneratorPrompt}
-        imageShape={imageShape}
-        setImageShape={setImageShape}
-        videoLength={videoLength}
-        setVideoLength={setVideoLength}
-        videoReferenceKey={videoReferenceKey}
-        setVideoReferenceKey={setVideoReferenceKey}
-        imageReferenceKey={imageReferenceKey}
-        setImageReferenceKey={setImageReferenceKey}
-        generatorVoice={generatorVoice}
-        setGeneratorVoice={setGeneratorVoice}
-        generatorStability={generatorStability}
-        setGeneratorStability={setGeneratorStability}
-        sfxSeconds={sfxSeconds}
-        setSfxSeconds={setSfxSeconds}
-        generationQueueCount={generationQueue.length}
         jewelProgress={jewelProgress}
-        musicLengthMode={musicLengthMode}
-        setMusicLengthMode={setMusicLengthMode}
-        musicDuration={musicDuration}
-        setMusicDuration={setMusicDuration}
-        musicLyrics={musicLyrics}
-        setMusicLyrics={setMusicLyrics}
-        musicInstrumental={musicInstrumental}
-        setMusicInstrumental={setMusicInstrumental}
-        generateAsset={queueOrGenerate}
         assetStatus={assetStatus}
         persist={persist}
         setAiUndo={setAiUndo}
@@ -1792,7 +1738,6 @@ export default function ProjectWorkspace() {
         setSelectedAssetKey={setSelectedAssetKey}
         selectedAsset={selectedAsset}
         showBoardGuide={showBoardGuide}
-        triviaBusy={triviaBusy}
         triviaTopics={triviaTopics}
         guideBoardId={guideBoardId}
         activeTrivia={activeTrivia}
@@ -1813,7 +1758,6 @@ export default function ProjectWorkspace() {
         setEditingComposition={setEditingComposition}
         setPositionAssetKey={setPositionAssetKey}
         setSideBySideTesting={setSideBySideTesting}
-        setTriviaListQuestions={setTriviaListQuestions}
         setListEditorId={setListEditorId}
         setNewCardEditorId={setNewCardEditorId}
         fileInputRef={fileInputRef}
@@ -1828,16 +1772,13 @@ export default function ProjectWorkspace() {
         setBoardDesignerId={setBoardDesignerId}
         setEditingAssetIndex={setEditingAssetIndex}
         setGuideBoardId={setGuideBoardId}
-        setShowTriviaListGenerator={setShowTriviaListGenerator}
-        setTriviaListCategories={setTriviaListCategories}
-        setTriviaListCount={setTriviaListCount}
         setTriviaTopics={setTriviaTopics}
+        onDownloadTriviaPdf={downloadTriviaPdf}
         addGameTool={addGameTool}
         createWorkshopCard={createWorkshopCard}
         deleteComposition={deleteComposition}
         handleDeleteAsset={handleDeleteAsset}
         pushWorkspaceCreation={pushWorkspaceCreation}
-        regenerateTrivia={regenerateTrivia}
         revealTriviaAnswer={revealTriviaAnswer}
         toggleAssetInProject={toggleAssetInProject}
         toggleComposition={toggleComposition}
@@ -1848,7 +1789,6 @@ export default function ProjectWorkspace() {
         TRIVIA_CONFIG={TRIVIA_CONFIG}
         triviaConfig={triviaConfig}
         selectedAssetIndex={selectedAssetIndex}
-        promptRef={promptRef}
         BackgroundDestination={BackgroundDestination}
         ccssEntitled={ccssEntitled}
         onAddTemplate={applyTemplateToProject}

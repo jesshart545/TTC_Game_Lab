@@ -6,8 +6,9 @@ const load = require('./load.cjs');
 
 // Trivia questions belong IN the saved item (Jessica, 2026-11-01): expanding a
 // "Trivia Question List" tool in the Workshop's Game tools & cards must show
-// its questions right there — not only in the Generate Trivia panel across
-// the screen. Plus: generated lists all share the name "Trivia Question
+// its questions right there. (The Generate Trivia panel that also showed them
+// was removed in Jewel Piece 2 Half B, so the item is now the only home —
+// together with its PDF export.) Plus: generated lists all share the name "Trivia Question
 // List (N)", so a repeat generation gets a " (2)" / " (3)" suffix instead of
 // an indistinguishable duplicate name.
 
@@ -36,10 +37,10 @@ assert.equal(tree.props.style.maxHeight, 320, 'The in-item questions block is he
 assert.equal(tree.props.style.overflow, 'auto', 'The in-item questions block scrolls');
 const text = content(tree);
 assert(text.includes('1. Which band released the album Abbey Road?'), 'First question renders numbered, from config');
-assert(text.includes('✓ Verified'), 'Verified vocabulary matches the Generate Trivia panel');
+assert(text.includes('✓ Verified'), 'Verified vocabulary renders on the saved question');
 assert(text.includes('Answer: The Beatles'), 'First answer renders');
 assert(text.includes('2. How many strings does a standard guitar have?'), 'Second question renders numbered, from config');
-assert(text.includes('* Needs verification'), 'Needs-verification vocabulary matches the Generate Trivia panel');
+assert(text.includes('* Needs verification'), 'Needs-verification vocabulary renders on the saved question');
 assert(text.includes('Answer: Six'), 'Second answer renders');
 assert(text.includes('Music'), 'Category renders');
 const links = nodes(tree).filter(n => n.type === 'a');
@@ -50,14 +51,15 @@ assert.equal(content(links[0]), 'Example Music Source', 'Source link carries the
 const emptyTree = SavedTriviaQuestions({ questions: [] });
 assert.equal(content(emptyTree), 'No questions saved in this list yet.', 'An empty list shows the plain no-questions line');
 
-// ---------- Wiring: the block lives inside the saved item, Review stays ----------
-const reviewAt = panel.indexOf('Review saved questions');
+// ---------- Wiring: the block lives inside the saved item, next to the PDF export ----------
+const pdfAt = panel.indexOf('Download PDF');
 const blockAt = panel.indexOf('<SavedTriviaQuestions');
 const editorTernaryAt = panel.indexOf('tool.type==="card-list"?', blockAt);
-assert(reviewAt >= 0 && blockAt > reviewAt, 'The questions block renders inside the item, right after the Review button');
+assert(pdfAt >= 0 && blockAt > pdfAt, 'The questions block renders inside the item, right after the PDF download button');
 assert(editorTernaryAt > blockAt, 'The questions block renders before the tool editor, so it is seen first on open');
 assert(panel.includes('<SavedTriviaQuestions questions={Array.isArray(tool.config.questions)?tool.config.questions:[]}/>'), 'The block reads the questions saved in the tool config');
-assert(panel.includes('Review saved questions</button>'), 'The Review saved questions button stays (it restores generator state)');
+assert(panel.includes('onDownloadTriviaPdf(Array.isArray(tool.config.questions)?tool.config.questions:[])'), 'The PDF button downloads this list\'s own saved questions (the export the removed Generate Trivia panel used to offer)');
+assert(!panel.includes('Review saved questions'), 'Half B: the Review button that reopened the generator is gone');
 
 // ---------- (c): generated list names stay unique ----------
 const { uniqueTriviaListName } = load('lib/trivia-list-name.ts');

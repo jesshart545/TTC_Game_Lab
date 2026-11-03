@@ -19,8 +19,8 @@ import AssetThumbnail from "./AssetThumbnail";
 import { isAudio, isVideo } from "../lib/workshop-libraries";
 
 /**
- * The questions saved inside a trivia-list tool, shown in the item itself.
- * Same information the Generate Trivia panel shows — numbered question,
+ * The questions saved inside a trivia-list tool, shown in the item itself:
+ * numbered question,
  * "✓ Verified" or "* Needs verification", the answer, and the category ·
  * source link when present — in a scrollable block.
  */
@@ -41,7 +41,6 @@ export type WorkshopAssetsPanelProps = {
   setSelectedAssetKey: Dispatch<SetStateAction<string | null>>;
   selectedAsset: ProjectAsset | null;
   showBoardGuide: boolean;
-  triviaBusy: boolean;
   triviaTopics: string[];
   guideBoardId: string;
   activeTrivia: string | null;
@@ -62,11 +61,10 @@ export type WorkshopAssetsPanelProps = {
   setEditingComposition: (v: any) => void;
   setPositionAssetKey: Dispatch<SetStateAction<string | null>>;
   setSideBySideTesting: Dispatch<SetStateAction<boolean>>;
-  setTriviaListQuestions: Dispatch<SetStateAction<any[]>>;
   setListEditorId: Dispatch<SetStateAction<string>>;
   setNewCardEditorId: Dispatch<SetStateAction<string>>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
-  openWorkshopTool: (tool: "media" | "trivia" | "boards" | "tools", background?: boolean) => void;
+  openWorkshopTool: (tool: "boards" | "tools") => void;
   onMakeVariation: (asset: ProjectAsset) => void;
   onRenameAsset: (index: number, name: string) => void;
   ccssEntitled: boolean;
@@ -80,16 +78,13 @@ export type WorkshopAssetsPanelProps = {
   setBoardDesignerId: Dispatch<SetStateAction<string>>;
   setEditingAssetIndex: Dispatch<SetStateAction<number | null>>;
   setGuideBoardId: Dispatch<SetStateAction<string>>;
-  setShowTriviaListGenerator: Dispatch<SetStateAction<boolean>>;
-  setTriviaListCategories: Dispatch<SetStateAction<string>>;
-  setTriviaListCount: Dispatch<SetStateAction<number>>;
   setTriviaTopics: Dispatch<SetStateAction<string[]>>;
+  onDownloadTriviaPdf: (questions: any[]) => void;
   addGameTool: (type: any) => void;
   createWorkshopCard: (kind: "question" | "blank") => void;
   deleteComposition: (id: string) => void;
   handleDeleteAsset: (asset: ProjectAsset) => void;
   pushWorkspaceCreation: (tool: any) => void;
-  regenerateTrivia: (mode: "generate" | "source", categoryName?: string) => void;
   revealTriviaAnswer: (ci: number, qi: number) => void;
   toggleAssetInProject: (index: number) => void;
   toggleComposition: (id: string) => void;
@@ -100,7 +95,6 @@ export type WorkshopAssetsPanelProps = {
   TRIVIA_CONFIG: any;
   triviaConfig: any;
   selectedAssetIndex: number;
-  promptRef: React.RefObject<HTMLTextAreaElement | null>;
   BackgroundDestination: any;
 };
 
@@ -108,20 +102,20 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   const {
     workflowStep, workshopStep, project, persist, assetSearch, assetKindFilter,
     visibleAssets, selectedAssetKey, setSelectedAssetKey, selectedAsset,
-    showBoardGuide, triviaBusy, triviaTopics, guideBoardId, activeTrivia,
+    showBoardGuide, triviaTopics, guideBoardId, activeTrivia,
     primaryWorkshopIntent, saveStatus, dashboardLinkStatus, privateDashboardUrl,
     projectUrl, chooseWorkflowStep, openNewList, copyDashboardLink,
     closeTriviaQuestion, placeSceneImage, saveAssetPools, beginBlank, spinWheel,
     setBackgroundIntent, setEditingComposition, setPositionAssetKey,
-    setSideBySideTesting, setTriviaListQuestions, setListEditorId, setNewCardEditorId,
+    setSideBySideTesting, setListEditorId, setNewCardEditorId,
     fileInputRef, openWorkshopTool, onMakeVariation, onRenameAsset, ccssEntitled, onAddTemplate, openCityCrimeScene, setShowBoardGuide, setShowAssetComposer,
     setAssetKindFilter, setAssetSearch, setAssetStatus, setBoardDesignerId,
-    setEditingAssetIndex, setGuideBoardId, setShowTriviaListGenerator,
-    setTriviaListCategories, setTriviaListCount, setTriviaTopics, addGameTool,
+    setEditingAssetIndex, setGuideBoardId,
+    setTriviaTopics, onDownloadTriviaPdf, addGameTool,
     createWorkshopCard, deleteComposition, handleDeleteAsset, pushWorkspaceCreation,
-    regenerateTrivia, revealTriviaAnswer, toggleAssetInProject, toggleComposition,
+    revealTriviaAnswer, toggleAssetInProject, toggleComposition,
     triggerTriviaQuestion, updateWheelField, useImageAsBlankBoardBackground,
-    addCompositionControl, TRIVIA_CONFIG, triviaConfig, selectedAssetIndex, promptRef,
+    addCompositionControl, TRIVIA_CONFIG, triviaConfig, selectedAssetIndex,
     BackgroundDestination,
   } = props;
 
@@ -144,12 +138,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     </div>
     <button type="button" className="assets-upload-btn" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>＋ Upload</button>
   </div>
-{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 10 : 9} description="Grouped: create, upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools">
-  <div className="creation-group"><strong>CREATE</strong><div>
-    <button type="button" onClick={() => openWorkshopTool("media")}>Generate media</button>
-    <button type="button" onClick={() => openWorkshopTool("media",true)}>Create background artwork</button>
-    <button type="button" onClick={() => openWorkshopTool("trivia")}>Generate trivia</button>
-  </div></div>
+{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 7 : 6} description="Grouped: upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools">
   <div className="creation-group"><strong>UPLOAD</strong><div>
     <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload assets</button>
   </div></div>
@@ -168,7 +157,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   <button type="button" className="outline-btn" aria-expanded={showBoardGuide} onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(!showBoardGuide);}}>Combine artwork with an interactive board</button>
   {showBoardGuide && <div className="workshop-help-grid">
     <article><h3>1. Choose how your board works</h3><p>Artwork gives your board its look. The interactive board supplies selectable areas and reveal behavior. Both are saved in this project.</p><button type="button" className="outline-btn" onClick={() => openWorkshopTool("boards")}>Choose a board template</button><button type="button" className="outline-btn" onClick={() => void addGameTool("blank-board")}>Create a custom board</button></article>
-    <article><h3>2. Create or upload the artwork</h3><p>Generate a new image, upload your own, or use an image already saved below.</p><button type="button" className="outline-btn" onClick={() => openWorkshopTool("media",true)}>Generate board artwork</button><button type="button" className="outline-btn" onClick={() => {setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload board artwork</button></article>
+    <article><h3>2. Upload the artwork</h3><p>Upload your own image, or use an image already saved below.</p><button type="button" className="outline-btn" onClick={() => {setBackgroundIntent(true);fileInputRef.current?.click();}}>Upload board artwork</button></article>
     <article><h3>3. Connect artwork to your custom board</h3><p>Choose the custom board, then an image. This saves the image as that board’s background; your other images remain available.</p><label htmlFor="guide-board">Custom board<select id="guide-board" value={guideBoardId} onChange={event => setGuideBoardId(event.target.value)}><option value="">Choose a custom board</option>{(project.gameTools || []).filter(tool => tool.type === "blank-board").map(tool => <option key={tool.id} value={tool.id}>{tool.name}</option>)}</select></label>
     {!(project.gameTools || []).some(tool => tool.type === "blank-board") && <p>Create a custom board in step 1 to connect your artwork.</p>}
     {project.assets.filter(isImage).length === 0 && <p>Create or upload an image in step 2 to continue.</p>}
@@ -252,7 +241,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
           <div>
             <b>{tool.name}</b>
             <em>{tool.type}</em>{(tool.type==="blank-board"||tool.type==="trivia-board")&&<button type="button" onClick={()=>setBoardDesignerId(tool.id)}>Open board designer</button>}
-            {tool.type==="trivia-list" && <button type="button" onClick={()=>{setTriviaListQuestions(Array.isArray(tool.config.questions)?tool.config.questions:[]);setTriviaListCount(Number(tool.config.requestedCount)||10);setTriviaListCategories(Array.isArray(tool.config.suggestedCategories)?tool.config.suggestedCategories.join(", "):"");setShowTriviaListGenerator(true);promptRef.current?.scrollIntoView({behavior:"smooth",block:"center"});}}>Review saved questions</button>}
+            {tool.type==="trivia-list" && Array.isArray(tool.config.questions) && tool.config.questions.length>0 && <button type="button" onClick={()=>onDownloadTriviaPdf(Array.isArray(tool.config.questions)?tool.config.questions:[])}>Download PDF</button>}
             {tool.type==="trivia-list" && <SavedTriviaQuestions questions={Array.isArray(tool.config.questions)?tool.config.questions:[]}/>}
             {tool.type==="card-list"?<><p>{savedListEntries(tool).length} pool entries · {Array.isArray(tool.config.cards)?tool.config.cards.length:0} cards</p><button type="button" onClick={()=>setListEditorId(tool.id)}>Open pool and card designer</button></>: (tool.type==="question-card"||tool.type==="blank-card")?<button type="button" onClick={()=>setNewCardEditorId(tool.id)}>Customize cards</button>:<GameToolEditor key={tool.id} tool={tool} project={project} assets={project.assets} ccssEntitled={ccssEntitled} onSave={next=>persist({...project,name:titleFromToolSave(project,next),gameTools:(project.gameTools||[]).map(x=>x.id===next.id?next:x),updatedAt:"just now"})} onRegisterAsset={asset=>persist({...project,assets:[...(project.assets||[]),asset],updatedAt:"just now"})}/>}
           </div>
@@ -263,11 +252,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     {(project.gameTools || []).some(t => t.name === "Trivia Board") && (
       <div className="trivia-dashboard">
         <strong>TRIVIA BOARD</strong>
-        <small>Choose a question to fill the live overlay. Every question is source-backed; regenerate topics or questions whenever you want.</small>
-        <div className="trivia-actions">
-          <button className="outline-btn" disabled={triviaBusy} onClick={() => regenerateTrivia("generate")}>↻ Regenerate sourced board</button>
-          <button className="outline-btn" disabled={triviaBusy} onClick={() => regenerateTrivia("source")}>↻ Refresh sources</button>
-        </div>
+        <small>Choose a question to fill the live overlay. Every question is source-backed.</small>
         <div className="trivia-topic-editor">
           <small>TOPICS</small>
           {(triviaConfig || TRIVIA_CONFIG).categories.map((cat: any, i: number) => (
@@ -284,7 +269,6 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
             <div className="trivia-column" key={cat.name}>
               <div className="trivia-column-head">
                 <b>{cat.name}</b>
-                <button onClick={() => regenerateTrivia("generate", cat.name)} disabled={triviaBusy}>↻</button>
               </div>
               {cat.questions.map((q: any, qi: number) => (
                 <div className="trivia-cell" key={q.value}>
