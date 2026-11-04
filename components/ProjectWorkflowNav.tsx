@@ -38,7 +38,7 @@ export default function ProjectWorkflowNav({ stage, workshopSection, onStageChan
             aria-current={stage === index ? "step" : undefined}
             className={stage === index ? "active" : ""}
             disabled={locked.has(index)}
-            title={locked.has(index) ? "Finish every area in Imagine and Create first — done or skipped" : undefined}
+            title={locked.has(index) ? "Finish every topic in Imagine and Create first — done or skipped" : undefined}
             onClick={() => onStageChange(index)}
           >
             <span aria-hidden="true">{locked.has(index) ? "🔒" : index + 1}</span>

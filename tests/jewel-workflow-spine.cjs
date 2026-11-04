@@ -123,16 +123,18 @@ const step = (evaluation, stageIndex, stepId) => evaluation.stages[stageIndex].s
     const evaluation = evaluateWorkflow(baseProject({ kind }));
     eq(evaluation.stages[0].steps.map(s => s.id), ['plan', 'media', 'tools', 'scenes', 'toolbox'], `kind ${kind} gets the generic Imagine and Create set`);
   }
-  // Talk Show or Classroom has its own designed path — Jessica's layout
-  // (2026-11-04): eight areas in her order; its evaluators live in
-  // lib/workflow-progress.ts beside these.
+  // Talk Show or Classroom has its own topic model — Jessica's design
+  // (2026-11-04): the sequence lives in Jewel's conversation; theme is a
+  // creation-seeded fact, and there is NO sign step — the sign and the
+  // background always go together, one combined piece of work. Its
+  // evaluators live in lib/workflow-progress.ts beside these.
   const talkEvaluation = evaluateWorkflow(baseProject({ kind: 'talk' }));
-  eq(talkEvaluation.stages[0].steps.map(s => s.id), ['theme', 'background', 'sign', 'prompt', 'research', 'quiz', 'media', 'missed'], 'kind talk gets the Talk Show or Classroom set');
+  eq(talkEvaluation.stages[0].steps.map(s => s.id), ['theme', 'background', 'prompt', 'research', 'quiz', 'media', 'missed'], 'kind talk gets the Talk Show or Classroom set');
+  assert.equal(talkEvaluation.stages[0].steps.some(s => s.id === 'sign'), false, 'no sign step exists in the talk model');
   const talk = evaluateWorkflow(baseProject({ kind: 'talk', name: 'Morning Show', gamePlan: { theme: 'chat', winning: 'n/a' }, assets: [{ name: 'Theme', type: 'audio/mp3', url: 'https://example.com/t.mp3' }] }));
-  assert.equal(step(talk, 0, 'theme').complete, true, 'the theme box is answered — area 1 checks off');
-  assert.equal(step(talk, 0, 'sign').complete, false, 'a name and a theme song are not a sign — the sign evaluator wants the sign itself');
+  assert.equal(step(talk, 0, 'theme').complete, true, 'the creation-seeded theme fact is answered — the topic model starts from it');
   assert.equal(step(talk, 0, 'background').complete, false, 'an audio theme is not a background');
-  assert.equal(step(talk, 0, 'media').complete, true, 'a filed theme song is media beyond the background/sign');
+  assert.equal(step(talk, 0, 'media').complete, true, 'a filed theme song is media beyond the background');
   console.log('PASS: kind gating — radio, multiplayer and unset kinds get the generic set; talk gets its own designed set, honestly evaluated.');
 }
 
@@ -212,6 +214,15 @@ const step = (evaluation, stageIndex, stepId) => evaluation.stages[stageIndex].s
   assert.equal(validateNavigate(talk, { stage: 0, stepId: 'trivia-cards' }), null);
   assert.equal(validateNavigate(talk, { stage: 0, stepId: 'tools' }), null);
   eq(validateNavigate(talk, { stage: 0, stepId: 'quiz' }), { stage: 0, stepId: 'quiz' });
+  // Jewel records a skip inside her navigate directive when the creator
+  // declines an optional talk topic — validated against the same model:
+  // only a skippable Imagine and Create step of this project qualifies.
+  eq(validateNavigate(talk, { stage: 0, stepId: 'media', skipStepId: 'quiz' }), { stage: 0, stepId: 'media', skipStepId: 'quiz' });
+  eq(validateNavigate(talk, { stage: 1, skipStepId: 'missed' }), { stage: 1, skipStepId: 'missed' }, 'a final skip may ride along with the move to Set the Stage');
+  assert.equal(validateNavigate(talk, { stage: 0, stepId: 'prompt', skipStepId: 'background' }), null, 'the background is not skippable — the directive is stripped');
+  assert.equal(validateNavigate(talk, { stage: 0, stepId: 'media', skipStepId: 'sign' }), null, 'there is no sign step to skip');
+  assert.equal(validateNavigate(talk, { stage: 2, skipStepId: 'quiz' }), null, 'a skip cannot ride into Showtime!');
+  assert.equal(validateNavigate(project, { stage: 0, stepId: 'media', skipStepId: 'media' }), null, 'a gameshow project has no skippable steps');
   console.log('PASS: navigate directives validate against stage range, per-kind step lists, and saved item ids — anything else is stripped.');
 }
 

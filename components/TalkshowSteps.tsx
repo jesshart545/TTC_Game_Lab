@@ -21,7 +21,7 @@ type ScreenProps = TalkshowWorkshopProps & { step?: WorkflowStepState };
 
 const assetKey = (asset: ProjectAsset) => asset.storageKey || asset.name;
 
-function BackdropStageMedia({ asset }: { asset: ProjectAsset }) {
+export function BackdropStageMedia({ asset }: { asset: ProjectAsset }) {
   if (!asset.url) return <ExampleStageMedia />;
   if (isVideo(asset)) {
     return <video src={asset.url} autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
@@ -32,14 +32,14 @@ function BackdropStageMedia({ asset }: { asset: ProjectAsset }) {
 /** The pictured example stage for an empty project: the site's own Talk
  * Show artwork, so a step demonstrates with a real picture — never a flat
  * gradient void. Labelled as an example wherever it stands in. */
-function ExampleStageMedia() {
+export function ExampleStageMedia() {
   return <img className="gsw-bg" src="/redesign/kind-talkshow.webp" alt="" />;
 }
 
 /** The animated example: the project's own moving backdrop when it has
  * one; otherwise the site's own animated artwork (Jewel waving, from the
  * home Tips card) — a real looping visual, honestly labelled. */
-function AnimatedExampleMedia({ project }: { project: TalkshowWorkshopProps["project"] }) {
+export function AnimatedExampleMedia({ project }: { project: TalkshowWorkshopProps["project"] }) {
   const animated = backgroundAssets(project).find(asset => isVideo(asset) && asset.url);
   if (animated) return <BackdropStageMedia asset={animated} />;
   return <video src="/redesign/jewel-wave.mp4" autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
@@ -398,7 +398,7 @@ export function ResearchStep(props: ScreenProps) {
 
 type DemoQuizQuestion = { question: string; options: string[]; correctIndex: number };
 
-function QuizFlip({ q }: { q: DemoQuizQuestion }) {
+export function QuizFlip({ q }: { q: DemoQuizQuestion }) {
   const [flipped, setFlipped] = useState(false);
   return (
     <div className="gsw-flipwrap">
@@ -608,9 +608,15 @@ const SLIDE_KIND_LABELS: Record<TalkSlide["kind"], string> = {
 };
 
 /** The hand-arranged deck, kept whole from the earlier Slides step — it
- * lives in the Anything-we-missed area now, among the other doors. */
-export function DeckArranger(props: ScreenProps) {
-  const { project, onSaveProject, onAskJewel: onAsk } = props;
+ * lives in the Anything-we-missed topic now. Narrow props (the project,
+ * the page's save path, an optional Jewel-ask for its change list) so the
+ * visual stage can render it bare — the deck itself, no change list. */
+export function DeckArranger({ project, onSaveProject, onAskJewel, bare }: {
+  project: TalkshowWorkshopProps["project"];
+  onSaveProject: TalkshowWorkshopProps["onSaveProject"];
+  onAskJewel?: TalkshowWorkshopProps["onAskJewel"];
+  bare?: boolean;
+}) {
   const deck: TalkSlide[] = Array.isArray(project.talkDeck) ? project.talkDeck : [];
   const candidates = slideCandidates(project);
   const inDeck = (candidate: SlideCandidate) => deck.some(slide => slide.kind === candidate.kind && slide.refKey === candidate.refKey);
@@ -698,7 +704,7 @@ export function DeckArranger(props: ScreenProps) {
       ) : (
         <p className="gsw-hint">Nothing to arrange yet — your sign, backdrops, quiz and packages appear here as you make them.</p>
       )}
-      <ChangeList title="What you can change — your slides" items={SLIDES_CHANGES} onAsk={onAsk} />
+      {!bare && onAskJewel && <ChangeList title="What you can change — your slides" items={SLIDES_CHANGES} onAsk={onAskJewel} />}
     </div>
   );
 }
@@ -771,7 +777,7 @@ export function MissedStep(props: ScreenProps) {
         <p>{deck.length ? deck.map((slide, i) => `${i + 1}. ${slide.label}`).join("  ·  ") : "No slides arranged yet — line up your show’s moments in the deck below."}</p>
       </div>
       <div style={{ marginTop: 16 }}>
-        <DeckArranger {...props} />
+        <DeckArranger project={props.project} onSaveProject={props.onSaveProject} onAskJewel={props.onAskJewel} />
       </div>
       <div className="gsw-seclabel" style={{ marginTop: 22 }}>Every manual editor — the doors</div>
       <div className="gsw-tiles" style={{ marginTop: 0 }}>

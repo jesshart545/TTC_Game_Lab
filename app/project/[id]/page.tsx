@@ -68,7 +68,7 @@ import { useCityCrimeSceneBuilder } from "../../../components/CityCrimeSceneBuil
 import RuntimeActionLayers, { useRuntimeActions } from "../../../components/RuntimeActionLayers";
 import WorkshopAiPanel from "../../../components/WorkshopAiPanel";
 import GameshowWorkshop from "../../../components/GameshowWorkshop";
-import TalkshowWorkshop from "../../../components/TalkshowWorkshop";
+import TalkshowStage from "../../../components/TalkshowStage";
 import BackdropTextLayer from "../../../components/BackdropText";
 import { assetBackdropText, assetPromptText } from "../../../lib/backdrop-text";
 import ConfirmDialog from "../../../components/ConfirmDialog";
@@ -111,17 +111,9 @@ export default function ProjectWorkspace() {
     const current = evaluateWorkflow(project).current;
     if (current && current.stageIndex === 0) setGameshowStep(current.stepId);
   }, [project]);
-  const [talkshowStep, setTalkshowStep] = useState("sign");
-  const talkshowStepInit = useRef<string | null>(null);
-  // The Talk Show path's "upload your own sign" intent: the next uploaded
+  // The Talk Show stage's "upload your own sign" intent: the next uploaded
   // image is tagged as the project's sign (role background + sign flag).
   const [signUploadIntent, setSignUploadIntent] = useState(false);
-  useEffect(() => {
-    if (!project || project.kind !== "talk" || talkshowStepInit.current === project.id) return;
-    talkshowStepInit.current = project.id;
-    const current = evaluateWorkflow(project).current;
-    if (current && current.stageIndex === 0) setTalkshowStep(current.stepId);
-  }, [project]);
   const [viewerCcssEntitled, setViewerCcssEntitled] = useState(false);
   const [ownerCcssEntitled, setOwnerCcssEntitled] = useState(false);
   // Creator identification is admin-only: the project endpoint sends
@@ -221,9 +213,11 @@ export default function ProjectWorkspace() {
     if (Object.entries(patch).every(([key, value]) => (current as Record<string, unknown>)[key] === value)) return;
     persist({ ...latest, workflowProgress: { ...current, ...patch } });
   }
-  // Talk Show layout (Jessica, 2026-11-04): skipping one of the optional
-  // areas records the skip on the project — the workflow model counts it
-  // as complete, and the area stays open to change afterwards.
+  // Talk Show (Jessica, 2026-11-04): when the creator declines one of
+  // Jewel's optional topics in conversation, her validated navigate
+  // directive carries the skipStepId and this records the skip on the
+  // project — the workflow model counts it as complete, and the topic
+  // stays open to change afterwards.
   function skipTalkArea(stepId: string) {
     const latest = projectRef.current;
     if (!latest) return;
@@ -244,7 +238,6 @@ export default function ProjectWorkspace() {
     }
     if (stage === 2) { chooseWorkflowStep(2); return; }
     if (projectRef.current?.kind === "talk" && stepId) {
-      setTalkshowStep(stepId);
       if (stepId === "missed") recordWorkflowFact({ toolboxOpened: true });
       chooseWorkflowStep(0);
       return;
@@ -262,6 +255,10 @@ export default function ProjectWorkspace() {
   function honorJewelNavigate(navigate: JewelNavigate) {
     const latest = projectRef.current;
     if (!latest) return;
+    // A skip Jewel recorded in conversation (validated server-side
+    // against the model's skippable steps) lands on the project first,
+    // so the topic she directs to is already the current one.
+    if (navigate.skipStepId) skipTalkArea(navigate.skipStepId);
     if (navigate.targetId) {
       const target = resolveNavigateTarget(latest, navigate.targetId);
       if (target?.kind === "control" || target?.kind === "tool") { requestBuildFix(target.kind, target.id); return; }
@@ -319,14 +316,6 @@ export default function ProjectWorkspace() {
     if (stage === 0 && stepId) {
       if (stepId === "toolbox") recordWorkflowFact({ toolboxOpened: true });
       setGameshowStep(stepId);
-      return;
-    }
-    goToWorkflowStep(stage, stepId);
-  }
-  function selectTalkshowStep(stage: number, stepId?: string) {
-    if (stage === 0 && stepId) {
-      if (stepId === "missed") recordWorkflowFact({ toolboxOpened: true });
-      setTalkshowStep(stepId);
       return;
     }
     goToWorkflowStep(stage, stepId);
@@ -1707,15 +1696,18 @@ export default function ProjectWorkspace() {
   const ccssBuilderView=ccssBuilder.renderBuilder();
   if(ccssBuilderView)return ccssBuilderView;
   if(editingBoard)return <main className="workspace-page"><div className="jewel-access-bar"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={()=>{setBoardDesignerId("");setBoardDraft(null);openJewel();}}>✦ Ask Jewel</button></div><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} deferSave={!project.gameTools.some(t=>t.id===editingBoard.id)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist({...current,gameTools:exists?current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t):[...current.gameTools,next]});}} onClose={()=>{setBoardDesignerId("");setBoardDraft(null);}} onCreateArtwork={()=>{setBoardDesignerId("");setBoardDraft(null);setDraft("Create a seamless animated game board background. Keep game spaces readable.");openJewel();}}/></main>;
-  // Talk Show Imagine and Create gets Jessica's own layout (2026-11-04):
-  // a bare top (Rename · Save · Delete), no generic workshop frame above
-  // the talk areas, and Set the Stage gated until every area is complete
-  // — done or skipped. Every other kind and stage renders as before.
+  // Talk Show Imagine and Create (Jessica, 2026-11-04): a bare top
+  // (Rename · Save project · Delete), no generic workshop frame, and no
+  // guided path on the page at all — Jewel's conversation carries the
+  // sequence and the check-offs, and the page's one visual stage shows
+  // her current topic (their stored work, or the examples). Set the
+  // Stage stays gated until every topic is complete — done or skipped.
+  // Every other kind and stage renders as before.
   const talkCreateView = project.kind === "talk" && workflowStep === 0;
   const talkCreateComplete = project.kind === "talk" && allCreateStepsComplete(evaluateWorkflow(project));
   const draftOverlay = <>{(() => { const selected = project.assets.filter(a => a.inProject && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}{bg && assetBackdropText(bg) && <BackdropTextLayer spec={assetBackdropText(bg)!}/>}{bg && assetPromptText(bg) && <BackdropTextLayer spec={assetPromptText(bg)!} placement="lower"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">${q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}<RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
   return <main className="workspace-page">
-    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>}{!talkCreateView && <span>{project.status}</span>}{!talkCreateView && <label style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>Kind <select aria-label="Project kind" value={project.kind || ""} onChange={event => { const value = event.target.value; persist({ ...project, kind: value ? (value as Project["kind"]) : undefined, updatedAt: "just now" }); }} style={{ padding: "6px 8px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #2b3a55", fontSize: 12.5 }}><option value="">Not set</option>{PROJECT_KINDS.map(info => <option key={info.id} value={info.id}>{info.title}</option>)}</select></label>}{viewerIsAdmin && !talkCreateView && <span style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>{creatorEmail ? `Created by ${creatorEmail}` : "Creator unknown"}</span>}</div><div className="workspace-actions">{!talkCreateView && <button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={openJewel}>✦ Ask Jewel</button>}{workflowStep===1&&<div className="workspace-history-group" role="group" aria-label="Undo and redo"><button type="button" className="outline-btn" onClick={undoManualEdit} disabled={historyDepth.undo===0} title="Undo (Ctrl+Z)">&#8617; Undo</button><button type="button" className="outline-btn" onClick={redoManualEdit} disabled={historyDepth.redo===0} title="Redo (Ctrl+Y)">&#8618; Redo</button></div>}<div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : "Save progress"}</button>{!talkCreateView && <small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small>}</div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
+    <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>}{!talkCreateView && <span>{project.status}</span>}{!talkCreateView && <label style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>Kind <select aria-label="Project kind" value={project.kind || ""} onChange={event => { const value = event.target.value; persist({ ...project, kind: value ? (value as Project["kind"]) : undefined, updatedAt: "just now" }); }} style={{ padding: "6px 8px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #2b3a55", fontSize: 12.5 }}><option value="">Not set</option>{PROJECT_KINDS.map(info => <option key={info.id} value={info.id}>{info.title}</option>)}</select></label>}{viewerIsAdmin && !talkCreateView && <span style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>{creatorEmail ? `Created by ${creatorEmail}` : "Creator unknown"}</span>}</div><div className="workspace-actions">{!talkCreateView && <button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={openJewel}>✦ Ask Jewel</button>}{workflowStep===1&&<div className="workspace-history-group" role="group" aria-label="Undo and redo"><button type="button" className="outline-btn" onClick={undoManualEdit} disabled={historyDepth.undo===0} title="Undo (Ctrl+Z)">&#8617; Undo</button><button type="button" className="outline-btn" onClick={redoManualEdit} disabled={historyDepth.redo===0} title="Redo (Ctrl+Y)">&#8618; Redo</button></div>}<div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : talkCreateView ? "Save project" : "Save progress"}</button>{!talkCreateView && <small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small>}</div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
     <section className={"workshop-flow"+(workflowStep===1?" compact-build-heading":"")} ref={workflowRef} aria-label="Project workflow">
       {!talkCreateView && <div className="workshop-flow-heading">
         <div><small>{workflowStep === 0 ? workshopTask.stage : ["Imagine and Create", "Set the Stage", "Showtime!"][workflowStep]}</small><h1>{["Brainstorm & create", "Build & implement", "Review & publish"][workflowStep]}</h1></div>
@@ -1724,7 +1716,7 @@ export default function ProjectWorkspace() {
 {mediaPlayback && <div role="status" className="media-playback-ready"><p>Your video is ready to trim. Start rendering with audio.</p><button type="button" className="build-btn" onClick={mediaPlayback.start}>Start video trim</button></div>}      <ProjectWorkflowNav stage={workflowStep} workshopSection={workshopStep} onStageChange={chooseWorkflowStep}
         bare={talkCreateView}
         lockedStages={project.kind === "talk" && !talkCreateComplete ? [1, 2] : undefined}
-        lockNote={project.kind === "talk" && !talkCreateComplete ? "Set the Stage unlocks when every area in Imagine and Create is done — or skipped. Nothing is locked against changes: finished areas stay open." : undefined}
+        lockNote={project.kind === "talk" && !talkCreateComplete ? "Set the Stage unlocks when Jewel has checked off every topic in Imagine and Create — done, or skipped. Nothing is locked against changes: finished work stays open." : undefined}
         entryGuide={talkCreateView ? undefined : <WorkflowEntryGuide {...entryCopy} started={firstActionTaken}
           firstAction={{ ...entryCopy.firstAction, onClick: () => { markEntryStage(workflowStep, true); entryCopy.firstAction.onClick(); } }}
           onShowFirst={() => markEntryStage(workflowStep, false)} />} />
@@ -1757,15 +1749,10 @@ export default function ProjectWorkspace() {
         />
       )}
       {workflowStep === 0 && project.kind === "talk" && (
-        <TalkshowWorkshop
+        <TalkshowStage
           project={project}
           workflow={evaluateWorkflow(project)}
-          activeStep={talkshowStep}
-          onNavigateStep={selectTalkshowStep}
-          onAskJewel={askJewel}
-          onOpenJewel={openJewel}
           onSaveProject={persist}
-          onSkipStep={skipTalkArea}
           doors={{
             uploadSign: () => { setSignUploadIntent(true); setBackgroundIntent(true); fileInputRef.current?.click(); },
             uploadMedia: () => { setBackgroundIntent(false); fileInputRef.current?.click(); },
