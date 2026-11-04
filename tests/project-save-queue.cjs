@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
-const start = page.indexOf('  function persist(next: Project)');
+// persist gained an opts parameter after this harness was written; match
+// the signature up to the parameter list so the extraction finds it again.
+const start = page.indexOf('  function persist(next: Project');
 const end = page.indexOf('\n  function saveProjectTitle', start);
 const code = ts.transpileModule('export ' + page.slice(start, end).trim(), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -15,6 +17,12 @@ function harness(save) {
   const saveQueue = { current: new Promise(resolve => { release = resolve; }) };
   const context = { exports, Error, saveQueue, saveRevision: { current: 0 }, queuedSaveRevisions: { current: new Map() },
     projectRef: {}, taskRunning: { current: true }, taskSaveError: {},
+    // Stubs for the collaborators persist has since grown: the CCS title
+    // sync (identity for these fixtures) and the manual-history hook
+    // (the extracted span builds it at module level).
+    titleFromProjectTools: project => project.name,
+    historyRef: { current: null },
+    useManualHistory: () => ({ recordHistory() {}, undo() {}, redo() {}, historyDepth: { undo: 0, redo: 0 }, suppressHistory: { current: false } }),
     saveProjectToServer: async project => { writes.push(project); await save?.(project); },
   };
   for (const name of ['setAiUndo','setSaveStatus','setProject','setAssetStatus']) context[name] = () => {};
