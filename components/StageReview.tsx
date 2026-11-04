@@ -2,24 +2,20 @@
 import "./stage-review.css";
 import BuildOverlayPreview from "./BuildOverlayPreview";
 import JewelWandScene from "./JewelWandScene";
-import FontPicker from './FontPicker';
-import CountdownDuration from "./CountdownDuration";
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, type ReactNode, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import type { Project, ProjectEvent, ProjectAsset, GameTool, OverlayResult } from "../lib/project";
+import type { Project, ProjectEvent, ProjectAsset, GameTool } from "../lib/project";
 import { titleFromToolSave } from "../lib/project";
 import { controlLabel, controlButtonStyle, infoTypes } from "../lib/game-tools";
 import type { CardState } from "../lib/question-cards";
+import { cardDesignPlacement, isCardTool, withCardDesignPlacement } from "../lib/question-cards";
 import type { YouTubeState } from "../lib/youtube";
 import { safeYoutubePlacement } from "../lib/youtube";
 import { defaultOverlayResult } from "./CompositionPlayer";
 import WheelHostPanel from "./WheelHostPanel";
-import QuestionCardEditor from "./QuestionCardEditor";
-import GameToolEditor from "./GameToolEditor";
-import { buttonFacts, controlEffectResult, stageFitWidth } from "../lib/build-controls";
+import { stageFitWidth } from "../lib/build-controls";
 import { mediaKind } from "../lib/board-design";
 import { normalizePlacement, movePlacement, resizePlacement, toolShapePlacement } from '../lib/overlay-placement';
 import { ControlAppearancePreview } from "./RuntimeActionLayers";
-import YouTubePlacementEditor from "./YouTubePlacementEditor";
 import YouTubeHostPanel from "./YouTubeHostPanel";
 import { reorderVisibleControls } from "../lib/stage-review";
 
@@ -39,14 +35,15 @@ import { reorderVisibleControls } from "../lib/stage-review";
  * live, and flipping to the Overlay side shows the result. There is
  * no separate Test mode.
  *
- * Adding, staging and wiring happen through Jewel (her connections
- * and build changes); what the creator does by hand here is what the
- * review itself invites: drag placed items across the overlay review
- * (persisted through the placement model — asset edits.placement,
- * tool config.placement, control overlayResult), drag dashboard
- * buttons to reorder them (persisted as control order), and edit any
- * item in place through the same inspectors the old Build Space used
- * — minus the manual wiring editors, which are Jewel's job now.
+ * Adding, staging, wiring and EDITING happen through Jewel (her
+ * connections and build changes) — there are no inspector or editor
+ * panels on this page at all, and selecting an item opens nothing.
+ * What the creator does by hand here is what the review itself
+ * invites: drag placed items across the overlay review (persisted
+ * through the placement model — asset edits.placement, tool
+ * config.placement, control overlayResult; for card tools the card
+ * DESIGN geometry the card renderer actually reads), and drag
+ * dashboard buttons to reorder them (persisted as control order).
  *
  * Legacy projects (older field shapes, default-era controls whose
  * actions the current runtime only flashes for) render exactly as
@@ -184,10 +181,6 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
     if (!exists) setSelection(null);
   }, [selection, project.controls, project.gameTools, project.assets]);
   useEffect(() => { if (focusControl) setSelection({ kind: 'control', id: focusControl.id }); }, [focusControl]);
-  const settings = useRef<HTMLElement>(null);
-  useEffect(() => { if (selection) settings.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [selection]);
-  const [positionYoutube, setPositionYoutube] = useState(false);
-  useEffect(() => setPositionYoutube(false), [selection?.id]);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetWipe, setResetWipe] = useState(true);
 
@@ -228,9 +221,6 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
   const control = selection?.kind === "control" ? controls.find(c => c.id === selection.id) : undefined;
   const asset = selection?.kind === "asset" ? assetsByKey.get(selection.id) : control?.action.startsWith("asset.show.") ? assetsByKey.get(control.action.slice(11)) : undefined;
   const tool = (project.gameTools || []).find(t => selection?.kind === "tool" ? t.id === selection.id : control?.toolIds?.includes(t.id));
-  const fxResult = control?.overlayResult || defaultOverlayResult;
-  const canFx = !!control && control.toolIds?.length !== 1 && !control.action.startsWith("result.hide.");
-  const facts = control ? buttonFacts(control, project) : null;
   const hasVisualResult = control?.action !== 'sequence' && !!control && tool?.type !== 'youtube' && !control.action.startsWith("result.hide.") && (!asset || mediaKind(asset) !== "audio");
   const youtube = (project.gameTools || []).find(t => t.type === "youtube" && t.enabled);
 
@@ -247,13 +237,18 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
   }
   function updateControl(id: string, patch: Partial<ProjectEvent>) {
     const current = currentProject.current, target = (current.controls || []).find(c => c.id === id), t = target?.toolIds?.length === 1 ? (current.gameTools || []).find(t => t.id === target.toolIds![0]) : undefined;
-    if (patch.overlayResult && t && t.type !== 'youtube') { saveTool({ ...t, config: { ...t.config, placement: normalizePlacement(patch.overlayResult) } }); return; }
+    if (patch.overlayResult && t && t.type !== 'youtube') {
+      const placement = normalizePlacement(patch.overlayResult);
+      // Card tools render from their card DESIGN geometry, never from
+      // config.placement or overlayResult — a drag that writes only
+      // those two moves the preview in-session and snaps back on
+      // reload. Write the design too (config.placement is still
+      // synced, so saveTool's control-result sync keeps every view
+      // of the card in agreement).
+      if (isCardTool(t)) { saveTool(withCardDesignPlacement({ ...t, config: { ...t.config, placement } }, placement)); return; }
+      saveTool({ ...t, config: { ...t.config, placement } }); return;
+    }
     save({ ...current, controls: (current.controls || []).map(c => c.id === id ? { ...c, ...patch } : c) });
-  }
-  function setControlEffect(entrance: OverlayResult['entrance']) {
-    if (!control) return; const current = currentProject.current, target = (current.controls || []).find(c => c.id === control.id); if (!target) return;
-    const overlayResult = controlEffectResult(target, current, entrance);
-    save({ ...current, controls: (current.controls || []).map(c => c.id === control.id ? { ...c, overlayResult } : c) });
   }
   function updateAsset(id: string, patch: Partial<ProjectAsset>) { const current = currentProject.current; save({ ...current, assets: (current.assets || []).map(a => key(a) === id ? { ...a, ...patch } : a) }); }
 
@@ -336,7 +331,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
               {tool && !control && !(infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && !['question-card', 'blank-card', 'card-list', 'youtube', 'random-picker'].includes(tool.type) && (
                 <ControlAppearancePreview state={cardStates[tool.id]} control={{ id: 'editing-' + tool.id, label: tool.name, detail: 'Editing preview', action: `tool.${tool.id}`, toolIds: [tool.id], overlayResult: { ...defaultOverlayResult, ...(tool.config.placement as Partial<typeof defaultOverlayResult> || {}) } }} project={project} />
               )}
-              {control && hasVisualResult && !(tool && infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && (
+              {control && hasVisualResult && !(tool && (infoTypes.includes(tool.type) || isCardTool(tool)) && cardStates[tool.id] && !cardStates[tool.id].cleared) && (
                 <ControlAppearancePreview state={tool ? cardStates[tool.id] : undefined} control={{ ...control, overlayResult: control.overlayResult || defaultOverlayResult }} project={project} />
               )}
             </BuildOverlayPreview>
@@ -364,13 +359,10 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
               )}
               {control && hasVisualResult && (
                 <StageDragBox key={'control-' + control.id} label={control.label} canvasRef={stageFrameRef}
-                  placement={normalizePlacement(control.overlayResult || defaultOverlayResult)}
+                  placement={isCardTool(tool) ? cardDesignPlacement(tool!) : normalizePlacement(control.overlayResult || defaultOverlayResult)}
                   selected
                   onSelect={() => setSelection({ kind: "control", id: control.id })}
                   onCommit={placement => updateControl(control.id, { overlayResult: { ...(control.overlayResult || defaultOverlayResult), ...placement } })} />
-              )}
-              {tool?.type === 'youtube' && positionYoutube && (
-                <YouTubePlacementEditor key={tool.id} label="Video position (editing only)" placement={safeYoutubePlacement(tool.config.placement)} onChange={placement => saveTool({ ...currentProject.current.gameTools.find(t => t.id === tool.id)!, config: { ...currentProject.current.gameTools.find(t => t.id === tool.id)!.config, placement } })} />
               )}
             </div>
           </div>
@@ -383,7 +375,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
         </section>
         ) : (
         <section role="tabpanel" className="sr-canvas assembly-canvas" aria-label="Dashboard review">
-          <div className="sr-review-head"><h3>Dashboard review</h3><span>Your host controls — press them: they work here exactly as they will live. Drag a button to reorder it; ✎ edits it.</span></div>
+          <div className="sr-review-head"><h3>Dashboard review</h3><span>Your host controls — press them: they work here exactly as they will live. Drag a button to reorder it. To change a button, ask Jewel above.</span></div>
           {sequenceRunning && <button type="button" onClick={onStopSequence}>Stop sequence</button>}
           <div role="status" aria-live="polite">{sequenceError || feedback}</div>
           {onResetGame && (
@@ -415,11 +407,16 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
                     onPointerCancel={buttonPointerCancel}
                     onClick={() => {
                       if (suppressClick.current) { suppressClick.current = false; return; }
+                      // Firing a button also points the overlay review
+                      // at its result: flip to the Overlay side and the
+                      // result's drag frame is there waiting — the way
+                      // a result is picked up and moved, now that no
+                      // edit buttons or inspectors do the pointing.
+                      setSelection({ kind: "control", id: c.id });
                       onTrigger(c);
                     }}>
                     {controlLabel(project, c, cardStates)}<small>{c.detail || "Choose an action"}</small>
                   </button>
-                  <button type="button" className="sr-editbtn" aria-label={`Edit ${c.label}`} onClick={() => setSelection({ kind: "control", id: c.id })}>✎</button>
                 </div>
               ))}
             </div>
@@ -436,99 +433,6 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
             )}
           </div>
         </section>
-        )}
-
-        {selection && (asset || tool || control) && (
-          <section ref={settings} className="sr-inspector assembly-settings" aria-label="Selected item settings">
-            <h3>Set up: {tool?.type === 'youtube' ? 'YouTube search' : asset?.name || tool?.name || control?.label}</h3>
-            {facts && (
-              <section className="button-facts" aria-label="What this button does">
-                <p><strong>Does:</strong> {facts.does}</p>
-                {facts.effect && canFx && (
-                  <label>Comes in with
-                    <select aria-label="Entrance effect" value={fxResult.entrance || "none"} onChange={e => setControlEffect(e.target.value as OverlayResult["entrance"])}>
-                      <option value="none">No effect</option><option value="fade">Fade in</option><option value="slide">Slide in</option><option value="zoom">Zoom in</option>
-                    </select>
-                  </label>
-                )}
-                <p><strong>Clicks:</strong> {facts.clicks}</p>
-              </section>
-            )}
-            {asset && (
-              <>
-                <button type="button" onClick={onWorkshop}>Edit or upload in Imagine and Create</button>
-                {mediaKind(asset) !== "audio" && (
-                  <section className="build-media-fit" aria-label="Media fit">
-                    <h4>Fit to 1920 × 1080 overlay</h4>
-                    <p>Show the whole image or video, or fill the frame with cropped edges.</p>
-                    <button type="button" onClick={() => updateAsset(key(asset), { edits: { ...asset.edits, fit: "contain", placement: { x: 0, y: 0, width: 100, height: 100 }, zoom: 1, rotation: 0, offsetX: 0, offsetY: 0 } })}>Show full media</button>
-                    <button type="button" onClick={() => updateAsset(key(asset), { edits: { ...asset.edits, fit: "cover", placement: { x: 0, y: 0, width: 100, height: 100 }, zoom: 1, rotation: 0, offsetX: 0, offsetY: 0 } })}>Fill overlay</button>
-                    <label>Fit inside its placed frame
-                      <select value={asset.edits?.fit || "contain"} onChange={e => updateAsset(key(asset), { edits: { ...asset.edits, fit: e.target.value as "contain" | "cover" } })}>
-                        <option value="contain">Show full media · no cropping</option>
-                        <option value="cover">Fill frame · crop edges</option>
-                        {asset.edits?.fit === "fill" && <option value="fill">Existing stretched fit</option>}
-                      </select>
-                    </label>
-                  </section>
-                )}
-                <p>{mediaKind(asset) === "audio" ? "Audio playback" : asset.role === "background" && asset.inProject ? "Initial background" : "Shown by its dashboard control"}</p>
-                {(asset.type.includes("video") || asset.type.includes("audio")) && (
-                  <>
-                    <label>Repeat this media<input type="checkbox" checked={asset.edits?.loop ?? false} onChange={e => updateAsset(key(asset), { edits: { ...asset.edits, loop: e.target.checked } })} /></label>
-                    <label>Play sound<input type="checkbox" checked={asset.edits?.sound ?? ["audio", "video"].includes(mediaKind(asset))} onChange={e => updateAsset(key(asset), { edits: { ...asset.edits, sound: e.target.checked } })} /></label>
-                    <label>Volume<input type="range" min="0" max="100" value={asset.edits?.volume ?? 80} onChange={e => updateAsset(key(asset), { edits: { ...asset.edits, volume: +e.target.value } })} /></label>
-                  </>
-                )}
-                {asset.inProject && <button type="button" onClick={() => { updateAsset(key(asset), { inProject: false }); setSelection(null); }}>Remove from overlay</button>}
-              </>
-            )}
-            {tool && (tool.type === "question-card" || tool.type === "blank-card") && <QuestionCardEditor key={`card-editor:${tool.id}`} project={project} tool={tool} onSave={saveTool} />}
-            {tool?.type === 'countdown' && <CountdownDuration key={`timer-duration:${tool.id}`} seconds={Number(tool.config.seconds) || 10} onSave={seconds => onChange({ ...project, gameTools: (project.gameTools || []).map(item => item.id === tool.id ? { ...item, config: { ...item.config, seconds } } : item) })} />}
-            {tool && !["question-card", "blank-card", "youtube", "blank-board", "trivia-board"].includes(tool.type) && <GameToolEditor expanded showDuration={tool.type !== "countdown"} key={`tool-editor:${tool.id}`} project={project} tool={tool} assets={project.assets || []} ccssEntitled={ccssEntitled} onSave={saveTool} onRegisterAsset={newAsset => onChange({ ...project, assets: [...(project.assets || []), newAsset] })} />}
-            {tool && (
-              <>
-                <p>{tool.type === "youtube" ? "YouTube search is added to your host dashboard. Press Open YouTube search during the show to find and choose a video. The search panel stays private. Only the video appears on the overlay when you send it. No YouTube search box is added to the overlay. Choose Adjust video position below only when you want to set where a chosen video will play." : "This result waits for its dashboard control during play."}</p>
-                {tool.type === 'youtube' ? (
-                  <>
-                    <button type="button" onClick={() => { const search = controls.find(c => c.action === `tool.${tool.id}`); if (search) onOpenYoutube(); }}>Open private YouTube search</button>
-                    <button type="button" aria-pressed={positionYoutube} onClick={() => setPositionYoutube(value => !value)}>{positionYoutube ? 'Hide video position guide' : 'Adjust video position'}</button>
-                  </>
-                ) : (
-                  <button type="button" onClick={() => { onChange({ ...project, gameTools: (project.gameTools || []).map(t => t.id === tool.id ? { ...t, inOverlayBuild: false } : t) }); setSelection(null); }}>Remove from overlay</button>
-                )}
-              </>
-            )}
-            {tool?.type === 'blank-card' && <label>Text shown by this card button<textarea value={String(tool.config.text || '')} onChange={e => onChange({ ...project, gameTools: (project.gameTools || []).map(t => t.id === tool.id ? { ...t, config: { ...t.config, text: e.target.value } } : t) })} /></label>}
-            {control?.action.startsWith('coin.cycle.') && (
-              <section className="build-sequence-summary" aria-label="Coin button press cycle">
-                <h4>One button · one action per press</h4>
-                <ol><li>First press: show the coin, ready to flip.</li><li>Second press: flip the coin and reveal Heads or Tails.</li><li>Third press: remove the coin.</li></ol>
-                <p>The next press starts again. Each step waits for the host. Press it on the dashboard review to run it, exactly as live.</p>
-              </section>
-            )}
-            {control?.action === 'sequence' && (
-              <section className="build-sequence-summary" aria-label="Connected sequence steps">
-                <h4>Actions connected to this button</h4>
-                <p>{control.sequenceMode === 'per-press' ? 'Each press performs the next action below. After the last step, the next press returns to the first.' : 'One press runs these actions in order.'}</p>
-                <ol>{(control.chain || []).map(step => <li key={step.id}>{controls.find(item => item.id === step.refId)?.label || step.label}{step.timing.mode === 'delay' && Number(step.timing.seconds) > 0 ? ` · wait ${step.timing.seconds} seconds before this step` : ''}</li>)}</ol>
-                <p>Ask Jewel to change what this button runs — wiring is hers now.</p>
-              </section>
-            )}
-            {control && (
-              <>
-                <label>Button name on your dashboard<input value={control.label} onChange={e => updateControl(control.id, { label: e.target.value })} /></label>
-                <details className="build-advanced">
-                  <summary>Button colors and font</summary>
-                  <label>Button color<input type="color" value={control.appearance?.backgroundColor || '#15243a'} onChange={e => updateControl(control.id, { appearance: { ...control.appearance, backgroundColor: e.target.value } })} /></label>
-                  <label>Text color<input type="color" value={control.appearance?.color || '#ffffff'} onChange={e => updateControl(control.id, { appearance: { ...control.appearance, color: e.target.value } })} /></label>
-                  <FontPicker value={control.appearance?.fontFamily || 'Arial, sans-serif'} onChange={fontFamily => updateControl(control.id, { appearance: { ...control.appearance, fontFamily } })} />
-                </details>
-                <p>During the show, the host presses this saved button. Its wiring is Jewel’s job — ask her in the conversation above to change what it does.</p>
-                <button type="button" onClick={() => { onChange({ ...project, controls: controls.filter(c => c.id !== control.id) }); setSelection(null); }}>Remove from dashboard</button>
-              </>
-            )}
-          </section>
         )}
       </div>
     </section>

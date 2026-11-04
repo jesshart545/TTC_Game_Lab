@@ -116,34 +116,54 @@ export const PROMPT_BLOCK_MAX_RATIO = 0.32;
 /** The block budget the title fit has always used. */
 const TITLE_BLOCK_MAX_RATIO = 0.78;
 
+/** What a measure reports for a string at a given px size: its advance
+ *  width and its INK extents — how far the painted glyphs can reach
+ *  above and below the baseline, i.e. the font's full bounding
+ *  extents. Display and script fonts paint far outside their line
+ *  box (a script face's painted extent can span ~1.5em against a
+ *  1.16em line height, beyond even its tight glyph box), so a fit
+ *  budgeted on the line box alone lets the first line's ascenders
+ *  paint past the frame's edge: measured in a real browser at the
+ *  review canvas, a script sign's line box sat fully inside the
+ *  canvas while its ink crossed the top and was cropped by the
+ *  frame's overflow. The fit below budgets the ink. */
+export type BackdropTextMeasure = { width: number; inkAscent: number; inkDescent: number };
+
 /**
  * The auto-fit both backdrop text layers share. `measure` reports a
- * string's rendered width at a given px size (the component passes a
- * canvas measure; tests pass a fixed one). `lower: true` applies the
- * opening prompt's lower-third caps above; the sign's fit is unchanged.
- * Render-time only — saved specs are never rewritten.
+ * string's rendered width and ink extents at a given px size (the
+ * component passes a canvas measure; tests pass a fixed one).
+ * `lower: true` applies the opening prompt's lower-third caps above;
+ * the sign keeps its maximize-to-fill fit, now ink-budgeted like the
+ * prompt. Render-time only — saved specs are never rewritten.
  */
 export function fitBackdropTextSize(args: {
   text: string;
   width: number;
   height: number;
   lower?: boolean;
-  measure: (text: string, px: number) => number;
+  measure: (text: string, px: number) => BackdropTextMeasure;
 }): number {
   const { text, width, height, lower, measure } = args;
   const words = text.split(/\s+/).filter(Boolean);
   const blockRatio = lower ? PROMPT_BLOCK_MAX_RATIO : TITLE_BLOCK_MAX_RATIO;
+  // Font ink metrics scale linearly with px; sample them once.
+  const sampled = measure(text, 100);
+  const inkPerPx = Math.max(0, (sampled.inkAscent + sampled.inkDescent) / 100);
   const fits = (px: number) => {
     const maxWidth = width * 0.88;
     let lines = 1, line = "";
     for (const word of words) {
       const trial = line ? `${line} ${word}` : word;
-      if (measure(trial, px) > maxWidth && line) {
+      if (measure(trial, px).width > maxWidth && line) {
         lines += 1; line = word;
-        if (measure(word, px) > maxWidth) return false;
+        if (measure(word, px).width > maxWidth) return false;
       } else line = trial;
     }
-    return lines * px * 1.16 <= height * blockRatio;
+    // The block's painted height: every line after the first adds a
+    // line height; the ink itself spans inkPerPx per px of font size.
+    const inkBlock = (lines - 1) * px * 1.16 + inkPerPx * px;
+    return inkBlock <= height * blockRatio;
   };
   let low = 10, high = Math.max(12, Math.floor(height * 0.85)), best = low;
   if (lower) high = Math.min(high, Math.max(low, Math.floor(height * PROMPT_LINE_MAX_RATIO)));

@@ -24,6 +24,27 @@ export function cleanQuizChoice(raw:Record<string,unknown>):{options:string[];co
 }
 export function bounded(value:unknown,fallback:number,min:number,max:number){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback;}
 export function cardDesign(tool:GameTool,answer=false){return record(tool.config[answer?'answerCard':'questionCard']);}
+/** Card tools (question-card, blank-card) render through FittedCard,
+ *  which positions the card from its DESIGN geometry —
+ *  config.questionCard / config.answerCard {x, y, width, height} —
+ *  never from config.placement or a control's overlayResult. These
+ *  defaults are FittedCard's own (bounded fallbacks there and in the
+ *  card editor), so a card with no saved design sits exactly here. */
+export const CARD_DESIGN_DEFAULT_PLACEMENT={x:17.5,y:30,width:65,height:25};
+export function cardDesignPlacement(tool:GameTool){const cfg=cardDesign(tool);return {
+ x:bounded(cfg.x,CARD_DESIGN_DEFAULT_PLACEMENT.x,0,100),
+ y:bounded(cfg.y,CARD_DESIGN_DEFAULT_PLACEMENT.y,0,100),
+ width:bounded(cfg.width,CARD_DESIGN_DEFAULT_PLACEMENT.width,1,100),
+ height:bounded(cfg.height,CARD_DESIGN_DEFAULT_PLACEMENT.height,1,100)};}
+/** Move a card tool by writing the placement into BOTH card designs —
+ *  the geometry FittedCard actually reads — the same write the card
+ *  editor's own drag performs (design x/y/width/height, edge margins
+ *  zeroed so the placement lands exactly). Every other design field
+ *  (colors, font, shape, text fitting) is preserved untouched. */
+export function withCardDesignPlacement(tool:GameTool,placement:{x:number;y:number;width:number;height:number}):GameTool{
+ const place=(design:Record<string,unknown>)=>({...design,...placement,marginTop:0,marginBottom:0,marginLeft:0,marginRight:0});
+ return {...tool,config:{...tool.config,questionCard:place(cardDesign(tool)),answerCard:place(cardDesign(tool,true))}};}
+export function isCardTool(tool:GameTool|undefined):boolean{return tool?.type==='question-card'||tool?.type==='blank-card';}
 export function questionPool(project:Project,tool:GameTool):CardQuestion[]{
  const pool=project.gameTools.find(t=>t.id===tool.config.poolId&&t.enabled&&t.type==='trivia-list');
  const raw=Array.isArray(pool?.config.questions)?pool.config.questions:[];

@@ -2,11 +2,11 @@
    The stage page for gameshow and talk is only: Jewel's doorway and
    conversation at the top, then ONE review spot immediately past
    her where the overlay review and the dashboard review trade
-   places on a toggle, with the inspector for whatever the creator
-   selects inside that same spot. Self-sufficient sheet, imported by
-   the component itself (the JewelWandScene pattern), so the surface
-   carries its own presentation. Colors follow the redesign's
-   purple/gold. */
+   places on a toggle. No inspector or editor panels anywhere on
+   the page — editing goes through Jewel's conversation. Self-
+   sufficient sheet, imported by the component itself (the
+   JewelWandScene pattern), so the surface carries its own
+   presentation. Colors follow the redesign's purple/gold. */
 
 /* The root layout's global Ask Jewel launcher is a second Jewel
    door floating at the bottom of every page. On this page Jewel's
@@ -168,9 +168,8 @@ body[data-stage-review="true"] .ttc-support-root {
   line-height: 1;
 }
 
-/* Dashboard review buttons: the published button, a drag grip by
-   press-and-move, and a small ✎ that selects it for editing without
-   firing it. */
+/* Dashboard review buttons: the published button, with a drag grip
+   by press-and-move (a press that stays put fires it, as live). */
 .sr-buttons {
   align-items: stretch;
 }
@@ -193,28 +192,5 @@ body[data-stage-review="true"] .ttc-support-root {
   outline: 2px dashed #e9c979;
   outline-offset: 3px;
   border-radius: 10px;
-}
-
-.sr-editbtn {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid rgba(233, 201, 121, .7);
-  background: rgba(10, 8, 20, .75);
-  color: #e9c979;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  z-index: 2;
-}
-
-.sr-inspector {
-  border: 1px solid #2b2444;
-  border-radius: 14px;
-  padding: 14px 16px;
-  background: rgba(23, 19, 31, .6);
 }
 
