@@ -108,6 +108,7 @@ function routeRequire(id) {
   if (id.endsWith('lib/auth/server')) return { requireCreator: async () => currentUser, isAdmin: u => !!u && u.role === 'admin' };
   if (id.endsWith('lib/project-protection')) return { ensureProtectionSchema: async () => {}, trashProject: async () => true };
   if (id.endsWith('lib/city-crime-scene')) return { readCityCrimeSceneConfig: c => c, sanitizeCityCrimeSceneForOverlay: c => c, canUseCityCrimeScene: () => false, stripCityCrimeSceneTools: d => d };
+  if (id.endsWith('lib/quiz')) return load('lib/quiz.ts');
   if (id.endsWith('lib/creator-identity')) return { creatorEmailForViewer };
   return require(id);
 }
