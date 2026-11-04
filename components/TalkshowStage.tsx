@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { BackdropTextSpec, Project, ProjectAsset } from "../lib/project";
 import type { WorkflowEvaluation } from "../lib/workflow-progress";
 import { assetBackdropText, assetPromptText, backgroundAssets, promptAsset } from "../lib/backdrop-text";
@@ -22,16 +23,29 @@ import "./talkshow-workshop.css";
  * The Talk Show or Classroom visual stage (Jessica, 2026-11-04): the
  * sequence lives in the conversation with Jewel — she checks topics off
  * and directs — so the page carries NO path, no area panels, no ask
- * strips, no skip buttons. What stands here is storage and demonstration
- * for the ONE topic Jewel is working on (the workflow model's current
- * talk step): the creator's own saved work for that topic when it exists
+ * strips, no skip buttons. The movement into Jewel lives inside the
+ * topic she is on: in the background area the flat/animated examples
+ * come first, and Jewel's conversation panel stands open directly
+ * after them — the eye flows examples → step into Jewel → the
+ * backdrops shelf where the work is stored. The same placement holds
+ * in every later topic: her panel renders inside the current topic's
+ * section, after that topic's examples. What stands around the panel
+ * is storage and demonstration for the ONE topic Jewel is working on
+ * (the workflow model's current talk step): the creator's own saved
+ * work for that topic when it exists
  * (their real background with its title lettering, their prompt rendered
  * on it, their questions, their filed media, their deck), and the honest
  * examples only while nothing is made yet. The only controls are the
- * genuine manual doors for the current topic — the backdrops shelf and
- * the upload-your-own-sign door on background, upload on media, the card
- * designer on quiz/follow-ups. Jewel's avatar appears exactly once, in
- * the liberty banner, as the continuity reminder.
+ * genuine manual doors for the current topic — the backdrops shelf on
+ * background, upload on media, the card designer on quiz/follow-ups.
+ * There is deliberately no upload-your-own-sign button here — no
+ * sign-specific upload path exists anywhere: the sign and the
+ * background always go together, uploads live in the media upload
+ * area, and Jewel builds the combined piece, working with media the
+ * creator already uploaded like any other asset. Jewel's avatar
+ * stands in the liberty banner as the continuity reminder, and again
+ * at full presence where the creator steps into her conversation in
+ * the background area.
  */
 
 const TALK_TOPICS = ["background", "prompt", "research", "quiz", "media", "missed"] as const;
@@ -41,13 +55,14 @@ type StageProps = {
   project: Project;
   doors: TalkshowDoors;
   onSaveProject: (project: Project) => void;
+  jewelPanel?: ReactNode;
 };
 
 const assetKey = (asset: ProjectAsset) => asset.storageKey || asset.name;
 
 /* ---------------- Background — the combined background + sign piece ---------------- */
 
-function BackgroundStage({ project, doors }: StageProps) {
+function BackgroundStage({ project, doors, jewelPanel }: StageProps) {
   const backgrounds = backgroundAssets(project);
   const animated = backgrounds.find(asset => isVideo(asset)) || null;
   const flat = backgrounds.find(asset => !isVideo(asset)) || null;
@@ -75,11 +90,16 @@ function BackgroundStage({ project, doors }: StageProps) {
           <div className="gsw-stage-visual" style={{ minHeight: 190, position: "relative" }}>
             <AnimatedExampleMedia project={project} />
             <div style={{ position: "absolute", left: 12, bottom: 10 }}>
-              <span className="gsw-vchip gold">{animated ? `Your animated backdrop · ${animated.name}` : "Example · an animated visual, playing"}</span>
+              <span className="gsw-vchip gold">{animated ? `Your animated backdrop · ${animated.name}` : "Example · an animated talk-show backdrop, playing"}</span>
             </div>
           </div>
         </div>
       </div>
+
+      <div style={{ marginTop: 20, marginBottom: 12 }}>
+        <JewelAvatar size={104} wandSize={46} />
+      </div>
+      {jewelPanel}
 
       {hero && (
         <>
@@ -116,20 +136,13 @@ function BackgroundStage({ project, doors }: StageProps) {
         <p className="gsw-hint">Nothing here yet — the background you design with Jewel is stored on this shelf.</p>
       )}
 
-      <div className="gsw-card" style={{ marginTop: 14 }}>
-        <h4>Have your own sign?</h4>
-        <p>Upload a sign you made yourself and it becomes your background piece — exactly as it is, nothing redrawn.</p>
-        <div className="gsw-chipsrow">
-          <button type="button" className="gsw-demobtn" onClick={doors.uploadSign}>Upload your own sign</button>
-        </div>
-      </div>
     </div>
   );
 }
 
 /* ---------------- Opening prompt ---------------- */
 
-function PromptStage({ project }: StageProps) {
+function PromptStage({ project, jewelPanel }: StageProps) {
   const backgrounds = backgroundAssets(project);
   const target = backgrounds.find(asset => asset.inProject) || backgrounds[0] || null;
   const current = target ? assetPromptText(target) : null;
@@ -154,6 +167,7 @@ function PromptStage({ project }: StageProps) {
           </div>
         </div>
         <p className="gsw-hint" style={{ marginTop: 10 }}>Stored on your background as its own layer — Jewel can reword it, re-letter it, or move it between bubble, frame, and plain whenever you ask her.</p>
+        {jewelPanel}
       </div>
     );
   }
@@ -184,13 +198,14 @@ function PromptStage({ project }: StageProps) {
         </div>
       </div>
       <p className="gsw-hint" style={{ marginTop: 10 }}>Examples for now — the prompt you settle on with Jewel is stored here, lettered on your own background.</p>
+      {jewelPanel}
     </div>
   );
 }
 
 /* ---------------- Research ---------------- */
 
-function ResearchStage({ project }: StageProps) {
+function ResearchStage({ project, jewelPanel }: StageProps) {
   const theme = (project.gamePlan?.theme || "").trim();
   const promptSpec = assetPromptText(promptAsset(project));
   const researched = project.workflowProgress?.researched === true;
@@ -216,6 +231,7 @@ function ResearchStage({ project }: StageProps) {
         ))}
       </div>
       <p className="gsw-demostatus" style={{ marginTop: 10 }}>{SAMPLE_RESEARCH.note}</p>
+      {jewelPanel}
       <p className="gsw-demostatus" style={{ marginTop: 10 }}>
         {researched ? "✓ Jewel has researched in this project — the data points and sources are in your conversation with her." : "No research yet — the first lookup you ask Jewel for in your conversation checks this topic off."}
       </p>
@@ -225,7 +241,7 @@ function ResearchStage({ project }: StageProps) {
 
 /* ---------------- Quiz or follow-up questions ---------------- */
 
-function QuizStage({ project, doors }: StageProps) {
+function QuizStage({ project, doors, jewelPanel }: StageProps) {
   const quizTool = (project.gameTools || []).find(tool => tool.enabled && tool.type === "trivia-list" && quizQuestionsOf(tool).length > 0);
   const saved = quizTool ? quizQuestionsOf(quizTool) : [];
   const questions = saved.length
@@ -259,6 +275,7 @@ function QuizStage({ project, doors }: StageProps) {
           </div>
         </>
       )}
+      {jewelPanel}
       <div className="gsw-card" style={{ marginTop: 14 }}>
         <h4>Follow-ups, on cards you design</h4>
         <p>No right-or-wrong answers — questions that keep the conversation going after your prompt. The cards are your design: your own background, text color, font and all. Design them yourself here; the questions themselves you settle with Jewel.</p>
@@ -272,7 +289,7 @@ function QuizStage({ project, doors }: StageProps) {
 
 /* ---------------- Media ---------------- */
 
-function MediaStage({ project, doors }: StageProps) {
+function MediaStage({ project, doors, jewelPanel }: StageProps) {
   const youtube = (project.gameTools || []).find(t => t.enabled && t.type === "youtube");
   const backdrop = demoBackdrop(project);
   const media = (project.assets || []).filter(asset => asset.role !== "background");
@@ -319,6 +336,7 @@ function MediaStage({ project, doors }: StageProps) {
         </>
       )}
       {youtube && media.length > 0 && <p className="gsw-demostatus" style={{ marginTop: 10 }}>✓ YouTube is on your dashboard — during the show you search privately and send the video to your backdrop.</p>}
+      {jewelPanel}
       <div className="gsw-card" style={{ marginTop: 14 }}>
         <h4>Upload your media</h4>
         <p>Your own clips, images, and sounds file here — ready for your show.</p>
@@ -330,7 +348,7 @@ function MediaStage({ project, doors }: StageProps) {
 
 /* ---------------- Anything we missed? ---------------- */
 
-function MissedStage({ project, onSaveProject }: StageProps) {
+function MissedStage({ project, onSaveProject, jewelPanel }: StageProps) {
   const tools = (project.gameTools || []).filter(tool => TALK_TOOL_TYPES.includes(tool.type));
   const toolStatus = (tool: (typeof tools)[number]) => tool.type === "trivia-list"
     ? `${quizQuestionsOf(tool).length} quiz questions`
@@ -341,6 +359,7 @@ function MissedStage({ project, onSaveProject }: StageProps) {
     <div>
       <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>Anything we missed?</div>
       <p className="gsw-hint" style={{ marginBottom: 14 }}>Any other idea for your show — tell Jewel in your conversation, and she’ll try to handle it. What you’ve made together is stored here.</p>
+      {jewelPanel}
       <div className="gsw-seclabel">Your tools</div>
       {tools.length ? (
         <div className="gsw-shelf">
@@ -363,14 +382,14 @@ function MissedStage({ project, onSaveProject }: StageProps) {
 
 /* ---------------- The stage itself ---------------- */
 
-export default function TalkshowStage({ project, workflow, doors, onSaveProject }: StageProps & { workflow: WorkflowEvaluation }) {
+export default function TalkshowStage({ project, workflow, doors, onSaveProject, jewelPanel }: StageProps & { workflow: WorkflowEvaluation }) {
   const steps = workflow.stages[0]?.steps || [];
   // Jewel's current topic: the model's first unfinished talk topic. Theme
   // is a creation-seeded fact, never a topic on this page — while it is
   // the only thing open, Jewel still begins at the background.
   const open = steps.find(step => !step.complete && (TALK_TOPICS as readonly string[]).includes(step.id));
   const topic: TalkTopic = (open?.id as TalkTopic) || "missed";
-  const stageProps: StageProps = { project, doors, onSaveProject };
+  const stageProps: StageProps = { project, doors, onSaveProject, jewelPanel };
   return (
     <section className="gsw" aria-label="Imagine and Create — your show, as Jewel builds it with you">
       <div className="gsw-liberty">

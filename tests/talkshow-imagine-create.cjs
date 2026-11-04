@@ -8,10 +8,14 @@ const load = require('./load.cjs');
 // same work, always), opening prompt, then the optional research / quiz /
 // media / anything-missed topics — she checks topics off from the
 // workflow model's facts and records a skip when the creator declines an
-// optional topic. The page (components/TalkshowStage.tsx) is ONE visual
-// stage beside her panel: storage and demonstration for the topic she is
-// on — the creator's real saved work when it exists, the honest examples
-// until then — with only the genuine manual doors for that topic. The
+// optional topic. On the page, the movement into Jewel lives inside
+// the topic she is on: the background area shows its flat/animated
+// examples first, and Jewel's conversation panel stands open directly
+// after them — examples → step into Jewel → the shelf where the work
+// is stored (components/TalkshowStage.tsx) — storage and demonstration
+// for the topic she is on: the creator's real saved work when it
+// exists, the honest examples until then — with only the genuine
+// manual doors for that topic. The
 // backdrop text layer (lib/backdrop-text.ts) is a validated DOM text
 // spec, never lettering burned into artwork.
 
@@ -89,14 +93,73 @@ const quizTool = (overrides = {}) => ({
   assert(stage.includes('!step.complete') && stage.includes('workflow.stages[0]'), 'the stage reads the current topic from the workflow model');
   assert(stage.includes('First let’s decide on a background (flat/animated)'), 'the background topic opens with Jessica\'s own line');
   assert(stage.includes('AnimatedExampleMedia') && stage.includes('ExampleStageMedia'), 'flat and animated examples stand side by side');
-  assert(stage.includes('/redesign/jewel-wave.mp4') === false && fs.readFileSync('components/TalkshowSteps.tsx', 'utf8').includes('/redesign/jewel-wave.mp4'),
-    'the animated example is the real playing visual, reused from the step library');
+  // The animated example legitimately demonstrates an animated backdrop
+  // (Jessica, 2026-11-04): a real talk-show set loop — skyline lights,
+  // glowing set, drifting light, NO characters. The Jewel-wave character
+  // clip is her portrait (it belongs to her avatar), never a backdrop
+  // example, and no longer appears anywhere in the talk stage or steps.
+  const stepsSrc = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
+  assert(!stage.includes('jewel-wave') && !stepsSrc.includes('jewel-wave'), 'the character clip is gone from the talk stage and the step library');
+  assert(stepsSrc.includes('/redesign/talk-animated-backdrop.mp4'), 'the animated example is the real animated talk-show backdrop loop');
+  assert(fs.existsSync('public/redesign/talk-animated-backdrop.mp4'), 'the animated backdrop asset is filed under public/redesign/');
+  assert(stage.includes('Example · an animated talk-show backdrop, playing'), 'the animated card is labelled honestly — an animated talk-show backdrop');
   // Only the genuine manual doors for the current topic are controls.
-  assert(stage.includes('doors.uploadSign'), 'background keeps the upload-your-own-sign door');
+  // The upload-your-own-sign concept is gone ENTIRELY (Jessica,
+  // 2026-11-04): there is an area already in place to upload media, so
+  // no sign-specific upload path exists anywhere — no block on the
+  // stage, no button in the legacy steps, no door in the page's doors
+  // object, no intent plumbing in the page's upload handler, and no
+  // sign-upload line in Jewel's guidance. Uploads live in the media
+  // upload area and the creator's library; Jewel builds the combined
+  // background+sign piece, working with already-uploaded media like
+  // any other asset.
+  assert(!stage.includes('doors.uploadSign'), 'no upload-your-own-sign door on the stage');
+  assert(!stage.includes('Upload your own sign') && !stage.includes('Have your own sign?'), 'the standalone sign-upload block is gone from the background topic');
+  assert(!stepsSrc.includes('Upload your own sign') && !stepsSrc.includes('Have your own sign?'), 'the legacy steps carry no sign-upload button either');
+  assert(!page.includes('signUploadIntent') && !page.includes('uploadSign'), 'the dead sign-upload plumbing is out of the page entirely');
+  assert(!fs.readFileSync('lib/talkshow-path.ts', 'utf8').includes('Your own uploaded sign'), 'the legacy change lists offer no sign-upload path');
   assert(stage.includes('doors.applyBackground'), 'background keeps the backdrops shelf');
   assert(stage.includes('doors.uploadMedia'), 'media keeps the upload door');
   assert(stage.includes('doors.openCardEditor') && stage.includes('doors.createQuizCards'), 'quiz/follow-ups keep the card designer door');
   assert(!stage.includes('doors.addYoutube'), 'YouTube is added by Jewel in conversation — no duplicate door on the stage');
+  // The movement into Jewel lives inside the topic (Jessica, 2026-11-04):
+  // in the background area the flat/animated examples come first, and
+  // Jewel's conversation panel stands open directly after them — the
+  // eye flows examples → step into Jewel → the backdrops shelf where
+  // the work is stored. The panel is NOT parked under the banner or
+  // below all the content, and no "Open Jewel" button was added: the
+  // panel itself, open and in place after the examples, is the movement.
+  const bgAt = stage.indexOf('First let’s decide on a background');
+  const bgPanelAt = stage.indexOf('{jewelPanel}', bgAt);
+  assert(bgAt > -1 && bgPanelAt > bgAt, 'the conversation panel renders inside the background topic');
+  assert(stage.indexOf('AnimatedExampleMedia', bgAt) < bgPanelAt, 'background: the flat/animated examples come before the conversation');
+  assert(bgPanelAt < stage.indexOf('Your backdrops', bgAt), 'background: examples → conversation → the backdrops shelf');
+  const bannerAt = stage.indexOf('{TALK_CREATIVITY_BANNER}');
+  assert(!stage.slice(bannerAt, stage.indexOf('topic === "background"')).includes('{jewelPanel}'),
+    'the conversation is not parked between the banner and the topics — it lives inside the current topic');
+  assert((stage.match(/\{jewelPanel\}/g) || []).length >= 6, 'her panel stands inside every topic section, after that topic\'s examples');
+  assert(page.includes('jewelPanel={jewelPanelElement}'), 'the page hands its one Jewel panel to the talk stage');
+  assert(page.includes('talkCreateView ? null : jewelPanelElement'), 'in the talk create view the grid does not render the panel a second time');
+  assert.equal((page.match(/<WorkshopAiPanel/g) || []).length, 1, 'the panel element is built exactly once and placed, never duplicated');
+  const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
+  assert(panel.includes('hidden={workflowStep===1&&!buildAiOpen}'), 'the panel can only be hidden in Set the Stage — in Imagine and Create it stands open by default');
+  // And her presence there is FULL, not a token (Jessica, 2026-11-04):
+  // the whole conversation panel — her heading, her greeting and
+  // messages, the composer — at the full width of the content column.
+  // Never a text link, a side tab, a small chip, or a collapsed strip
+  // hiding the way in.
+  assert(panel.includes('<CompactConversation') && panel.includes('AI CREATIVE DIRECTOR'),
+    'what stands in the topic is Jewel\'s full conversation panel — heading, her messages, the composer — not a launcher');
+  assert(!stage.includes('Ask Jewel') && !stage.includes('<details'), 'no side tab, text link, or collapsed strip stands in for her presence in the topic');
+  // And Jewel herself is THERE at that entry (Jessica, 2026-11-04: "the
+  // Jewel magic wand doesn't appear anywhere" — the banner badge alone
+  // read as absent). In the background area, right where her
+  // conversation begins, her avatar stands large with the wand
+  // rendered at full size — an actual magic wand, not tiny sparkles.
+  const entryAt = stage.indexOf('wandSize', bgAt);
+  assert(entryAt > bgAt && entryAt < bgPanelAt, 'her entry presence stands in the background area, immediately before the conversation');
+  const avatarSrc = fs.readFileSync('components/JewelAvatar.tsx', 'utf8');
+  assert(avatarSrc.includes('wandSize') && avatarSrc.includes('fontSize: wandSize'), 'the avatar renders its wand at a chosen full size on the entry placement');
   console.log('PASS: page shape — one topic-keyed visual stage; no path row, panels, ask strips, change lists, or skip buttons on the page.');
 }
 
@@ -382,6 +445,9 @@ const quizTool = (overrides = {}) => ({
   assert(route.includes('ONE combined piece of work, always'), 'sign + background are one job');
   assert(route.includes('There is no separate sign step'), 'she is told there is no sign step');
   assert(!route.includes('gently suggest adding the title sign'), 'the old follow-on sign suggestion is gone');
+  assert(route.includes('There is no sign upload anywhere') && route.includes('media upload area'),
+    'no sign-specific upload path in her guidance either — uploads live in the media upload area and the library, and she works with already-uploaded media like any other asset');
+  assert(!route.includes('uploads their own sign') && !route.includes('hand you a sign'), 'the old sign-upload wording is gone from the addendum');
   assert(route.includes('textOverlay'), 'she is taught the text-layer mechanism for the lettering');
   assert(route.includes('never ask the image or video generator to render the title'), 'generated lettering is forbidden — the text layer does the lettering');
   assert(route.includes('promptOverlay'), 'she is taught the opening prompt layer mechanism');
@@ -410,7 +476,7 @@ const quizTool = (overrides = {}) => ({
   console.log('PASS: deck — ordered talkDeck record on the project, hand-arranged only, no dashboard controls built.');
 }
 
-// --- Banner + avatar exactly once; the stage never generates on its own ------
+// --- Banner once; avatar in the banner + at the entry; no self-generation ----
 {
   assert.equal(TALK_CREATIVITY_BANNER, 'These are examples, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.');
   const files = ['components/TalkshowStage.tsx', 'components/TalkshowSteps.tsx', 'components/TalkshowWorkshop.tsx', 'lib/talkshow-path.ts'];
@@ -418,10 +484,12 @@ const quizTool = (overrides = {}) => ({
   assert.equal(occurrences, 1, 'the banner wording lives in exactly one place across the talk files');
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(stage.includes('{TALK_CREATIVITY_BANNER}'), 'the stage renders the banner once, above the topic visual');
-  // Jewel's avatar and wand: exactly ONE instance on the talk page
-  // (Jessica, 2026-11-04) — with her conversation presence, as the
-  // continuity reminder; never stamped on every control.
-  assert.equal((stage.match(/<JewelAvatar/g) || []).length, 1, 'her avatar appears exactly once on the talk page — in the stage\'s liberty banner');
+  // Jewel's avatar and wand stand twice on the talk page (Jessica,
+  // 2026-11-04): the liberty banner's continuity instance, and — the
+  // required one — at full presence where the creator steps into her
+  // conversation in the background area, her wand at full size.
+  // Never stamped on every control.
+  assert.equal((stage.match(/<JewelAvatar/g) || []).length, 2, 'her avatar stands in the banner and at the entry into Jewel in the background area');
   assert(!fs.readFileSync('components/TalkshowSteps.tsx', 'utf8').includes('JewelAvatar'), 'the avatar is not repeated across the step library');
   const avatar = fs.readFileSync('components/JewelAvatar.tsx', 'utf8');
   assert(avatar.includes('/redesign/jewel-wave.mp4'), 'the avatar is her real waving portrait, the Tips-card artwork');
@@ -434,7 +502,7 @@ const quizTool = (overrides = {}) => ({
     assert(!src.includes('localStorage'), `${file}: no side-channel persistence`);
   }
   assert(backgroundAssets(baseProject({ assets: [bgAsset(), { name: 'x.png', type: 'Image', role: 'layer' }] })).length === 1, 'backgroundAssets counts background-role assets only');
-  console.log('PASS: banner + avatar exactly once; the stage components never fetch, generate, or persist behind Jewel’s back.');
+  console.log('PASS: banner once; avatar in the banner and at full presence at the entry into Jewel; the stage components never fetch, generate, or persist behind Jewel’s back.');
 }
 
 // --- Presentation: pictured demonstrations, never a wall of words ------------
