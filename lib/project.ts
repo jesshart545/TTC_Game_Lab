@@ -39,8 +39,8 @@ export type ProjectAssetGeneration = { type: string; prompt: string; aspectRatio
  * lib/backdrop-text.ts): the lettering is a DOM layer in the font the
  * creator chose — never burned into the image by a generator.
  */
-export type BackdropTextSpec = { text: string; fontFamily: string; textColor: string; accentColor?: string };
-export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio"; generation?: ProjectAssetGeneration; textOverlay?: BackdropTextSpec | null; sign?: boolean };
+export type BackdropTextSpec = { text: string; fontFamily: string; textColor: string; accentColor?: string; presentation?: "plain" | "bubble" | "frame" };
+export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio"; generation?: ProjectAssetGeneration; textOverlay?: BackdropTextSpec | null; promptOverlay?: BackdropTextSpec | null; sign?: boolean };
 export type AssetPool = { id: string; name: string; assetKeys: string[] };
 export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
 export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
@@ -62,6 +62,10 @@ export type WorkflowProgressRecord = {
   rehearsed?: boolean;
   /** Talk Show or Classroom: Jewel has run a web search in this project. */
   researched?: boolean;
+  /** Talk Show or Classroom: the optional areas (research, quiz, media,
+   * anything-missed) the creator chose to skip. A skip counts as complete
+   * (Jessica, 2026-11-04) — and never locks the area against later edits. */
+  skipped?: string[];
   issuedChecks?: string[];
 };
 /**

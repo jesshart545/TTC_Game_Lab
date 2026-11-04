@@ -36,13 +36,41 @@ export function cleanBackdropText(value: unknown): BackdropTextSpec | null {
   if (!textColor) return null;
   const accentColor = raw.accentColor === undefined ? undefined : cleanHexColor(raw.accentColor);
   if (raw.accentColor !== undefined && !accentColor) return null;
-  return { text, fontFamily: resolveFont(raw.fontFamily), textColor, ...(accentColor ? { accentColor } : {}) };
+  const presentation = raw.presentation === undefined ? undefined : raw.presentation;
+  if (presentation !== undefined && presentation !== "plain" && presentation !== "bubble" && presentation !== "frame") return null;
+  return { text, fontFamily: resolveFont(raw.fontFamily), textColor, ...(accentColor ? { accentColor } : {}), ...(presentation ? { presentation } : {}) };
 }
 
 /** The valid text layer on an asset, or null when it has none. */
 export function assetBackdropText(asset: ProjectAsset | null | undefined): BackdropTextSpec | null {
   if (!asset) return null;
   return cleanBackdropText(asset.textOverlay);
+}
+
+/**
+ * The valid OPENING PROMPT layer on an asset, or null: the talk show's
+ * talking-point text, drawn over the background in the creator's chosen
+ * font, color, and presentation (thought bubble, frame, or plain). It is
+ * the same real-text-layer machinery as the sign lettering, kept in its
+ * own field so a background can carry both its sign and its prompt.
+ */
+export function assetPromptText(asset: ProjectAsset | null | undefined): BackdropTextSpec | null {
+  if (!asset) return null;
+  return cleanBackdropText(asset.promptOverlay);
+}
+
+/** The background asset that carries the show's opening prompt, if any:
+ * the overlay background first, then backgrounds in saved order. */
+export function promptAsset(project: Project): ProjectAsset | null {
+  const backgrounds = backgroundAssets(project);
+  return backgrounds.find(asset => asset.inProject && assetPromptText(asset))
+    || backgrounds.find(asset => assetPromptText(asset))
+    || null;
+}
+
+/** Opening-prompt evaluator fact: a background carries a valid prompt layer. */
+export function promptPresent(project: Project): boolean {
+  return Boolean(promptAsset(project));
 }
 
 /** Background-role assets (the ones the overlay background slot can show). */
