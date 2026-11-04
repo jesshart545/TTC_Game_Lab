@@ -1,30 +1,59 @@
 /* Talk Show or Classroom workshop — only what the shared gameshow-workshop
-   classes don't already cover: the empty-stage fill, the YouTube moment
-   frame, and the slide deck rows. Everything else reuses .gsw-*. */
+   classes don't already cover: the sign step's two in-face fields (name &
+   theme, edited on the step itself, Gameshow-plan style), the YouTube
+   moment's play medallion centered on the stage, and the slide deck's
+   pictured strip. Everything else reuses .gsw-*. */
 
-.tsw-stagefill {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(120% 90% at 20% 0%, rgba(179, 18, 63, .4), transparent 55%),
-    radial-gradient(100% 80% at 85% 100%, rgba(32, 232, 255, .28), transparent 55%),
-    linear-gradient(160deg, #241a3f, #120d20 70%);
+.tsw-fields {
+  display: grid;
+  gap: 12px;
 }
 
-.tsw-ytframe {
-  position: relative;
-  border-radius: 18px;
-  border: 1px solid #2b2444;
-  background: #0b0913;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
-  padding: 34px 26px 26px;
-  text-align: center;
+.tsw-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #948bb3;
+}
+
+.tsw-fields input,
+.tsw-fields textarea {
+  background: #12101c;
+  border: 1px solid #3a2f63;
+  border-radius: 10px;
+  color: #f0edf7;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  padding: 10px 12px;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.tsw-fields input:focus,
+.tsw-fields textarea:focus {
+  border-color: #e9c979;
+  outline: none;
+}
+
+/* YouTube moment: the play medallion, centered over the stage visual. */
+.tsw-ytcenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tsw-ytplay {
   width: 74px;
   height: 52px;
-  margin: 0 auto 14px;
   border-radius: 14px;
   background: #b3123f;
   color: #fff;
@@ -35,53 +64,108 @@
   box-shadow: 0 0 26px rgba(179, 18, 63, .55);
 }
 
-.tsw-ytframe p {
-  color: #d9d3ec;
-  font-size: 14.5px;
-  line-height: 1.6;
-  max-width: 560px;
-  margin: 0 auto;
-}
-
-.tsw-deck {
-  display: grid;
-  gap: 8px;
-}
-
-.tsw-deckrow {
+/* The slide deck: pictured tiles in show order, never text rows. */
+.tsw-deckstrip {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.tsw-slide {
+  flex: 0 0 168px;
   border-radius: 14px;
   border: 1px solid #2b2444;
   background: #17131f;
+  padding: 8px;
 }
 
-.tsw-deckn {
-  width: 26px;
-  height: 26px;
-  flex: none;
+.tsw-slidevis {
+  position: relative;
+  height: 96px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #12101c;
+}
+
+.tsw-slidevis img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tsw-slidevis .workshop-asset-preview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #e9c979;
+}
+
+.tsw-slidevis .workshop-asset-preview img,
+.tsw-slidevis .workshop-asset-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tsw-slideface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 800;
+  color: #e9c979;
+  background: linear-gradient(150deg, #251739, #154c69 130%);
+}
+
+.tsw-sliden {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: #512b75;
   color: #fff;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 12.5px;
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
 }
 
-.tsw-decklabel {
-  flex: 1;
+.tsw-slidelabel {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   color: #efeaff;
+  line-height: 1.3;
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tsw-slidekind {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #948bb3;
+  margin-top: 2px;
 }
 
 .tsw-deckbtns {
   display: flex;
   gap: 6px;
+  margin-top: 8px;
 }
 
 .tsw-deckbtns button {

@@ -17,6 +17,7 @@ const { applyDraftChanges } = load('lib/draft-edit.ts');
 const { applyBuildChanges, creatableTools } = load('lib/build-edits.ts');
 const talkPath = load('lib/talkshow-path.ts');
 const { TALK_STEPS, TALK_STEP_ORDER, TALK_CREATIVITY_BANNER } = talkPath;
+const { SIGN_CHANGES, BACKDROP_CHANGES, QUIZ_CHANGES, RESEARCH_CHANGES, YOUTUBE_CHANGES, SLIDES_CHANGES, DEMO_FONTS } = talkPath;
 const { fontCatalog } = load('lib/fonts.ts');
 
 const eq = (actual, expected, msg) => assert.equal(JSON.stringify(actual), JSON.stringify(expected), msg);
@@ -56,6 +57,71 @@ const quizTool = (overrides = {}) => ({
   assert(page.includes('project.kind === "talk"') && page.includes('<TalkshowWorkshop'), 'the page renders the Talkshow Workshop for talk projects');
   assert(page.includes('project.kind === "gameshow"') && page.includes('<GameshowWorkshop'), 'the Gameshow Workshop still renders for gameshow projects');
   console.log('PASS: kind gating — talk projects get the seven talk steps; gameshow and generic paths are unchanged.');
+}
+
+// --- Presentation grammar: the finished Gameshow pages are the guide --------
+// The rework (Jessica, after seeing PR #135 live): every kind's steps are
+// presented the way the Gameshow steps are — Gameshow-shaped step meta
+// (kicker / one-subject intro / short done-when / short Jewel note),
+// quoted example-ask chips, the SHARED ChangeList component rendering
+// ChangeItem rows, pictured shelves, and brevity enforced as data.
+{
+  TALK_STEP_ORDER.forEach((id, i) => {
+    const meta = TALK_STEPS[id];
+    assert.equal(meta.kicker, `Step ${i + 1} of 7`, `${id}: the kicker counts the steps, Gameshow-style`);
+    assert(typeof meta.intro === 'string' && meta.intro.length > 0, `${id}: an intro line`);
+    if (id !== 'toolbox') assert(meta.intro.startsWith('One subject here:'), `${id}: the intro names its one subject, like every Gameshow step`);
+    assert(typeof meta.doneWhen === 'string' && meta.doneWhen.length <= 160, `${id}: the done-when line stays a short line, not a paragraph`);
+    assert(typeof meta.jewelNote === 'string' && meta.jewelNote.length <= 220, `${id}: Jewel's strip message stays short`);
+    for (const ask of meta.asks) assert(ask.chip.startsWith('“'), `${id}: example asks read as quoted examples, Gameshow-style`);
+  });
+  // Change lists are ChangeItems (label / sub / tap-to-ask say), the shape
+  // the Gameshow ChangeList renders — never bare strings.
+  for (const [name, list] of Object.entries({ SIGN_CHANGES, BACKDROP_CHANGES, QUIZ_CHANGES, RESEARCH_CHANGES, YOUTUBE_CHANGES, SLIDES_CHANGES })) {
+    assert(Array.isArray(list) && list.length >= 1, `${name}: a non-empty change list`);
+    for (const item of list) assert(typeof item.label === 'string' && item.label.length > 0, `${name}: every row carries a label`);
+  }
+  assert(SIGN_CHANGES.some(item => item.say) && QUIZ_CHANGES.some(item => item.say) && RESEARCH_CHANGES.some(item => item.say),
+    'rows that name a Jewel capability are tap-to-ask rows');
+  // The components actually use the shared Gameshow presentation pieces.
+  const shell = fs.readFileSync('components/TalkshowWorkshop.tsx', 'utf8');
+  const steps = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
+  assert(steps.includes('import { ChangeList } from "./GameshowWorkshop"'), 'the talk steps render change lists with the Gameshow ChangeList component');
+  assert(!shell.includes('TalkChangeList') && !steps.includes('TalkChangeList'), 'the old talk-only plain-string change list is gone');
+  assert(steps.includes('AssetThumbnail'), 'shelves are pictured tiles over the real assets, like the Gameshow media shelf');
+  assert(shell.includes('info.doneWhen') && shell.includes('info.kicker') && shell.includes('info.jewelNote'),
+    'the step shell reads the Gameshow-shaped meta (kicker, intro, done-when, Jewel note)');
+  console.log('PASS: presentation grammar — Gameshow-shaped meta, quoted ask chips, shared ChangeList, pictured shelves.');
+}
+
+// --- Sign step: name & theme live in the step's own face ----------------------
+// Gameshow-plan style: the plan is handled on the step, not by sending the
+// creator down to the 8-field form. The two fields write through the page's
+// save path into the same project fields the form writes (project.name and
+// project.gamePlan.theme) — the form below still exists, untouched.
+{
+  const steps = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
+  assert(steps.includes('name: event.target.value'), 'the sign step edits the show name in its own face');
+  assert(steps.includes('gamePlan: { ...project.gamePlan, theme: event.target.value }'), 'the sign step edits the theme into project.gamePlan.theme — the form’s own field');
+  assert(!steps.includes('showPlanForm'), 'the sign step no longer routes name & theme through the plan form below');
+  console.log('PASS: sign step face — name & theme are edited compactly on the step, into the same project fields.');
+}
+
+// --- The lettering demonstration offers the site's real display fonts --------
+// (Live-verification gap in PR #135: the font buttons were the catalog's
+// opening system stacks — Arial, Georgia, Verdana, Trebuchet MS, Monospace.
+// A sign is lettered in a display face: every offered font must be one of
+// the catalog's self-hosted faces, the ones carrying a font file.)
+{
+  const systemStacks = ['Arial', 'Georgia', 'Verdana', 'Trebuchet MS', 'Monospace'];
+  assert(DEMO_FONTS.length >= 4, 'the demonstration offers a real choice of display fonts');
+  for (const demo of DEMO_FONTS) {
+    assert(!systemStacks.includes(demo.name), `${demo.name}: no system stacks among the sign fonts`);
+    const catalogFont = fontCatalog.find(font => font.name === demo.name);
+    assert(catalogFont && 'file' in catalogFont, `${demo.name}: a self-hosted catalog face (carries a font file)`);
+    assert.equal(demo.family, catalogFont.family, `${demo.name}: rendered in the catalog's own family string`);
+  }
+  console.log('PASS: demo fonts — the sign demonstration letters in the site’s real display fonts only.');
 }
 
 // --- Talk step evaluators ----------------------------------------------------
@@ -270,6 +336,29 @@ const quizTool = (overrides = {}) => ({
   assert(shell.includes('onAskJewel') || shell.includes('onAsk'), 'asks route to the Jewel input hand-off');
   assert(backgroundAssets(baseProject({ assets: [bgAsset(), { name: 'x.png', type: 'Image', role: 'layer' }] })).length === 1, 'backgroundAssets counts background-role assets only');
   console.log('PASS: banner exactly once; the new components never fetch, generate, or persist behind Jewel’s back.');
+}
+
+// --- Presentation, second half: every step demonstrates, pictured ----------
+// After Jessica saw PR #135 live ("a page with a bunch of words on it"), the
+// remaining text-shaped pieces were rebuilt to the Gameshow pattern: empty
+// projects demonstrate over the site's pictured Talk Show stage, research
+// runs as an interactive sample, the YouTube moment is a stage — not a
+// framed paragraph — and the deck is pictured tiles, never text rows.
+{
+  const steps = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
+  const css = fs.readFileSync('components/talkshow-workshop.css', 'utf8');
+  assert(steps.includes('/redesign/kind-talkshow.webp'), 'empty projects demonstrate over the pictured Talk Show stage artwork');
+  assert(!steps.includes('tsw-stagefill') && !css.includes('tsw-stagefill'), 'the flat gradient stage void is gone');
+  assert(!steps.includes('tsw-ytframe') && !css.includes('tsw-ytframe'), 'the YouTube text frame is gone — the moment renders on a stage visual');
+  assert(steps.includes('tsw-ytcenter'), 'the YouTube play medallion centers on the stage');
+  assert(steps.includes('Run the sample search'), 'research demonstrates by running a sample search, not by describing one');
+  const sample = talkPath.SAMPLE_RESEARCH;
+  assert(Array.isArray(sample.findings) && sample.findings.length >= 2, 'the sample answer is findings, revealed by the run');
+  for (const finding of sample.findings) assert(finding.text && finding.source, 'every sample finding carries its source');
+  assert(steps.includes('tsw-deckstrip') && steps.includes('Example deck'), 'the deck is a pictured tile strip, with a labelled example deck when empty');
+  assert(steps.includes('kind: candidate.kind, label: candidate.label, refKey: candidate.refKey'),
+    'adding to the deck still writes the same slide shape — the candidate thumbnail never leaks into talkDeck');
+  console.log('PASS: presentation, second half — pictured example stage, interactive research, stage YouTube, pictured deck.');
 }
 
 console.log('talkshow-imagine-create: all assertions passed');
