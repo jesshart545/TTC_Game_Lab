@@ -4,25 +4,37 @@ import { useState } from "react";
 import type { ProjectAsset, TalkSlide } from "../lib/project";
 import type { WorkflowStepState } from "../lib/workflow-progress";
 import { assetBackdropText, backgroundAssets, findSignAsset } from "../lib/backdrop-text";
+import { assetCategory } from "../lib/asset-folders";
 import { quizQuestionsOf } from "../lib/quiz";
 import { isVideo } from "../lib/workshop-libraries";
 import {
   BACKDROP_CHANGES, DEMO_COLOR_PAIRS, DEMO_FONTS, EXAMPLE_QUIZ, QUIZ_CHANGES,
-  SAMPLE_RESEARCH, SIGN_CHANGES, TALK_STEPS, demoBackdrop, demoTextSpec,
+  RESEARCH_CHANGES, SAMPLE_RESEARCH, SIGN_CHANGES, SLIDES_CHANGES, TALK_STEPS,
+  YOUTUBE_CHANGES, demoBackdrop, demoTextSpec,
 } from "../lib/talkshow-path";
+import AssetThumbnail from "./AssetThumbnail";
 import BackdropTextLayer from "./BackdropText";
-import { TalkAskStrip, TalkChangeList, TalkStepShell, type TalkshowWorkshopProps } from "./TalkshowWorkshop";
+import { ChangeList } from "./GameshowWorkshop";
+import { TalkAskStrip, TalkStepShell, type TalkshowWorkshopProps } from "./TalkshowWorkshop";
 
 type ScreenProps = TalkshowWorkshopProps & { step?: WorkflowStepState };
 
 const assetKey = (asset: ProjectAsset) => asset.storageKey || asset.name;
 
-function BackdropStageMedia({ asset }: { asset: ProjectAsset | null }) {
-  if (!asset?.url) return <div className="tsw-stagefill" aria-hidden="true" />;
+function BackdropStageMedia({ asset }: { asset: ProjectAsset }) {
+  if (!asset.url) return <ExampleStageMedia />;
   if (isVideo(asset)) {
     return <video src={asset.url} autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
   }
   return <img src={asset.url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
+}
+
+/** The pictured example stage for an empty project: the site's own Talk
+ * Show artwork, so a step demonstrates with a real picture — never a flat
+ * gradient void — exactly as the Gameshow media step labels its example
+ * stage. Labelled as an example wherever it stands in. */
+function ExampleStageMedia() {
+  return <img className="gsw-bg" src="/redesign/kind-talkshow.webp" alt="" />;
 }
 
 /** Font + color play-state shared by the sign and backdrop demonstrations. */
@@ -38,7 +50,7 @@ function LookControls({ fontIndex, pairIndex, onFont, onPair }: {
 }) {
   return (
     <>
-      <div className="gsw-seclabel">Try the lettering — fonts from the site’s catalog</div>
+      <div className="gsw-seclabel">Lettering — the site’s display fonts</div>
       <div className="gsw-chipsrow">
         {DEMO_FONTS.slice(0, 6).map((font, i) => (
           <button key={font.family} type="button" className={"gsw-vchip" + (fontIndex === i ? " gold" : "")} style={{ fontFamily: font.family, fontSize: 14 }} onClick={() => onFont(i)}>{font.name}</button>
@@ -59,7 +71,7 @@ function LookControls({ fontIndex, pairIndex, onFont, onPair }: {
 /* ---------------- Step 1 · Name & sign your show ---------------- */
 
 export function SignStep(props: ScreenProps) {
-  const { project, doors, onAskJewel: onAsk } = props;
+  const { project, doors, onAskJewel: onAsk, onSaveProject } = props;
   const signAsset = findSignAsset(project);
   const demoAsset = signAsset || demoBackdrop(project);
   const baseSpec = demoTextSpec(project, demoAsset);
@@ -77,15 +89,13 @@ export function SignStep(props: ScreenProps) {
         <div>
           <span className="gsw-demotag">Live demonstration — your sign, lettered for real</span>
           <div className="gsw-stage-visual" style={{ minHeight: 300, position: "relative" }}>
-            <BackdropStageMedia asset={demoAsset} />
+            {demoAsset ? <BackdropStageMedia asset={demoAsset} /> : <ExampleStageMedia />}
             {!uploadedSign && <BackdropTextLayer spec={spec} />}
             <div className="gsw-shade" style={{ background: "linear-gradient(180deg, transparent 55%, rgba(8,6,14,.72))" }} />
-            <div style={{ position: "absolute", left: 14, bottom: 10, fontSize: 12, color: "#cfc8e6" }}>
-              {uploadedSign
-                ? <>Your uploaded sign — <b style={{ color: "#fff" }}>{uploadedSign.name}</b>, used exactly as you made it.</>
-                : signAsset
-                  ? <>Your sign — saved on <b style={{ color: "#fff" }}>{signAsset.name}</b>. The lettering is a real text layer in your font — never baked into the artwork.</>
-                  : "Demonstration — Jewel makes artwork like this for your show and letters your title over it, in the font and colors you pick."}
+            <div style={{ position: "absolute", left: 14, bottom: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span className="gsw-vchip gold">{uploadedSign ? `Your uploaded sign · ${uploadedSign.name}` : signAsset ? `Your sign · ${signAsset.name}` : "Demonstration · Jewel letters your title over artwork like this"}</span>
+              {signAsset && !uploadedSign && <span className="gsw-vchip">Lettering is a real text layer — never baked in</span>}
+              {theme && <span className="gsw-vchip">Theme · {theme}</span>}
             </div>
           </div>
           {!uploadedSign && (
@@ -101,15 +111,28 @@ export function SignStep(props: ScreenProps) {
             </>
           )}
 
-          <div className="gsw-seclabel" style={{ marginTop: 22 }}>Your name &amp; theme — the short version</div>
+          <div className="gsw-seclabel" style={{ marginTop: 22 }}>Your name &amp; theme — the short version, set right here</div>
           <div className="gsw-grid2">
             <div className="gsw-card">
-              <h4>{project.name && project.name !== "New Project" ? project.name : "No name yet"}</h4>
-              <p>{theme ? <>Theme &amp; style: <b style={{ color: "#fff" }}>{theme}</b></> : "No theme & style yet — it tells Jewel what kind of show this is, so her research looks in the right places."}</p>
-              <div className="gsw-chipsrow">
-                <button type="button" className="gsw-demobtn gold" onClick={doors.showPlanForm}>Edit name &amp; theme</button>
+              <div className="tsw-fields">
+                <label>Show name
+                  <input
+                    type="text"
+                    value={project.name === "New Project" ? "" : project.name}
+                    placeholder="Example: The Cozy Corner"
+                    onChange={event => onSaveProject({ ...project, name: event.target.value, updatedAt: "just now" })}
+                  />
+                </label>
+                <label>Theme &amp; style
+                  <textarea
+                    rows={2}
+                    value={project.gamePlan?.theme || ""}
+                    placeholder="Example: a warm spiritual-and-life talk show"
+                    onChange={event => onSaveProject({ ...project, gamePlan: { ...project.gamePlan, theme: event.target.value }, updatedAt: "just now" })}
+                  />
+                </label>
               </div>
-              <p style={{ marginTop: 8 }}>The form below holds both fields — the same form as always. Jewel helps with the name only if you ask her.</p>
+              <p style={{ marginTop: 8 }}>Saved as you type, into the same fields as always — the theme aims Jewel’s research.</p>
             </div>
             <div className="gsw-card">
               <h4>Have your own sign?</h4>
@@ -119,7 +142,7 @@ export function SignStep(props: ScreenProps) {
               </div>
             </div>
           </div>
-          <TalkChangeList title="What you can change — your sign" items={SIGN_CHANGES} />
+          <ChangeList title="What you can change — your sign" items={SIGN_CHANGES} onAsk={onAsk} />
         </div>
         <TalkAskStrip {...props} stepId="sign" extra={TALK_STEPS.sign.adjust} />
       </div>
@@ -130,7 +153,7 @@ export function SignStep(props: ScreenProps) {
 /* ---------------- Step 2 · Make your backdrops ---------------- */
 
 export function BackdropsStep(props: ScreenProps) {
-  const { project, doors } = props;
+  const { project, doors, onAskJewel: onAsk } = props;
   const backgrounds = backgroundAssets(project);
   const animated = backgrounds.find(asset => isVideo(asset)) || null;
   const artistic = backgrounds.find(asset => !isVideo(asset)) || null;
@@ -149,39 +172,44 @@ export function BackdropsStep(props: ScreenProps) {
         <div>
           <span className="gsw-demotag">Live demonstration — a backdrop, playing</span>
           <div className="gsw-stage-visual" style={{ minHeight: 280, position: "relative" }}>
-            <BackdropStageMedia asset={hero} />
+            {hero ? <BackdropStageMedia asset={hero} /> : <ExampleStageMedia />}
             <div style={{ position: "absolute", left: 14, top: 10 }}>
-              <span className="gsw-vchip gold">{animated ? `Animated — playing · ${animated.name}` : artistic ? `Artistic · ${artistic.name}` : "Your backdrop will play here"}</span>
+              <span className="gsw-vchip gold">{animated ? `Animated — playing · ${animated.name}` : artistic ? `Artistic · ${artistic.name}` : "Example stage — your backdrop will play here"}</span>
             </div>
           </div>
           <p className="gsw-demostatus" style={{ marginTop: 8 }}>
-            {animated ? "That motion is the real backdrop, looping the way it loops on your overlay." : artistic ? "This one is a still, artistic backdrop — ask Jewel for an animated one and it moves like this space is ready to show." : "No backdrop yet — the first one Jewel makes for you plays right here."}
+            {animated ? "The real backdrop, looping the way it loops on your overlay." : artistic ? "A still, artistic backdrop — ask Jewel for an animated one and it plays in this same frame." : "No backdrop yet — the first one Jewel makes for you plays right here."}
           </p>
 
           <div className="gsw-seclabel" style={{ marginTop: 22 }}>Words over a backdrop — switch the look, live</div>
           <div className="gsw-stage-visual" style={{ minHeight: 240, position: "relative" }}>
-            <BackdropStageMedia asset={textAsset} />
+            {textAsset ? <BackdropStageMedia asset={textAsset} /> : <ExampleStageMedia />}
             <BackdropTextLayer spec={spec} />
           </div>
           <LookControls fontIndex={look.fontIndex} pairIndex={look.pairIndex} onFont={look.setFontIndex} onPair={look.setPairIndex} />
-          <p className="gsw-demostatus" style={{ marginTop: 8 }}>The lettering is a real text layer — crisp at any size, in the font you chose. Jewel sets it on your backdrop the same way.</p>
+          <p className="gsw-demostatus" style={{ marginTop: 8 }}>The lettering is a real text layer — crisp at any size, never baked into the artwork.</p>
 
           <div className="gsw-seclabel" style={{ marginTop: 22 }}>Your backdrops</div>
           {backgrounds.length ? (
             <div className="gsw-shelf">
-              {backgrounds.map(asset => (
-                <button key={assetKey(asset)} type="button" className="gsw-asset plain" onClick={() => doors.applyBackground(assetKey(asset))}>
-                  <span className="gsw-ak">{isVideo(asset) ? "Animated backdrop" : "Backdrop"}{asset.sign ? " · Your sign" : ""}</span>
-                  <span className="gsw-an" style={{ position: "static" }}>{asset.name}<br />
-                    <span style={{ color: "#948bb3", fontWeight: 600, fontSize: 12 }}>{asset.inProject ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{assetBackdropText(asset) ? ` · Lettered: “${assetBackdropText(asset)!.text}”` : ""}</span>
-                  </span>
-                </button>
-              ))}
+              {backgrounds.map(asset => {
+                const lettering = assetBackdropText(asset);
+                return (
+                  <button key={assetKey(asset)} type="button" className="gsw-asset" onClick={() => doors.applyBackground(assetKey(asset))}>
+                    <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
+                    <div className="gsw-shade" />
+                    <span className="gsw-ak">{isVideo(asset) ? "Animated backdrop" : "Backdrop"}{asset.sign ? " · Your sign" : ""}</span>
+                    <span className="gsw-an">{asset.name}<br />
+                      <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{asset.inProject ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{lettering ? ` · Lettered: “${lettering.text}”` : ""}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <p className="gsw-hint">Nothing here yet — your first backdrop lands on this shelf.</p>
           )}
-          <TalkChangeList title="What you can change — a backdrop" items={BACKDROP_CHANGES} />
+          <ChangeList title="What you can change — a backdrop" items={BACKDROP_CHANGES} onAsk={onAsk} />
         </div>
         <TalkAskStrip {...props} stepId="backdrops" extra={TALK_STEPS.backdrops.adjust} />
       </div>
@@ -192,9 +220,10 @@ export function BackdropsStep(props: ScreenProps) {
 /* ---------------- Step 3 · Research with Jewel ---------------- */
 
 export function ResearchStep(props: ScreenProps) {
-  const { project, onNavigateStep } = props;
+  const { project, onNavigateStep, onAskJewel: onAsk } = props;
   const theme = (project.gamePlan?.theme || "").trim();
   const researched = project.workflowProgress?.researched === true;
+  const [sampleRan, setSampleRan] = useState(false);
   return (
     <TalkStepShell stepId="research" step={props.step}>
       <div className="gsw-cols">
@@ -203,29 +232,44 @@ export function ResearchStep(props: ScreenProps) {
           <div className="gsw-card">
             <h4>{theme || "No theme & style set yet"}</h4>
             <p>{theme
-              ? "This is what aims Jewel’s searching: the kind of show it is tells her what information to look for — a science classroom and a gossip show research very differently."
-              : "Set your theme & style on the Name & sign step — it tells Jewel what kind of show this is, so she knows what information to look for."}</p>
+              ? "This aims Jewel’s searching — a science classroom and a gossip show research very differently."
+              : "Set it on the Name & sign step — it tells Jewel what kind of show this is, so she knows what to look for."}</p>
             {!theme && <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={() => onNavigateStep(0, "sign")}>Set my theme &amp; style</button></div>}
           </div>
 
-          <span className="gsw-demotag" style={{ marginTop: 22 }}>Demonstration — what a research answer looks like</span>
-          <div className="gsw-card">
-            <h4>{SAMPLE_RESEARCH.heading.replace("Demonstration — ", "")}</h4>
-            <p>{SAMPLE_RESEARCH.body}</p>
-            <div className="gsw-chipsrow">
-              {SAMPLE_RESEARCH.sources.map(source => <span key={source} className="gsw-vchip">{source}</span>)}
-            </div>
-            <p style={{ marginTop: 8 }}>{SAMPLE_RESEARCH.note}</p>
+          <span className="gsw-demotag" style={{ marginTop: 22 }}>Demonstration — run a sample search</span>
+          <div className="gsw-qcard" style={{ textAlign: "left" }}>
+            <div className="gsw-qk">Sample question · a classroom show</div>
+            <div className="gsw-qq" style={{ fontSize: 17 }}>{SAMPLE_RESEARCH.question}</div>
+            {!sampleRan && (
+              <div className="gsw-chipsrow" style={{ justifyContent: "center", marginTop: 14 }}>
+                <button type="button" className="gsw-demobtn gold" onClick={() => setSampleRan(true)}>Run the sample search</button>
+              </div>
+            )}
           </div>
+          {sampleRan && (
+            <>
+              <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                {SAMPLE_RESEARCH.findings.map(finding => (
+                  <div key={finding.text} className="gsw-card">
+                    <p style={{ margin: 0 }}>{finding.text}</p>
+                    <div className="gsw-chipsrow"><span className="gsw-vchip">{finding.source}</span></div>
+                  </div>
+                ))}
+              </div>
+              <p className="gsw-demostatus" style={{ marginTop: 10 }}>{SAMPLE_RESEARCH.note}</p>
+            </>
+          )}
 
           <div className="gsw-seclabel" style={{ marginTop: 22 }}>Then the research goes to work</div>
           <div className="gsw-grid2">
-            <div className="gsw-card"><h4>A backdrop shaped by findings</h4><p>Jewel can take what she found — the places, the facts, the mood — and brief your backdrop’s artwork with it.</p></div>
-            <div className="gsw-card"><h4>A quiz built from sources</h4><p>Or turn the findings into quiz questions your audience can actually answer from what your show taught them.</p></div>
+            <div className="gsw-card"><h4>A backdrop shaped by findings</h4><p>Jewel briefs your backdrop’s artwork with what she found — the places, the facts, the mood.</p></div>
+            <div className="gsw-card"><h4>A quiz built from sources</h4><p>Or the findings become questions your audience can answer from what your show taught them.</p></div>
           </div>
           <p className="gsw-demostatus" style={{ marginTop: 10 }}>
-            {researched ? "✓ Jewel has researched in this project — her findings are in your conversation with her, sources attached." : "No research yet in this project — the first question you ask Jewel to look up checks this step off."}
+            {researched ? "✓ Jewel has researched in this project — findings and sources are in your conversation with her." : "No research yet — the first lookup you ask Jewel for checks this step off."}
           </p>
+          <ChangeList title="What you can change — the research" items={RESEARCH_CHANGES} onAsk={onAsk} />
         </div>
         <TalkAskStrip {...props} stepId="research" extra={TALK_STEPS.research.adjust} />
       </div>
@@ -302,7 +346,7 @@ export function QuizStep(props: ScreenProps) {
               <p>Tell Jewel your topic — or let her build the quiz from the research you did together — and the questions land here with their choices.</p>
             </div>
           )}
-          <TalkChangeList title="What you can change — a quiz" items={QUIZ_CHANGES} />
+          <ChangeList title="What you can change — a quiz" items={QUIZ_CHANGES} onAsk={onAsk} />
         </div>
         <TalkAskStrip {...props} stepId="quiz" extra={TALK_STEPS.quiz.adjust} />
       </div>
@@ -313,18 +357,21 @@ export function QuizStep(props: ScreenProps) {
 /* ---------------- Step 5 · Add YouTube ---------------- */
 
 export function YoutubeStep(props: ScreenProps) {
-  const { project, doors } = props;
+  const { project, doors, onAskJewel: onAsk } = props;
   const tool = (project.gameTools || []).find(t => t.enabled && t.type === "youtube");
+  const backdrop = demoBackdrop(project);
   return (
     <TalkStepShell stepId="youtube" step={props.step}>
       <div className="gsw-cols">
         <div>
-          <span className="gsw-demotag">Demonstration — the video moment, as your audience will see it</span>
-          <div className="tsw-ytframe">
-            <div className="tsw-ytplay" aria-hidden="true">▶</div>
-            <p>{tool
-              ? "YouTube is in your toolbox. During your show, you search for a video from your dashboard and send it — it plays here, on your overlay, only when you send it. Nothing plays on its own."
-              : "During your show, you’ll search YouTube from your dashboard and send a video — it plays on your overlay only when you send it, and stops when you clear it."}</p>
+          <span className="gsw-demotag">Demonstration — the video moment, on your stage</span>
+          <div className="gsw-stage-visual" style={{ minHeight: 280, position: "relative" }}>
+            {backdrop ? <BackdropStageMedia asset={backdrop} /> : <ExampleStageMedia />}
+            <div className="gsw-shade" style={{ background: "rgba(8,6,14,.38)" }} />
+            <div className="tsw-ytcenter"><div className="tsw-ytplay" aria-hidden="true">▶</div></div>
+            <div style={{ position: "absolute", left: 14, bottom: 12 }}>
+              <span className="gsw-vchip gold">{tool ? "YouTube · in your toolbox — it plays here when you send it" : "Plays here — only when you send it, from your dashboard"}</span>
+            </div>
           </div>
           {tool ? (
             <div className="gsw-card" style={{ marginTop: 14 }}>
@@ -339,6 +386,7 @@ export function YoutubeStep(props: ScreenProps) {
               <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.addYoutube}>Add YouTube</button></div>
             </div>
           )}
+          <ChangeList title="What you can change — YouTube" items={YOUTUBE_CHANGES} onAsk={onAsk} />
         </div>
         <TalkAskStrip {...props} stepId="youtube" extra={TALK_STEPS.youtube.adjust} />
       </div>
@@ -348,26 +396,40 @@ export function YoutubeStep(props: ScreenProps) {
 
 /* ---------------- Step 6 · Arrange your slides ---------------- */
 
-type SlideCandidate = { kind: TalkSlide["kind"]; label: string; refKey: string };
+type SlideCandidate = { kind: TalkSlide["kind"]; label: string; refKey: string; asset: ProjectAsset | null };
 
 function slideCandidates(project: TalkshowWorkshopProps["project"]): SlideCandidate[] {
   const out: SlideCandidate[] = [];
   const sign = findSignAsset(project);
-  if (sign) out.push({ kind: "sign", label: `Your sign — ${project.name || sign.name}`, refKey: assetKey(sign) });
+  if (sign) out.push({ kind: "sign", label: `Your sign — ${project.name || sign.name}`, refKey: assetKey(sign), asset: sign });
   for (const asset of backgroundAssets(project)) {
     if (sign && assetKey(asset) === assetKey(sign)) continue;
-    out.push({ kind: "backdrop", label: asset.name, refKey: assetKey(asset) });
+    out.push({ kind: "backdrop", label: asset.name, refKey: assetKey(asset), asset });
   }
   for (const tool of project.gameTools || []) {
     if (!tool.enabled) continue;
-    if (tool.type === "trivia-list" && quizQuestionsOf(tool).length > 0) out.push({ kind: "quiz", label: `Quiz — ${tool.name}`, refKey: tool.id });
-    if (tool.type === "youtube") out.push({ kind: "youtube", label: "YouTube video moment", refKey: tool.id });
+    if (tool.type === "trivia-list" && quizQuestionsOf(tool).length > 0) out.push({ kind: "quiz", label: `Quiz — ${tool.name}`, refKey: tool.id, asset: null });
+    if (tool.type === "youtube") out.push({ kind: "youtube", label: "YouTube video moment", refKey: tool.id, asset: null });
   }
-  for (const comp of project.compositions || []) out.push({ kind: "composition", label: `Package — ${comp.name}`, refKey: comp.id });
+  for (const comp of project.compositions || []) out.push({ kind: "composition", label: `Package — ${comp.name}`, refKey: comp.id, asset: null });
   for (const asset of project.assets || []) {
-    if (asset.inProject && asset.role !== "background") out.push({ kind: "media", label: asset.name, refKey: assetKey(asset) });
+    if (asset.inProject && asset.role !== "background") out.push({ kind: "media", label: asset.name, refKey: assetKey(asset), asset });
   }
   return out;
+}
+
+/** The asset a saved slide points at, when it points at one — so the deck
+ * shows the slide's real picture, not a text row. */
+function slideAsset(project: TalkshowWorkshopProps["project"], slide: TalkSlide): ProjectAsset | null {
+  if (slide.kind !== "sign" && slide.kind !== "backdrop" && slide.kind !== "media") return null;
+  return (project.assets || []).find(asset => assetKey(asset) === slide.refKey) || null;
+}
+
+/** A slide's face when it has no picture of its own — the same glyphs the
+ * toolbox tiles use, on a stage-colored card. */
+function SlideFace({ kind }: { kind: TalkSlide["kind"] }) {
+  const glyph = kind === "quiz" ? "?" : kind === "youtube" ? "▶" : kind === "composition" ? "⚡" : "▭";
+  return <span className="tsw-slideface" aria-hidden="true">{glyph}</span>;
 }
 
 const SLIDE_KIND_LABELS: Record<TalkSlide["kind"], string> = {
@@ -375,7 +437,7 @@ const SLIDE_KIND_LABELS: Record<TalkSlide["kind"], string> = {
 };
 
 export function SlidesStep(props: ScreenProps) {
-  const { project, onSaveProject } = props;
+  const { project, onSaveProject, onAskJewel: onAsk } = props;
   const deck: TalkSlide[] = Array.isArray(project.talkDeck) ? project.talkDeck : [];
   const candidates = slideCandidates(project);
   const inDeck = (candidate: SlideCandidate) => deck.some(slide => slide.kind === candidate.kind && slide.refKey === candidate.refKey);
@@ -393,33 +455,67 @@ export function SlidesStep(props: ScreenProps) {
         <div>
           <div className="gsw-seclabel">Your deck — in the order your show will follow</div>
           {deck.length ? (
-            <div className="tsw-deck">
-              {deck.map((slide, i) => (
-                <div key={slide.id} className="tsw-deckrow">
-                  <span className="tsw-deckn">{i + 1}</span>
-                  <span className="gsw-vchip gold">{SLIDE_KIND_LABELS[slide.kind]}</span>
-                  <span className="tsw-decklabel">{slide.label}</span>
-                  <span className="tsw-deckbtns">
-                    <button type="button" aria-label={`Move ${slide.label} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-                    <button type="button" aria-label={`Move ${slide.label} down`} disabled={i === deck.length - 1} onClick={() => move(i, 1)}>↓</button>
-                    <button type="button" aria-label={`Remove ${slide.label} from the deck`} onClick={() => save(deck.filter((_, j) => j !== i))}>✕</button>
-                  </span>
-                </div>
-              ))}
+            <div className="tsw-deckstrip">
+              {deck.map((slide, i) => {
+                const asset = slideAsset(project, slide);
+                return (
+                  <div key={slide.id} className="tsw-slide">
+                    <div className="tsw-slidevis">
+                      {asset ? <AssetThumbnail asset={asset} kind={assetCategory(asset)} /> : slide.kind === "backdrop" || slide.kind === "sign" ? <ExampleStageMedia /> : <SlideFace kind={slide.kind} />}
+                      <span className="tsw-sliden">{i + 1}</span>
+                    </div>
+                    <div className="tsw-slidelabel">{slide.label}</div>
+                    <div className="tsw-slidekind">{SLIDE_KIND_LABELS[slide.kind]}</div>
+                    <span className="tsw-deckbtns">
+                      <button type="button" aria-label={`Move ${slide.label} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                      <button type="button" aria-label={`Move ${slide.label} down`} disabled={i === deck.length - 1} onClick={() => move(i, 1)}>↓</button>
+                      <button type="button" aria-label={`Remove ${slide.label} from the deck`} onClick={() => save(deck.filter((_, j) => j !== i))}>✕</button>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <p className="gsw-hint">Your deck is empty — add the moments you’ve made, in the order you’ll present them.</p>
+            <>
+              <div className="gsw-seclabel" style={{ marginBottom: 8 }}>Example deck — yours will line up like this</div>
+              <div className="tsw-deckstrip" aria-hidden="true">
+                {([["sign", "Your sign"], ["backdrop", "Opening backdrop"], ["quiz", "Quiz"], ["youtube", "Video moment"]] as [TalkSlide["kind"], string][]).map(([kind, label], i) => (
+                  <div key={kind} className="tsw-slide">
+                    <div className="tsw-slidevis">
+                      {kind === "sign" || kind === "backdrop" ? <ExampleStageMedia /> : <SlideFace kind={kind} />}
+                      <span className="tsw-sliden">{i + 1}</span>
+                    </div>
+                    <div className="tsw-slidelabel">{label}</div>
+                    <div className="tsw-slidekind">Example</div>
+                  </div>
+                ))}
+              </div>
+              <p className="gsw-hint">Your deck is empty — add the moments you’ve made below, in the order you’ll present them.</p>
+            </>
           )}
-          <p className="gsw-demostatus" style={{ marginTop: 8 }}>This step only prepares the order. The controls that run your slides live — next, back — arrive in Set the Stage.</p>
+          <p className="gsw-demostatus" style={{ marginTop: 8 }}>Preparing only — the clickers that run your slides live arrive in Set the Stage.</p>
 
           <div className="gsw-seclabel" style={{ marginTop: 22 }}>What you’ve made — add it to the deck</div>
           {candidates.length ? (
             <div className="gsw-shelf">
-              {candidates.map(candidate => (
+              {candidates.map(candidate => candidate.asset ? (
+                <button
+                  key={`${candidate.kind}:${candidate.refKey}`} type="button" className="gsw-asset"
+                  disabled={inDeck(candidate)}
+                  onClick={() => save([...deck, { id: crypto.randomUUID(), kind: candidate.kind, label: candidate.label, refKey: candidate.refKey }])}
+                >
+                  <AssetThumbnail asset={candidate.asset} kind={assetCategory(candidate.asset)} />
+                  <div className="gsw-shade" />
+                  <span className="gsw-ak">{SLIDE_KIND_LABELS[candidate.kind]}</span>
+                  <span className="gsw-an">{candidate.label}<br />
+                    <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{inDeck(candidate) ? "✓ In your deck" : "Tap to add"}</span>
+                  </span>
+                </button>
+              ) : (
                 <button
                   key={`${candidate.kind}:${candidate.refKey}`} type="button" className="gsw-asset plain"
                   disabled={inDeck(candidate)}
-                  onClick={() => save([...deck, { id: crypto.randomUUID(), ...candidate }])}
+                  onClick={() => save([...deck, { id: crypto.randomUUID(), kind: candidate.kind, label: candidate.label, refKey: candidate.refKey }])}
                 >
                   <span className="gsw-ak">{SLIDE_KIND_LABELS[candidate.kind]}</span>
                   <span className="gsw-an" style={{ position: "static" }}>{candidate.label}<br />
@@ -431,6 +527,7 @@ export function SlidesStep(props: ScreenProps) {
           ) : (
             <p className="gsw-hint">Nothing to arrange yet — your sign, backdrops, quiz and packages appear here as you make them.</p>
           )}
+          <ChangeList title="What you can change — your slides" items={SLIDES_CHANGES} onAsk={onAsk} />
         </div>
         <TalkAskStrip {...props} stepId="slides" extra={TALK_STEPS.slides.adjust} />
       </div>
@@ -448,7 +545,7 @@ export function ToolboxStep(props: ScreenProps) {
   const firstCard = tools.find(tool => tool.type === "question-card" || tool.type === "blank-card");
   const firstList = tools.find(tool => tool.type === "trivia-list");
   const toolStatus = (tool: (typeof tools)[number]) => tool.type === "trivia-list"
-    ? `${quizQuestionsOf(tool).length} quiz questions · ${Array.isArray(tool.config.questions) ? tool.config.questions.length : 0} questions total`
+    ? `${quizQuestionsOf(tool).length} quiz questions`
     : tool.type === "youtube"
       ? "In your dashboard toolbox"
       : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Saved in toolbox");
@@ -478,12 +575,17 @@ export function ToolboxStep(props: ScreenProps) {
       <div className="gsw-seclabel" style={{ marginTop: 22 }}>Your backdrops &amp; sign</div>
       {backgrounds.length ? (
         <div className="gsw-shelf">
-          {backgrounds.map(asset => (
-            <button key={assetKey(asset)} type="button" className="gsw-asset plain" onClick={() => onNavigateStep(0, "backdrops")}>
-              <span className="gsw-ak">{asset.sign ? "Your sign" : "Backdrop"}</span>
-              <span className="gsw-an" style={{ position: "static" }}>{asset.name}<br /><span style={{ color: "#948bb3", fontWeight: 600, fontSize: 12 }}>{assetBackdropText(asset) ? `Lettered: “${assetBackdropText(asset)!.text}”` : asset.inProject ? "On your overlay" : "Saved"}</span></span>
-            </button>
-          ))}
+          {backgrounds.map(asset => {
+            const lettering = assetBackdropText(asset);
+            return (
+              <button key={assetKey(asset)} type="button" className="gsw-asset" onClick={() => onNavigateStep(0, "backdrops")}>
+                <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
+                <div className="gsw-shade" />
+                <span className="gsw-ak">{asset.sign ? "Your sign" : "Backdrop"}</span>
+                <span className="gsw-an">{asset.name}<br /><span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{lettering ? `Lettered: “${lettering.text}”` : asset.inProject ? "On your overlay" : "Saved"}</span></span>
+              </button>
+            );
+          })}
         </div>
       ) : (
         <p className="gsw-hint">No backdrops yet.</p>
@@ -500,6 +602,12 @@ export function ToolboxStep(props: ScreenProps) {
             <div className="gsw-ic">{tile.icon}</div><div className="gsw-tt">{tile.title}</div><div className="gsw-td">{tile.description}</div>
           </button>
         ))}
+      </div>
+      <div className="gsw-grid2" style={{ marginTop: 16 }}>
+        <div className="gsw-card"><h4>Published links &amp; sharing</h4><p>The links for this project, where they already live today.</p>
+          <div className="gsw-chipsrow"><button type="button" className="gsw-jchip" onClick={doors.showSavedWork}>Open sharing</button></div></div>
+        <div className="gsw-card"><h4>Mistake? Take it back</h4><p>Jewel’s edits can be undone, one step at a time — the Undo button appears in her panel after she changes something.</p>
+          <div className="gsw-chipsrow"><button type="button" className="gsw-jchip" onClick={props.onOpenJewel}>Open Jewel</button></div></div>
       </div>
       <div className="gsw-cols">
         <div />

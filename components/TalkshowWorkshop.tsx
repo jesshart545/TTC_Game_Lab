@@ -9,20 +9,24 @@ import "./gameshow-workshop.css";
 import "./talkshow-workshop.css";
 
 /**
- * The Talk Show or Classroom Workshop: the same guided-path architecture as
- * the Gameshow Workshop — seven tasks whose state is read from the workflow
- * model (this component keeps no completion state of its own), living
- * demonstrations instead of stacked words and forms, a plain list of what
- * can be changed under each one, and example asks that are handed to Jewel.
- * Nothing here generates: Jewel is the only generation door. The only
- * writes on these screens are the creator's own — arranging the slide deck
- * by hand, through the page's normal save path.
+ * The Talk Show or Classroom Workshop: the Gameshow Workshop's architecture
+ * and presentation grammar, carried over whole — seven tasks whose state is
+ * read from the workflow model (this component keeps no completion state of
+ * its own), living demonstrations instead of stacked words and forms, a
+ * plain list of what can be changed under each one, and example asks that
+ * are handed to Jewel. Only what the steps CREATE differs. Nothing here
+ * generates: Jewel is the only generation door. The only writes on these
+ * screens are the creator's own — the show name and theme typed on the
+ * sign step, and the slide deck arranged by hand — both through the page's
+ * normal save path, into the same project fields the forms below write.
  */
 
 export type TalkshowDoors = {
   /** Upload the creator's own sign (page tags the upload as the sign). */
   uploadSign: () => void;
-  /** Scroll to the project form below (name + theme & style fields). */
+  /** Scroll to the project form below. Name & theme themselves are edited
+   *  on the sign step's own face now, Gameshow-plan style — this door stays
+   *  wired for the page's other entries into the form. */
   showPlanForm: () => void;
   /** Put a saved backdrop on the overlay (the existing background choice). */
   applyBackground: (assetKey: string) => void;
@@ -49,26 +53,16 @@ export type TalkshowWorkshopProps = {
   doors: TalkshowDoors;
 };
 
-const DONE_WHEN: Record<TalkStepId, string> = {
-  sign: "your show has a real name, and a sign exists — made by Jewel with your title lettered over a backdrop, or your own uploaded sign.",
-  backdrops: "at least one backdrop is saved with your backgrounds.",
-  research: "Jewel has run a web search in this project — her findings, with their sources, are in your conversation with her.",
-  quiz: "a quiz with at least one multiple-choice question is saved in your toolbox.",
-  youtube: "the YouTube tool is in your toolbox, ready for your dashboard.",
-  slides: "your deck holds at least two slides, in the order your show will follow.",
-  toolbox: "every earlier step is complete, and you have opened this review.",
-};
-
 export function TalkStepShell({ stepId, step, children }: { stepId: TalkStepId; step?: WorkflowStepState; children: ReactNode }) {
   const info = TALK_STEPS[stepId];
   if (!step) return <>{children}</>;
   return (
     <section aria-label={step.label}>
-      <div className="gsw-stephead"><span className="gsw-k">Imagine and Create · Talk Show or Classroom</span><div className="gsw-display">{step.label}</div></div>
-      <p className="gsw-ask">{info.sub}</p>
+      <div className="gsw-stephead"><span className="gsw-k">{info.kicker}</span><div className="gsw-display">{step.label}</div></div>
+      <p className="gsw-ask">{info.intro}</p>
       <div className={"gsw-donewhen" + (step.complete ? " met" : "")}>
         <span className="gsw-box">{step.complete ? "✓" : ""}</span>
-        <span><b>This step is done when</b> {DONE_WHEN[stepId]}</span>
+        <span><b>This step is done when</b> {info.doneWhen}</span>
       </div>
       {step.complete && <div className="gsw-jcheck">✓ Checked off — {step.checkLine}</div>}
       {children}
@@ -87,29 +81,16 @@ export function TalkAskStrip(props: TalkshowWorkshopProps & { stepId: TalkStepId
           <div className="gsw-java">✦</div>
           <div><div className="gsw-jt">Jewel</div><div className="gsw-js">Your co-creator</div></div>
         </div>
-        <div className="gsw-jmsg">{info.status}</div>
-        <div className="gsw-exlabel">{info.askTitle}</div>
+        <div className="gsw-jmsg">{info.jewelNote}</div>
+        <div className="gsw-exlabel">Examples — tap one, or write your own</div>
         <div className="gsw-jchips">
           {info.asks.map(ask => (
-            <button key={ask.label} type="button" className="gsw-jchip" onClick={() => onAsk(ask.ask)}>{ask.label}</button>
+            <button key={ask.say} type="button" className="gsw-jchip" onClick={() => onAsk(ask.say)}>{ask.chip}</button>
           ))}
         </div>
         <button type="button" className="gsw-openjewel" onClick={onOpenJewel}>Write it in Jewel’s box ↓</button>
         {extra && <p className="gsw-jnote">{extra}</p>}
       </div>
-    </div>
-  );
-}
-
-export function TalkChangeList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="gsw-edits">
-      <div className="gsw-eh">{title}</div>
-      <ul>
-        {items.map((item, i) => (
-          <li key={i}><span className="gsw-ei"><span>{item}</span></span></li>
-        ))}
-      </ul>
     </div>
   );
 }
