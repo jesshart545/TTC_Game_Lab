@@ -102,7 +102,7 @@ async function render(element) { await React.act(async () => root.render(element
     assert.deepEqual(selected[0], ['board', true]);
     await click(folderButton('Image backgrounds')); await click(button('Use as initial background'));
     assert.deepEqual(selected[1], ['b']);
-    await click(button('Create or design in Workshop')); assert.equal(workshop, 1);
+    await click(button('Create or design in Imagine and Create')); assert.equal(workshop, 1);
     assert.equal(JSON.stringify(assets), original);
     console.log('PASS: stable media identities, accessible collapsed folders, bulk/search precedence, blocked storage, preserved editor state, and original background/board callbacks.');
   } finally { await React.act(async () => root.unmount()); }

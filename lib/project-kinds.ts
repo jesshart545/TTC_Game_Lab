@@ -64,6 +64,22 @@ export const PROJECT_KINDS: ProjectKindInfo[] = [
   },
 ];
 
+/** The setup pieces a kind's from-scratch screen offers. A talk show's
+ * screen offers only talk pieces — quiz cards and YouTube clips — never
+ * pictured gameshow tools (Jessica, 2026-11-03: the Talk space holds only
+ * talk pieces). Other kinds keep the full shared list. */
+export function setupPiecesForKind(kind: ProjectKind): SetupPiece[] {
+  if (kind === "talk") return SETUP_PIECES.filter(piece => piece.id === "question-cards" || piece.id === "video-clips");
+  return SETUP_PIECES;
+}
+
+/** The pieces pre-tapped for a kind: the talk defaults are its own two
+ * pieces; every other kind keeps the shared defaults. */
+export function defaultSetupPieces(kind: ProjectKind): string[] {
+  if (kind === "talk") return ["question-cards", "video-clips"];
+  return SETUP_PIECES.filter(piece => piece.defaultOn).map(piece => piece.id);
+}
+
 export function projectKindInfo(kind: ProjectKind | undefined): ProjectKindInfo | undefined {
   return PROJECT_KINDS.find(info => info.id === kind);
 }

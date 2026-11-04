@@ -198,5 +198,261 @@
     "weight": "100 700",
     "source": "https://github.com/google/fonts/blob/main/ofl/robotomono/RobotoMono[wght].ttf",
     "bytes": 128684
+  },
+  {
+    "name": "Comfortaa",
+    "slug": "comfortaa",
+    "group": "Modern",
+    "weight": "300 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/comfortaa/Comfortaa[wght].ttf",
+    "bytes": 99696
+  },
+  {
+    "name": "DM Sans",
+    "slug": "dmsans",
+    "group": "Modern",
+    "weight": "100 1000",
+    "source": "https://github.com/google/fonts/blob/main/ofl/dmsans/DMSans[opsz,wght].ttf",
+    "bytes": 109300
+  },
+  {
+    "name": "Josefin Sans",
+    "slug": "josefinsans",
+    "group": "Modern",
+    "weight": "100 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/josefinsans/JosefinSans[wght].ttf",
+    "bytes": 58920
+  },
+  {
+    "name": "Outfit",
+    "slug": "outfit",
+    "group": "Modern",
+    "weight": "100 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/outfit/Outfit[wght].ttf",
+    "bytes": 55960
+  },
+  {
+    "name": "Quicksand",
+    "slug": "quicksand",
+    "group": "Modern",
+    "weight": "300 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/quicksand/Quicksand[wght].ttf",
+    "bytes": 66144
+  },
+  {
+    "name": "Rubik",
+    "slug": "rubik",
+    "group": "Modern",
+    "weight": "300 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/rubik/Rubik[wght].ttf",
+    "bytes": 145748
+  },
+  {
+    "name": "Work Sans",
+    "slug": "worksans",
+    "group": "Modern",
+    "weight": "100 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/worksans/WorkSans[wght].ttf",
+    "bytes": 170092
+  },
+  {
+    "name": "Cinzel Decorative",
+    "slug": "cinzeldecorative",
+    "group": "Classic",
+    "weight": "700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/cinzeldecorative/CinzelDecorative-Bold.ttf",
+    "bytes": 28488
+  },
+  {
+    "name": "Cormorant Garamond",
+    "slug": "cormorantgaramond",
+    "group": "Classic",
+    "weight": "300 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/cormorantgaramond/CormorantGaramond[wght].ttf",
+    "bytes": 326252
+  },
+  {
+    "name": "EB Garamond",
+    "slug": "ebgaramond",
+    "group": "Classic",
+    "weight": "400 800",
+    "source": "https://github.com/google/fonts/blob/main/ofl/ebgaramond/EBGaramond[wght].ttf",
+    "bytes": 399160
+  },
+  {
+    "name": "Fraunces",
+    "slug": "fraunces",
+    "group": "Classic",
+    "weight": "100 900",
+    "source": "https://github.com/google/fonts/blob/main/ofl/fraunces/Fraunces[SOFT,WONK,opsz,wght].ttf",
+    "bytes": 245952
+  },
+  {
+    "name": "Libre Baskerville",
+    "slug": "librebaskerville",
+    "group": "Classic",
+    "weight": "400 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/librebaskerville/LibreBaskerville[wght].ttf",
+    "bytes": 80760
+  },
+  {
+    "name": "Marcellus",
+    "slug": "marcellus",
+    "group": "Classic",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/marcellus/Marcellus-Regular.ttf",
+    "bytes": 24328
+  },
+  {
+    "name": "Spectral",
+    "slug": "spectral",
+    "group": "Classic",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/spectral/Spectral-Regular.ttf",
+    "bytes": 111444
+  },
+  {
+    "name": "Alfa Slab One",
+    "slug": "alfaslabone",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/alfaslabone/AlfaSlabOne-Regular.ttf",
+    "bytes": 45444
+  },
+  {
+    "name": "Black Ops One",
+    "slug": "blackopsone",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/blackopsone/BlackOpsOne-Regular.ttf",
+    "bytes": 73568
+  },
+  {
+    "name": "Bungee",
+    "slug": "bungee",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/bungee/Bungee-Regular.ttf",
+    "bytes": 55408
+  },
+  {
+    "name": "Fascinate Inline",
+    "slug": "fascinateinline",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/fascinateinline/FascinateInline-Regular.ttf",
+    "bytes": 29884
+  },
+  {
+    "name": "Faster One",
+    "slug": "fasterone",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/fasterone/FasterOne-Regular.ttf",
+    "bytes": 43236
+  },
+  {
+    "name": "Fredoka",
+    "slug": "fredoka",
+    "group": "Bold & game show",
+    "weight": "300 700",
+    "source": "https://github.com/google/fonts/blob/main/ofl/fredoka/Fredoka[wdth,wght].ttf",
+    "bytes": 102196
+  },
+  {
+    "name": "Limelight",
+    "slug": "limelight",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/limelight/Limelight-Regular.ttf",
+    "bytes": 52496
+  },
+  {
+    "name": "Monoton",
+    "slug": "monoton",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/monoton/Monoton-Regular.ttf",
+    "bytes": 26756
+  },
+  {
+    "name": "Righteous",
+    "slug": "righteous",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/righteous/Righteous-Regular.ttf",
+    "bytes": 22876
+  },
+  {
+    "name": "Russo One",
+    "slug": "russoone",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/russoone/RussoOne-Regular.ttf",
+    "bytes": 19272
+  },
+  {
+    "name": "Titan One",
+    "slug": "titanone",
+    "group": "Bold & game show",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/titanone/TitanOne-Regular.ttf",
+    "bytes": 25516
+  },
+  {
+    "name": "Amatic SC",
+    "slug": "amaticsc",
+    "group": "Handwritten",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/amaticsc/AmaticSC-Regular.ttf",
+    "bytes": 82456
+  },
+  {
+    "name": "Great Vibes",
+    "slug": "greatvibes",
+    "group": "Handwritten",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/greatvibes/GreatVibes-Regular.ttf",
+    "bytes": 216428
+  },
+  {
+    "name": "Kalam",
+    "slug": "kalam",
+    "group": "Handwritten",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/kalam/Kalam-Regular.ttf",
+    "bytes": 190116
+  },
+  {
+    "name": "Sacramento",
+    "slug": "sacramento",
+    "group": "Handwritten",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/sacramento/Sacramento-Regular.ttf",
+    "bytes": 41044
+  },
+  {
+    "name": "Shadows Into Light",
+    "slug": "shadowsintolight",
+    "group": "Handwritten",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/shadowsintolight/ShadowsIntoLight.ttf",
+    "bytes": 28436
+  },
+  {
+    "name": "IBM Plex Mono",
+    "slug": "ibmplexmono",
+    "group": "Monospace",
+    "weight": "400",
+    "source": "https://github.com/google/fonts/blob/main/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
+    "bytes": 56576
+  },
+  {
+    "name": "JetBrains Mono",
+    "slug": "jetbrainsmono",
+    "group": "Monospace",
+    "weight": "100 800",
+    "source": "https://github.com/google/fonts/blob/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf",
+    "bytes": 90680
   }
 ]

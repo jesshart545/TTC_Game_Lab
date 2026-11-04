@@ -43,13 +43,13 @@ const actionsRow=pageSource.indexOf('publish-review-actions',reviewStart);
 assert(outcomeRender>reviewStart&&outcomeRender<actionsRow,'the publish outcome renders in the Publish panel by the Publish button');
 assert((pageSource.match(/setPublishOutcome\(/g)||[]).length>=5,'blockers, the cloud check, success and failure all set the panel outcome');
 // The title Fix goes to the Game plan title field, never to a bare stage switch.
-assert(pageSource.includes('onClick={openGamePlanEntry}>Fix in Workshop'));
-assert(!pageSource.includes('onClick={() => chooseWorkflowStep(0)}>Fix in Workshop'),'the title fix must not land on a bare Workshop switch');
+assert(pageSource.includes('onClick={openGamePlanEntry}>Fix in Imagine and Create'));
+assert(!pageSource.includes('onClick={() => chooseWorkflowStep(0)}>Fix in Imagine and Create'),'the title fix must not land on a bare stage switch');
 assert(pageSource.includes('getElementById("game-title")'),'the title fix targets the Game plan title field');
 assert(pageSource.includes('classList.add("fix-highlight")'),'fix landings highlight the target field');
 // Issue rows and the no-background row carry Fix buttons too.
 assert(pageSource.includes('onClick={() => fixChecklistIssue(issue)}'),'every readiness row renders a Fix button');
-assert(pageSource.includes('onClick={() => requestBuildEntry("background", true)}>Fix in Build Space'),'the no-background row has a Fix button');
+assert(pageSource.includes('onClick={() => requestBuildEntry("background", true)}>Fix in Set the Stage'),'the no-background row has a Fix button');
 // Build Space accepts a fix entry request and selects the exact item.
 assert(buildSource.includes('"fix"')&&buildSource.includes('fixTarget'),'Build Space fix entries select the named tool or control');
 // Build Space's own step-4 readiness panel: its Fix connection button selects
@@ -57,5 +57,5 @@ assert(buildSource.includes('"fix"')&&buildSource.includes('fixTarget'),'Build S
 // checklist fixes use, instead of selecting silently.
 assert(buildSource.includes('setSelection({kind:issue.kind,id:issue.targetId});setFixFlashRequest'),'the Fix connection button selects the issue target and requests the landing highlight');
 assert(buildSource.includes('if(!fixFlashRequest||testing||!selection)return;')&&buildSource.includes('flashFixHighlight(target)'),'the Fix connection landing flashes the settings panel with the shared fix highlight');
-console.log('PASS: publish outcomes render in the Publish panel and checklist Fix buttons target the Game plan title field, the named Build Space item, and the background picker.');
+console.log('PASS: publish outcomes render in the Publish panel and checklist Fix buttons target the Game plan title field, the named Set the Stage item, and the background picker.');
 

@@ -24,7 +24,7 @@ export default function BackgroundBrowser({ project, onChoose, onWorkshop }: Pro
 
   return <section className="build-background-browser" aria-label="Initial background">
     <h3>Choose the initial background or board</h3>
-    <p className="workflow-quick-help">{current ? `Current background: ${current}. Open a folder to choose a different one.` : "Open a folder to choose your starting scene, or create one in Workshop."}</p>
+    <p className="workflow-quick-help">{current ? `Current background: ${current}. Open a folder to choose a different one.` : "Open a folder to choose your starting scene, or create one in Imagine and Create."}</p>
     <label>Find a background or board<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search backgrounds and boards" /></label>
     <div className="folder-toolbar" role="group" aria-label="Background folder controls">
       <span>{media.length + boards.length} choices</span>
@@ -61,6 +61,6 @@ export default function BackgroundBrowser({ project, onChoose, onWorkshop }: Pro
       </CollapsibleFolder>}
       {!media.length && !boards.length && <p className="empty-note">{search ? "No backgrounds or boards match that search." : "No backgrounds or boards saved yet."}</p>}
     </div>
-    <button type="button" className="outline-btn" onClick={onWorkshop}>Create or design in Workshop</button>
+    <button type="button" className="outline-btn" onClick={onWorkshop}>Create or design in Imagine and Create</button>
   </section>;
 }

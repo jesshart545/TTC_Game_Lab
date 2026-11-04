@@ -23,8 +23,8 @@ export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwo
  const appearance=(draft.config.appearance||{}) as Record<string,unknown>;
  const patch=(values:Record<string,unknown>)=>{patchConfig(values);setSaved(true);};
  const media=project.assets.filter(a=>a.url&&['image','video'].includes(mediaKind(a)));
- return <section className="board-designer" aria-label="Workshop board designer">
- <header><div><small>WORKSHOP · BOARD DESIGNER</small><h2>Design your game board</h2><p>The board becomes your initial overlay background. Create your own artwork and layout here; connect game actions in Build Space.</p></div><button type="button" onClick={onClose}>Back to Workshop</button></header>
+ return <section className="board-designer" aria-label="Imagine and Create board designer">
+ <header><div><small>IMAGINE AND CREATE · BOARD DESIGNER</small><h2>Design your game board</h2><p>The board becomes your initial overlay background. Create your own artwork and layout here; connect game actions in Set the Stage.</p></div><button type="button" onClick={onClose}>Back to Imagine and Create</button></header>
  <div className="board-designer-layout"><aside>
  <label>Board name<input value={draft.name} onChange={e=>{patchTool({name:e.target.value});setSaved(true);}}/></label>
  <label><input type="checkbox" checked={appearance.transparentBackground===true} onChange={e=>patchAppearance({transparentBackground:e.target.checked})}/>Transparent board background</label>
@@ -39,6 +39,6 @@ export default function BoardDesigner({project,tool,onSave,onClose,onCreateArtwo
  </aside><div><button type="button" onClick={()=>setPreview(!preview)}>{preview?'Pause artwork preview':'Play artwork preview'}</button><div className="board-design-canvas" aria-label="Board design canvas">
  {preview?<BoardSurface tool={draft} project={project} playing/>:<div className="board-preview-paused">Artwork preview paused</div>}
  </div><p>Start with your own artwork, or create new artwork from your description. No game spaces or grid are added to your design.</p>{tool.type==='trivia-board'&&<p>Your saved trivia categories and questions are preserved. This designer edits the board artwork without changing the saved questions.</p>}</div></div>
- <footer><button type="button" onClick={()=>{commit(draft);setSaved(true);}}>Save board design</button><span role="status">{saved?'Board design saved to draft.':''}</span><p>Your design saves as you edit. Build Space connects dashboard controls to the finished board.</p></footer>
+ <footer><button type="button" onClick={()=>{commit(draft);setSaved(true);}}>Save board design</button><span role="status">{saved?'Board design saved to draft.':''}</span><p>Your design saves as you edit. Set the Stage connects dashboard controls to the finished board.</p></footer>
  </section>;
 }

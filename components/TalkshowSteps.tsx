@@ -9,7 +9,7 @@ import { quizQuestionsOf } from "../lib/quiz";
 import { isVideo } from "../lib/workshop-libraries";
 import {
   BACKDROP_CHANGES, DEMO_COLOR_PAIRS, DEMO_FONTS, EXAMPLE_QUIZ, QUIZ_CHANGES,
-  RESEARCH_CHANGES, SAMPLE_RESEARCH, SIGN_CHANGES, SLIDES_CHANGES, TALK_STEPS,
+  RESEARCH_CHANGES, SAMPLE_RESEARCH, SIGN_CHANGES, SLIDES_CHANGES, TALK_STEPS, TALK_TOOL_TYPES,
   YOUTUBE_CHANGES, demoBackdrop, demoTextSpec,
 } from "../lib/talkshow-path";
 import AssetThumbnail from "./AssetThumbnail";
@@ -71,18 +71,11 @@ function LookControls({ fontIndex, pairIndex, onFont, onPair }: {
 /* ---------------- Step 1 · Name & sign your show ---------------- */
 
 export function SignStep(props: ScreenProps) {
-  const { project, doors, onAskJewel: onAsk, onSaveProject } = props;
+  const { project, doors, onAskJewel: onAsk } = props;
   const signAsset = findSignAsset(project);
   const demoAsset = signAsset || demoBackdrop(project);
-  const baseSpec = demoTextSpec(project, demoAsset);
-  const look = useLookPlay();
-  const spec = {
-    ...baseSpec,
-    ...(look.fontIndex !== null ? { fontFamily: DEMO_FONTS[look.fontIndex].family } : {}),
-    ...(look.pairIndex !== null ? { textColor: DEMO_COLOR_PAIRS[look.pairIndex].textColor, accentColor: DEMO_COLOR_PAIRS[look.pairIndex].accentColor } : {}),
-  };
+  const spec = demoTextSpec(project, demoAsset);
   const uploadedSign = signAsset && signAsset.sign === true && !assetBackdropText(signAsset) ? signAsset : null;
-  const theme = (project.gamePlan?.theme || "").trim();
   return (
     <TalkStepShell stepId="sign" step={props.step}>
       <div className="gsw-cols">
@@ -95,51 +88,13 @@ export function SignStep(props: ScreenProps) {
             <div style={{ position: "absolute", left: 14, bottom: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <span className="gsw-vchip gold">{uploadedSign ? `Your uploaded sign · ${uploadedSign.name}` : signAsset ? `Your sign · ${signAsset.name}` : "Demonstration · Jewel letters your title over artwork like this"}</span>
               {signAsset && !uploadedSign && <span className="gsw-vchip">Lettering is a real text layer — never baked in</span>}
-              {theme && <span className="gsw-vchip">Theme · {theme}</span>}
             </div>
           </div>
-          {!uploadedSign && (
-            <>
-              <LookControls fontIndex={look.fontIndex} pairIndex={look.pairIndex} onFont={look.setFontIndex} onPair={look.setPairIndex} />
-              {(look.fontIndex !== null || look.pairIndex !== null) && (
-                <div className="gsw-chipsrow" style={{ marginTop: 12 }}>
-                  <button type="button" className="gsw-jchip" onClick={() => onAsk(`Letter my sign “${spec.text}” in ${DEMO_FONTS[look.fontIndex ?? 0].name}, ${DEMO_COLOR_PAIRS[look.pairIndex ?? 0].name} colors`)}>
-                    Ask Jewel for this exact look
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          <div className="gsw-seclabel" style={{ marginTop: 22 }}>Your name &amp; theme — the short version, set right here</div>
-          <div className="gsw-grid2">
-            <div className="gsw-card">
-              <div className="tsw-fields">
-                <label>Show name
-                  <input
-                    type="text"
-                    value={project.name === "New Project" ? "" : project.name}
-                    placeholder="Example: The Cozy Corner"
-                    onChange={event => onSaveProject({ ...project, name: event.target.value, updatedAt: "just now" })}
-                  />
-                </label>
-                <label>Theme &amp; style
-                  <textarea
-                    rows={2}
-                    value={project.gamePlan?.theme || ""}
-                    placeholder="Example: a warm spiritual-and-life talk show"
-                    onChange={event => onSaveProject({ ...project, gamePlan: { ...project.gamePlan, theme: event.target.value }, updatedAt: "just now" })}
-                  />
-                </label>
-              </div>
-              <p style={{ marginTop: 8 }}>Saved as you type, into the same fields as always — the theme aims Jewel’s research.</p>
-            </div>
-            <div className="gsw-card">
-              <h4>Have your own sign?</h4>
-              <p>Upload a sign you made yourself and it is used instead of Jewel’s — exactly as it is, nothing redrawn.</p>
-              <div className="gsw-chipsrow">
-                <button type="button" className="gsw-demobtn" onClick={doors.uploadSign}>Upload your own sign</button>
-              </div>
+          <div className="gsw-card" style={{ marginTop: 14 }}>
+            <h4>Have your own sign?</h4>
+            <p>Upload a sign you made yourself and it is used instead of Jewel’s — exactly as it is, nothing redrawn.</p>
+            <div className="gsw-chipsrow">
+              <button type="button" className="gsw-demobtn" onClick={doors.uploadSign}>Upload your own sign</button>
             </div>
           </div>
           <ChangeList title="What you can change — your sign" items={SIGN_CHANGES} onAsk={onAsk} />
@@ -233,8 +188,8 @@ export function ResearchStep(props: ScreenProps) {
             <h4>{theme || "No theme & style set yet"}</h4>
             <p>{theme
               ? "This aims Jewel’s searching — a science classroom and a gossip show research very differently."
-              : "Set it on the Name & sign step — it tells Jewel what kind of show this is, so she knows what to look for."}</p>
-            {!theme && <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={() => onNavigateStep(0, "sign")}>Set my theme &amp; style</button></div>}
+              : "It starts with you: tell Jewel your show’s title and its theme or vibe — she asks for them first, before anything else, and her research follows them."}</p>
+            {!theme && <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={() => onNavigateStep(0, "sign")}>Start with my title &amp; theme</button></div>}
           </div>
 
           <span className="gsw-demotag" style={{ marginTop: 22 }}>Demonstration — run a sample search</span>
@@ -332,7 +287,7 @@ export function QuizStep(props: ScreenProps) {
               <h4>{quizTool.name} · {saved.length} multiple-choice question{saved.length === 1 ? "" : "s"}</h4>
               <p>{cardTool
                 ? "Your quiz cards are ready — they draw from this list, choices showing, answer held for the reveal."
-                : "Your questions are saved. They present on quiz cards — make the cards yourself with the Workshop’s card maker, or ask Jewel to create them."}</p>
+                : "Your questions are saved. They present on quiz cards — make the cards yourself with the card maker in Imagine and Create, or ask Jewel to create them."}</p>
               <div className="gsw-chipsrow">
                 <button type="button" className="gsw-jchip" onClick={() => doors.openListEditor(quizTool.id)}>Open the quiz list</button>
                 {!cardTool && <button type="button" className="gsw-jchip" onClick={doors.createQuizCards}>Create the cards yourself</button>}
@@ -539,7 +494,9 @@ export function SlidesStep(props: ScreenProps) {
 
 export function ToolboxStep(props: ScreenProps) {
   const { project, doors, onNavigateStep } = props;
-  const tools = project.gameTools || [];
+  // Talk space holds talk pieces only: gameshow tools a project may carry
+  // are never pictured or listed here (Jessica, 2026-11-03).
+  const tools = (project.gameTools || []).filter(tool => TALK_TOOL_TYPES.includes(tool.type));
   const backgrounds = backgroundAssets(project);
   const deck = Array.isArray(project.talkDeck) ? project.talkDeck : [];
   const firstCard = tools.find(tool => tool.type === "question-card" || tool.type === "blank-card");
@@ -555,7 +512,7 @@ export function ToolboxStep(props: ScreenProps) {
     { icon: "✂", title: "Media editor", description: "Trim · Resize · Save an edited copy", action: () => project.assets.length ? doors.openMediaEditor(0) : onNavigateStep(0, "backdrops") },
     { icon: "⚡", title: "Asset Composer", description: "The timeline workbench", action: doors.openComposer },
     { icon: "⚙", title: "Tool editors", description: "Name · Setup · Look · Preview — per tool", action: doors.showSavedWork },
-    { icon: "✎", title: "Name & theme form", description: "Your show’s name and its theme & style", action: () => onNavigateStep(0, "sign") },
+    { icon: "✎", title: "Name & sign", description: "Your show’s title, theme, and its sign", action: () => onNavigateStep(0, "sign") },
   ];
   return (
     <TalkStepShell stepId="toolbox" step={props.step}>

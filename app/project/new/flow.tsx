@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createProject, saveProjectToServer, type ProjectKind } from "../../../lib/project";
 import { GAME_TEMPLATES, getGameTemplate } from "../../../lib/game-templates";
-import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, projectKindInfo } from "../../../lib/project-kinds";
+import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
 import "./new-project.css";
 
-type ScratchStart = { kind: ProjectKind; pieces: string[] };
+type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string };
 
 export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean }) {
   const router = useRouter();
@@ -17,6 +17,7 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [name, setName] = useState("");
+  const [theme, setTheme] = useState("");
   const [begun, setBegun] = useState(false);
   const [plain, setPlain] = useState<boolean | null>(null);
   const [chosenTemplate, setChosenTemplate] = useState("");
@@ -90,6 +91,12 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
           // Scratch start from the kind flow: stamp the kind and add the
           // pieces the user tapped, using the Workshop's own creators.
           project.kind = start.kind;
+          // A talk show starts with the ask (Jessica, 2026-11-03): the
+          // title and the theme/vibe/subject the creator gave on the
+          // setup screen seed the project before anything else exists.
+          if (start.kind === "talk" && start.theme) {
+            project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
+          }
           project = applySetupPieces(project, start.pieces);
         }
       }
@@ -113,6 +120,7 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
 
   function chooseKind(next: ProjectKind) {
     setKind(next);
+    setPieces(defaultSetupPieces(next));
     if (next === "gameshow") {
       setPopup(true);
       return;
@@ -129,7 +137,7 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
 
   function startScratch() {
     if (!kind) return;
-    setStart({ kind, pieces: [...pieces] });
+    setStart({ kind, pieces: [...pieces], theme: kind === "talk" ? theme.trim() || undefined : undefined });
     setBegun(true);
   }
 
@@ -183,10 +191,20 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
                 <div className="display">{kindInfo.scratchHeading}</div>
                 <div className="np-chip set">From scratch</div>
               </div>
-              <div className="np-ask">Two things on this screen: <b>name it</b>, and <b>tap the pieces your show needs</b>.</div>
-              <input className="np-nameinput" aria-label="Show name" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+              {kind === "talk" ? (
+                <>
+                  <div className="np-ask">First things first — two things only you can give: <b>the title of your show</b>, and <b>its theme, vibe, or subject</b>. Then tap the pieces your show needs.</div>
+                  <input className="np-nameinput" aria-label="Show title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+                  <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder="Its theme, vibe, or subject — e.g. cozy faith-and-life chat" value={theme} onChange={event => setTheme(event.target.value)} />
+                </>
+              ) : (
+                <>
+                  <div className="np-ask">Two things on this screen: <b>name it</b>, and <b>tap the pieces your show needs</b>.</div>
+                  <input className="np-nameinput" aria-label="Show name" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+                </>
+              )}
               <div className="np-pieces">
-                {SETUP_PIECES.map(piece => {
+                {setupPiecesForKind(kindInfo.id).map(piece => {
                   const on = pieces.includes(piece.id);
                   return (
                     <div
@@ -254,7 +272,7 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
               <div className="np-kick">Gameshow project</div>
               <h3 className="display">How do you want to start?</h3>
               <div className="np-sub">Two ways in — pick one and you&apos;re building.</div>
-              <button type="button" className="np-opt" onClick={() => { setPopup(false); const info = projectKindInfo("gameshow"); if (info && !name.trim()) setName(info.nameSuggestion); setScreen("scratch"); }}>
+              <button type="button" className="np-opt" onClick={() => { setPopup(false); setPieces(defaultSetupPieces("gameshow")); const info = projectKindInfo("gameshow"); if (info && !name.trim()) setName(info.nameSuggestion); setScreen("scratch"); }}>
                 <div className="np-ic">✨</div>
                 <div>
                   <div className="np-t">Build from Scratch</div>
