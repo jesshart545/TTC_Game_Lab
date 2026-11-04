@@ -139,10 +139,10 @@ const quizTool = (overrides = {}) => ({
     'the conversation is not parked between the banner and the topics — it lives inside the current topic');
   assert((stage.match(/\{jewelPanel\}/g) || []).length >= 6, 'her panel stands inside every topic section, after that topic\'s examples');
   assert(page.includes('jewelPanel={jewelPanelElement}'), 'the page hands its one Jewel panel to the talk stage');
-  assert(page.includes('talkCreateView ? null : jewelPanelElement'), 'in the talk create view the grid does not render the panel a second time');
+  assert(page.includes('talkCreateView || stageReviewView ? null : jewelPanelElement'), 'in the talk create view (and the stage-review view) the grid does not render the panel a second time');
   assert.equal((page.match(/<WorkshopAiPanel/g) || []).length, 1, 'the panel element is built exactly once and placed, never duplicated');
   const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
-  assert(panel.includes('hidden={workflowStep===1&&!buildAiOpen}'), 'the panel can only be hidden in Set the Stage — in Imagine and Create it stands open by default');
+  assert(panel.includes('hidden={workflowStep===1&&!buildAiOpen&&!stageReview}'), 'the panel can only be hidden in Set the Stage outside the review spaces — in Imagine and Create it stands open by default, and in the review spaces it always stands open');
   // And her presence there is FULL, not a token (Jessica, 2026-11-04):
   // the whole conversation panel — her heading, her greeting and
   // messages, the composer — at the full width of the content column.
@@ -632,18 +632,19 @@ const quizTool = (overrides = {}) => ({
   // Top of the page: Rename · Save project · Delete only — the Ask Jewel
   // header button, the status span, the kind picker, and the save-status
   // line come off the top in that view (they render for every other view).
-  assert(page.includes('{!talkCreateView && <span>{project.status}</span>}'), 'the draft-status span leaves the talk top');
-  assert(page.includes('{!talkCreateView && <button type="button" className="build-btn ask-jewel-btn"'), 'the Ask Jewel header button leaves the talk top');
-  assert(page.includes('{!talkCreateView && <small role="status"'), 'the save-status clutter leaves the talk top');
+  assert(page.includes('{!talkBareFrame && <span>{project.status}</span>}'), 'the draft-status span leaves the talk top');
+  assert(page.includes('const talkBareFrame = talkCreateView || (project.kind === "talk" && stageReviewView)'), 'the bare talk frame covers both the talk create view and talk at Set the Stage');
+  assert(page.includes('{!talkBareFrame && <button type="button" className="build-btn ask-jewel-btn"'), 'the Ask Jewel header button leaves the talk top');
+  assert(page.includes('{!talkBareFrame && <small role="status"'), 'the save-status clutter leaves the talk top');
   assert(page.includes('✎ Rename') && page.includes('Delete Project'), 'Rename and Delete Project remain at the top');
-  assert(page.includes('talkCreateView ? "Save project" : "Save progress"'), 'in the talk top the save button reads exactly "Save project"');
+  assert(page.includes('talkBareFrame ? "Save project" : "Save progress"'), 'in the talk top the save button reads exactly "Save project"');
   // No generic frame above the stage: no Brainstorm & create heading
   // block, no Current Task entry guide, no section tab trio (bare nav),
   // and no gameshow-shaped game plan form — the theme was settled at
   // creation and never becomes a page area again.
-  assert(page.includes('{!talkCreateView && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view');
-  assert(page.includes('entryGuide={talkCreateView ? undefined :'), 'the Current Task card leaves the talk view');
-  assert(page.includes('bare={talkCreateView}'), 'the nav renders bare for the talk view — stage buttons only');
+  assert(page.includes('{!talkBareFrame && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view');
+  assert(page.includes('entryGuide={talkCreateView || stageReviewView ? undefined :'), 'the Current Task card leaves the talk view (and the stage-review views)');
+  assert(page.includes('bare={talkBareFrame}'), 'the nav renders bare for the talk views — stage buttons only');
   assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && <details key="game-plan"'), 'the gameshow-shaped game plan form leaves the talk view');
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(!stage.includes('gamePlan') || !stage.includes('theme: event.target.value'), 'the stage carries no theme editing — theme is a fact from creation');
@@ -696,13 +697,15 @@ const quizTool = (overrides = {}) => ({
   assert(conversation.includes('"ttc-open-jewel"') && conversation.includes('setHidden(false)'),
     'a hidden conversation reveals itself when the doorway fires — the scene works whether the panel was open or collapsed');
   // The page-level progress strip is withheld in the talk create
-  // view ONLY: the chips row and the Next/Go-there line no longer
-  // render there, while the generic strip survives untouched for
-  // every other kind and stage.
+  // view — and, since the Set the Stage review spaces (2026-11-04),
+  // in the gameshow/talk stage-1 review views too: the chips row
+  // and the Next/Go-there line no longer render there, while the
+  // generic strip survives untouched for every other kind and
+  // stage.
   assert(panel.includes('const talkCreateView = project.kind === "talk" && workflowStep === 0'),
     'the panel computes the talk create view to withhold the strip');
-  assert(panel.includes('{!talkCreateView && (()=>{const stageState=workflow.stages[workflowStep];'),
-    'the progress strip renders only outside the talk create view');
+  assert(panel.includes('const stripWithheld = talkCreateView || stageReview;') && panel.includes('{!stripWithheld && (()=>{const stageState=workflow.stages[workflowStep];'),
+    'the progress strip renders only where it is not withheld (talk create, or the stage-review spaces)');
   assert(panel.includes('jewel-progress') && panel.includes('Next: {nextTask.label}') && panel.includes('Go there →'),
     'the generic progress strip itself is untouched — other kinds keep their chips and Next line');
   assert(panel.includes('<CompactConversation') && panel.includes('AI CREATIVE DIRECTOR'),

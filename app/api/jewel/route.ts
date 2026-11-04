@@ -19,6 +19,7 @@ import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured }
 import { assistantChatCompletion, assistantConfigured } from "../../../lib/assistant-provider";
 import { evaluateWorkflow, validateNavigate, workflowContextBlock } from "../../../lib/workflow-progress";
 import { assetPromptText, backgroundAssets, findSignAsset, promptAsset } from "../../../lib/backdrop-text";
+import { deckMomentStaged } from "../../../lib/stage-review";
 import { quizQuestionsOf } from "../../../lib/quiz";
 import { checkedBoardRegenerateAction, checkedGenerationAction, checkedTriviaAction } from "../../../lib/jewel-generation";
 import { GENERATOR_VOICES } from "../../../lib/generator-voices";
@@ -101,8 +102,24 @@ function talkShowContextBlock(project: any): Record<string, unknown> | undefined
     mediaCount: assets.filter((asset: any) => asset?.role !== "background" && (asset?.storageKey || asset?.url)).length,
     skippedAreas: Array.isArray(project.workflowProgress?.skipped) ? project.workflowProgress.skipped : [],
     deckSize: Array.isArray(project.talkDeck) ? project.talkDeck.length : 0,
+    // Set the Stage (2026-11-04): the deck's moments, in the
+    // creator's order, each with what it points at (ref) and whether
+    // it is staged yet — a moment is staged when its clicker already
+    // exists on the dashboard (media, quiz, youtube, composition) or,
+    // for the sign and backdrop, when it already IS the overlay's
+    // opening scene. Same definition the review page shows.
+    deckMoments: Array.isArray(project.talkDeck) ? project.talkDeck.map((slide: any) => ({ kind: slide?.kind, label: slide?.label, ref: slide?.refKey || null, staged: deckMomentStaged(project, slide) })) : [],
   };
 }
+
+const JEWEL_STAGE_REVIEW_ADDENDUM = `
+SET THE STAGE — REVIEW SPACES (gameshow and talk projects at the build stage): the creator is staging the live stream in the review spaces. The overlay review is exactly the published overlay and the dashboard review acts exactly as the published dashboard; there is no separate test mode and no manual wiring screen — YOU do the adding, staging and wiring through your changes:
+- Place an existing item on the overlay and give it its dashboard button in one edit: changes.connections [{kind:"asset"|"tool"|"composition", id: the item's exact saved id, label: optional button name}] creates the correct controls and activates the item's overlay destination. Placing and wiring is the same single connection — never send the creator to a wiring screen, and never describe a placement as done until your changes contain it.
+- Create and connect a new tool in one edit with changes.newTools [{..., connect:true}].
+- Move or resize a placed item with placement edits: an asset's edits.placement (changes.assets), a tool's config.placement (changes.gameTools), or a button's shown result (that control's overlayResult in changes.controls). Percentages of the 1920x1080 canvas.
+- Rename or restyle a dashboard button through changes.controls [{id, label, appearance}]; reorder the dashboard with changes.controlOrder; remove a button with changes.removeControls; take an item off the overlay by removing its controls and setting inProject / inOverlayBuild false through changes when the creator wants it gone entirely (the item itself stays saved in their project).
+- The creator can also drag items across the review spaces and edit them in place; treat selectedItem as what they are pointing at when they say "this one".
+For TALK projects, talkShow.deckMoments lists the show's deck in the creator's own order, each with staged true/false. Stage an unstaged moment by connecting what it points at: media → changes.connections {kind:"asset", id: ref}; quiz and youtube → {kind:"tool", id: ref}; composition → {kind:"composition", id: ref}. The sign and backdrop moments are the show's opening scene and are already staged as the overlay's background — NEVER connect the sign or backdrop asset as a button (changes.connections would take it off the background). If the creator wants a clicker that returns to a backdrop mid-show, connect a DIFFERENT saved backdrop asset the same way, or remind them the opening backdrop is already the starting scene. You still cannot reorder the deck itself — that is arranged by the creator's own hand.`;
 
 const JEWEL_FEEDBACK_ADDENDUM = `
 GENERATION FEEDBACK — This request includes generationFeedback: a generation you previously asked the app to run has failed. Decide the next step and return it as a normal response in the same JSON contract:
@@ -182,7 +199,8 @@ Attaching media to the case: media already saved in this project attaches by set
     ? { sourceKey: rawEditResult.sourceKey.slice(0, 300), prompt: rawEditResult.prompt.slice(0, 3000), resultKey: rawEditResult.resultKey.slice(0, 300), resultName: typeof rawEditResult.resultName === "string" && rawEditResult.resultName ? rawEditResult.resultName.slice(0, 300) : rawEditResult.resultKey.slice(0, 300), layer: Number.isInteger(rawEditResult.layer) ? Math.min(5, Math.max(1, rawEditResult.layer)) : 1 }
     : undefined;
   const talkShow = talkShowContextBlock(body.project);
-  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM + JEWEL_GENERATION_ADDENDUM + (talkShow ? JEWEL_TALKSHOW_ADDENDUM : "") + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "") + (editResult ? JEWEL_EDIT_RESULT_ADDENDUM : "");
+  const stageReview = body.workspaceStage === "build" && (body.project?.kind === "gameshow" || body.project?.kind === "talk") ? JEWEL_STAGE_REVIEW_ADDENDUM : "";
+  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM + JEWEL_GENERATION_ADDENDUM + (talkShow ? JEWEL_TALKSHOW_ADDENDUM : "") + stageReview + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "") + (editResult ? JEWEL_EDIT_RESULT_ADDENDUM : "");
   // Jewel's progress awareness: the workflow model, computed from the
   // project's real data on every turn (see lib/workflow-progress.ts).
   const workflowEvaluation = body.project ? evaluateWorkflow(body.project) : undefined;
