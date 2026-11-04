@@ -6,12 +6,14 @@ const ts = require('typescript');
 const load = require('./load.cjs');
 
 // Set the Stage — review spaces (Jessica, 2026-11-04). For gameshow
-// and talk at workflowStep 1 the page shows ONLY the overlay review,
-// the dashboard review, and Jewel's conversation: the overlay review
-// is the published overlay's own draft node, the dashboard review's
-// buttons fire through the published runtime, adding/staging/wiring
-// happen through Jewel, items drag across the reviews, and the page
-// progress strip does not render. Radio/multiplayer keep BuildSpace.
+// and talk at workflowStep 1 the page shows ONLY Jewel's conversation
+// at the top and, immediately past her, the overlay and dashboard
+// reviews sharing ONE spot on a toggle: the overlay review is the
+// published overlay's own draft node, the dashboard review's buttons
+// fire through the published runtime (including while the Overlay
+// side is toggled away), adding/staging/wiring happen through Jewel,
+// items drag across the reviews, and the page progress strip does
+// not render. Radio/multiplayer keep BuildSpace.
 // Existing projects — including legacy-shaped ones saved by older
 // code — must open here with every piece of generated media intact,
 // and a save round-trip must not drop fields the surface doesn't
@@ -30,6 +32,12 @@ assert(page.includes('{workflowStep===1 && !stageReviewView && <BuildSpace'), 'B
 assert(page.includes('{!stageReviewView && <WorkshopAssetsPanel'), 'the workshop shelf leaves the stage-review page');
 assert(page.includes('workflowStep !== 2 && !stageReviewView && <details className="workshop-help">'), 'the guide details leave the stage-review page');
 assert(page.includes('entryGuide={talkCreateView || stageReviewView ? undefined :'), 'the entry guide leaves the stage-review views');
+assert(page.includes('{!talkBareFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the flow heading leaves the stage-review page — nothing pushes the surface down');
+assert(page.includes('bare={talkBareFrame || stageReviewView}'), 'the stage nav renders bare (stage buttons only) in the review view — no explanatory note stacked above the surface');
+assert(page.includes('{!stageReviewView && mediaPlayback &&'), 'the video-trim notice leaves the stage-review page');
+assert(page.includes('{!stageReviewView && Boolean(project.pendingVideos?.length)'), 'pending-video blocks cannot sit above the review surface');
+assert(page.includes('{!stageReviewView && backgroundDestinationKey&&'), 'the background-destination editor leaves the stage-review page');
+assert(!page.includes('onEnterJewel={enterJewelFromScene} onAskJewel'), 'the page no longer hands the review surface a deck-shelf ask — deck staging goes through Jewel\'s conversation');
 assert(page.includes('stageReview={stageReviewView}'), 'the page passes the review flag to Jewel\'s panel');
 assert(page.includes('<StageReview ccssEntitled={ccssEntitled} jewelPanel={jewelPanelElement} onEnterJewel={enterJewelFromScene}'), 'the review surface gets the one Jewel panel and the wand-scene entry');
 assert(page.includes('overlay={draftOverlay} onTrigger={trigger}'), 'the review receives the same draft overlay node and trigger the preview uses');
@@ -59,10 +67,19 @@ assert(review.includes('reorderVisibleControls'), 'dashboard drag-reorder writes
 assert(review.includes('Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6'), 'a movement threshold keeps drag and click-to-fire apart');
 assert(review.includes('suppressClick'), 'a completed drag never also fires the button');
 
-// Talk's deck is visible and stageable at this stage (it was orphaned).
-assert(review.includes('deckMomentStaged(project, slide)'), 'the deck shelf reads the shared staged definition');
-assert(review.includes('Ask Jewel to stage this') && review.includes('onAskJewel'), 'an unstaged moment can be handed to Jewel from the shelf');
-assert(review.includes('Your opening scene'), 'sign/backdrop moments read as the opening scene, not as clickers');
+// ONE spot, on a toggle, immediately past Jewel — and the talk
+// deck shelf is GONE from this page: staging deck moments happens
+// through Jewel's conversation (her route context below keeps the
+// deck), never through page furniture.
+assert(review.indexOf('stage-review-jewel') >= 0 && review.indexOf('stage-review-jewel') < review.indexOf('stage-review-spot'), 'Jewel comes first; the review spot follows immediately');
+assert(review.includes('role="tablist"') && review.includes('setReviewSide("overlay")') && review.includes('setReviewSide("dashboard")'), 'one toggle switches the two reviews in the same spot');
+assert(review.includes('reviewSide === "overlay" ? ('), 'only one review side renders at a time');
+assert(review.includes('body.dataset.stageReview'), 'the surface flags the page while mounted so the global Ask Jewel launcher leaves');
+assert(!review.includes('sr-deck') && !review.includes('Your deck') && !review.includes('Ask Jewel to stage this') && !review.includes('deckMomentStaged(project, slide)'), 'the talk deck shelf is removed from the staging page');
+assert(!review.includes('sr-hint') && !review.includes('stage-review-main'), 'no trailing hint, no stacked second column — the spot is the spot');
+const reviewCss = fs.readFileSync('components/stage-review.css', 'utf8');
+assert(reviewCss.includes('body[data-stage-review="true"] .ttc-support-root'), 'the stylesheet hides the global Ask Jewel launcher while this page is mounted');
+assert(reviewCss.includes('.sr-review-toggle') && reviewCss.includes('.stage-review-spot'), 'the toggle and the one review spot carry their own styling');
 
 // Jewel's stage-1 instruction: place, wire, move, rename, remove —
 // and the talk deck rules, including never connecting the sign.
@@ -70,7 +87,7 @@ assert(route.includes('JEWEL_STAGE_REVIEW_ADDENDUM'), 'the route carries the sta
 assert(route.includes('body.workspaceStage === "build" && (body.project?.kind === "gameshow" || body.project?.kind === "talk")'), 'the instruction is scoped to gameshow/talk at the build stage');
 assert(route.includes('deckMoments'), 'Jewel\'s talk context lists the deck moments with staged flags');
 assert(route.includes('NEVER connect the sign or backdrop asset as a button'), 'Jewel is told never to connect the sign/backdrop (it would strip the background)');
-console.log('PASS: source contracts — review surface scope, three surfaces only, strip withheld, drag persistence paths, deck shelf, Jewel stage-1 instruction.');
+console.log('PASS: source contracts — review surface scope, Jewel plus one toggled review spot, strip withheld, drag persistence paths, deck shelf removed, Jewel stage-1 instruction.');
 
 // ---------- lib/stage-review behavior ----------
 const { reorderVisibleControls, deckMomentStaged, deckSlideCreation } = load('lib/stage-review.ts');
@@ -186,7 +203,7 @@ function legacyProject() {
   // new project prop, exactly as persist() does on the real page.
   const renderWith = p => root.render(React.createElement(StageReview, {
     jewelPanel: React.createElement('div', { className: 'jewel-stub' }, 'Jewel conversation'),
-    onEnterJewel: noop, onAskJewel: noop,
+    onEnterJewel: noop,
     sequenceRunning: false, sequenceError: '', onStopSequence: noop, onResetGame: noop,
     cardStates: {}, onSelect: noop, focusControl: null,
     project: p, onChange: next => changes.push(next),
@@ -199,12 +216,20 @@ function legacyProject() {
   }));
   await React.act(async () => renderWith(project));
 
-  // Only the three surfaces render.
+  // Jewel first, then ONE review spot on its toggle: the Overlay
+  // side shows first; the Dashboard side is one flip away, in the
+  // same spot — never both at once, never stacked down the page.
   assert(container.querySelector('.wand-stub'), 'the wand doorway renders');
   assert(container.querySelector('.jewel-stub'), 'Jewel\'s conversation renders on the page');
-  assert(container.querySelector('[aria-label="Overlay review"]'), 'the overlay review renders');
-  assert(container.querySelector('[aria-label="Dashboard review"]'), 'the dashboard review renders');
-  assert(!container.querySelector('.build-space') && !container.querySelector('.workshop-assets'), 'no Build Space workbench, no workshop shelf');
+  const toggleButtons = [...container.querySelectorAll('.sr-review-toggle button')];
+  assert.deepEqual(toggleButtons.map(b => b.textContent), ['Overlay', 'Dashboard'], 'the toggle offers exactly the two reviews');
+  assert(container.querySelector('[aria-label="Overlay review"]'), 'the overlay review renders first in the spot');
+  assert(!container.querySelector('[aria-label="Dashboard review"]'), 'the dashboard review does not render until toggled to — one spot, one side at a time');
+  assert.equal(document.body.dataset.stageReview, 'true', 'the global Ask Jewel launcher is flagged off while this page is mounted');
+  assert(!container.querySelector('.sr-deck') && !container.querySelector('.build-space') && !container.querySelector('.workshop-assets'), 'no deck shelf, no Build Space workbench, no workshop shelf');
+  await React.act(async () => toggleButtons[1].click());
+  assert(container.querySelector('[aria-label="Dashboard review"]'), 'the dashboard review renders in the same spot after the flip');
+  assert(!container.querySelector('[aria-label="Overlay review"]'), 'the overlay review leaves the spot while the dashboard shows — dashboard presses below land on the shared runtime with the Overlay side toggled away');
 
   // Every legacy control stays on the dashboard — including TRIGGER
   // EFFECT — and the hidden sequence step stays hidden, as published.
@@ -212,8 +237,6 @@ function legacyProject() {
   for (const label of ['SHOW WINNER', 'TEST ALERT', 'TRIGGER EFFECT', 'WINNER PACKAGE'])
     assert(labels.some(t => t.includes(label)), `legacy control ${label} is present on the dashboard review`);
   assert(!labels.some(t => t.includes('HIDDEN STEP')), 'sequenceOnly steps stay off the dashboard, exactly as published');
-  // The placed legacy asset gets a drag frame on the overlay review.
-  assert([...container.querySelectorAll('.sr-dragbox-move')].some(b => (b.getAttribute('aria-label') || '').includes('Winner.gif')), 'the placed legacy asset is draggable in the overlay review');
 
   // A press fires — even the legacy no-handler control is handed to
   // the same runtime path, exactly as it behaves today.
@@ -244,6 +267,12 @@ function legacyProject() {
     'the dragged button lands in its new slot; the hidden sequence step keeps its place at the end');
   await React.act(async () => renderWith(reordered));
 
+  // Flip back to the Overlay side for the in-place edit round-trip.
+  const overlayToggle = [...container.querySelectorAll('.sr-review-toggle button')].find(b => b.textContent === 'Overlay');
+  await React.act(async () => overlayToggle.click());
+  assert(container.querySelector('[aria-label="Overlay review"]'), 'the overlay review returns to the same spot');
+  assert([...container.querySelectorAll('.sr-dragbox-move')].some(b => (b.getAttribute('aria-label') || '').includes('Winner.gif')), 'the placed legacy asset is draggable in the overlay review');
+
   // Save round-trip through an in-place edit: select the placed
   // asset on the overlay review (a press that does not move selects
   // it), then use its media-fit editor.
@@ -269,9 +298,13 @@ function legacyProject() {
   assert.equal(saved.controls.find(c => c.id === 'c-effect').legacyButton, 'kept', 'unknown fields on a control pass through untouched');
   assert(!('talkDeck' in saved) && !('workflowProgress' in saved), 'the surface invents no fields the legacy project never had');
   await React.act(async () => root.unmount());
+  assert.equal(document.body.dataset.stageReview, undefined, 'the launcher flag clears when the surface unmounts');
   console.log('PASS: legacy gameshow project — all controls (incl. TRIGGER EFFECT) present and firing, placed media draggable, save round-trip preserves every asset/tool/composition/control and unknown fields.');
 
-  // Talk: the deck is on the staging page, staged state honest.
+  // Talk: NO deck shelf on this page. The deck lives in Jewel's
+  // conversation context (the route contracts above), not in page
+  // furniture — the talk staging page is Jewel plus the one toggled
+  // review spot, exactly like gameshow.
   const dom2 = freshDom();
   const talkProject = {
     ...legacyProject(), id: 'talk-legacy', kind: 'talk', name: 'Legacy Talk',
@@ -281,11 +314,10 @@ function legacyProject() {
       { id: 'd3', kind: 'quiz', label: 'Warm-up quiz', refKey: 'quiz-missing' },
     ],
   };
-  const asked = [];
   const root2 = createRoot(container);
   await React.act(async () => root2.render(React.createElement(StageReview, {
     jewelPanel: React.createElement('div', { className: 'jewel-stub' }, 'Jewel conversation'),
-    onEnterJewel: noop, onAskJewel: text => asked.push(text),
+    onEnterJewel: noop,
     sequenceRunning: false, sequenceError: '', onStopSequence: noop, onResetGame: noop,
     cardStates: {}, onSelect: noop, focusControl: null,
     project: talkProject, onChange: noop,
@@ -295,16 +327,12 @@ function legacyProject() {
     onYoutubeCommand: async () => null, youtubeState: null, youtubeFeedback: null,
     dashboardExtras: () => null, feedback: '',
   })));
-  const slides = [...container.querySelectorAll('.sr-slide')];
-  assert.equal(slides.length, 3, 'all three deck moments render at Set the Stage');
-  assert(slides[0].textContent.includes('Your opening scene'), 'the backdrop moment reads as the opening scene (it is the current background)');
-  assert(slides[1].textContent.includes('On your dashboard'), 'the media moment with an existing clicker reads staged');
-  assert(slides[2].textContent.includes('Not staged yet'), 'the quiz moment without a clicker reads unstaged');
-  const askBtn = slides[2].querySelector('.sr-stage-ask');
-  assert(askBtn, 'the unstaged moment offers the Jewel ask');
-  await React.act(async () => askBtn.click());
-  assert(asked.length === 1 && asked[0].includes('Warm-up quiz'), 'the ask hands the moment to Jewel by name');
+  assert(!container.querySelector('.sr-deck') && !container.querySelector('.sr-slide'), 'no deck shelf renders for a talk project at Set the Stage');
+  assert(!container.textContent.includes('Your deck'), 'the deck is not page furniture here');
+  assert(container.querySelector('.jewel-stub') && container.querySelector('[aria-label="Overlay review"]'), 'the talk staging page is Jewel plus the toggled review spot');
+  assert.deepEqual([...container.querySelectorAll('.sr-review-toggle button')].map(b => b.textContent), ['Overlay', 'Dashboard'], 'the talk review spot carries the same toggle');
+  assert.equal(container.ownerDocument.body.dataset.stageReview, 'true', 'the launcher stays flagged off on the talk staging page');
   await React.act(async () => root2.unmount());
-  console.log('PASS: talk deck at Set the Stage — moments visible in order, staged state honest, unstaged moments go to Jewel.');
-  console.log('PASS: stage review spaces — the three surfaces, legacy survival, and the talk deck.');
+  console.log('PASS: talk at Set the Stage — no deck shelf; Jewel and the toggled review spot only.');
+  console.log('PASS: stage review spaces — Jewel plus one toggled review spot, and legacy survival.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -642,9 +642,9 @@ const quizTool = (overrides = {}) => ({
   // block, no Current Task entry guide, no section tab trio (bare nav),
   // and no gameshow-shaped game plan form — the theme was settled at
   // creation and never becomes a page area again.
-  assert(page.includes('{!talkBareFrame && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view');
+  assert(page.includes('{!talkBareFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view (and the stage-review views)');
   assert(page.includes('entryGuide={talkCreateView || stageReviewView ? undefined :'), 'the Current Task card leaves the talk view (and the stage-review views)');
-  assert(page.includes('bare={talkBareFrame}'), 'the nav renders bare for the talk views — stage buttons only');
+  assert(page.includes('bare={talkBareFrame || stageReviewView}'), 'the nav renders bare for the talk views (and the stage-review views) — stage buttons only');
   assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && <details key="game-plan"'), 'the gameshow-shaped game plan form leaves the talk view');
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(!stage.includes('gamePlan') || !stage.includes('theme: event.target.value'), 'the stage carries no theme editing — theme is a fact from creation');
