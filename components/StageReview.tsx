@@ -23,12 +23,14 @@ import { reorderVisibleControls } from "../lib/stage-review";
  * Set the Stage — the review spaces (Jessica, 2026-11-04).
  *
  * For gameshow and talk projects, the staging area shows ONLY three
- * things: Jewel's conversation (entered through the wand scene, the
- * stage-0 way) at the top, and — immediately past her, in ONE spot —
- * the overlay review and the dashboard review on a toggle. Only one
- * review shows at a time, in that one place; nobody scrolls past
- * anything else to find either of them. The reviews are not
- * mock-ups: the overlay review renders the same draft overlay node
+ * things: FIRST and most prominent, in ONE spot at the top, the
+ * overlay review and the dashboard review on a toggle — and BELOW
+ * that spot, Jewel's conversation (entered through the wand scene,
+ * the stage-0 way), so her chat sits under the review area she
+ * stages into. Only one review shows at a time, in that one place;
+ * nobody scrolls past anything else to find either of them. The
+ * reviews are not mock-ups: the overlay review renders the same
+ * draft overlay node
  * the published overlay runs, and the dashboard review's buttons
  * fire through the same runtime the published dashboard uses — once
  * a button is wired, pressing it here does exactly what it will do
@@ -130,6 +132,12 @@ type Props = {
   onStopSequence: () => void;
   onResetGame?: (wipeEdits: boolean) => void;
   cardStates: Record<string, CardState>;
+  // Ids of controls with a live run on the overlay right now. While
+  // a control's own run is showing, its appearance preview stands
+  // down: the run IS the appearance, and rendering both left a
+  // second copy standing at the fired position after a drag commit
+  // moved the preview to the new one (the ghost card, 2026-11-04).
+  liveControlIds?: string[];
   onSelect: (selection: { kind: string; id: string } | null) => void;
   focusControl?: { id: string; request: number } | null;
   project: Project;
@@ -148,12 +156,13 @@ type Props = {
   ccssEntitled?: boolean;
 };
 
-export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning, sequenceError, onStopSequence, onResetGame, cardStates, onSelect, focusControl, project, onChange, overlay, onTrigger, onWorkshop, youtubeOpen, onOpenYoutube, onCloseYoutube, onYoutubeCommand, youtubeState, youtubeFeedback, dashboardExtras, feedback, ccssEntitled = false }: Props) {
+export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning, sequenceError, onStopSequence, onResetGame, cardStates, liveControlIds, onSelect, focusControl, project, onChange, overlay, onTrigger, onWorkshop, youtubeOpen, onOpenYoutube, onCloseYoutube, onYoutubeCommand, youtubeState, youtubeFeedback, dashboardExtras, feedback, ccssEntitled = false }: Props) {
   const currentProject = useRef(project); currentProject.current = project;
   const save = (next: Project) => { currentProject.current = next; onChange(next); };
   // The two reviews share ONE spot, on a toggle (Jessica's
-  // correction, 2026-11-04): only the chosen side renders, in the
-  // same place, immediately past Jewel. The runtime behind both
+  // corrections, 2026-11-04): only the chosen side renders, in the
+  // same place — the first, most prominent thing on the page, with
+  // Jewel's conversation below it. The runtime behind both
   // sides is the page's shared draft runtime, so a dashboard press
   // lands on the overlay whether or not the Overlay side is the one
   // showing — flip the toggle to see it.
@@ -313,10 +322,6 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
 
   return (
     <section className="stage-review" aria-label="Set the Stage review spaces">
-      <div className="stage-review-jewel">
-        <JewelWandScene onEnter={onEnterJewel} />
-        {jewelPanel}
-      </div>
       <div className="stage-review-spot">
         <div className="sr-review-toggle" role="tablist" aria-label="Choose a review area">
           <button type="button" role="tab" aria-selected={reviewSide === "overlay"} className={reviewSide === "overlay" ? "active" : ""} onClick={() => setReviewSide("overlay")}>Overlay</button>
@@ -331,7 +336,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
               {tool && !control && !(infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && !['question-card', 'blank-card', 'card-list', 'youtube', 'random-picker'].includes(tool.type) && (
                 <ControlAppearancePreview state={cardStates[tool.id]} control={{ id: 'editing-' + tool.id, label: tool.name, detail: 'Editing preview', action: `tool.${tool.id}`, toolIds: [tool.id], overlayResult: { ...defaultOverlayResult, ...(tool.config.placement as Partial<typeof defaultOverlayResult> || {}) } }} project={project} />
               )}
-              {control && hasVisualResult && !(tool && (infoTypes.includes(tool.type) || isCardTool(tool)) && cardStates[tool.id] && !cardStates[tool.id].cleared) && (
+              {control && hasVisualResult && !liveControlIds?.includes(control.id) && !(tool && (infoTypes.includes(tool.type) || isCardTool(tool)) && cardStates[tool.id] && !cardStates[tool.id].cleared) && (
                 <ControlAppearancePreview state={tool ? cardStates[tool.id] : undefined} control={{ ...control, overlayResult: control.overlayResult || defaultOverlayResult }} project={project} />
               )}
             </BuildOverlayPreview>
@@ -375,7 +380,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
         </section>
         ) : (
         <section role="tabpanel" className="sr-canvas assembly-canvas" aria-label="Dashboard review">
-          <div className="sr-review-head"><h3>Dashboard review</h3><span>Your host controls — press them: they work here exactly as they will live. Drag a button to reorder it. To change a button, ask Jewel above.</span></div>
+          <div className="sr-review-head"><h3>Dashboard review</h3><span>Your host controls — press them: they work here exactly as they will live. Drag a button to reorder it. To change a button, ask Jewel below.</span></div>
           {sequenceRunning && <button type="button" onClick={onStopSequence}>Stop sequence</button>}
           <div role="status" aria-live="polite">{sequenceError || feedback}</div>
           {onResetGame && (
@@ -434,6 +439,10 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
           </div>
         </section>
         )}
+      </div>
+      <div className="stage-review-jewel">
+        <JewelWandScene onEnter={onEnterJewel} />
+        {jewelPanel}
       </div>
     </section>
   );
