@@ -1,5 +1,7 @@
 "use client";
 
+import "./jewel-avatar.css";
+
 /**
  * Jewel herself, pictured the way the site introduces her: her real
  * waving portrait (public/redesign/jewel-wave.mp4 — the same artwork the
@@ -19,11 +21,22 @@
  * component keeps her 🪄 badge at its standard size, per her standing
  * rule that the wand itself must appear where the creator steps in.
  * Callers pass size={112} with `landing` to render that presentation.
+ *
+ * Self-sufficiency (2026-11-04 fix): the component imports its own
+ * stylesheet and carries the critical box inline — display:inline-block
+ * plus explicit width/height on the bubble AND the video. A bare <span>
+ * is an inline box and inline boxes ignore width/height: rendered in a
+ * plain block parent (the talk entry placement), the bubble used to
+ * lose its 112px box entirely and the portrait video ballooned to
+ * intrinsic size — a giant, ringless, bob-less circle. Inside a flex
+ * parent (the liberty banner) the same span was blockified and sized
+ * correctly, which is why the banner never showed the bug. The box now
+ * holds in any parent, styled sheet or not.
  */
 export default function JewelAvatar({ size = 56, wandSize, landing }: { size?: number; wandSize?: number; landing?: boolean }) {
   return (
-    <span className={`jewel-avatar${landing ? " jewel-avatar-landing" : ""}`} style={{ width: size, height: size }} aria-hidden="true">
-      <video src="/redesign/jewel-wave.mp4" autoPlay muted loop playsInline />
+    <span className={`jewel-avatar${landing ? " jewel-avatar-landing" : ""}`} style={{ width: size, height: size, display: "inline-block" }} aria-hidden="true">
+      <video src="/redesign/jewel-wave.mp4" autoPlay muted loop playsInline style={{ width: size, height: size, display: "block", objectFit: "cover", borderRadius: "50%" }} />
       <span className="jewel-avatar-wand" style={wandSize ? { fontSize: wandSize } : undefined}>🪄</span>
     </span>
   );

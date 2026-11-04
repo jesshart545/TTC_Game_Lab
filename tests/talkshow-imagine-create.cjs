@@ -170,9 +170,25 @@ const quizTool = (overrides = {}) => ({
   assert(!stage.includes('size={104}') && !stage.includes('wandSize={46}'), 'the rejected oversized entry treatment is gone: no plain 104px bubble, no 46px wand');
   const avatarSrc = fs.readFileSync('components/JewelAvatar.tsx', 'utf8');
   assert(avatarSrc.includes('jewel-avatar-landing'), 'JewelAvatar carries the landing variant of her presentation');
-  const avatarCss = fs.readFileSync('components/talkshow-workshop.css', 'utf8');
+  const avatarCss = fs.readFileSync('components/jewel-avatar.css', 'utf8');
   assert(avatarCss.includes('.jewel-avatar-landing') && avatarCss.includes('0 0 34px 10px rgba(255, 215, 94, .45)'), 'the landing glow is replicated value-for-value from the home Tips bubble');
   assert(avatarCss.includes('@keyframes jewel-bob') && avatarCss.includes('translateY(-7px)') && avatarCss.includes('3.2s'), 'the landing bobbing motion is replicated — jewel-bob carries the rd-bob values');
+  // The bubble must carry its own box (live bug, 2026-11-04): the avatar
+  // is a <span> — an inline box, which IGNORES width/height. In the flex
+  // liberty banner the span was blockified and sized fine, but at this
+  // entry (a plain block parent) it kept no box at all and the portrait
+  // video ballooned to intrinsic size: a giant, ringless, bob-less
+  // circle. Three pins keep that from ever coming back: the component
+  // imports its own stylesheet, the base rule is display:inline-block,
+  // and the critical box (display + explicit size on bubble AND video)
+  // is carried inline in the component itself.
+  assert(avatarSrc.includes('import "./jewel-avatar.css"'), 'JewelAvatar imports its own stylesheet — its styling no longer depends on a page-level sheet loading');
+  const baseRule = avatarCss.slice(avatarCss.indexOf('.jewel-avatar {'), avatarCss.indexOf('}', avatarCss.indexOf('.jewel-avatar {')));
+  assert(baseRule.includes('display: inline-block'), 'the .jewel-avatar base rule is display:inline-block — the bubble\'s box cannot depend on a flex parent to blockify it');
+  assert(avatarSrc.includes('display: "inline-block"') && avatarSrc.includes('width: size, height: size, display: "block"'),
+    'the component carries the critical box inline: display:inline-block on the bubble and an explicit size on the video');
+  const talkCss = fs.readFileSync('components/talkshow-workshop.css', 'utf8');
+  assert(!talkCss.includes('.jewel-avatar-landing') && !talkCss.includes('jewel-bob'), 'the avatar rules moved out of the talk workshop sheet — one home, imported by the component');
   console.log('PASS: page shape — one topic-keyed visual stage; no path row, panels, ask strips, change lists, or skip buttons on the page.');
 }
 
