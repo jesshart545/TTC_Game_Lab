@@ -2,31 +2,36 @@
 
 import type { ReactNode } from "react";
 import type { Project } from "../lib/project";
-import type { WorkflowEvaluation, WorkflowStepState } from "../lib/workflow-progress";
-import { TALK_CREATIVITY_BANNER, TALK_STEPS, type TalkStepId } from "../lib/talkshow-path";
-import { BackdropsStep, QuizStep, ResearchStep, SignStep, SlidesStep, ToolboxStep, YoutubeStep } from "./TalkshowSteps";
+import { allCreateStepsComplete, type WorkflowEvaluation, type WorkflowStepState } from "../lib/workflow-progress";
+import { TALK_CREATIVITY_BANNER, TALK_SKIPPABLE_STEPS, TALK_STEPS, type TalkStepId } from "../lib/talkshow-path";
+import JewelAvatar from "./JewelAvatar";
+import { BackgroundStep, MediaStep, MissedStep, PromptStep, QuizStep, ResearchStep, SignStep, ThemeStep } from "./TalkshowSteps";
 import "./gameshow-workshop.css";
 import "./talkshow-workshop.css";
 
 /**
- * The Talk Show or Classroom Workshop: the Gameshow Workshop's architecture
- * and presentation grammar, carried over whole — seven tasks whose state is
- * read from the workflow model (this component keeps no completion state of
- * its own), living demonstrations instead of stacked words and forms, a
- * plain list of what can be changed under each one, and example asks that
- * are handed to Jewel. Only what the steps CREATE differs. Nothing here
- * generates: Jewel is the only generation door. The only writes on these
- * screens are the creator's own — the show name and theme typed on the
- * sign step, and the slide deck arranged by hand — both through the page's
- * normal save path, into the same project fields the forms below write.
+ * The Talk Show or Classroom Workshop, in the layout Jessica dictated
+ * (2026-11-04): eight areas in her order — theme & subject, background,
+ * title sign, opening prompt, research, quiz or follow-up questions,
+ * media, anything we missed — with no generic workshop frame stacked
+ * above them. Area state is read from the workflow model only (this
+ * component keeps no completion state of its own); the optional areas
+ * carry a Skip that counts as complete; complete never locks an area.
+ * Jewel's real avatar and wand appear ONCE on this page — in the
+ * guidance banner below — for continuity (she is the user's magic wand),
+ * never stamped on every control. Nothing here generates: Jewel is the
+ * only generation door. The creator's own writes (the theme box, the
+ * prompt layer, the hand-arranged deck, a skip) go through the page's
+ * normal save path.
  */
 
 export type TalkshowDoors = {
   /** Upload the creator's own sign (page tags the upload as the sign). */
   uploadSign: () => void;
-  /** Scroll to the project form below. Name & theme themselves are edited
-   *  on the sign step's own face now, Gameshow-plan style — this door stays
-   *  wired for the page's other entries into the form. */
+  /** Upload media for the Media area (the plain project upload). */
+  uploadMedia: () => void;
+  /** Scroll to the project form below. Kept wired for the page's other
+   *  entries into the form; the theme itself is edited in area 1 now. */
   showPlanForm: () => void;
   /** Put a saved backdrop on the overlay (the existing background choice). */
   applyBackground: (assetKey: string) => void;
@@ -48,8 +53,11 @@ export type TalkshowWorkshopProps = {
   onNavigateStep: (stage: number, stepId?: string) => void;
   onAskJewel: (text: string) => void;
   onOpenJewel: () => void;
-  /** The page's normal save path — used only for the hand-arranged deck. */
+  /** The page's normal save path — the theme box, the prompt layer, the
+   *  hand-arranged deck, and skips are the creator's own writes. */
   onSaveProject: (project: Project) => void;
+  /** Record a skip on an optional area (counts as complete). */
+  onSkipStep?: (stepId: string) => void;
   doors: TalkshowDoors;
 };
 
@@ -62,9 +70,10 @@ export function TalkStepShell({ stepId, step, children }: { stepId: TalkStepId; 
       <p className="gsw-ask">{info.intro}</p>
       <div className={"gsw-donewhen" + (step.complete ? " met" : "")}>
         <span className="gsw-box">{step.complete ? "✓" : ""}</span>
-        <span><b>This step is done when</b> {info.doneWhen}</span>
+        <span><b>This area is done when</b> {info.doneWhen}</span>
       </div>
-      {step.complete && <div className="gsw-jcheck">✓ Checked off — {step.checkLine}</div>}
+      {step.complete && !step.skipped && <div className="gsw-jcheck">✓ Checked off — {step.checkLine}</div>}
+      {step.skipped && <div className="gsw-jcheck">✓ Skipped — counts as complete. You can still change anything here, any time.</div>}
       {children}
     </section>
   );
@@ -96,12 +105,12 @@ export function TalkAskStrip(props: TalkshowWorkshopProps & { stepId: TalkStepId
 }
 
 const SHORT_LABELS: Record<string, string> = {
-  sign: "Name & sign", backdrops: "Backdrops", research: "Research", quiz: "Quiz",
-  youtube: "YouTube", slides: "Slides", toolbox: "Toolbox",
+  theme: "Theme & subject", background: "Background", sign: "Title sign", prompt: "Opening prompt",
+  research: "Research", quiz: "Quiz & follow-ups", media: "Media", missed: "Anything missed",
 };
 
 export default function TalkshowWorkshop(props: TalkshowWorkshopProps) {
-  const { project, workflow, activeStep, onNavigateStep } = props;
+  const { workflow, activeStep, onNavigateStep, onSkipStep } = props;
   const steps = workflow.stages[0]?.steps || [];
   const active = steps.find(step => step.id === activeStep) || steps.find(step => !step.complete) || steps[0];
   if (!active) return null;
@@ -109,6 +118,8 @@ export default function TalkshowWorkshop(props: TalkshowWorkshopProps) {
   const previous = index > 0 ? steps[index - 1] : null;
   const next = index >= 0 && index < steps.length - 1 ? steps[index + 1] : null;
   const screenProps = { ...props, step: active };
+  const skippable = TALK_SKIPPABLE_STEPS.includes(active.id as TalkStepId);
+  const createComplete = allCreateStepsComplete(workflow);
   return (
     <section className="gsw" aria-label="Imagine and Create — the guided path">
       <div className="gsw-path" role="navigation" aria-label="Your path through Imagine and Create">
@@ -124,12 +135,12 @@ export default function TalkshowWorkshop(props: TalkshowWorkshopProps) {
         ))}
       </div>
       <p className="gsw-pathnote">
-        These buttons are the path — each one names a task, and tapping it takes you straight to that task’s screen.
-        Each step opens with a working demonstration: try the thing itself, see what can change, then tell Jewel to make yours.
-        A step earns its green ✓ only when Jewel has checked it against what’s actually in your project.
+        These buttons are the path — each one names an area, and tapping it takes you straight to that area’s screen.
+        Each area opens by showing you the thing itself — then you make yours with Jewel.
+        An area earns its green ✓ when Jewel has checked it against what’s actually in your project — or when you skip it, where skipping is offered.
       </p>
       <div className="gsw-liberty">
-        <div className="gsw-lmedal" aria-hidden="true">✦</div>
+        <JewelAvatar size={58} />
         <div>
           <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
           <div className="gsw-ltext">{TALK_CREATIVITY_BANNER}</div>
@@ -137,13 +148,23 @@ export default function TalkshowWorkshop(props: TalkshowWorkshopProps) {
         <div className="gsw-lwand" aria-hidden="true">🪄</div>
       </div>
 
+      {active.id === "theme" && <ThemeStep {...screenProps} />}
+      {active.id === "background" && <BackgroundStep {...screenProps} />}
       {active.id === "sign" && <SignStep {...screenProps} />}
-      {active.id === "backdrops" && <BackdropsStep {...screenProps} />}
+      {active.id === "prompt" && <PromptStep {...screenProps} />}
       {active.id === "research" && <ResearchStep {...screenProps} />}
       {active.id === "quiz" && <QuizStep {...screenProps} />}
-      {active.id === "youtube" && <YoutubeStep {...screenProps} />}
-      {active.id === "slides" && <SlidesStep {...screenProps} />}
-      {active.id === "toolbox" && <ToolboxStep {...screenProps} />}
+      {active.id === "media" && <MediaStep {...screenProps} />}
+      {active.id === "missed" && <MissedStep {...screenProps} />}
+
+      {skippable && !active.complete && onSkipStep && (
+        <div className="tsw-skiprow">
+          <span>Don’t need this one?</span>
+          <button type="button" className="gsw-demobtn" onClick={() => { onSkipStep(active.id); if (next) onNavigateStep(0, next.id); }}>
+            Skip this area — it counts as complete →
+          </button>
+        </div>
+      )}
 
       <div className="gsw-nextrow">
         <button type="button" className="gsw-backbtn" disabled={!previous} onClick={() => previous && onNavigateStep(0, previous.id)}>
@@ -153,10 +174,14 @@ export default function TalkshowWorkshop(props: TalkshowWorkshopProps) {
           <button type="button" className="gsw-nextbtn" onClick={() => onNavigateStep(0, next.id)}>
             Next — {SHORT_LABELS[next.id] || next.label} →
           </button>
-        ) : (
+        ) : createComplete ? (
           <button type="button" className="gsw-nextbtn" onClick={() => onNavigateStep(1)}>Continue — Set the Stage →</button>
+        ) : (
+          <button type="button" className="gsw-nextbtn" disabled title="Set the Stage unlocks when every area is done — or skipped">
+            Set the Stage unlocks when every area is done 🔒
+          </button>
         )}
-        <span className="gsw-hint">Step {index + 1} of {steps.length} · {active.label}</span>
+        <span className="gsw-hint">Area {index + 1} of {steps.length} · {active.label}</span>
       </div>
     </section>
   );

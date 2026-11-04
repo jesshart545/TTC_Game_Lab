@@ -29,3 +29,40 @@
   border-radius: 999px;
   font-size: inherit;
 }
+
+/* The opening prompt sits low on the background, under the sign. */
+.backdrop-text-layer.place-lower {
+  justify-content: flex-end;
+  padding-bottom: 6.5%;
+}
+
+/* Presentation variants — the talk show opening prompt's three faces
+   (the sign always letters plain). */
+.backdrop-text-layer.pres-bubble .backdrop-text-line {
+  position: relative;
+  background: #fffdf6;
+  border-radius: .9em;
+  padding: .42em .8em;
+  text-shadow: none;
+  box-shadow: 0 10px 30px rgba(5, 3, 12, .45);
+  max-width: 86%;
+}
+
+.backdrop-text-layer.pres-bubble .backdrop-text-line::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -.34em;
+  transform: translateX(-50%);
+  border: .19em solid transparent;
+  border-top: .34em solid #fffdf6;
+  border-bottom: 0;
+}
+
+.backdrop-text-layer.pres-frame .backdrop-text-line {
+  border: .09em solid #e9c979;
+  border-radius: .35em;
+  background: rgba(9, 6, 18, .55);
+  padding: .4em .75em;
+  max-width: 88%;
+}
