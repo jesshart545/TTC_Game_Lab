@@ -1,0 +1,70 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import type { BackdropTextSpec } from "../lib/project";
+import "./backdrop-text.css";
+
+/**
+ * The backdrop text layer: renders a background asset's text spec
+ * (lib/backdrop-text.ts) as a real DOM text layer over the background —
+ * the show's name lettered in the creator's chosen font and colors, never
+ * burned into the artwork. Auto-fits like the question cards do
+ * (document.fonts.load + canvas measure + shrink to fit). Rendered in all
+ * three places a background renders: the project page's draft preview
+ * (which Build Space reuses), and the published overlay.
+ */
+export default function BackdropTextLayer({ spec }: { spec: BackdropTextSpec }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(44);
+
+  useEffect(() => {
+    let live = true;
+    const host = hostRef.current;
+    if (!host) return;
+    const fit = () => {
+      const width = host.clientWidth, height = host.clientHeight;
+      if (!width || !height) return;
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context) return;
+      const words = spec.text.split(/\s+/).filter(Boolean);
+      const fits = (px: number) => {
+        context.font = `800 ${px}px ${spec.fontFamily}`;
+        const maxWidth = width * 0.88;
+        let lines = 1, line = "";
+        for (const word of words) {
+          const trial = line ? `${line} ${word}` : word;
+          if (context.measureText(trial).width > maxWidth && line) {
+            lines += 1; line = word;
+            if (context.measureText(word).width > maxWidth) return false;
+          } else line = trial;
+        }
+        return lines * px * 1.16 <= height * 0.78;
+      };
+      let low = 10, high = Math.max(12, Math.floor(height * 0.85)), best = low;
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (fits(mid)) { best = mid; low = mid + 1; } else high = mid - 1;
+      }
+      if (live) setSize(best);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(host);
+    document.fonts?.load(`800 40px ${spec.fontFamily}`).then(() => { if (live) fit(); }).catch(() => {});
+    return () => { live = false; observer.disconnect(); };
+  }, [spec.text, spec.fontFamily]);
+
+  return (
+    <div ref={hostRef} className="backdrop-text-layer" style={{ fontSize: size }} aria-label={spec.text}>
+      <div
+        className="backdrop-text-line"
+        style={{
+          fontFamily: spec.fontFamily,
+          color: spec.textColor,
+          ...(spec.accentColor ? { textShadow: `0 2px 22px rgba(0,0,0,.5), 0 0 34px ${spec.accentColor}` } : {}),
+        }}
+      >{spec.text}</div>
+      {spec.accentColor && <div className="backdrop-text-rule" style={{ background: spec.accentColor }} />}
+    </div>
+  );
+}

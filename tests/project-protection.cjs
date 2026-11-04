@@ -144,6 +144,7 @@ function routeRequire(extra = {}) {
     if (id.endsWith('lib/project-protection')) return protection;
     if (id.endsWith('lib/object-storage')) return { deleteAssetsByPrefix: async () => { assetDeleteCalls++; return 2; }, getAssetUrl: async k => 'https://example/' + k };
     if (id.endsWith('lib/city-crime-scene')) return { readCityCrimeSceneConfig: c => c, sanitizeCityCrimeSceneForOverlay: c => c, canUseCityCrimeScene: () => true, stripCityCrimeSceneTools: d => d };
+    if (id.endsWith('lib/quiz')) return require('./load.cjs')('lib/quiz.ts');
     if (id.endsWith('lib/creator-identity')) return { creatorEmailForViewer: (viewerIsAdmin, ownerEmail) => viewerIsAdmin && typeof ownerEmail === 'string' && ownerEmail.trim() ? ownerEmail.trim() : null };
     return extra[id] ?? require(id);
   };
