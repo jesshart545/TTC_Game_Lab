@@ -1,5 +1,7 @@
 import {isSupportedFont,resolveFont} from './fonts';
 import {assignControlAction,controlConnectionError} from "./control-connections";
+import {cleanBackdropText} from "./backdrop-text";
+import {cleanTriviaQuestions} from "./quiz";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -52,6 +54,12 @@ export function applyDraftChanges(project: Project, input: unknown) {
     const edit = object(raw), asset = next.assets.find(a => (a.storageKey||a.name) === edit.storageKey); if (!asset) continue;
     if (typeof edit.inProject === "boolean") { asset.inProject = edit.inProject; applied++; }
     if (["background", "layer", "video", "audio"].includes(String(edit.role))) { asset.role = edit.role as typeof asset.role; applied++; }
+    // The backdrop text layer (lib/backdrop-text.ts): a validated spec, or
+    // null to clear it. An invalid spec (unknown font, non-hex color,
+    // overlong text) is dropped whole — never partially applied.
+    if (edit.textOverlay === null) { if (asset.textOverlay) { asset.textOverlay = null; applied++; } }
+    else if (edit.textOverlay !== undefined) { const spec = cleanBackdropText(edit.textOverlay); if (spec) { asset.textOverlay = spec; applied++; } }
+    if (typeof edit.sign === "boolean" && asset.sign !== edit.sign) { asset.sign = edit.sign; applied++; }
     const values = object(edit.edits);
     if (["contain", "cover", "fill"].includes(String(values.fit))) { asset.edits = {...asset.edits, fit: values.fit as ProjectAssetEdits["fit"]}; applied++; }
     for(const key of ['loop','sound','flipX','flipY'] as const)if(typeof values[key]==='boolean'){asset.edits={...asset.edits,[key]:values[key] as boolean};applied++;}
@@ -86,6 +94,7 @@ export function applyDraftChanges(project: Project, input: unknown) {
     if (name) { tool.name = name; applied++; }
     for(const key of ['inToolbox','inOverlayBuild','enabled'] as const)if(typeof edit[key]==='boolean'){tool[key]=edit[key] as boolean;applied++;}
     const config = object(edit.config);
+    if(tool.type==='trivia-list'&&Array.isArray(config.questions))config.questions=cleanTriviaQuestions(config.questions);
     if(tool.type==='card-list'&&Array.isArray(config.entries))config.entries=config.entries.filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).slice(0,500).map((e:any)=>({...e,id:e.id||crypto.randomUUID(),text:e.text.slice(0,20000)}));
     if(tool.type==='card-list'&&config.makeCardsFromEntries===true){
       const entries=Array.isArray(config.entries)?config.entries:Array.isArray(tool.config.entries)?tool.config.entries:[];
