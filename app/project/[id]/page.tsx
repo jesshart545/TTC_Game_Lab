@@ -2,7 +2,7 @@
 import { VIDEO_DURATIONS } from "../../../lib/video-duration";
 import { imageLayout } from "../../../lib/image-layout";
 
-import { useSupportBridge, requestResearchOpen, type SupportTurn, type SupportTaskResult } from "../../../lib/support-client";
+import { useSupportBridge, requestResearchOpen, requestJewelOpen, type SupportTurn, type SupportTaskResult } from "../../../lib/support-client";
 import { checkedAssistantMediaAction } from "../../../lib/assistant-media-actions";
 import { runEditLayerChain, type EditVideoAction, type EditLayerOutcome } from "../../../lib/edit-layer-chain";
 import { pollForEditedVideoUrl } from "../../../lib/video-edit-poll";
@@ -291,6 +291,15 @@ export default function ProjectWorkspace() {
   function openJewel() {
     if (workflowStep === 2) chooseWorkflowStep(1);
     if (workflowStep !== 0) setBuildAiOpen(true);
+    focusJewelPrompt();
+  }
+  // The wand scene in the Talk Show background area IS the doorway
+  // into Jewel (Jessica, 2026-11-04): stepping in through the picture
+  // reveals her conversation if the creator had hidden it, brings the
+  // panel into view, and lands on her input — whether the panel was
+  // open or collapsed.
+  function enterJewelFromScene() {
+    requestJewelOpen();
     focusJewelPrompt();
   }
   // Generation has no form anymore: the media and trivia steps land on
@@ -1776,6 +1785,7 @@ export default function ProjectWorkspace() {
       {workflowStep === 0 && project.kind === "talk" && (
         <TalkshowStage
           jewelPanel={jewelPanelElement}
+          onEnterJewel={enterJewelFromScene}
           project={project}
           workflow={evaluateWorkflow(project)}
           onSaveProject={persist}

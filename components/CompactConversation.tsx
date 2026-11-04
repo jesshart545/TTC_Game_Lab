@@ -31,6 +31,15 @@ export default function CompactConversation({ messages, busy = false, progressTe
     const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 500);
     return () => clearInterval(timer);
   }, [busy]);
+  // The doorway into Jewel (the wand scene, via requestJewelOpen in
+  // lib/support-client) reveals the conversation if it was hidden:
+  // stepping in through the picture always lands in her open
+  // conversation, never on a collapsed one.
+  useEffect(() => {
+    const reveal = () => setHidden(false);
+    window.addEventListener("ttc-open-jewel", reveal);
+    return () => window.removeEventListener("ttc-open-jewel", reveal);
+  }, []);
   const elapsedLabel = elapsed >= 3 ? ` · ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}` : "";
   return <section className="compact-conversation" aria-label="AI conversation"><div className="conversation-toolbar"><span>{messages.length ? `${messages.length} messages` : "Conversation"}</span><button type="button" aria-expanded={!hidden} onClick={() => setHidden(value => !value)}>{hidden ? "Show conversation" : "Hide conversation"}</button></div>{!hidden && <><div className="conversation-history-controls">{messages.length > 4 && <button type="button" aria-expanded={history} onClick={() => { setHistory(value => !value); nearBottom.current = false; }}>{history ? "Show recent messages" : `Show ${messages.length - 4} earlier messages`}</button>}</div><div ref={viewport} className="compact-messages" role="log" aria-label="Conversation messages" aria-live="polite" onScroll={() => { const node = viewport.current; if (node) nearBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}>{messages.slice(start).map((message, offset) => { const index = start + offset, long = message.text.length > 600, full = expanded[index]; const display = long && !full ? message.text.slice(0, 600) + "…" : message.text; return <div className={`compact-message ${message.role}`} key={index}><strong>{message.role === "assistant" ? "Jewel" : "You"}</strong><p>{message.role === "assistant" ? renderRichText(display) : display}</p>{long && <button type="button" aria-expanded={!!full} onClick={() => setExpanded(value => ({ ...value, [index]: !value[index] }))}>{full ? "Show less" : "Read full response"}</button>}</div>; })}{busy && <div className="compact-chat-working"><p role="status">{progressText || "Working on your request…"}{elapsedLabel}</p>{elapsed >= 20 && <p>Media and multi-step requests can take a few minutes — Jewel is still working.</p>}</div>}</div></>}</section>;
 }

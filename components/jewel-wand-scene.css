@@ -24,6 +24,49 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
 }
 
+/* The scene is the doorway into Jewel (Jessica, 2026-11-04): the
+   whole pictured card is one button, so the native button chrome is
+   reset and the card keeps the landing presentation above, exactly.
+   A gold focus ring keeps the doorway visible to keyboard users. */
+button.jewel-scene {
+  display: block;
+  padding: 0;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.jewel-scene:focus-visible {
+  outline: 2px solid #e9c979;
+  outline-offset: 3px;
+}
+
+/* The one short label naming the move, carried ON the picture —
+   a wand-lit pill over the shade at the card's lower left, where
+   the landing composition is darkest and quietest. */
+.jewel-scene-cta {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #e9c979;
+  background: rgba(23, 15, 38, .82);
+  color: #ffe9a8;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .45), 0 0 18px rgba(255, 215, 94, .25);
+}
+
+.jewel-scene:hover .jewel-scene-cta {
+  background: rgba(43, 32, 68, .92);
+}
+
 /* .rd-tips-imgwrap.magic img.rd-tipimg: the pictured scene fills the
    card and floats gently. */
 .jewel-scene-img {

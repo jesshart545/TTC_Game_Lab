@@ -659,4 +659,65 @@ const quizTool = (overrides = {}) => ({
   console.log('PASS: Jessica\'s layout — bare top with "Save project", no generic frame, no theme area, and the Set the Stage gate intact.');
 }
 
+// --- The scene is the doorway; no progress strip on the page ----------------
+// (Jessica, 2026-11-04, live review of the #143 build: "there isn't
+// anything where that picture is that takes the user to jewel —
+// instead it is in an unnecessary area set below where that picture
+// is." The chips row and the "Next: … / Go there →" line at the head
+// of Jewel's panel were that unnecessary area: check-offs and
+// directing are Jewel's, inside her conversation — her permanent
+// rule. And the picture itself had no way in: the scene must BE the
+// doorway.)
+{
+  const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
+  const scene = fs.readFileSync('components/JewelWandScene.tsx', 'utf8');
+  const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
+  const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
+  // The whole pictured card is one button into Jewel, with the one
+  // short label naming the move carried ON the picture.
+  assert(scene.includes('<button type="button" className="jewel-scene" onClick={onEnter}'),
+    'the wand scene itself is the button — the whole pictured card is the move into Jewel');
+  assert(scene.includes('jewel-scene-cta') && scene.includes('Create with Jewel'),
+    'one short label on the picture itself names the move: Create with Jewel');
+  assert(!scene.includes('aria-hidden'), 'the doorway is not hidden from assistive tech — it is the way in');
+  const sceneCss = fs.readFileSync('components/jewel-wand-scene.css', 'utf8');
+  assert(sceneCss.includes('button.jewel-scene') && sceneCss.includes('.jewel-scene-cta') && sceneCss.includes(':focus-visible'),
+    'the scene stylesheet resets the button chrome, styles the on-picture label, and keeps a visible focus ring');
+  // The wiring: stage hands the page's doorway handler to the scene;
+  // the page reveals her conversation and lands on her input.
+  assert(stage.includes('<JewelWandScene onEnter={onEnterJewel} />'), 'the background stage wires the doorway handler into the scene');
+  assert(page.includes('onEnterJewel={enterJewelFromScene}'), 'the page hands its doorway handler to the talk stage');
+  assert(page.includes('function enterJewelFromScene()') && page.includes('requestJewelOpen();') && page.includes('focusJewelPrompt();'),
+    'stepping in through the picture reveals the conversation and scrolls to + focuses her input');
+  const supportClient = fs.readFileSync('lib/support-client.ts', 'utf8');
+  assert(supportClient.includes('export function requestJewelOpen()') && supportClient.includes('"ttc-open-jewel"'),
+    'requestJewelOpen dispatches the doorway event');
+  const conversation = fs.readFileSync('components/CompactConversation.tsx', 'utf8');
+  assert(conversation.includes('"ttc-open-jewel"') && conversation.includes('setHidden(false)'),
+    'a hidden conversation reveals itself when the doorway fires — the scene works whether the panel was open or collapsed');
+  // The page-level progress strip is withheld in the talk create
+  // view ONLY: the chips row and the Next/Go-there line no longer
+  // render there, while the generic strip survives untouched for
+  // every other kind and stage.
+  assert(panel.includes('const talkCreateView = project.kind === "talk" && workflowStep === 0'),
+    'the panel computes the talk create view to withhold the strip');
+  assert(panel.includes('{!talkCreateView && (()=>{const stageState=workflow.stages[workflowStep];'),
+    'the progress strip renders only outside the talk create view');
+  assert(panel.includes('jewel-progress') && panel.includes('Next: {nextTask.label}') && panel.includes('Go there →'),
+    'the generic progress strip itself is untouched — other kinds keep their chips and Next line');
+  assert(panel.includes('<CompactConversation') && panel.includes('AI CREATIVE DIRECTOR'),
+    'her conversation — heading, log, composer — stands in the talk view exactly as before');
+  // The survey's other catch: the research topic carried its own
+  // page-level check-off line. It is gone — whether research is done
+  // is Jewel's to say, in conversation.
+  assert(!stage.includes('checks this topic off') && !stage.includes('has researched in this project'),
+    'no per-topic check-off status line stands on the stage anymore');
+  // The model underneath is untouched: topics still complete by work
+  // or by skip, and done-or-skipped still opens the gate.
+  const gated = baseProject({ gamePlan: { theme: 'x' }, assets: [bgAsset({ promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
+  assert.equal(allCreateStepsComplete(evaluateWorkflow(gated)), true, 'the Set the Stage gate still reads the model, done-or-skipped');
+  assert(page.includes('lockedStages={project.kind === "talk" && !talkCreateComplete ? [1, 2] : undefined}'), 'the gate wiring on the page is unchanged');
+  console.log('PASS: doorway + strip — the wand scene is the button into Jewel (label on the picture, reveal + focus wired); no chips/Next strip in the talk create view; the generic strip and the workflow gate are untouched.');
+}
+
 console.log('talkshow-imagine-create: all assertions passed');
