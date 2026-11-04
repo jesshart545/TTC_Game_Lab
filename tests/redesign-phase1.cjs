@@ -112,3 +112,21 @@ assert(flow.includes('!template.restricted'), 'template gallery still excludes r
 assert(flow.includes('applySetupPieces'), 'scratch creation adds pieces through the shared factory');
 assert(flow.includes('project.kind = "gameshow"'), 'template starts are stamped gameshow');
 console.log('PASS: new-project flow gates City Crime Scene and reuses existing creation paths.');
+
+// 8. Coming Soon kinds (Jessica, 2026-11-04): radio and multiplayer are
+// shown in the picker under a "Coming Soon!" band and cannot be chosen;
+// gameshow and talk stay open. The gate is on STARTING only.
+eq(PROJECT_KINDS.filter(k => k.comingSoon).map(k => k.id), ['radio', 'multiplayer']);
+assert(kinds.isKindComingSoon('radio') && kinds.isKindComingSoon('multiplayer'), 'radio and multiplayer are coming-soon');
+assert(!kinds.isKindComingSoon('gameshow') && !kinds.isKindComingSoon('talk'), 'gameshow and talk are not gated');
+assert(!kinds.isKindComingSoon(undefined), 'unset kind is not gated');
+assert(flow.includes('np-soonband') && flow.includes('Coming Soon!'), 'picker pastes a Coming Soon! band across gated cards');
+assert(flow.includes('np-kind soon') && flow.includes('disabled aria-disabled="true"'), 'gated cards render disabled, not clickable');
+assert(flow.includes('onClick={() => chooseKind(info.id)}'), 'open kinds keep their click-to-choose card');
+assert(flow.includes('if (isKindComingSoon(next)) return;'), 'chooseKind refuses gated kinds');
+assert(flow.includes('if (!kind || isKindComingSoon(kind)) return;'), 'startScratch refuses to create a gated kind');
+const projectPage = fs.readFileSync(path.join(root, 'app/project/[id]/page.tsx'), 'utf8');
+assert(projectPage.includes('isKindComingSoon(info.id) && project.kind !== info.id'), 'kind dropdown blocks converting a project INTO a gated kind, current kind exempt');
+const newCss = fs.readFileSync(path.join(root, 'app/project/new/new-project.css'), 'utf8');
+assert(newCss.includes('.np-soonband'), 'band styling ships with the picker stylesheet');
+console.log('PASS: radio and multiplayer carry the Coming Soon! band and cannot be started; gameshow and talk unchanged.');

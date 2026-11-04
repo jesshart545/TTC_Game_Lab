@@ -15,6 +15,11 @@ export type ProjectKindInfo = {
   chipLabel: string;
   scratchHeading: string;
   nameSuggestion: string;
+  /** Not yet open for new projects (Jessica, 2026-11-04): the kind picker
+   * shows the card with a "Coming Soon!" band and the card cannot be
+   * chosen. Existing projects of the kind are untouched — the gate is
+   * only on STARTING a new one. */
+  comingSoon?: boolean;
 };
 
 export const PROJECT_KINDS: ProjectKindInfo[] = [
@@ -50,6 +55,7 @@ export const PROJECT_KINDS: ProjectKindInfo[] = [
     chipLabel: "Radio project",
     scratchHeading: "Build your broadcast",
     nameSuggestion: "My Radio Show",
+    comingSoon: true,
   },
   {
     id: "multiplayer",
@@ -61,8 +67,17 @@ export const PROJECT_KINDS: ProjectKindInfo[] = [
     chipLabel: "Game night project",
     scratchHeading: "Build your game night",
     nameSuggestion: "Game Night",
+    comingSoon: true,
   },
 ];
+
+/** Kinds whose new-project start is gated with "Coming Soon!" — the
+ * picker card is shown but cannot be chosen, and creation guards refuse
+ * the kind so no path (picker, kind conversion, future deep link) can
+ * start a new project of a gated kind. Existing projects keep working. */
+export function isKindComingSoon(kind: ProjectKind | undefined): boolean {
+  return !!kind && PROJECT_KINDS.some(info => info.id === kind && info.comingSoon);
+}
 
 /** The setup pieces a kind's from-scratch screen offers. A talk show's
  * screen offers only talk pieces — quiz cards and YouTube clips — never
