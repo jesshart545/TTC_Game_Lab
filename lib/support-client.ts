@@ -51,3 +51,11 @@ export function supportPanelEvent(panel: "support" | "research") {
 export function requestResearchOpen() {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ttc-open-research"));
 }
+
+/** The doorway into Jewel (the wand scene on the Talk Show page) fires
+ *  this so her conversation reveals itself if the creator had hidden
+ *  it — stepping in through the picture always lands in her open
+ *  conversation. CompactConversation listens for it. */
+export function requestJewelOpen() {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ttc-open-jewel"));
+}

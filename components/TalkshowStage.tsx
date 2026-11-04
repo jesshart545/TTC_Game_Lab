@@ -56,6 +56,19 @@ import "./talkshow-workshop.css";
  * landing bubble alone at 112px with a tiny wand badge. Both were
  * the opposite composition: Jewel dominant, the wand a speck.
  * The picture is the presentation, not the bubble alone.)
+ *
+ * The scene is also the doorway (Jessica, 2026-11-04): the whole
+ * pictured card is one button into the conversation directly below
+ * it — a decorated picture standing above the panel while the way
+ * in lived somewhere else on the page was the miss she named. And
+ * the panel in this view carries no page-level progress strip:
+ * the topic chips and the next-task line that used to head the
+ * panel are gone (WorkshopAiPanel withholds them in this view),
+ * and the research topic's checked-off status line is gone from
+ * this stage — check-offs and directing live inside her
+ * conversation, nowhere on the page. The workflow model itself
+ * is untouched: it still picks the topic shown here, records the
+ * facts and the skips, and gates Set the Stage.
  */
 
 const TALK_TOPICS = ["background", "prompt", "research", "quiz", "media", "missed"] as const;
@@ -66,13 +79,16 @@ type StageProps = {
   doors: TalkshowDoors;
   onSaveProject: (project: Project) => void;
   jewelPanel?: ReactNode;
+  /** Stepping into Jewel through the wand scene: the page reveals
+   *  her conversation if it was hidden and lands on her input. */
+  onEnterJewel: () => void;
 };
 
 const assetKey = (asset: ProjectAsset) => asset.storageKey || asset.name;
 
 /* ---------------- Background — the combined background + sign piece ---------------- */
 
-function BackgroundStage({ project, doors, jewelPanel }: StageProps) {
+function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProps) {
   const backgrounds = backgroundAssets(project);
   const animated = backgrounds.find(asset => isVideo(asset)) || null;
   const flat = backgrounds.find(asset => !isVideo(asset)) || null;
@@ -107,7 +123,7 @@ function BackgroundStage({ project, doors, jewelPanel }: StageProps) {
       </div>
 
       <div style={{ marginTop: 20, marginBottom: 12 }}>
-        <JewelWandScene />
+        <JewelWandScene onEnter={onEnterJewel} />
       </div>
       {jewelPanel}
 
@@ -218,7 +234,6 @@ function PromptStage({ project, jewelPanel }: StageProps) {
 function ResearchStage({ project, jewelPanel }: StageProps) {
   const theme = (project.gamePlan?.theme || "").trim();
   const promptSpec = assetPromptText(promptAsset(project));
-  const researched = project.workflowProgress?.researched === true;
   return (
     <div>
       <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>Research on your topic — Jewel gathers the data points</div>
@@ -242,9 +257,6 @@ function ResearchStage({ project, jewelPanel }: StageProps) {
       </div>
       <p className="gsw-demostatus" style={{ marginTop: 10 }}>{SAMPLE_RESEARCH.note}</p>
       {jewelPanel}
-      <p className="gsw-demostatus" style={{ marginTop: 10 }}>
-        {researched ? "✓ Jewel has researched in this project — the data points and sources are in your conversation with her." : "No research yet — the first lookup you ask Jewel for in your conversation checks this topic off."}
-      </p>
     </div>
   );
 }
@@ -392,14 +404,14 @@ function MissedStage({ project, onSaveProject, jewelPanel }: StageProps) {
 
 /* ---------------- The stage itself ---------------- */
 
-export default function TalkshowStage({ project, workflow, doors, onSaveProject, jewelPanel }: StageProps & { workflow: WorkflowEvaluation }) {
+export default function TalkshowStage({ project, workflow, doors, onSaveProject, jewelPanel, onEnterJewel }: StageProps & { workflow: WorkflowEvaluation }) {
   const steps = workflow.stages[0]?.steps || [];
   // Jewel's current topic: the model's first unfinished talk topic. Theme
   // is a creation-seeded fact, never a topic on this page — while it is
   // the only thing open, Jewel still begins at the background.
   const open = steps.find(step => !step.complete && (TALK_TOPICS as readonly string[]).includes(step.id));
   const topic: TalkTopic = (open?.id as TalkTopic) || "missed";
-  const stageProps: StageProps = { project, doors, onSaveProject, jewelPanel };
+  const stageProps: StageProps = { project, doors, onSaveProject, jewelPanel, onEnterJewel };
   return (
     <section className="gsw" aria-label="Imagine and Create — your show, as Jewel builds it with you">
       <div className="gsw-liberty">

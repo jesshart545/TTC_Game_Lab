@@ -32,19 +32,30 @@ import "./jewel-wand-scene.css";
  * composition (Jewel dominant, the wand a speck). Jessica's
  * instruction all along was the landing picture: wand first,
  * Jewel small.
+ *
+ * THE SCENE IS THE DOORWAY (Jessica, 2026-11-04): standing the
+ * picture above her panel was not enough — nothing at the picture
+ * itself took the user to Jewel. The whole pictured card is now one
+ * button: tapping it steps into her conversation directly below
+ * (the page's onEnter reveals the conversation if it was hidden and
+ * lands on her input). One short label on the picture itself names
+ * the move — "Create with Jewel" — on the card, never in a text
+ * block below it. The composition is unchanged from the landing
+ * picture: wand and sparkles dominant, Jewel small at the tip.
  */
-export default function JewelWandScene() {
+export default function JewelWandScene({ onEnter }: { onEnter: () => void }) {
   return (
-    <div className="jewel-scene" aria-hidden="true">
+    <button type="button" className="jewel-scene" onClick={onEnter} aria-label="Create with Jewel">
       <img className="jewel-scene-img" src="/redesign/tip-jewel-wand.webp" alt="" />
-      <div className="jewel-scene-shade" />
+      <span className="jewel-scene-shade" />
       <span className="jewel-scene-sparkle" style={{ top: "16%", left: "56%", fontSize: 15 }}>✦</span>
       <span className="jewel-scene-sparkle" style={{ top: "38%", left: "78%", fontSize: 11, animationDelay: ".4s" }}>✦</span>
       <span className="jewel-scene-sparkle" style={{ top: "10%", left: "84%", fontSize: 18, animationDelay: ".8s" }}>✦</span>
       <span className="jewel-scene-sparkle" style={{ top: "52%", left: "62%", fontSize: 10, animationDelay: "1.1s" }}>✦</span>
-      <div className="jewel-scene-bubble">
+      <span className="jewel-scene-bubble">
         <video src="/redesign/jewel-wave.mp4" autoPlay muted loop playsInline />
-      </div>
-    </div>
+      </span>
+      <span className="jewel-scene-cta">🪄 Create with Jewel</span>
+    </button>
   );
 }
