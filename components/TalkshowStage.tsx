@@ -44,8 +44,15 @@ import "./talkshow-workshop.css";
  * area, and Jewel builds the combined piece, working with media the
  * creator already uploaded like any other asset. Jewel's avatar
  * stands in the liberty banner as the continuity reminder, and again
- * at full presence where the creator steps into her conversation in
- * the background area.
+ * where the creator steps into her conversation in the background
+ * area — there in her LANDING PAGE presentation (Jessica,
+ * 2026-11-04: "we need the enter Jewel area to show the same way it
+ * does on the landing page"): the glowing 112px bubble of the home
+ * Tips card that introduces her as their magic wand, bobbing gently,
+ * her wand badge at its standard size. (An earlier cut — a plain
+ * 104px bubble with a 46px wand — was rejected as "too damn big":
+ * what made it wrong was not the pixels but that it was a treatment
+ * invented for this page instead of the way the site introduces her.)
  */
 
 const TALK_TOPICS = ["background", "prompt", "research", "quiz", "media", "missed"] as const;
@@ -97,7 +104,7 @@ function BackgroundStage({ project, doors, jewelPanel }: StageProps) {
       </div>
 
       <div style={{ marginTop: 20, marginBottom: 12 }}>
-        <JewelAvatar size={104} wandSize={46} />
+        <JewelAvatar size={112} landing />
       </div>
       {jewelPanel}
 

@@ -154,12 +154,25 @@ const quizTool = (overrides = {}) => ({
   // And Jewel herself is THERE at that entry (Jessica, 2026-11-04: "the
   // Jewel magic wand doesn't appear anywhere" — the banner badge alone
   // read as absent). In the background area, right where her
-  // conversation begins, her avatar stands large with the wand
-  // rendered at full size — an actual magic wand, not tiny sparkles.
-  const entryAt = stage.indexOf('wandSize', bgAt);
-  assert(entryAt > bgAt && entryAt < bgPanelAt, 'her entry presence stands in the background area, immediately before the conversation');
+  // conversation begins, she stands in the SAME presentation that
+  // introduces her on the landing page (Jessica, 2026-11-04, final:
+  // "we need the enter Jewel area to show the same way it does on the
+  // landing page"): the home Tips card's glowing bubble — 112px, gold
+  // ring, the landing glow, gently bobbing, her waving portrait
+  // inside — replicated into JewelAvatar's landing variant, her wand
+  // badge at its standard size. (A first cut stood at 104px with a
+  // 46px wand and was rejected as "too damn big": an invented
+  // treatment, not the way the site introduces her.)
+  const entryAvatarAt = stage.indexOf('<JewelAvatar', bgAt);
+  assert(entryAvatarAt > bgAt && entryAvatarAt < bgPanelAt, 'her entry presence stands in the background area, immediately before the conversation');
+  const entryAvatar = stage.slice(entryAvatarAt, stage.indexOf('/>', entryAvatarAt) + 2);
+  assert(entryAvatar.includes('size={112}') && entryAvatar.includes('landing'), 'the entry avatar renders her landing presentation — the Tips card bubble at its own 112px');
+  assert(!stage.includes('size={104}') && !stage.includes('wandSize={46}'), 'the rejected oversized entry treatment is gone: no plain 104px bubble, no 46px wand');
   const avatarSrc = fs.readFileSync('components/JewelAvatar.tsx', 'utf8');
-  assert(avatarSrc.includes('wandSize') && avatarSrc.includes('fontSize: wandSize'), 'the avatar renders its wand at a chosen full size on the entry placement');
+  assert(avatarSrc.includes('jewel-avatar-landing'), 'JewelAvatar carries the landing variant of her presentation');
+  const avatarCss = fs.readFileSync('components/talkshow-workshop.css', 'utf8');
+  assert(avatarCss.includes('.jewel-avatar-landing') && avatarCss.includes('0 0 34px 10px rgba(255, 215, 94, .45)'), 'the landing glow is replicated value-for-value from the home Tips bubble');
+  assert(avatarCss.includes('@keyframes jewel-bob') && avatarCss.includes('translateY(-7px)') && avatarCss.includes('3.2s'), 'the landing bobbing motion is replicated — jewel-bob carries the rd-bob values');
   console.log('PASS: page shape — one topic-keyed visual stage; no path row, panels, ask strips, change lists, or skip buttons on the page.');
 }
 
@@ -485,9 +498,12 @@ const quizTool = (overrides = {}) => ({
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(stage.includes('{TALK_CREATIVITY_BANNER}'), 'the stage renders the banner once, above the topic visual');
   // Jewel's avatar and wand stand twice on the talk page (Jessica,
-  // 2026-11-04): the liberty banner's continuity instance, and — the
-  // required one — at full presence where the creator steps into her
-  // conversation in the background area, her wand at full size.
+  // 2026-11-04): the liberty banner's continuity instance (58px,
+  // unchanged), and — the required one — where the creator steps
+  // into her conversation in the background area, in her landing
+  // page presentation: the Tips card's glowing, bobbing 112px
+  // bubble. The plain oversized 104px / 46px-wand entry treatment
+  // was rejected as "too damn big".
   // Never stamped on every control.
   assert.equal((stage.match(/<JewelAvatar/g) || []).length, 2, 'her avatar stands in the banner and at the entry into Jewel in the background area');
   assert(!fs.readFileSync('components/TalkshowSteps.tsx', 'utf8').includes('JewelAvatar'), 'the avatar is not repeated across the step library');
@@ -502,7 +518,7 @@ const quizTool = (overrides = {}) => ({
     assert(!src.includes('localStorage'), `${file}: no side-channel persistence`);
   }
   assert(backgroundAssets(baseProject({ assets: [bgAsset(), { name: 'x.png', type: 'Image', role: 'layer' }] })).length === 1, 'backgroundAssets counts background-role assets only');
-  console.log('PASS: banner once; avatar in the banner and at full presence at the entry into Jewel; the stage components never fetch, generate, or persist behind Jewel’s back.');
+  console.log('PASS: banner once; avatar in the banner (58px, unchanged) and at the entry into Jewel in her landing page presentation; the stage components never fetch, generate, or persist behind Jewel’s back.');
 }
 
 // --- Presentation: pictured demonstrations, never a wall of words ------------

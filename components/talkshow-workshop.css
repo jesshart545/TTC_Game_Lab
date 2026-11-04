@@ -33,6 +33,25 @@
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .55));
 }
 
+/* The landing presentation of the avatar, replicated value-for-value
+   from the home Tips card's bubble (.rd-bubble in app/home.css): the
+   stronger landing glow and the gentle bobbing motion, so the entry
+   into Jewel shows her exactly the way the landing page introduces
+   her. Rendered at the landing bubble's own size (112px) by the
+   caller. The one deliberate difference: the landing bubble clips to
+   its circle and carries no wand badge (her wand reads there from
+   the tip's picture and words); here the badge rides outside the
+   circle as on every other JewelAvatar, so overflow stays visible. */
+.jewel-avatar-landing {
+  box-shadow: 0 0 0 4px rgba(233, 201, 121, .25), 0 0 34px 10px rgba(255, 215, 94, .45);
+  animation: jewel-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes jewel-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-7px) rotate(2deg); }
+}
+
 /* The optional areas' skip row: a skip counts as complete. */
 .tsw-skiprow {
   display: flex;
