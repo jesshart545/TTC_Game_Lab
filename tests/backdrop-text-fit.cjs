@@ -14,7 +14,10 @@ const load = require('./load.cjs');
 // and, after the caps, a script-font sign whose line box fit the
 // frame while its painted glyphs crossed the top edge and cropped —
 // the fit now budgets the font's painted (bounding-box) extent, not
-// the line box.
+// the line box. The caps themselves tightened once more (line 6.5%
+// → 4.5%, block 32% → 24% of frame height) after two consecutive
+// live checks still judged the capped prompt as prominent as the
+// sign beside it — a caption should sit well under the title.
 
 const {
   fitBackdropTextSize, cleanBackdropText,
@@ -47,7 +50,7 @@ const LINE_CAP_1080 = Math.floor(1080 * PROMPT_LINE_MAX_RATIO);
 {
   const size = fitBackdropTextSize({ text: SAMPLE_PROMPT, width: 1920, height: 1080, lower: true, measure });
   assert.equal(size, LINE_CAP_1080, 'the prompt fits AT its lower-third line cap, not at title scale');
-  assert.equal(wrapLines(SAMPLE_PROMPT, size, 1920), 2, 'the sample prompt wraps to two caption lines');
+  assert.equal(wrapLines(SAMPLE_PROMPT, size, 1920), 1, 'at the tightened cap the sample prompt fits on one caption line');
   assert.ok(blockShare(SAMPLE_PROMPT, size, 1920, 1080) <= PROMPT_BLOCK_MAX_RATIO, 'the prompt block stays within its share of the frame');
   assert.ok(size >= 40, 'corrected, not crushed — still a bold, legible lower-third');
   console.log('PASS: the oversized case — the sample prompt now fits at the corrected caption scale.');

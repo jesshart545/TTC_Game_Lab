@@ -82,11 +82,31 @@ assert(review.includes('cardDesignPlacement') && review.includes('withCardDesign
 const runtimeLayers = fs.readFileSync('components/RuntimeActionLayers.tsx', 'utf8');
 assert(runtimeLayers.includes('isCardTool(tool)') && runtimeLayers.includes('<FittedCard'), 'the appearance preview renders the real fitted card for card tools, not the generic overlayResult run');
 
-// ONE spot, on a toggle, immediately past Jewel — and the talk
-// deck shelf is GONE from this page: staging deck moments happens
-// through Jewel's conversation (her route context below keeps the
-// deck), never through page furniture.
-assert(review.indexOf('stage-review-jewel') >= 0 && review.indexOf('stage-review-jewel') < review.indexOf('stage-review-spot'), 'Jewel comes first; the review spot follows immediately');
+// Ghost copy after a drag (live-found, 2026-11-04): a fired
+// control's run and the selected control's appearance preview both
+// rendered the item; the preview followed a drag commit to the new
+// position while the run stayed where it was fired — two copies,
+// one stranded at the original position until reload. Two halves
+// fix it: the preview stands down while the control's own run is
+// live (the run IS the appearance), and draft runs render at
+// their control's CURRENT overlayResult, so the one remaining
+// copy sits at the committed position. The published overlay
+// keeps the fire-time snapshot exactly.
+assert(review.includes('liveControlIds'), 'the review surface knows which controls have a live run');
+assert(review.includes('!liveControlIds?.includes(control.id)'), 'the appearance preview stands down while the selected control\'s own run is live');
+assert(page.includes('liveControlIds={runtime.runs.map(r => r.control.id)}'), 'the page hands the review the live run ids from the same runtime that renders the overlay');
+assert(runtimeLayers.includes('const shown=(run:Run):Run=>{ if(live)return run;'), 'draft runs resolve to their control\'s current record; live (published) runs keep the fire-time snapshot');
+assert(runtimeLayers.includes('const displayRuns=runtime.runs.map(shown);'), 'tool, message, composition and asset runs all render through the current-control resolution in draft mode');
+
+// ONE spot, on a toggle, FIRST on the page — the review area is
+// the most prominent thing, and Jewel's conversation sits BELOW
+// it (Jessica's clarification, 2026-11-04). The talk deck shelf
+// is GONE from this page: staging deck moments happens through
+// Jewel's conversation (her route context below keeps the deck),
+// never through page furniture.
+assert(review.indexOf('stage-review-spot') >= 0 && review.indexOf('stage-review-spot') < review.indexOf('stage-review-jewel'), 'the review spot comes first; Jewel\'s conversation sits below it');
+assert(review.includes('ask Jewel below'), 'the dashboard header points down to Jewel, who sits below the review');
+assert(!review.includes('ask Jewel above'), 'no copy still sends the creator up to Jewel — she moved below the review');
 assert(review.includes('role="tablist"') && review.includes('setReviewSide("overlay")') && review.includes('setReviewSide("dashboard")'), 'one toggle switches the two reviews in the same spot');
 assert(review.includes('reviewSide === "overlay" ? ('), 'only one review side renders at a time');
 assert(review.includes('body.dataset.stageReview'), 'the surface flags the page while mounted so the global Ask Jewel launcher leaves');
@@ -103,7 +123,7 @@ assert(route.includes('JEWEL_STAGE_REVIEW_ADDENDUM'), 'the route carries the sta
 assert(route.includes('body.workspaceStage === "build" && (body.project?.kind === "gameshow" || body.project?.kind === "talk")'), 'the instruction is scoped to gameshow/talk at the build stage');
 assert(route.includes('deckMoments'), 'Jewel\'s talk context lists the deck moments with staged flags');
 assert(route.includes('NEVER connect the sign or backdrop asset as a button'), 'Jewel is told never to connect the sign/backdrop (it would strip the background)');
-console.log('PASS: source contracts — review surface scope, Jewel plus one toggled review spot, strip withheld, drag persistence paths, deck shelf removed, Jewel stage-1 instruction.');
+console.log('PASS: source contracts — review surface scope, one toggled review spot first with Jewel below, strip withheld, drag persistence paths, deck shelf removed, Jewel stage-1 instruction.');
 
 // ---------- lib/stage-review behavior ----------
 const { reorderVisibleControls, deckMomentStaged, deckSlideCreation } = load('lib/stage-review.ts');
@@ -258,11 +278,15 @@ function legacyProject() {
   }));
   await React.act(async () => renderWith(project));
 
-  // Jewel first, then ONE review spot on its toggle: the Overlay
-  // side shows first; the Dashboard side is one flip away, in the
-  // same spot — never both at once, never stacked down the page.
+  // ONE review spot first, on its toggle, with Jewel's
+  // conversation BELOW it: the Overlay side shows first; the
+  // Dashboard side is one flip away, in the same spot — never both
+  // at once, never stacked down the page.
   assert(container.querySelector('.wand-stub'), 'the wand doorway renders');
   assert(container.querySelector('.jewel-stub'), 'Jewel\'s conversation renders on the page');
+  const spotEl = container.querySelector('.stage-review-spot');
+  const jewelEl = container.querySelector('.stage-review-jewel');
+  assert(spotEl && jewelEl && (spotEl.compareDocumentPosition(jewelEl) & 4), 'in the rendered page the review spot precedes Jewel\'s conversation — the review is the first, most prominent thing; Jewel sits below');
   const toggleButtons = [...container.querySelectorAll('.sr-review-toggle button')];
   assert.deepEqual(toggleButtons.map(b => b.textContent), ['Overlay', 'Dashboard'], 'the toggle offers exactly the two reviews');
   assert(container.querySelector('[aria-label="Overlay review"]'), 'the overlay review renders first in the spot');
@@ -386,5 +410,52 @@ function legacyProject() {
   assert.equal(container.ownerDocument.body.dataset.stageReview, 'true', 'the launcher stays flagged off on the talk staging page');
   await React.act(async () => root2.unmount());
   console.log('PASS: talk at Set the Stage — no deck shelf; Jewel and the toggled review spot only.');
+
+  // Ghost guard, behaviorally: the appearance preview is stubbed
+  // with a marker so this harness can see StageReview's choice to
+  // render it. With no live run, selecting the quiz control shows
+  // the preview (where the item lands). While the control's own
+  // run is live — its id in liveControlIds, as the page passes
+  // from the runtime — the preview stands down: exactly one copy
+  // of the item (the run) is on the overlay. When the run ends,
+  // the preview returns for the still-selected control.
+  freshDom();
+  const container3 = document.getElementById('root');
+  const StageReviewGhost = compile('components/StageReview.tsx', {
+    './RuntimeActionLayers': { ControlAppearancePreview: ({ control }) => React.createElement('div', { className: 'preview-stub', 'data-preview-for': control.id }, 'appearance preview') },
+  }).default;
+  const quizProject = {
+    ...legacyProject(), id: 'ghost-1', name: 'Ghost Check',
+    gameTools: [{ id: 't1', type: 'trivia-list', name: 'Quiz — Small Habits', enabled: true, inToolbox: true, inOverlayBuild: false, config: { questions: [{ question: 'Which small habit?', answer: 'Making your bed' }] } }],
+    controls: [{ id: 'c-quiz', label: 'Quiz — Small Habits', detail: 'Show the quiz', action: 'tool.t1', toolIds: ['t1'], overlayResult: { x: 15, y: 12, width: 70, height: 30, layer: 10, entrance: 'fade', exit: 'fade', entranceSeconds: 0.3, exitSeconds: 0.3 } }],
+  };
+  const root3 = createRoot(container3);
+  const renderGhost = liveIds => root3.render(React.createElement(StageReviewGhost, {
+    jewelPanel: React.createElement('div', { className: 'jewel-stub' }, 'Jewel conversation'),
+    onEnterJewel: noop,
+    sequenceRunning: false, sequenceError: '', onStopSequence: noop, onResetGame: noop,
+    cardStates: {}, liveControlIds: liveIds, onSelect: noop, focusControl: null,
+    project: quizProject, onChange: noop,
+    overlay: React.createElement('div', null, 'overlay'),
+    onTrigger: noop, onWorkshop: noop,
+    youtubeOpen: false, onOpenYoutube: noop, onCloseYoutube: noop,
+    onYoutubeCommand: async () => null, youtubeState: null, youtubeFeedback: null,
+    dashboardExtras: () => null, feedback: '',
+  }));
+  await React.act(async () => renderGhost([]));
+  const dashTab3 = [...container3.querySelectorAll('.sr-review-toggle button')].find(b => b.textContent === 'Dashboard');
+  await React.act(async () => dashTab3.click());
+  const quizButton = [...container3.querySelectorAll('.sr-buttonwrap > button:first-child')].find(b => b.textContent.includes('Quiz — Small Habits'));
+  assert(quizButton, 'the quiz control is on the dashboard review');
+  await React.act(async () => quizButton.click());
+  const overlayTab3 = [...container3.querySelectorAll('.sr-review-toggle button')].find(b => b.textContent === 'Overlay');
+  await React.act(async () => overlayTab3.click());
+  assert(container3.querySelector('.preview-stub[data-preview-for="c-quiz"]'), 'with no live run, the selected control\'s appearance preview shows where it lands');
+  await React.act(async () => renderGhost(['c-quiz']));
+  assert(!container3.querySelector('.preview-stub'), 'while the control\'s own run is live, the preview stands down — the run is the only copy on the overlay');
+  await React.act(async () => renderGhost([]));
+  assert(container3.querySelector('.preview-stub[data-preview-for="c-quiz"]'), 'when the run ends, the preview returns for the still-selected control');
+  await React.act(async () => root3.unmount());
+  console.log('PASS: ghost guard — the appearance preview stands down while the selected control\'s own run is live, and returns when it ends.');
   console.log('PASS: stage review spaces — Jewel plus one toggled review spot, and legacy survival.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

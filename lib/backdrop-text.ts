@@ -110,9 +110,9 @@ export function signPresent(project: Project): boolean {
  * prompt's fit is therefore capped like a broadcast lower-third: no
  * line taller than this share of the frame's height…
  */
-export const PROMPT_LINE_MAX_RATIO = 0.065;
+export const PROMPT_LINE_MAX_RATIO = 0.045;
 /** …and the whole prompt block within this share of the frame. */
-export const PROMPT_BLOCK_MAX_RATIO = 0.32;
+export const PROMPT_BLOCK_MAX_RATIO = 0.24;
 /** The block budget the title fit has always used. */
 const TITLE_BLOCK_MAX_RATIO = 0.78;
 

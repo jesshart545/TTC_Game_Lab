@@ -1,9 +1,10 @@
 /* Set the Stage — review spaces (components/StageReview.tsx).
-   The stage page for gameshow and talk is only: Jewel's doorway and
-   conversation at the top, then ONE review spot immediately past
-   her where the overlay review and the dashboard review trade
-   places on a toggle. No inspector or editor panels anywhere on
-   the page — editing goes through Jewel's conversation. Self-
+   The stage page for gameshow and talk is only: ONE review spot
+   first — the most prominent thing on the page — where the overlay
+   review and the dashboard review trade places on a toggle, then
+   Jewel's doorway and conversation below it. No inspector or
+   editor panels anywhere on the page — editing goes through
+   Jewel's conversation. Self-
    sufficient sheet, imported by the component itself (the
    JewelWandScene pattern), so the surface carries its own
    presentation. Colors follow the redesign's purple/gold. */

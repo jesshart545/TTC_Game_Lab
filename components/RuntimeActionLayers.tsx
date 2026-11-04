@@ -230,10 +230,20 @@ function motionStyle(run:Run):import("react").CSSProperties{
 }
 
 export default function RuntimeActionLayers({ runtime, project, live = false }: { runtime: ReturnType<typeof useRuntimeActions>; project: Project; live?: boolean }) {
-  const toolRuns=runtime.runs.filter(run=>run.tool);
-  return <><QuestionCards project={project} states={runtime.cardStates}/>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length} live={live} slug={project.slug}/>)}{runtime.runs.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
+  // A run keeps the control exactly as it was when fired. In the
+  // draft/review surfaces the project on screen is the living one,
+  // so render each run with its control's CURRENT record: a
+  // committed change — a drag in the stage review writing a new
+  // overlayResult — then moves the run that is already showing,
+  // instead of leaving it standing at the position it was fired
+  // from (the ghost copy left after a drag, 2026-11-04). The
+  // published overlay (live) keeps the fire-time snapshot exactly.
+  const shown=(run:Run):Run=>{ if(live)return run; const current=(project.controls||[]).find(c=>c.id===run.control.id); return current&&current!==run.control?{...run,control:current}:run; };
+  const displayRuns=runtime.runs.map(shown);
+  const toolRuns=displayRuns.filter(run=>run.tool);
+  return <><QuestionCards project={project} states={runtime.cardStates}/>{toolRuns.map((run,index)=><ToolRun key={run.id} run={run} assets={project.assets} index={index} count={toolRuns.length} live={live} slug={project.slug}/>)}{displayRuns.filter(run=>run.message).map(run=><div key={run.id} role="status" style={{position:"absolute",left:"20%",top:"10%",width:"60%",zIndex:40,padding:"1rem",background:"#101b32",color:"white",textAlign:"center"}}>{run.message}</div>)}{runtime.flash && <div aria-label="Triggered effect" style={{position:"absolute",inset:0,background:"#20e8ff44",zIndex:50,pointerEvents:"none"}}/>}
     {project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==='blank-board'&&!t.config.triggerOnly).map(tool=><section key={tool.id} aria-label={tool.name} style={{position:'absolute',inset:0,zIndex:5}}><BoardSurface tool={tool} project={project}/></section>)}
-    {runtime.runs.map(run => run.tool ? null : run.compositionId ? (() => {
+    {displayRuns.map(run => run.tool ? null : run.compositionId ? (() => {
       const composition = project.compositions?.find(c => c.id === run.compositionId);
       return composition ? <CompositionPlayer key={run.id} composition={composition} assets={project.assets} placement={run.control.overlayResult || defaultOverlayResult} startedAt={run.at} onEnd={() => runtime.remove(run.id)}/> : null;
     })() : run.asset ? <div key={run.id} style={{position:"absolute",...(run.control.overlayResult?{left:run.control.overlayResult.x+"%",top:run.control.overlayResult.y+"%",width:run.control.overlayResult.width+"%",height:run.control.overlayResult.height+"%"}:{inset:0}),zIndex:run.control.overlayResult?.layer??20,...motionStyle(run)}}>{["video","audio"].includes(mediaKind(run.asset)) ? <MediaRun asset={run.asset} onEnd={()=>runtime.remove(run.id)}/> : <img src={run.asset.url} alt={run.asset.name} style={{width:"100%",height:"100%",objectFit:"contain",...overlayAssetStyle({...run.asset,edits:{...run.asset.edits,placement:undefined}})}}/>}</div> : null)}
