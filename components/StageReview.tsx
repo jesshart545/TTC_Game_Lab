@@ -13,29 +13,31 @@ import type { YouTubeState } from "../lib/youtube";
 import { safeYoutubePlacement } from "../lib/youtube";
 import { defaultOverlayResult } from "./CompositionPlayer";
 import WheelHostPanel from "./WheelHostPanel";
-import AssetThumbnail from "./AssetThumbnail";
 import QuestionCardEditor from "./QuestionCardEditor";
 import GameToolEditor from "./GameToolEditor";
 import { buttonFacts, controlEffectResult, stageFitWidth } from "../lib/build-controls";
 import { mediaKind } from "../lib/board-design";
-import { assetCategory } from "../lib/asset-folders";
 import { normalizePlacement, movePlacement, resizePlacement, toolShapePlacement } from '../lib/overlay-placement';
 import { ControlAppearancePreview } from "./RuntimeActionLayers";
 import YouTubePlacementEditor from "./YouTubePlacementEditor";
 import YouTubeHostPanel from "./YouTubeHostPanel";
-import { deckMomentStaged, reorderVisibleControls, DECK_SLIDE_KIND_LABELS } from "../lib/stage-review";
+import { reorderVisibleControls } from "../lib/stage-review";
 
 /**
  * Set the Stage — the review spaces (Jessica, 2026-11-04).
  *
  * For gameshow and talk projects, the staging area shows ONLY three
- * things: the overlay review, the dashboard review, and Jewel's
- * conversation (entered through the wand scene, the stage-0 way).
- * The reviews are not mock-ups: the overlay review renders the same
- * draft overlay node the published overlay runs, and the dashboard
- * review's buttons fire through the same runtime the published
- * dashboard uses — once a button is wired, pressing it here does
- * exactly what it will do live. There is no separate Test mode.
+ * things: Jewel's conversation (entered through the wand scene, the
+ * stage-0 way) at the top, and — immediately past her, in ONE spot —
+ * the overlay review and the dashboard review on a toggle. Only one
+ * review shows at a time, in that one place; nobody scrolls past
+ * anything else to find either of them. The reviews are not
+ * mock-ups: the overlay review renders the same draft overlay node
+ * the published overlay runs, and the dashboard review's buttons
+ * fire through the same runtime the published dashboard uses — once
+ * a button is wired, pressing it here does exactly what it will do
+ * live, and flipping to the Overlay side shows the result. There is
+ * no separate Test mode.
  *
  * Adding, staging and wiring happen through Jewel (her connections
  * and build changes); what the creator does by hand here is what the
@@ -126,7 +128,6 @@ function StageDragBox({ label, placement, canvasRef, selected, onSelect, onCommi
 type Props = {
   jewelPanel: ReactNode;
   onEnterJewel: () => void;
-  onAskJewel?: (text: string) => void;
   sequenceRunning: boolean;
   sequenceError: string;
   onStopSequence: () => void;
@@ -150,9 +151,29 @@ type Props = {
   ccssEntitled?: boolean;
 };
 
-export default function StageReview({ jewelPanel, onEnterJewel, onAskJewel, sequenceRunning, sequenceError, onStopSequence, onResetGame, cardStates, onSelect, focusControl, project, onChange, overlay, onTrigger, onWorkshop, youtubeOpen, onOpenYoutube, onCloseYoutube, onYoutubeCommand, youtubeState, youtubeFeedback, dashboardExtras, feedback, ccssEntitled = false }: Props) {
+export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning, sequenceError, onStopSequence, onResetGame, cardStates, onSelect, focusControl, project, onChange, overlay, onTrigger, onWorkshop, youtubeOpen, onOpenYoutube, onCloseYoutube, onYoutubeCommand, youtubeState, youtubeFeedback, dashboardExtras, feedback, ccssEntitled = false }: Props) {
   const currentProject = useRef(project); currentProject.current = project;
   const save = (next: Project) => { currentProject.current = next; onChange(next); };
+  // The two reviews share ONE spot, on a toggle (Jessica's
+  // correction, 2026-11-04): only the chosen side renders, in the
+  // same place, immediately past Jewel. The runtime behind both
+  // sides is the page's shared draft runtime, so a dashboard press
+  // lands on the overlay whether or not the Overlay side is the one
+  // showing — flip the toggle to see it.
+  const [reviewSide, setReviewSide] = useState<"overlay" | "dashboard">("overlay");
+  // The global Ask Jewel launcher (the root layout's support bubble)
+  // is a second Jewel door floating at the bottom of the page. This
+  // page already IS Jewel's conversation, so the launcher leaves
+  // while the review surface is mounted.
+  useEffect(() => {
+    const body = window.document?.body; if (!body) return;
+    const previous = body.dataset.stageReview;
+    body.dataset.stageReview = "true";
+    return () => {
+      if (previous === undefined) delete body.dataset.stageReview;
+      else body.dataset.stageReview = previous;
+    };
+  }, []);
   const [selection, setSelection] = useState<{ kind: "asset" | "tool" | "control"; id: string } | null>(null);
   useEffect(() => onSelect(selection), [selection, onSelect]);
   useEffect(() => {
@@ -198,7 +219,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, onAskJewel, sequ
     const Observer = view.ResizeObserver; if (!Observer) return;
     const observer = new Observer(measure); observer.observe(canvas);
     return () => observer.disconnect();
-  }, [placedFitCount]);
+  }, [placedFitCount, reviewSide]);
 
   const key = (asset: ProjectAsset) => asset.storageKey || asset.name;
   const assetsByKey = useMemo(() => new Map((project.assets || []).map(a => [key(a), a])), [project.assets]);
@@ -288,7 +309,6 @@ export default function StageReview({ jewelPanel, onEnterJewel, onAskJewel, sequ
   }
   function buttonPointerCancel() { buttonDrag.current = null; setDraggingId(null); setDragOver(null); }
 
-  const deck = project.kind === "talk" && Array.isArray(project.talkDeck) ? project.talkDeck : null;
   const placedAssets = (project.assets || []).filter(a => a.inProject && a.url && a.role !== "background" && mediaKind(a) !== "audio");
   const placedBoards = (project.gameTools || []).filter(t => t.enabled && t.inOverlayBuild && (t.type === "blank-board" || t.type === "trivia-board"));
   const toolPlacement = (t: GameTool): Placement => {
@@ -302,40 +322,13 @@ export default function StageReview({ jewelPanel, onEnterJewel, onAskJewel, sequ
         <JewelWandScene onEnter={onEnterJewel} />
         {jewelPanel}
       </div>
-      <div className="stage-review-main">
-        {project.kind === "talk" && (
-          <section className="sr-deck" aria-label="Your show deck">
-            <div className="sr-review-head"><h3>Your deck</h3><span>The show’s moments, in your order — Jewel stages them onto your dashboard.</span></div>
-            {deck && deck.length ? (
-              <div className="sr-deckstrip">
-                {deck.map((slide, i) => {
-                  const staged = deckMomentStaged(project, slide);
-                  const slidePic = (slide.kind === "sign" || slide.kind === "backdrop" || slide.kind === "media") ? (project.assets || []).find(a => (a.storageKey || a.name) === slide.refKey) : undefined;
-                  return (
-                    <div key={slide.id} className="sr-slide">
-                      <div className="sr-slidevis">
-                        {slidePic ? <AssetThumbnail asset={slidePic} kind={assetCategory(slidePic)} /> : <span className="sr-slideface" aria-hidden="true">{slide.kind === "quiz" ? "?" : slide.kind === "youtube" ? "▶" : slide.kind === "composition" ? "⚡" : "▭"}</span>}
-                        <span className="sr-sliden">{i + 1}</span>
-                      </div>
-                      <div className="sr-slidelabel">{slide.label}</div>
-                      <div className="sr-slidekind">{DECK_SLIDE_KIND_LABELS[slide.kind]}</div>
-                      <p className={"sr-staged" + (staged ? " on" : "")}>{staged ? (slide.kind === "sign" || slide.kind === "backdrop" ? "✓ Your opening scene" : "✓ On your dashboard") : "Not staged yet"}</p>
-                      {!staged && onAskJewel && (
-                        <button type="button" className="sr-stage-ask" onClick={() => onAskJewel(`Stage my deck moment “${slide.label}” — put its clicker on my dashboard so I can run it during the show.`)}>
-                          Ask Jewel to stage this
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="sr-empty">Your deck is empty — the moments you line up in Imagine and Create will appear here, ready for Jewel to stage.</p>
-            )}
-          </section>
-        )}
-
-        <section ref={overlayCanvasRef} className="sr-canvas assembly-canvas" aria-label="Overlay review">
+      <div className="stage-review-spot">
+        <div className="sr-review-toggle" role="tablist" aria-label="Choose a review area">
+          <button type="button" role="tab" aria-selected={reviewSide === "overlay"} className={reviewSide === "overlay" ? "active" : ""} onClick={() => setReviewSide("overlay")}>Overlay</button>
+          <button type="button" role="tab" aria-selected={reviewSide === "dashboard"} className={reviewSide === "dashboard" ? "active" : ""} onClick={() => setReviewSide("dashboard")}>Dashboard</button>
+        </div>
+        {reviewSide === "overlay" ? (
+        <section ref={overlayCanvasRef} role="tabpanel" className="sr-canvas assembly-canvas" aria-label="Overlay review">
           <div className="sr-review-head"><h3>Overlay review</h3><span>Exactly what your audience will see — drag anything to move it.</span></div>
           <div className="stage" style={fittedStageWidth ? { width: fittedStageWidth } : undefined}>
             <BuildOverlayPreview>
@@ -388,8 +381,8 @@ export default function StageReview({ jewelPanel, onEnterJewel, onAskJewel, sequ
             <p className="sr-empty">Your buttons are ready — press one on the dashboard review and its result appears here. A background is optional; ask Jewel to add one anytime.</p>
           )}
         </section>
-
-        <section className="sr-canvas assembly-canvas" aria-label="Dashboard review">
+        ) : (
+        <section role="tabpanel" className="sr-canvas assembly-canvas" aria-label="Dashboard review">
           <div className="sr-review-head"><h3>Dashboard review</h3><span>Your host controls — press them: they work here exactly as they will live. Drag a button to reorder it; ✎ edits it.</span></div>
           {sequenceRunning && <button type="button" onClick={onStopSequence}>Stop sequence</button>}
           <div role="status" aria-live="polite">{sequenceError || feedback}</div>
@@ -443,6 +436,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, onAskJewel, sequ
             )}
           </div>
         </section>
+        )}
 
         {selection && (asset || tool || control) && (
           <section ref={settings} className="sr-inspector assembly-settings" aria-label="Selected item settings">
@@ -536,7 +530,6 @@ export default function StageReview({ jewelPanel, onEnterJewel, onAskJewel, sequ
             )}
           </section>
         )}
-        {!selection && <p className="sr-hint">Select a dashboard button (✎) or any placed item on the overlay to edit it here — or just ask Jewel.</p>}
       </div>
     </section>
   );
