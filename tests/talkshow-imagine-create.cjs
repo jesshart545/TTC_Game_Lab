@@ -151,28 +151,38 @@ const quizTool = (overrides = {}) => ({
   assert(panel.includes('<CompactConversation') && panel.includes('AI CREATIVE DIRECTOR'),
     'what stands in the topic is Jewel\'s full conversation panel — heading, her messages, the composer — not a launcher');
   assert(!stage.includes('Ask Jewel') && !stage.includes('<details'), 'no side tab, text link, or collapsed strip stands in for her presence in the topic');
-  // And Jewel herself is THERE at that entry (Jessica, 2026-11-04: "the
-  // Jewel magic wand doesn't appear anywhere" — the banner badge alone
-  // read as absent). In the background area, right where her
-  // conversation begins, she stands in the SAME presentation that
-  // introduces her on the landing page (Jessica, 2026-11-04, final:
-  // "we need the enter Jewel area to show the same way it does on the
-  // landing page"): the home Tips card's glowing bubble — 112px, gold
-  // ring, the landing glow, gently bobbing, her waving portrait
-  // inside — replicated into JewelAvatar's landing variant, her wand
-  // badge at its standard size. (A first cut stood at 104px with a
-  // 46px wand and was rejected as "too damn big": an invented
-  // treatment, not the way the site introduces her.)
-  const entryAvatarAt = stage.indexOf('<JewelAvatar', bgAt);
-  assert(entryAvatarAt > bgAt && entryAvatarAt < bgPanelAt, 'her entry presence stands in the background area, immediately before the conversation');
-  const entryAvatar = stage.slice(entryAvatarAt, stage.indexOf('/>', entryAvatarAt) + 2);
-  assert(entryAvatar.includes('size={112}') && entryAvatar.includes('landing'), 'the entry avatar renders her landing presentation — the Tips card bubble at its own 112px');
-  assert(!stage.includes('size={104}') && !stage.includes('wandSize={46}'), 'the rejected oversized entry treatment is gone: no plain 104px bubble, no 46px wand');
+  // And Jewel herself is THERE at that entry — in the LANDING
+  // PICTURE's own composition (Jessica, 2026-11-04: "Jewel is
+  // nowhere near as big as the wand. Jewel is in a small bubble
+  // that appears to have come from the tip of the wand — the wand
+  // and the sparkles dominate the picture"). The entry is the first
+  // Tips card's pictured scene itself (JewelWandScene): the wand
+  // picture fills a pictured card, gently floating, twinkling
+  // sparkles over it, and her small glowing bubble rides at the
+  // wand's tip. PRs #140–#142 stood a lone avatar bubble here
+  // instead (a plain 104px bubble with a 46px wand, then the
+  // landing bubble alone at 112px with a tiny wand badge) — the
+  // opposite composition: Jewel dominant, the wand a speck.
+  const sceneAt = stage.indexOf('<JewelWandScene', bgAt);
+  assert(sceneAt > bgAt && sceneAt < bgPanelAt, 'the landing wand scene stands in the background area, immediately before the conversation');
+  assert(stage.indexOf('AnimatedExampleMedia', bgAt) < sceneAt, 'background: the examples come before the wand scene, the scene before the conversation');
+  const bgSection = stage.slice(bgAt, stage.indexOf('Your backdrops', bgAt));
+  assert(!bgSection.includes('<JewelAvatar'), 'no lone avatar bubble stands at the entry — the pictured scene replaced it');
+  assert(!stage.includes('size={112}') && !stage.includes('size={104}') && !stage.includes('wandSize={46}'), 'the oversized entry treatments are gone: no 112px or 104px entry bubble, no 46px wand');
+  const scene = fs.readFileSync('components/JewelWandScene.tsx', 'utf8');
+  assert(scene.includes('/redesign/tip-jewel-wand.webp'), 'the scene is the landing picture itself — the wand and the sparkles that introduce her');
+  assert(scene.includes('jewel-scene-bubble') && scene.includes('/redesign/jewel-wave.mp4'), 'her small glowing bubble rides on the scene, her waving portrait inside it');
+  assert((scene.match(/jewel-scene-sparkle/g) || []).length >= 4, 'the twinkling sparkles stand over the scene as on the landing card');
+  assert(scene.includes('import "./jewel-wand-scene.css"'), 'the scene imports its own stylesheet — its styling never depends on a page-level sheet');
+  const sceneCss = fs.readFileSync('components/jewel-wand-scene.css', 'utf8');
+  assert(sceneCss.includes('width: 112px') && sceneCss.includes('height: 112px') && sceneCss.includes('border: 3px solid #e9c979') && sceneCss.includes('0 0 34px 10px rgba(255, 215, 94, .45)'),
+    'the bubble on the scene is the landing bubble at its own size — gold ring and landing glow, value for value (.rd-bubble)');
+  assert(sceneCss.includes('@keyframes jewel-scene-bob') && sceneCss.includes('translateY(-7px)') && sceneCss.includes('3.2s'), 'the bubble bobs with the landing motion (rd-bob values)');
+  assert(sceneCss.includes('@keyframes jewel-scene-floaty') && sceneCss.includes('translateY(-6px)') && sceneCss.includes('4s'), 'the pictured scene floats gently as the landing card does (rd-floaty values)');
+  assert(sceneCss.includes('@keyframes jewel-scene-twinkle') && sceneCss.includes('1.6s'), 'the sparkles twinkle with the landing timing (rd-twinkle values)');
   const avatarSrc = fs.readFileSync('components/JewelAvatar.tsx', 'utf8');
-  assert(avatarSrc.includes('jewel-avatar-landing'), 'JewelAvatar carries the landing variant of her presentation');
   const avatarCss = fs.readFileSync('components/jewel-avatar.css', 'utf8');
-  assert(avatarCss.includes('.jewel-avatar-landing') && avatarCss.includes('0 0 34px 10px rgba(255, 215, 94, .45)'), 'the landing glow is replicated value-for-value from the home Tips bubble');
-  assert(avatarCss.includes('@keyframes jewel-bob') && avatarCss.includes('translateY(-7px)') && avatarCss.includes('3.2s'), 'the landing bobbing motion is replicated — jewel-bob carries the rd-bob values');
+  assert(!avatarSrc.includes('jewel-avatar-landing') && !avatarCss.includes('.jewel-avatar-landing'), 'JewelAvatar\'s landing variant is retired — the entry presentation is the wand scene, not a bigger bubble');
   // The bubble must carry its own box (live bug, 2026-11-04): the avatar
   // is a <span> — an inline box, which IGNORES width/height. In the flex
   // liberty banner the span was blockified and sized fine, but at this
@@ -188,7 +198,7 @@ const quizTool = (overrides = {}) => ({
   assert(avatarSrc.includes('display: "inline-block"') && avatarSrc.includes('width: size, height: size, display: "block"'),
     'the component carries the critical box inline: display:inline-block on the bubble and an explicit size on the video');
   const talkCss = fs.readFileSync('components/talkshow-workshop.css', 'utf8');
-  assert(!talkCss.includes('.jewel-avatar-landing') && !talkCss.includes('jewel-bob'), 'the avatar rules moved out of the talk workshop sheet — one home, imported by the component');
+  assert(!talkCss.includes('.jewel-avatar') && !talkCss.includes('jewel-bob'), 'the avatar rules are not in the talk workshop sheet — one home, imported by the component');
   console.log('PASS: page shape — one topic-keyed visual stage; no path row, panels, ask strips, change lists, or skip buttons on the page.');
 }
 
@@ -513,15 +523,16 @@ const quizTool = (overrides = {}) => ({
   assert.equal(occurrences, 1, 'the banner wording lives in exactly one place across the talk files');
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(stage.includes('{TALK_CREATIVITY_BANNER}'), 'the stage renders the banner once, above the topic visual');
-  // Jewel's avatar and wand stand twice on the talk page (Jessica,
+  // Jewel's avatar and wand stand on the talk page (Jessica,
   // 2026-11-04): the liberty banner's continuity instance (58px,
-  // unchanged), and — the required one — where the creator steps
-  // into her conversation in the background area, in her landing
-  // page presentation: the Tips card's glowing, bobbing 112px
-  // bubble. The plain oversized 104px / 46px-wand entry treatment
-  // was rejected as "too damn big".
+  // unchanged) — and at the entry into Jewel in the background
+  // area, the landing picture's scene itself (JewelWandScene):
+  // the wand and the sparkles dominant, her small glowing bubble
+  // at the wand's tip. A lone entry bubble (104px, then 112px)
+  // was the opposite composition and is gone.
   // Never stamped on every control.
-  assert.equal((stage.match(/<JewelAvatar/g) || []).length, 2, 'her avatar stands in the banner and at the entry into Jewel in the background area');
+  assert.equal((stage.match(/<JewelAvatar/g) || []).length, 1, 'her avatar bubble stands in the banner only — the entry is the wand scene, not a second bubble');
+  assert(stage.includes('<JewelWandScene'), 'the entry into Jewel in the background area is the landing wand scene');
   assert(!fs.readFileSync('components/TalkshowSteps.tsx', 'utf8').includes('JewelAvatar'), 'the avatar is not repeated across the step library');
   const avatar = fs.readFileSync('components/JewelAvatar.tsx', 'utf8');
   assert(avatar.includes('/redesign/jewel-wave.mp4'), 'the avatar is her real waving portrait, the Tips-card artwork');
@@ -534,7 +545,7 @@ const quizTool = (overrides = {}) => ({
     assert(!src.includes('localStorage'), `${file}: no side-channel persistence`);
   }
   assert(backgroundAssets(baseProject({ assets: [bgAsset(), { name: 'x.png', type: 'Image', role: 'layer' }] })).length === 1, 'backgroundAssets counts background-role assets only');
-  console.log('PASS: banner once; avatar in the banner (58px, unchanged) and at the entry into Jewel in her landing page presentation; the stage components never fetch, generate, or persist behind Jewel’s back.');
+  console.log('PASS: banner once; avatar in the banner (58px, unchanged) and the landing wand scene at the entry into Jewel; the stage components never fetch, generate, or persist behind Jewel’s back.');
 }
 
 // --- Presentation: pictured demonstrations, never a wall of words ------------

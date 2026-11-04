@@ -10,17 +10,15 @@ import "./jewel-avatar.css";
  * edge. Continuity, not decoration (Jessica, 2026-11-04: at least once
  * on each page, never stamped on every control).
  *
- * The `landing` variant mirrors her introduction presentation on the
- * home page exactly (Jessica, 2026-11-04: "we need the enter Jewel
- * area to show the same way it does on the landing page"): the Tips
- * card's bubble (.rd-bubble in app/home.css) — a 112px gold-ringed
- * circle with the stronger landing glow (0 0 34px 10px
- * rgba(255,215,94,.45)) and the gentle rd-bob bobbing motion. The
- * landing bubble itself carries no wand badge — there her wand reads
- * from the tip's picture and its "your magic wand" words — while this
- * component keeps her 🪄 badge at its standard size, per her standing
- * rule that the wand itself must appear where the creator steps in.
- * Callers pass size={112} with `landing` to render that presentation.
+ * This component is her CONTINUITY bubble — the small instance in
+ * the talk liberty banner and the legacy workshop. The entry into
+ * her conversation does NOT use it: that spot carries her landing
+ * page introduction itself (JewelWandScene — the first Tips card's
+ * pictured scene, where the wand and the sparkles dominate and her
+ * bubble is small at the wand's tip). A `landing` variant of this
+ * avatar (the Tips bubble alone at 112px with a tiny wand badge)
+ * stood at the entry through PR #141 and was removed: a lone big
+ * bubble is the opposite composition of the landing picture.
  *
  * Self-sufficiency (2026-11-04 fix): the component imports its own
  * stylesheet and carries the critical box inline — display:inline-block
@@ -33,9 +31,9 @@ import "./jewel-avatar.css";
  * correctly, which is why the banner never showed the bug. The box now
  * holds in any parent, styled sheet or not.
  */
-export default function JewelAvatar({ size = 56, wandSize, landing }: { size?: number; wandSize?: number; landing?: boolean }) {
+export default function JewelAvatar({ size = 56, wandSize }: { size?: number; wandSize?: number }) {
   return (
-    <span className={`jewel-avatar${landing ? " jewel-avatar-landing" : ""}`} style={{ width: size, height: size, display: "inline-block" }} aria-hidden="true">
+    <span className="jewel-avatar" style={{ width: size, height: size, display: "inline-block" }} aria-hidden="true">
       <video src="/redesign/jewel-wave.mp4" autoPlay muted loop playsInline style={{ width: size, height: size, display: "block", objectFit: "cover", borderRadius: "50%" }} />
       <span className="jewel-avatar-wand" style={wandSize ? { fontSize: wandSize } : undefined}>🪄</span>
     </span>

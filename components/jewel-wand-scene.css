@@ -1,0 +1,95 @@
+/* Jewel's introduction scene — her own stylesheet, imported by
+   JewelWandScene itself so the presentation travels with the
+   component (the self-sufficiency lesson of the 2026-11-04 avatar
+   fix). Every value replicates the signed-in landing page's Jewel
+   presentation — the first Tips card ("Meet Jewel — your magic
+   wand") in app/workspace-home.tsx and the .rd-* rules in
+   app/home.css — so the enter-Jewel area genuinely shows the same
+   way the landing page shows her: the pictured wand scene dominant,
+   her small glowing bubble at the wand's tip.
+
+   .rd-tips (the landing card) → .jewel-scene: same radius, border,
+   background and shadow. The card is scaled to this section: a
+   pictured band across the content column, capped so its proportions
+   stay near the landing card's own. */
+.jewel-scene {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  height: 230px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #17131f;
+  border: 1px solid #2b2444;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
+}
+
+/* .rd-tips-imgwrap.magic img.rd-tipimg: the pictured scene fills the
+   card and floats gently. */
+.jewel-scene-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: jewel-scene-floaty 4s ease-in-out infinite;
+}
+
+@keyframes jewel-scene-floaty {
+  0%, 100% { transform: scale(1.04) translateY(0); }
+  50% { transform: scale(1.04) translateY(-6px); }
+}
+
+/* .rd-tips-imgwrap .rd-shade */
+.jewel-scene-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 6, 14, .05) 40%, rgba(8, 6, 14, .65));
+}
+
+/* .rd-sparkle as shown in the magic wrap: twinkling gold ✦. */
+.jewel-scene-sparkle {
+  position: absolute;
+  color: #ffe9a8;
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(255, 215, 94, .9);
+  animation: jewel-scene-twinkle 1.6s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes jewel-scene-twinkle {
+  0%, 100% { opacity: .15; transform: scale(.7); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* .rd-bubble, value for value: her small glowing bubble — the
+   landing bubble's own 112px, gold ring, landing glow, gentle bob —
+   riding at the top right of the scene, where the pictured Jewel
+   floats at the tip of the wand. The scene around her is what
+   dominates; the bubble stays the landing's size. */
+.jewel-scene-bubble {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #e9c979;
+  box-shadow: 0 0 0 4px rgba(233, 201, 121, .25), 0 0 34px 10px rgba(255, 215, 94, .45);
+  z-index: 3;
+  background: #fff;
+  animation: jewel-scene-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes jewel-scene-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-7px) rotate(2deg); }
+}
+
+.jewel-scene-bubble video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
