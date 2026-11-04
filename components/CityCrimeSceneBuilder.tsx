@@ -47,7 +47,7 @@ export function useCityCrimeSceneBuilder(deps: Deps) {
       <main className="workspace-page">
         <div className="ccss-builder">
           <div className="ccss-builder-topbar">
-            <button type="button" className="outline-btn" onClick={() => setCityCrimeSceneId("")}>← Back to Workshop</button>
+            <button type="button" className="outline-btn" onClick={() => setCityCrimeSceneId("")}>← Back to Imagine and Create</button>
             <button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={() => { setCityCrimeSceneId(""); onAskJewel(); }}>✦ Ask Jewel</button>
           </div>
           <CityCrimeSceneEditor

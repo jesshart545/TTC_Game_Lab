@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-const projectStages = ["Workshop", "Build Space", "Publish"];
+const projectStages = ["Imagine and Create", "Set the Stage", "Showtime!"];
 const workshopSections = [
   { label: "Game plan", hint: "Name and describe the game" },
   { label: "Assets & tools", hint: "Media, cards, boards, tools" },
@@ -34,12 +34,12 @@ export default function ProjectWorkflowNav({ stage, workshopSection, onStageChan
         ))}
       </nav>
       <p className="workflow-navigation-note">
-        Workshop is for creating materials. Build Space assembles the overlay and host dashboard. Publish only when you choose to.
+        Imagine and Create is for creating materials. Set the Stage assembles the overlay and host dashboard. Showtime! only when you choose to.
       </p>
       {stage === 0 && (
         <div className="workflow-local-navigation">
-          <span className="workflow-section-label">Workshop · create materials</span>
-          <nav className="workshop-substeps" aria-label="Workshop sections">
+          <span className="workflow-section-label">Imagine and Create · create materials</span>
+          <nav className="workshop-substeps" aria-label="Imagine and Create sections">
             {workshopSections.map((section, index) => (
               <button
                 key={section.label}

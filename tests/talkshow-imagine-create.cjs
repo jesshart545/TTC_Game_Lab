@@ -16,7 +16,7 @@ const { questionPool, publicCardState, cardDisplayText } = load('lib/question-ca
 const { applyDraftChanges } = load('lib/draft-edit.ts');
 const { applyBuildChanges, creatableTools } = load('lib/build-edits.ts');
 const talkPath = load('lib/talkshow-path.ts');
-const { TALK_STEPS, TALK_STEP_ORDER, TALK_CREATIVITY_BANNER } = talkPath;
+const { TALK_STEPS, TALK_STEP_ORDER, TALK_CREATIVITY_BANNER, TALK_TOOL_TYPES } = talkPath;
 const { SIGN_CHANGES, BACKDROP_CHANGES, QUIZ_CHANGES, RESEARCH_CHANGES, YOUTUBE_CHANGES, SLIDES_CHANGES, DEMO_FONTS } = talkPath;
 const { fontCatalog } = load('lib/fonts.ts');
 
@@ -94,17 +94,26 @@ const quizTool = (overrides = {}) => ({
   console.log('PASS: presentation grammar — Gameshow-shaped meta, quoted ask chips, shared ChangeList, pictured shelves.');
 }
 
-// --- Sign step: name & theme live in the step's own face ----------------------
-// Gameshow-plan style: the plan is handled on the step, not by sending the
-// creator down to the 8-field form. The two fields write through the page's
-// save path into the same project fields the form writes (project.name and
-// project.gamePlan.theme) — the form below still exists, untouched.
+// --- Sign step: name & theme come from the creator, through Jewel -----------
+// (Jessica, 2026-11-03, superseding the PR #136 in-step fields: the title
+// and the theme/vibe/subject are asked FIRST — at a new talk project's
+// start, and by Jewel inside this step for any project that arrives
+// without them. The step's face is the sign demonstration + the ask: no
+// fields, no font/color pickers, no "short version" display block.)
 {
   const steps = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
-  assert(steps.includes('name: event.target.value'), 'the sign step edits the show name in its own face');
-  assert(steps.includes('gamePlan: { ...project.gamePlan, theme: event.target.value }'), 'the sign step edits the theme into project.gamePlan.theme — the form’s own field');
-  assert(!steps.includes('showPlanForm'), 'the sign step no longer routes name & theme through the plan form below');
-  console.log('PASS: sign step face — name & theme are edited compactly on the step, into the same project fields.');
+  const signSpan = steps.slice(steps.indexOf('export function SignStep'), steps.indexOf('export function BackdropsStep'));
+  assert(!signSpan.includes('name: event.target.value'), 'the sign step has no name field');
+  assert(!signSpan.includes('theme: event.target.value'), 'the sign step has no theme field');
+  assert(!signSpan.includes('Your name & theme'), 'no name & theme duplication block on the step');
+  assert(!signSpan.includes('tsw-fields'), 'no field block remains on the sign step');
+  assert(!signSpan.includes('LookControls'), 'no font/color picker controls on the sign step face — choosing happens by asking Jewel');
+  assert(signSpan.includes('BackdropTextLayer'), 'the sign demonstration still letters for real');
+  assert(signSpan.includes('Upload your own sign'), 'the uploaded-sign door stays on the step');
+  assert(TALK_STEPS.sign.asks[0].say.startsWith("My show's title and theme are"), 'the first example ask is the title & theme answer');
+  const backdropsSpan = steps.slice(steps.indexOf('export function BackdropsStep'), steps.indexOf('export function ResearchStep'));
+  assert(backdropsSpan.includes('LookControls'), 'the backdrop lettering demonstration keeps its live look-switching');
+  console.log('PASS: sign step face — demonstration + the ask; no fields, no pickers, no duplication block.');
 }
 
 // --- The lettering demonstration offers the site's real display fonts --------
@@ -299,6 +308,8 @@ const quizTool = (overrides = {}) => ({
   assert(route.includes('...(talkShow ? { talkShow } : {})'), 'her per-turn context carries the talkShow facts block');
   assert(route.includes('RESEARCH COMPASS'), 'the theme & style is taught as her research compass');
   assert(route.includes('ONLY when the creator asks'), 'she helps with the name only when asked');
+  assert(route.includes('NAME & THEME FIRST'), 'Jewel asks for the title + theme first when a talk project lacks them');
+  assert(route.includes('Never invent a title or theme'), 'she never invents the title or theme for the creator');
   assert(route.includes('textOverlay'), 'she is taught the text-layer mechanism for the sign');
   assert(route.includes('never ask the image or video generator to render the title'), 'generated lettering is forbidden — the text layer does the lettering');
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
@@ -359,6 +370,50 @@ const quizTool = (overrides = {}) => ({
   assert(steps.includes('kind: candidate.kind, label: candidate.label, refKey: candidate.refKey'),
     'adding to the deck still writes the same slide shape — the candidate thumbnail never leaks into talkDeck');
   console.log('PASS: presentation, second half — pictured example stage, interactive research, stage YouTube, pictured deck.');
+}
+
+// --- The 2026-11-03 fix build: stage names + space purity -------------------
+// The reference case is a brand-new Talk Show project started from scratch
+// (Jessica, 2026-11-03) — never an existing project's data.
+{
+  // Fix 1: the stage navigation carries the locked stage names.
+  const nav = fs.readFileSync('components/ProjectWorkflowNav.tsx', 'utf8');
+  assert(nav.includes('"Imagine and Create", "Set the Stage", "Showtime!"'), 'stage nav labels are the locked stage names');
+  assert(!nav.includes('"Workshop", "Build Space", "Publish"'), 'the old stage labels are gone from the nav');
+
+  // Fix 4 at the data level: a from-scratch talk project is seeded with
+  // talk pieces only, and the theme given at project start lands in
+  // gamePlan.theme.
+  const { createProject } = load('lib/project.ts');
+  const { applySetupPieces, defaultSetupPieces, setupPiecesForKind } = load('lib/project-kinds.ts');
+  eq(setupPiecesForKind('talk').map(p => p.id), ['question-cards', 'video-clips'], 'the talk setup screen offers only talk pieces');
+  assert.equal(setupPiecesForKind('gameshow').length, 6, 'gameshow keeps the full setup list');
+  eq(defaultSetupPieces('talk'), ['question-cards', 'video-clips'], 'talk defaults are its own two pieces');
+  const fresh = applySetupPieces({ ...createProject(''), kind: 'talk', name: 'My Talk Show', gamePlan: { theme: 'cozy faith-and-life chat' } }, defaultSetupPieces('talk'));
+  assert(fresh.gameTools.length > 0, 'the from-scratch talk project is seeded with pieces');
+  assert(fresh.gameTools.every(t => TALK_TOOL_TYPES.includes(t.type)), `a from-scratch talk project carries talk tools only (got ${[...new Set(fresh.gameTools.map(t => t.type))]})`);
+  assert.equal(fresh.gamePlan.theme, 'cozy faith-and-life chat', 'the theme given at project start seeds gamePlan.theme');
+
+  // Fix 4 at the surface level: the talk toolbox shelf and the shared
+  // assets panel picture/list talk pieces only; gameshow framing stays
+  // for gameshow projects.
+  const stepsSrc = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
+  assert(stepsSrc.includes('TALK_TOOL_TYPES.includes(tool.type)'), 'the talk toolbox shelf filters to talk pieces');
+  const panel = fs.readFileSync('components/WorkshopAssetsPanel.tsx', 'utf8');
+  assert(panel.includes('visibleTools'), 'the assets panel lists a kind-scoped tool set');
+  assert(panel.includes('!isTalk && <button type="button" onClick={() => openWorkshopTool("tools")}>'), 'the game-tools gallery button is gameshow-only');
+  assert(panel.includes('!isTalk && <div className="detail-block" id="workshop-game-templates"'), 'game templates are not offered inside a talk project');
+  assert(panel.includes('title={isTalk ? "Show tools & cards" : "Game tools & cards"}'), 'the tools folder takes talk framing for talk projects');
+  const aiPanel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
+  assert(aiPanel.includes('project.kind!=="talk"&&<div id="tool-templates"'), 'the pictured tool-template gallery never opens in a talk project');
+  assert(aiPanel.includes('project.kind!=="talk"&&<div id="board-templates"'), 'board templates never open in a talk project');
+
+  // Fix 3 refinement: a NEW talk project starts with the ask.
+  const flow = fs.readFileSync('app/project/new/flow.tsx', 'utf8');
+  assert(flow.includes('the title of your show') && flow.includes('its theme, vibe, or subject'), 'a new talk project starts with the title + theme ask');
+  assert(flow.includes('setupPiecesForKind(kindInfo.id)'), 'the setup screen renders the kind’s own pieces');
+  assert(flow.includes('project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme }'), 'the theme answer seeds gamePlan.theme at creation');
+  console.log('PASS: fix build — locked stage names; from-scratch talk projects seed, picture, and list talk pieces only; the ask comes first.');
 }
 
 console.log('talkshow-imagine-create: all assertions passed');

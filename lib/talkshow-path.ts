@@ -23,6 +23,12 @@ export type TalkStepId = "sign" | "backdrops" | "research" | "quiz" | "youtube" 
 
 export const TALK_STEP_ORDER: TalkStepId[] = ["sign", "backdrops", "research", "quiz", "youtube", "slides", "toolbox"];
 
+/** The tool types that belong to a talk show's own creation space: the
+ * quiz and its cards, and YouTube. Gameshow tools (wheels, boards,
+ * scoreboards, dice…) are never pictured or listed in a talk project —
+ * the talk toolbox shows talk pieces only (Jessica, 2026-11-03). */
+export const TALK_TOOL_TYPES: readonly string[] = ["trivia-list", "question-card", "blank-card", "card-list", "youtube"];
+
 export const TALK_CREATIVITY_BANNER = "These are examples, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.";
 
 export type TalkStepInfo = {
@@ -39,16 +45,17 @@ export const TALK_STEPS: Record<TalkStepId, TalkStepInfo> = {
   sign: {
     id: "sign",
     kicker: "Step 1 of 7",
-    intro: "One subject here: what your show is called, what it's about — and the sign that puts the name on screen. Set the name and theme right here; Jewel letters the sign.",
+    intro: "One subject here: what your show is called, what it's about — and the sign that puts the name on screen. It starts with you: tell Jewel your title and theme, and she letters the sign.",
     doneWhen: "your show has a real name, and a sign exists — Jewel's lettered sign, or one you uploaded.",
-    jewelNote: "Tell me the look and I'll make your sign — artwork made for your show, your title lettered over it in your font and colors. I only help with the name when you ask.",
+    jewelNote: "First things first: if your show has no title or theme yet, tell me yours — the title, and the theme or vibe — and I'll build from what you give me. Then I'll make your sign in your font and colors.",
     asks: [
+      { chip: "“My show's title and theme are…”", say: "My show's title and theme are: " },
       { chip: "“Make my sign — gold letters, cozy studio”", say: "Make the sign for my show: a backdrop with my show's name lettered on it as a real text layer" },
       { chip: "“An animated backdrop behind my sign”", say: "Make my sign over an animated backdrop" },
       { chip: "“Change the sign's font”", say: "Change the font on my sign" },
       { chip: "“Help me name my show”", say: "Help me come up with a name for my show" },
     ],
-    adjust: "Name and theme are typed by you, in the fields on this step. Jewel helps with the name only if you ask her.",
+    adjust: "Your title and theme come from you — tell Jewel, here or in her panel, and she sets them on your project. There is no form for them on this step, on purpose.",
   },
   backdrops: {
     id: "backdrops",
@@ -130,11 +137,11 @@ export const TALK_STEPS: Record<TalkStepId, TalkStepInfo> = {
 
 /** "What you can change" lists — real fields of real editors/capabilities only. */
 export const SIGN_CHANGES: ChangeItem[] = [
-  { label: "Show name", sub: "Typed by you, in the field on this step — saved to your project" },
-  { label: "Theme & style", sub: "Typed by you, in the field on this step — it aims Jewel's research" },
+  { label: "Your show's title", sub: "Yours to give — tell Jewel and she sets it on your project", say: "My show's title is: " },
+  { label: "Your theme or vibe", sub: "What your show is about — tell Jewel; it aims her research too", say: "My show's theme is: " },
   { label: "The sign's artwork — animated or artistic", say: "Make the sign for my show over an animated backdrop" },
-  { label: "The lettering's font", sub: "Any font in the site's catalog — try them above", say: "Change the font on my sign" },
-  { label: "The lettering's colors", sub: "The text color and an accent color", say: "Change the colors of the lettering on my sign" },
+  { label: "The lettering's font", sub: "Any display font in the site's catalog — name it to Jewel", say: "Change the font on my sign" },
+  { label: "The lettering's colors", sub: "The text color and an accent color — name them to Jewel", say: "Change the colors of the lettering on my sign" },
   { label: "Your own uploaded sign", sub: "Replaces Jewel's sign — uploaded on this step, used exactly as you made it" },
 ];
 
@@ -147,7 +154,7 @@ export const BACKDROP_CHANGES: ChangeItem[] = [
 
 export const RESEARCH_CHANGES: ChangeItem[] = [
   { label: "The topic you ask about", say: "Research the topic of my next show" },
-  { label: "What aims the search", sub: "Your theme & style — set on the Name & sign step" },
+  { label: "What aims the search", sub: "Your theme & style — the one you gave Jewel when your show started" },
   { label: "Findings into a backdrop", say: "Research my topic first, then make a backdrop shaped by what you find" },
   { label: "Findings into a quiz", say: "Research my topic first, then build a short quiz from what you find" },
 ];
@@ -195,7 +202,7 @@ export const SAMPLE_RESEARCH = {
  * MS, Monospace) are never offered here: a sign is lettered in a display
  * face, the way the product actually letters it.
  */
-const DEMO_FONT_NAMES = ["Bebas Neue", "Playfair Display", "Pacifico", "Anton", "Cinzel", "Montserrat"];
+const DEMO_FONT_NAMES = ["Bebas Neue", "Playfair Display", "Pacifico", "Anton", "Cinzel", "Bungee", "Monoton", "Montserrat"];
 export const DEMO_FONTS: { name: string; family: string }[] = DEMO_FONT_NAMES
   .map(name => fontCatalog.find(font => font.name === name))
   .filter((font): font is (typeof fontCatalog)[number] => Boolean(font && "file" in font))

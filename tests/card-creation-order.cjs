@@ -43,7 +43,7 @@ const clickStep=(treeRef,render,label)=>{nodes(treeRef()).find(n=>n.type==='butt
  assert.equal(saves.length,1,'Save commits the new cards exactly once');
  assert.equal(saves[0].config.questionCard.backgroundColor,'#123456','the saved cards carry the look chosen first');
  tree=render();
- assert.ok(content(tree).includes('Saved. Your card design is ready for Build Space.'),'the saved confirmation follows the save');
+ assert.ok(content(tree).includes('Saved. Your card design is ready for Set the Stage.'),'the saved confirmation follows the save');
  // Size & position is step 2 in the creation flow, with all of its controls.
  tree=clickStep(()=>tree,render,'2Size & position');
  assert.equal(content(nodes(tree).find(n=>n.type==='h4')),'2. Size & position');

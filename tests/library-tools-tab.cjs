@@ -17,7 +17,7 @@ assert(toolsStart >= 0 && poolsStart > toolsStart && featuresStart > poolsStart 
 const poolsSource = source.slice(poolsStart, featuresStart);
 assert(poolsSource.includes('poolCreations.map'), 'Card pools tab renders the pool creations as tiles');
 assert(poolsSource.includes('onClick={e=>pickCreation(c,e)}'), 'Pool tiles route through the same pickCreation flow as the other families');
-assert(poolsSource.includes('No card pools yet — create them in the Workshop.'), 'Card pools tab has the plain empty state');
+assert(poolsSource.includes('No card pools yet — create them in Imagine and Create.'), 'Card pools tab has the plain empty state');
 assert(source.includes('t.type==="card-list"'), 'Pool creations are the card-list tools (the pools made in the Pool and card designer)');
 assert(source.includes('v==="question-card"?"pools"'), 'Choosing Question & answer cards in the add guide points the Library at the Card pools tab');
 const toolsSource = source.slice(toolsStart, featuresStart);
@@ -154,7 +154,7 @@ function propsFor(testProject, changes) {
   assert(container.querySelector('.library-grid'), 'Features & scenes still renders its item grid');
 
   await clickButton('Card pools');
-  assert(container.querySelector('.build-library').textContent.includes('No card pools yet — create them in the Workshop.'), 'Card pools tab shows the empty state when the project has no pools');
+  assert(container.querySelector('.build-library').textContent.includes('No card pools yet — create them in Imagine and Create.'), 'Card pools tab shows the empty state when the project has no pools');
 
   await React.act(async () => root.unmount());
 

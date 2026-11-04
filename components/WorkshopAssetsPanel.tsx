@@ -17,6 +17,7 @@ import AssetPoolAssignment from "./AssetPoolAssignment";
 import AssetDetailsDialog from "./AssetDetailsDialog";
 import AssetThumbnail from "./AssetThumbnail";
 import { isAudio, isVideo } from "../lib/workshop-libraries";
+import { TALK_TOOL_TYPES } from "../lib/talkshow-path";
 
 /**
  * The questions saved inside a trivia-list tool, shown in the item itself:
@@ -121,6 +122,12 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
 
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
 
+  // Space purity (Jessica, 2026-11-03): a talk project's creation space
+  // holds talk pieces only. Gameshow tools stay in the project's data —
+  // they are simply never pictured or listed here.
+  const isTalk = project.kind === "talk";
+  const visibleTools = (project.gameTools || []).filter(tool => tool.type !== "youtube" && (!isTalk || TALK_TOOL_TYPES.includes(tool.type)));
+
   const [downloadNote, setDownloadNote] = useState("");
   async function downloadSelectedAsset() {
     if (!selectedAsset) return;
@@ -138,22 +145,22 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     </div>
     <button type="button" className="assets-upload-btn" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>＋ Upload</button>
   </div>
-{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={ccssEntitled ? 7 : 6} description="Grouped: upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Workshop creation tools">
+{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={isTalk ? 4 : ccssEntitled ? 7 : 6} description="Grouped: upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Creation tools">
   <div className="creation-group"><strong>UPLOAD</strong><div>
     <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload assets</button>
   </div></div>
   <div className="creation-group"><strong>BUILD</strong><div>
-    <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>
-    <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button>
+    {!isTalk && <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>}
+    {!isTalk && <button type="button" onClick={() => openWorkshopTool("tools")}>Create game tools</button>}
     <button type="button" onClick={openNewList}>Create list and cards</button>
-    {ccssEntitled && <button type="button" onClick={openCityCrimeScene}>City Crime Scene</button>}
+    {ccssEntitled && !isTalk && <button type="button" onClick={openCityCrimeScene}>City Crime Scene</button>}
   </div></div>
   <div className="creation-group"><strong>MORE</strong><div>
     <button type="button" onClick={() => {setSideBySideTesting(false);requestAnimationFrame(()=>document.getElementById("workshop-assets")?.scrollIntoView({behavior:"smooth",block:"start"}));}}>Organize assets &amp; pools</button>
     <button type="button" onClick={() => {chooseWorkflowStep(0,2);setEditingComposition(undefined);setShowAssetComposer(true);}}>Asset Composer</button>
   </div></div>
 </div></CollapsibleFolder></div>}
-{workflowStep === 0 && showBoardGuide && <section hidden={workshopStep !== 1} className="workshop-help" aria-label="Artwork and interactive board guide">
+{workflowStep === 0 && showBoardGuide && !isTalk && <section hidden={workshopStep !== 1} className="workshop-help" aria-label="Artwork and interactive board guide">
   <button type="button" className="outline-btn" aria-expanded={showBoardGuide} onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(!showBoardGuide);}}>Combine artwork with an interactive board</button>
   {showBoardGuide && <div className="workshop-help-grid">
     <article><h3>1. Choose how your board works</h3><p>Artwork gives your board its look. The interactive board supplies selectable areas and reveal behavior. Both are saved in this project.</p><button type="button" className="outline-btn" onClick={() => openWorkshopTool("boards")}>Choose a board template</button><button type="button" className="outline-btn" onClick={() => void addGameTool("blank-board")}>Create a custom board</button></article>
@@ -161,15 +168,15 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     <article><h3>3. Connect artwork to your custom board</h3><p>Choose the custom board, then an image. This saves the image as that board’s background; your other images remain available.</p><label htmlFor="guide-board">Custom board<select id="guide-board" value={guideBoardId} onChange={event => setGuideBoardId(event.target.value)}><option value="">Choose a custom board</option>{(project.gameTools || []).filter(tool => tool.type === "blank-board").map(tool => <option key={tool.id} value={tool.id}>{tool.name}</option>)}</select></label>
     {!(project.gameTools || []).some(tool => tool.type === "blank-board") && <p>Create a custom board in step 1 to connect your artwork.</p>}
     {project.assets.filter(isImage).length === 0 && <p>Create or upload an image in step 2 to continue.</p>}
-    {project.assets.filter(isImage).map((asset,index) => <button key={(asset.storageKey || asset.name)+index} type="button" className="outline-btn" disabled={!guideBoardId} onClick={() => {const assetKey=asset.storageKey || asset.name;persist({...project,gameTools:(project.gameTools || []).map(tool => tool.id === guideBoardId ? {...tool,config:{...tool.config,backgroundAssetKey:assetKey,backgroundAssetKeys:Array.from(new Set([...(Array.isArray(tool.config?.backgroundAssetKeys) ? tool.config.backgroundAssetKeys : []),assetKey]))}} : tool),updatedAt:"just now"});setAssetStatus("Board artwork connected and saved. Use Build Space to position the board and wire its controls.");}}>Use {asset.name} as board artwork{(project.gameTools || []).find(tool => tool.id === guideBoardId)?.config?.backgroundAssetKey === (asset.storageKey || asset.name) ? " ✓" : ""}</button>)}</article>
-    <article><h3>4. Assemble and test</h3><p>In Build Space, add the board to the overlay, position its interactive areas, and connect host controls. Preview the artwork and behavior together before publishing.</p><button type="button" className="build-btn" onClick={() => chooseWorkflowStep(1)}>Continue to Build Space</button></article>
+    {project.assets.filter(isImage).map((asset,index) => <button key={(asset.storageKey || asset.name)+index} type="button" className="outline-btn" disabled={!guideBoardId} onClick={() => {const assetKey=asset.storageKey || asset.name;persist({...project,gameTools:(project.gameTools || []).map(tool => tool.id === guideBoardId ? {...tool,config:{...tool.config,backgroundAssetKey:assetKey,backgroundAssetKeys:Array.from(new Set([...(Array.isArray(tool.config?.backgroundAssetKeys) ? tool.config.backgroundAssetKeys : []),assetKey]))}} : tool),updatedAt:"just now"});setAssetStatus("Board artwork connected and saved. Use Set the Stage to position the board and wire its controls.");}}>Use {asset.name} as board artwork{(project.gameTools || []).find(tool => tool.id === guideBoardId)?.config?.backgroundAssetKey === (asset.storageKey || asset.name) ? " ✓" : ""}</button>)}</article>
+    <article><h3>4. Assemble and test</h3><p>In Set the Stage, add the board to the overlay, position its interactive areas, and connect host controls. Preview the artwork and behavior together before publishing.</p><button type="button" className="build-btn" onClick={() => chooseWorkflowStep(1)}>Continue to Set the Stage</button></article>
   </div>}
 </section>}
-  <div className="detail-block" id="workshop-game-templates" hidden={workflowStep === 0 && workshopStep !== 1}>
+  {!isTalk && <div className="detail-block" id="workshop-game-templates" hidden={workflowStep === 0 && workshopStep !== 1}>
     <h3>Game Templates</h3>
     <p className="asset-library-help">Pick a ready-made game — its tools and dashboard buttons join this project.</p>
     <TemplateBrowser project={project} onChoose={onAddTemplate} ccssEntitled={ccssEntitled}/>
-  </div>
+  </div>}
   <div className="detail-block" id="workshop-assets" hidden={workflowStep === 0 && workshopStep !== 1}>
     <h3>Media library</h3>
     <p className="asset-library-help">Open a media folder to find your assets. Select an item to edit, place it on the overlay, or add it to a game pool.</p>
@@ -232,11 +239,11 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     <button type="button" className="build-btn" onClick={() => {setEditingComposition(undefined);setShowAssetComposer(true);}}>Open Asset Composer</button>
     {(project.compositions || []).map(comp => <div className="saved-composition" key={comp.id}><div><b>{comp.name}</b><small>{comp.clips.length} clips · {comp.duration.toFixed(1)}s</small></div><button className="outline-btn build-only" onClick={()=>toggleComposition(comp.id)}>{comp.inProject?"✓ In Preview":"+ Add to Preview"}</button><button className="outline-btn" onClick={()=>{setEditingComposition(comp);setShowAssetComposer(true)}}>Edit</button><button className="build-btn build-only" disabled={!comp.inProject} onClick={()=>addCompositionControl(comp)}>Assign button</button><button className="danger-btn" onClick={() => deleteComposition(comp.id)}>Delete</button></div>)}
   </div></CollapsibleFolder></div>
-  <div id="workshop-tools" hidden={workflowStep === 0 && workshopStep !== 1}><CollapsibleFolder title="Game tools & cards" count={project.gameTools.filter(tool => tool.type !== "youtube").length} description="Cards, boards, questions and customized tools" storageKey={`${project.id}:tools`} keepMounted><div className="detail-block">
+  <div id="workshop-tools" hidden={workflowStep === 0 && workshopStep !== 1}><CollapsibleFolder title={isTalk ? "Show tools & cards" : "Game tools & cards"} count={visibleTools.length} description={isTalk ? "Cards, questions and your show’s tools" : "Cards, boards, questions and customized tools"} storageKey={`${project.id}:tools`} keepMounted><div className="detail-block">
     <span>WORKSPACE CREATIONS</span>
-    <p className="empty-note">Choose templates from Creation Tools above. Edit appearance and settings below, or customize them in chat, then add finished boards to the overlay and finished tools to the dashboard toolbox.</p>
+    <p className="empty-note">{isTalk ? "Edit your quiz, cards and show tools below, or customize them in chat with Jewel." : "Choose templates from Creation Tools above. Edit appearance and settings below, or customize them in chat, then add finished boards to the overlay and finished tools to the dashboard toolbox."}</p>
     <div className="tool-config-list">
-      <div className="background-destination"><h3>Create cards for your game</h3><button type="button" onClick={()=>createWorkshopCard("question")}>Create question and answer cards</button><button type="button" onClick={()=>createWorkshopCard("blank")}>Create blank card</button></div>{(project.gameTools || []).filter(tool => tool.type !== "youtube").map(tool => (
+      <div className="background-destination"><h3>{isTalk ? "Create cards for your show" : "Create cards for your game"}</h3><button type="button" onClick={()=>createWorkshopCard("question")}>Create question and answer cards</button><button type="button" onClick={()=>createWorkshopCard("blank")}>Create blank card</button></div>{visibleTools.map(tool => (
         <CollapsibleFolder key={tool.id} title={tool.name} description={tool.type.replace(/-/g," ")} storageKey={`${project.id}:tool:${tool.id}`} keepMounted><div className="tool-config">
           <div>
             <b>{tool.name}</b>
@@ -245,11 +252,11 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
             {tool.type==="trivia-list" && <SavedTriviaQuestions questions={Array.isArray(tool.config.questions)?tool.config.questions:[]}/>}
             {tool.type==="card-list"?<><p>{savedListEntries(tool).length} pool entries · {Array.isArray(tool.config.cards)?tool.config.cards.length:0} cards</p><button type="button" onClick={()=>setListEditorId(tool.id)}>Open pool and card designer</button></>: (tool.type==="question-card"||tool.type==="blank-card")?<button type="button" onClick={()=>setNewCardEditorId(tool.id)}>Customize cards</button>:<GameToolEditor key={tool.id} tool={tool} project={project} assets={project.assets} ccssEntitled={ccssEntitled} onSave={next=>persist({...project,name:titleFromToolSave(project,next),gameTools:(project.gameTools||[]).map(x=>x.id===next.id?next:x),updatedAt:"just now"})} onRegisterAsset={asset=>persist({...project,assets:[...(project.assets||[]),asset],updatedAt:"just now"})}/>}
           </div>
-          <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small>{(tool.type === "trivia-board" || tool.type === "blank-board") ? <button className="build-btn build-only" disabled={tool.inOverlayBuild} onClick={()=>pushWorkspaceCreation(tool)}>{tool.inOverlayBuild ? "Added to Overlay Build" : "Add to Overlay Build"}</button> : <small>{tool.type === "youtube" ? "Connected to dashboard and overlay · test in the preview before publishing" : "Saved in Toolbox · connect to a button in Build Space when needed"}</small>}
+          <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small>{(tool.type === "trivia-board" || tool.type === "blank-board") ? <button className="build-btn build-only" disabled={tool.inOverlayBuild} onClick={()=>pushWorkspaceCreation(tool)}>{tool.inOverlayBuild ? "Added to Overlay Build" : "Add to Overlay Build"}</button> : <small>{tool.type === "youtube" ? "Connected to dashboard and overlay · test in the preview before publishing" : "Saved in Toolbox · connect to a button in Set the Stage when needed"}</small>}
         </div></CollapsibleFolder>
       ))}
     </div>
-    {(project.gameTools || []).some(t => t.name === "Trivia Board") && (
+    {!isTalk && (project.gameTools || []).some(t => t.name === "Trivia Board") && (
       <div className="trivia-dashboard">
         <strong>TRIVIA BOARD</strong>
         <small>Choose a question to fill the live overlay. Every question is source-backed.</small>
@@ -293,7 +300,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       </div>
     )}
   </div></CollapsibleFolder></div>
-  {(project.wheel?.enabled || (project.gameTools || []).some(tool => tool.type === "wheel" || tool.type === "prize-wheel")) && <CollapsibleFolder title="Wheel settings" storageKey={`${project.id}:wheel`} keepMounted><div className="detail-block">
+  {!isTalk && (project.wheel?.enabled || (project.gameTools || []).some(tool => tool.type === "wheel" || tool.type === "prize-wheel")) && <CollapsibleFolder title="Wheel settings" storageKey={`${project.id}:wheel`} keepMounted><div className="detail-block">
     <span>WHEEL SETTINGS</span>
     {project.wheel?.enabled ? (
       <>
