@@ -41,7 +41,18 @@ export default function BackdropTextLayer({ spec, placement }: { spec: BackdropT
         lower: placement === "lower",
         measure: (value, px) => {
           context.font = `800 ${px}px ${spec.fontFamily}`;
-          return context.measureText(value).width;
+          const measured = context.measureText(value);
+          return {
+            width: measured.width,
+            // The font's full bounding extents, not the tight glyph
+            // box: display/script faces paint swashes beyond their
+            // actualBoundingBox (Sacramento's glyph box reports
+            // ~1.17em while its painted extent is its ~1.46em font
+            // bounding box), and the bounding box is what decides
+            // how far ink can reach toward the frame's edge.
+            inkAscent: measured.fontBoundingBoxAscent ?? measured.actualBoundingBoxAscent ?? px * 0.8,
+            inkDescent: measured.fontBoundingBoxDescent ?? measured.actualBoundingBoxDescent ?? px * 0.25,
+          };
         },
       });
       if (live) setSize(best);
@@ -50,6 +61,7 @@ export default function BackdropTextLayer({ spec, placement }: { spec: BackdropT
     const observer = new ResizeObserver(fit);
     observer.observe(host);
     document.fonts?.load(`800 40px ${spec.fontFamily}`).then(() => { if (live) fit(); }).catch(() => {});
+    document.fonts?.ready.then(() => { if (live) fit(); }).catch(() => {});
     return () => { live = false; observer.disconnect(); };
   }, [spec.text, spec.fontFamily, placement]);
 

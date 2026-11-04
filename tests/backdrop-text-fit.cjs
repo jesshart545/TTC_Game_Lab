@@ -7,10 +7,14 @@ const load = require('./load.cjs');
 // allows — a title's job. The opening PROMPT (placement "lower") is a
 // talking-point sentence worn low on the background; it shares the
 // layer but must fit like a broadcast lower-third, capped per line and
-// per block. Live defect this guards: on the test talk project the
+// per block. Live defects this guards: on the test talk project the
 // prompt "Tonight's talking point: small habits, big change" fitted
 // under the title's rules at ~180px a line, four lines deep — over
-// three quarters of the frame — burying the sign and the backdrop.
+// three quarters of the frame — burying the sign and the backdrop;
+// and, after the caps, a script-font sign whose line box fit the
+// frame while its painted glyphs crossed the top edge and cropped —
+// the fit now budgets the font's painted (bounding-box) extent, not
+// the line box.
 
 const {
   fitBackdropTextSize, cleanBackdropText,
@@ -20,19 +24,21 @@ const { fontCatalog } = load('lib/fonts.ts');
 const FONT = fontCatalog[0].family;
 
 // Deterministic stand-in for a heavy display font's measure: every
-// character (spaces included) advances 0.52em — the proportions the
-// real canvas fit sees, fixed so the assertions are exact.
-const measure = (text, px) => text.length * px * 0.52;
+// character (spaces included) advances 0.52em, and the font's ink
+// extents span 0.9em — the proportions the real canvas fit sees,
+// fixed so the assertions are exact. The fit budgets the block's
+// PAINTED height: (lines - 1) line heights plus one line's ink.
+const measure = (text, px) => ({ width: text.length * px * 0.52, inkAscent: px * 0.75, inkDescent: px * 0.15 });
 const wrapLines = (text, px, width) => {
   const maxWidth = width * 0.88;
   let lines = 1, line = '';
   for (const word of text.split(/\s+/).filter(Boolean)) {
     const trial = line ? `${line} ${word}` : word;
-    if (measure(trial, px) > maxWidth && line) { lines += 1; line = word; } else line = trial;
+    if (measure(trial, px).width > maxWidth && line) { lines += 1; line = word; } else line = trial;
   }
   return lines;
 };
-const blockShare = (text, px, width, height) => wrapLines(text, px, width) * px * 1.16 / height;
+const blockShare = (text, px, width, height) => ((wrapLines(text, px, width) - 1) * px * 1.16 + px * 0.9) / height;
 
 const SAMPLE_PROMPT = "Tonight's talking point: small habits, big change";
 const LINE_CAP_1080 = Math.floor(1080 * PROMPT_LINE_MAX_RATIO);
@@ -91,10 +97,31 @@ const LINE_CAP_1080 = Math.floor(1080 * PROMPT_LINE_MAX_RATIO);
   console.log('PASS: no size is stored in the spec — nothing user-set is overridden, no saved data rewritten.');
 }
 
+// --- Tall-ink fonts: the fit budgets the PAINT, not the line box -------------
+// Measured live in a real browser at the review canvas: in Sacramento
+// the sample sign's line box sat fully inside the canvas while its
+// painted extent (the font's ~1.46em bounding box, against a 1.16em
+// line height) crossed the canvas top and was cropped. A line-box
+// fit picks ~363px for this face; the ink-budgeted fit must pick
+// less, so the whole painted block — (lines - 1) line heights plus
+// one line's ink — stays within the same 78% title budget.
+{
+  const scriptMeasure = (text, px) => ({ width: text.length * px * 0.30, inkAscent: px * 1.0, inkDescent: px * 0.46 });
+  const inkBlock = (text, px, width) => (wrapLines(text, px, width) - 1) * px * 1.16 + px * 1.46;
+  const size = fitBackdropTextSize({ text: 'Jewel Test Talk Show', width: 1920, height: 1080, measure: scriptMeasure });
+  assert.ok(size < 363, `the tall-ink sign fits below the old line-box size (got ${size})`);
+  assert.ok(inkBlock('Jewel Test Talk Show', size, 1920) <= 1080 * 0.78, 'the painted block stays inside the title budget — nothing left to crop');
+  const promptSize = fitBackdropTextSize({ text: SAMPLE_PROMPT, width: 1920, height: 1080, lower: true, measure: scriptMeasure });
+  assert.equal(promptSize, LINE_CAP_1080, 'the prompt line cap still sets the prompt size');
+  assert.ok(inkBlock(SAMPLE_PROMPT, promptSize, 1920) <= 1080 * PROMPT_BLOCK_MAX_RATIO, 'the prompt\'s painted block stays inside its lower-third budget even in a tall-ink face');
+  console.log('PASS: tall-ink fonts — the fit budgets painted extent, so script signs are fully visible and the prompt stays a lower-third.');
+}
+
 // --- Wiring: every prompt render goes through the capped fit ------------------
 {
   const component = fs.readFileSync('components/BackdropText.tsx', 'utf8');
   assert(component.includes('fitBackdropTextSize'), 'the layer fits through the shared lib fit');
+  assert(component.includes('fontBoundingBoxAscent') && component.includes('fontBoundingBoxDescent'), 'the component measures the font\'s full bounding extents — the reach of its paint');
   assert(component.includes('lower: placement === "lower"'), 'the caps key off the prompt placement, and only it');
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   const published = fs.readFileSync('app/published/[slug]/overlay/page.tsx', 'utf8');

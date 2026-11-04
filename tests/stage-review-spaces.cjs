@@ -54,7 +54,9 @@ assert(review.includes('aria-label="Dashboard review"'), 'the dashboard review i
 assert(review.includes('onTrigger(c)'), 'pressing a dashboard review button fires it through the page runtime');
 assert(review.includes('Reset game') && review.includes('onResetGame(resetWipe)'), 'Reset game stays on the dashboard as the approved fixed control');
 assert(!review.includes('DashboardActionPicker') && !review.includes('DashboardSequenceEditor'), 'no manual wiring editors on this page — wiring is Jewel\'s job');
-assert(review.includes('QuestionCardEditor') && review.includes('GameToolEditor') && review.includes('FontPicker'), 'the existing in-place editors are preserved in the inspector');
+assert(!review.includes('sr-inspector') && !review.includes('Selected item settings') && !review.includes('sr-editbtn'), 'no inspector or editor panels on this page — selecting an item opens nothing; editing goes through Jewel');
+assert(!review.includes('QuestionCardEditor') && !review.includes('GameToolEditor') && !review.includes('FontPicker') && !review.includes('CountdownDuration') && !review.includes('YouTubePlacementEditor'), 'no in-place editor components are mounted on the staging page (they live on in their own surfaces)');
+assert(review.includes('setSelection({ kind: "control", id: c.id });'), 'firing a dashboard button points the overlay review at its result — its drag frame waits on the Overlay side');
 assert(review.includes('stage-review.css'), 'the surface carries its own stylesheet');
 
 // Drag and drop lives here: drag boxes persist through the placement
@@ -67,6 +69,19 @@ assert(review.includes('reorderVisibleControls'), 'dashboard drag-reorder writes
 assert(review.includes('Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6'), 'a movement threshold keeps drag and click-to-fire apart');
 assert(review.includes('suppressClick'), 'a completed drag never also fires the button');
 
+// Card tools: the drag must write the placement the card renderer
+// actually reads. FittedCard positions a card from its DESIGN
+// geometry (config.questionCard / config.answerCard), never from
+// config.placement or a control's overlayResult — a drag that wrote
+// only those two moved the generic preview in-session and snapped
+// back on reload (and the "card" vanished with the preview). The
+// review now frames a card control at its design placement, writes
+// the design on commit, and the appearance preview renders the real
+// FittedCard for card tools.
+assert(review.includes('cardDesignPlacement') && review.includes('withCardDesignPlacement') && review.includes('isCardTool'), 'the review drags card tools by their design placement and writes the design on commit');
+const runtimeLayers = fs.readFileSync('components/RuntimeActionLayers.tsx', 'utf8');
+assert(runtimeLayers.includes('isCardTool(tool)') && runtimeLayers.includes('<FittedCard'), 'the appearance preview renders the real fitted card for card tools, not the generic overlayResult run');
+
 // ONE spot, on a toggle, immediately past Jewel — and the talk
 // deck shelf is GONE from this page: staging deck moments happens
 // through Jewel's conversation (her route context below keeps the
@@ -78,6 +93,7 @@ assert(review.includes('body.dataset.stageReview'), 'the surface flags the page 
 assert(!review.includes('sr-deck') && !review.includes('Your deck') && !review.includes('Ask Jewel to stage this') && !review.includes('deckMomentStaged(project, slide)'), 'the talk deck shelf is removed from the staging page');
 assert(!review.includes('sr-hint') && !review.includes('stage-review-main'), 'no trailing hint, no stacked second column — the spot is the spot');
 const reviewCss = fs.readFileSync('components/stage-review.css', 'utf8');
+assert(!reviewCss.includes('.sr-inspector') && !reviewCss.includes('.sr-editbtn'), 'the stylesheet carries no inspector or edit-button furniture either');
 assert(reviewCss.includes('body[data-stage-review="true"] .ttc-support-root'), 'the stylesheet hides the global Ask Jewel launcher while this page is mounted');
 assert(reviewCss.includes('.sr-review-toggle') && reviewCss.includes('.stage-review-spot'), 'the toggle and the one review spot carry their own styling');
 
@@ -118,6 +134,32 @@ const { reorderVisibleControls, deckMomentStaged, deckSlideCreation } = load('li
   assert(quizCreation && quizCreation.kind === 'tool' && quizCreation.id === 'quiz1' && quizCreation.name === 'Q', 'quiz moments map to their tool');
 }
 console.log('PASS: lib behavior — reorder preserves hidden controls; deck staged definition holds.');
+
+// ---------- lib/question-cards: the card placement the renderer reads ----------
+const { cardDesignPlacement, withCardDesignPlacement, isCardTool } = load('lib/question-cards.ts');
+{
+  const bare = { id: 'q1', type: 'question-card', config: {} };
+  assert.deepEqual({ ...cardDesignPlacement(bare) }, { x: 17.5, y: 30, width: 65, height: 25 }, 'a card with no saved design sits at the renderer\'s own defaults');
+  const designed = {
+    id: 'q2', type: 'question-card',
+    config: {
+      placement: { x: 1, y: 2, width: 30, height: 30 },
+      questionCard: { x: 10, y: 12, width: 50, height: 22, fontFamily: 'Georgia, serif', marginLeft: 5, marginTop: 6 },
+      answerCard: { x: 10, y: 12, width: 50, height: 22, backgroundColor: '#123456' },
+    },
+  };
+  assert.deepEqual({ ...cardDesignPlacement(designed) }, { x: 10, y: 12, width: 50, height: 22 }, 'the design placement wins over config.placement — it is what FittedCard reads');
+  const moved = withCardDesignPlacement(designed, { x: 40, y: 44, width: 55, height: 26 });
+  assert.deepEqual({ ...cardDesignPlacement(moved) }, { x: 40, y: 44, width: 55, height: 26 }, 'a drag commit lands in the design the renderer reads');
+  assert.equal(moved.config.answerCard.x, 40, 'the answer design moves with the question design — one card, two faces');
+  assert.equal(moved.config.questionCard.fontFamily, 'Georgia, serif', 'other design fields are preserved untouched');
+  assert.equal(moved.config.answerCard.backgroundColor, '#123456', 'the answer design keeps its own look');
+  assert.equal(moved.config.questionCard.marginLeft, 0, 'edge margins are zeroed so the dragged placement lands exactly (the card editor\'s own drag does the same)');
+  assert.equal(isCardTool(designed), true, 'question-card is a card tool');
+  assert.equal(isCardTool({ type: 'blank-card' }), true, 'blank-card is a card tool');
+  assert.equal(isCardTool({ type: 'wheel' }), false, 'other tools keep the placement path they already had');
+}
+console.log('PASS: lib behavior — card design placement is the drag source and target for card tools.');
 
 // ---------- jsdom: a LEGACY project through the new surface ----------
 const { JSDOM } = require('jsdom');
@@ -267,15 +309,14 @@ function legacyProject() {
     'the dragged button lands in its new slot; the hidden sequence step keeps its place at the end');
   await React.act(async () => renderWith(reordered));
 
-  // Flip back to the Overlay side for the in-place edit round-trip.
+  // Flip back to the Overlay side for the drag round-trip.
   const overlayToggle = [...container.querySelectorAll('.sr-review-toggle button')].find(b => b.textContent === 'Overlay');
   await React.act(async () => overlayToggle.click());
   assert(container.querySelector('[aria-label="Overlay review"]'), 'the overlay review returns to the same spot');
   assert([...container.querySelectorAll('.sr-dragbox-move')].some(b => (b.getAttribute('aria-label') || '').includes('Winner.gif')), 'the placed legacy asset is draggable in the overlay review');
 
-  // Save round-trip through an in-place edit: select the placed
-  // asset on the overlay review (a press that does not move selects
-  // it), then use its media-fit editor.
+  // Selecting the placed asset (a press that does not move) opens
+  // NOTHING — no inspector, no editor panel; editing is Jewel's.
   const dragLayer = container.querySelector('.sr-draglayer');
   dragLayer.getBoundingClientRect = () => ({ left: 0, right: 960, top: 0, bottom: 540, width: 960, height: 540 });
   const assetBox = [...container.querySelectorAll('.sr-dragbox-move')].find(b => (b.getAttribute('aria-label') || '').includes('Winner.gif'));
@@ -283,13 +324,24 @@ function legacyProject() {
     assetBox.dispatchEvent(pointer('pointerdown', 100));
     assetBox.dispatchEvent(pointer('pointerup', 100));
   });
-  const fitButton = [...container.querySelectorAll('.sr-inspector button')].find(b => b.textContent === 'Show full media');
-  assert(fitButton, 'selecting the placed asset opens its in-place editors');
-  await React.act(async () => fitButton.click());
+  assert(!container.querySelector('.sr-inspector') && !container.textContent.includes('Selected item settings'), 'selecting an item opens no page furniture');
+
+  // Save round-trip through a real drag of the placed asset: press,
+  // carry it +10% / +10% of the canvas, release — the commit writes
+  // edits.placement through the same save the page persists.
+  const changesBeforeAssetDrag = changes.length;
+  const dragPointer = (type, x, y) => new dom.window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+  await React.act(async () => {
+    assetBox.dispatchEvent(dragPointer('pointerdown', 100, 100));
+    assetBox.dispatchEvent(dragPointer('pointermove', 196, 154));
+    assetBox.dispatchEvent(dragPointer('pointerup', 196, 154));
+  });
+  assert(changes.length > changesBeforeAssetDrag, 'the asset drag saves');
   const saved = changes[changes.length - 1];
   const savedAsset = saved.assets.find(a => a.storageKey === 'projects/legacy/winner.gif');
-  assert.equal(savedAsset.edits.fit, 'contain', 'the in-place edit landed');
-  assert.equal(savedAsset.url, 'https://example.test/winner.gif', 'the edited asset keeps its media');
+  assert(Math.abs(savedAsset.edits.placement.x - 20) < 0.01 && Math.abs(savedAsset.edits.placement.y - 22) < 0.01,
+    `the drag moved the asset's placement from (10, 12) to (20, 22) — got (${savedAsset.edits.placement.x}, ${savedAsset.edits.placement.y})`);
+  assert.equal(savedAsset.url, 'https://example.test/winner.gif', 'the dragged asset keeps its media');
   assert.deepEqual(saved.assets.map(a => a.storageKey), project.assets.map(a => a.storageKey), 'every asset survives the round-trip');
   assert.deepEqual(saved.gameTools.map(t => t.id), project.gameTools.map(t => t.id), 'every tool survives the round-trip');
   assert.deepEqual(saved.compositions.map(c => c.id), ['comp1'], 'the composition survives the round-trip');

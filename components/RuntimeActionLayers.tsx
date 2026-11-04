@@ -14,8 +14,8 @@ import {BoardSurface} from "./BoardDesigner";
 import {GameInfoOverlay} from './GameInfoTools';
 import {infoTypes} from '../lib/game-tools';
 import {toolShowsTitle,toolTitle} from '../lib/tool-style';
-import QuestionCards,{StyledTimer} from './QuestionCards';
-import {cardControl,cardTransition,freshCardState,type CardState,type CardAction} from '../lib/question-cards';
+import QuestionCards,{FittedCard,StyledTimer} from './QuestionCards';
+import {cardControl,cardTransition,freshCardState,isCardTool,questionPool,type CardState,type CardAction} from '../lib/question-cards';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
@@ -194,6 +194,17 @@ export function ControlAppearancePreview({control,project,state}:{control:Projec
  if(asset){const r=control.overlayResult||defaultOverlayResult;return <div aria-label="Appearance preview only" style={{position:'absolute',left:r.x+'%',top:r.y+'%',width:r.width+'%',height:r.height+'%',pointerEvents:'none'}}>{mediaKind(asset)==='video'?<video src={asset.url} muted style={{width:'100%',height:'100%',objectFit:'contain'}}/>:mediaKind(asset)==='audio'?<p>{asset.name} · audio</p>:<img src={asset.url} alt={asset.name} style={{width:'100%',height:'100%',objectFit:'contain'}}/>}</div>;}
  if(!tool)return null;
  if(infoTypes.includes(tool.type))return <GameInfoOverlay tool={tool} project={project} state={state||freshCardState()}/>;
+ // Card tools preview as the REAL card (FittedCard, positioned by the
+ // card design) — never the generic tool run, which positions by
+ // overlayResult, a field the card renderer does not read. A preview
+ // that follows a different placement than the card itself is how a
+ // staged quiz card could look dragged in-session yet be back at its
+ // design position after reload, and vanish when the preview closed.
+ if(isCardTool(tool)){
+  const ownQuestions=Array.isArray(tool.config.questions)?tool.config.questions as Array<Record<string,unknown>>:[];
+  const text=tool.type==='blank-card'?String(tool.config.text||'Your text appears here'):(questionPool(project,tool)[0]?.question||String(ownQuestions[0]?.question||ownQuestions[0]?.prompt||'Your question appears here'));
+  return <div style={{position:"absolute",inset:0,pointerEvents:"none"}}><FittedCard project={project} tool={tool} text={text} shownAt={Date.now()}/></div>;
+ }
  const questions=Array.isArray(tool.config.questions)?tool.config.questions:[];
  const run:Run={id:0,at:Date.now(),control,tool,question:questions[0],reveal:false,result:String((Array.isArray(tool.config.items)?tool.config.items[0]:null)||"Preview")};
  return <div style={{position:"absolute",inset:0,pointerEvents:"none"}}><ToolRun run={run} assets={project.assets} index={0} count={1} live={false} slug={project.slug}/></div>;
