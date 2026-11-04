@@ -42,7 +42,7 @@ export function ExampleStageMedia() {
 export function AnimatedExampleMedia({ project }: { project: TalkshowWorkshopProps["project"] }) {
   const animated = backgroundAssets(project).find(asset => isVideo(asset) && asset.url);
   if (animated) return <BackdropStageMedia asset={animated} />;
-  return <video src="/redesign/jewel-wave.mp4" autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
+  return <video src="/redesign/talk-animated-backdrop.mp4" autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
 }
 
 /* ---------------- Area 1 · Show theme & subject ---------------- */
@@ -106,7 +106,7 @@ export function BackgroundStep(props: ScreenProps) {
               <div className="gsw-stage-visual" style={{ minHeight: 190, position: "relative" }}>
                 <AnimatedExampleMedia project={project} />
                 <div style={{ position: "absolute", left: 12, bottom: 10 }}>
-                  <span className="gsw-vchip gold">{animated ? `Your animated backdrop · ${animated.name}` : "Example · an animated visual, playing"}</span>
+                  <span className="gsw-vchip gold">{animated ? `Your animated backdrop · ${animated.name}` : "Example · an animated talk-show backdrop, playing"}</span>
                 </div>
               </div>
             </div>
@@ -190,13 +190,6 @@ export function SignStep(props: ScreenProps) {
             <div style={{ position: "absolute", left: 14, bottom: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <span className="gsw-vchip gold">{uploadedSign ? `Your uploaded sign · ${uploadedSign.name}` : signAsset ? `Your sign · ${signAsset.name}` : "Demonstration · Jewel letters your title over artwork like this"}</span>
               {signAsset && !uploadedSign && <span className="gsw-vchip">Lettering is a real text layer — never baked in</span>}
-            </div>
-          </div>
-          <div className="gsw-card" style={{ marginTop: 14 }}>
-            <h4>Have your own sign?</h4>
-            <p>Upload a sign you made yourself and it is used instead of Jewel’s — exactly as it is, nothing redrawn.</p>
-            <div className="gsw-chipsrow">
-              <button type="button" className="gsw-demobtn" onClick={doors.uploadSign}>Upload your own sign</button>
             </div>
           </div>
           <ChangeList title="What you can change — your sign" items={SIGN_CHANGES} onAsk={onAsk} />

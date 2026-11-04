@@ -165,7 +165,6 @@ export const SIGN_CHANGES: ChangeItem[] = [
   { label: "The sign's artwork — animated or artistic", say: "Make the sign for my show over an animated backdrop" },
   { label: "The lettering's font", sub: "Any display font in the site's catalog — name it to Jewel", say: "Change the font on my sign" },
   { label: "The lettering's colors", sub: "The text color and an accent color — name them to Jewel", say: "Change the colors of the lettering on my sign" },
-  { label: "Your own uploaded sign", sub: "Replaces Jewel's sign — uploaded on this step, used exactly as you made it" },
 ];
 
 export const BACKDROP_CHANGES: ChangeItem[] = [

@@ -26,8 +26,6 @@ import "./talkshow-workshop.css";
  */
 
 export type TalkshowDoors = {
-  /** Upload the creator's own sign (page tags the upload as the sign). */
-  uploadSign: () => void;
   /** Upload media for the Media area (the plain project upload). */
   uploadMedia: () => void;
   /** Scroll to the project form below. Kept wired for the page's other
