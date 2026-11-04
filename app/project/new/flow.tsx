@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createProject, saveProjectToServer, type ProjectKind } from "../../../lib/project";
 import { GAME_TEMPLATES, getGameTemplate } from "../../../lib/game-templates";
-import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
+import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, isKindComingSoon, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
 import "./new-project.css";
 
 type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string };
@@ -119,6 +119,9 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
   }
 
   function chooseKind(next: ProjectKind) {
+    // Coming Soon kinds cannot be chosen — the card is disabled, and this
+    // guard keeps every other caller out of the scratch screen too.
+    if (isKindComingSoon(next)) return;
     setKind(next);
     setPieces(defaultSetupPieces(next));
     if (next === "gameshow") {
@@ -136,7 +139,7 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
   }
 
   function startScratch() {
-    if (!kind) return;
+    if (!kind || isKindComingSoon(kind)) return;
     setStart({ kind, pieces: [...pieces], theme: kind === "talk" ? theme.trim() || undefined : undefined });
     setBegun(true);
   }
@@ -169,7 +172,18 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
             <div>
               <div className="np-ask">One question: <b>what are you making?</b></div>
               <div className="np-kinds">
-                {PROJECT_KINDS.map(info => (
+                {PROJECT_KINDS.map(info => info.comingSoon ? (
+                  <button key={info.id} type="button" className="np-kind soon" disabled aria-disabled="true" aria-label={`${info.title} — Coming Soon!`}>
+                    <img src={info.image} alt="" />
+                    <div className="np-shade" />
+                    <div className="np-txt">
+                      <div className="np-kick">{info.kicker}</div>
+                      <div className="np-t display">{info.title}</div>
+                      <div className="np-d">{info.description}</div>
+                    </div>
+                    <div className="np-soonband display" aria-hidden="true">Coming Soon!</div>
+                  </button>
+                ) : (
                   <button key={info.id} type="button" className="np-kind" onClick={() => chooseKind(info.id)}>
                     <img src={info.image} alt="" />
                     <div className="np-shade" />
