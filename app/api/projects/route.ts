@@ -4,6 +4,7 @@ import { requireCreator, isAdmin } from "../../../lib/auth/server";
 import { ensureProtectionSchema } from "../../../lib/project-protection";
 import { createHash, randomBytes } from "node:crypto";
 import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, canUseCityCrimeScene, stripCityCrimeSceneTools } from "../../../lib/city-crime-scene";
+import { scrubQuizQuestionsForPublish } from "../../../lib/quiz";
 import { creatorEmailForViewer } from "../../../lib/creator-identity";
 
 export async function GET() {
@@ -87,6 +88,12 @@ export async function POST(request: Request) {
       for (const t of snapshot.gameTools) {
         if (t?.type === "city-crime-scene" && t.config) {
           t.config = { ...t.config, mystery: sanitizeCityCrimeSceneForOverlay(readCityCrimeSceneConfig(t.config)) };
+        }
+        // Quiz correctness is host-only too: the snapshot keeps each quiz
+        // question and its choices, never which choice is right — the
+        // reveal travels through the host-gated live card states.
+        if (t?.type === "trivia-list" && t.config && Array.isArray(t.config.questions)) {
+          t.config = { ...t.config, questions: scrubQuizQuestionsForPublish(t.config.questions) };
         }
       }
     }
