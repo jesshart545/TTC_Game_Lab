@@ -9,15 +9,15 @@ const load = require('./load.cjs');
 // the one new mechanism — the backdrop text layer (lib/backdrop-text.ts) —
 // is a validated DOM text spec, never lettering burned into artwork.
 
-const { evaluateWorkflow } = load('lib/workflow-progress.ts');
-const { cleanBackdropText, assetBackdropText, findSignAsset, signPresent, backgroundAssets } = load('lib/backdrop-text.ts');
+const { evaluateWorkflow, allCreateStepsComplete } = load('lib/workflow-progress.ts');
+const { cleanBackdropText, assetBackdropText, assetPromptText, promptPresent, findSignAsset, signPresent, backgroundAssets } = load('lib/backdrop-text.ts');
 const { cleanTriviaQuestions, quizQuestionsOf, scrubQuizQuestionsForPublish } = load('lib/quiz.ts');
 const { questionPool, publicCardState, cardDisplayText } = load('lib/question-cards.ts');
 const { applyDraftChanges } = load('lib/draft-edit.ts');
 const { applyBuildChanges, creatableTools } = load('lib/build-edits.ts');
 const talkPath = load('lib/talkshow-path.ts');
-const { TALK_STEPS, TALK_STEP_ORDER, TALK_CREATIVITY_BANNER, TALK_TOOL_TYPES } = talkPath;
-const { SIGN_CHANGES, BACKDROP_CHANGES, QUIZ_CHANGES, RESEARCH_CHANGES, YOUTUBE_CHANGES, SLIDES_CHANGES, DEMO_FONTS } = talkPath;
+const { TALK_STEPS, TALK_STEP_ORDER, TALK_SKIPPABLE_STEPS, TALK_CREATIVITY_BANNER, TALK_TOOL_TYPES } = talkPath;
+const { THEME_CHANGES, SIGN_CHANGES, BACKDROP_CHANGES, PROMPT_CHANGES, QUIZ_CHANGES, RESEARCH_CHANGES, MEDIA_CHANGES, SLIDES_CHANGES, DEMO_FONTS } = talkPath;
 const { fontCatalog } = load('lib/fonts.ts');
 
 const eq = (actual, expected, msg) => assert.equal(JSON.stringify(actual), JSON.stringify(expected), msg);
@@ -44,8 +44,9 @@ const quizTool = (overrides = {}) => ({
 // --- Kind gating: the talk path exists for talk projects only ---------------
 {
   eq(evaluateWorkflow(baseProject()).stages[0].steps.map(s => s.id),
-    ['sign', 'backdrops', 'research', 'quiz', 'youtube', 'slides', 'toolbox']);
-  eq(TALK_STEP_ORDER, ['sign', 'backdrops', 'research', 'quiz', 'youtube', 'slides', 'toolbox']);
+    ['theme', 'background', 'sign', 'prompt', 'research', 'quiz', 'media', 'missed']);
+  eq(TALK_STEP_ORDER, ['theme', 'background', 'sign', 'prompt', 'research', 'quiz', 'media', 'missed']);
+  eq(TALK_SKIPPABLE_STEPS, ['research', 'quiz', 'media', 'missed'], 'the four optional areas, in path order');
   eq(Object.keys(TALK_STEPS), TALK_STEP_ORDER, 'step copy covers exactly the evaluator steps, in order');
   for (const id of TALK_STEP_ORDER) assert(TALK_STEPS[id].asks.length >= 2, `${id} offers example asks for Jewel`);
   // Other kinds keep their own paths, untouched.
@@ -68,16 +69,16 @@ const quizTool = (overrides = {}) => ({
 {
   TALK_STEP_ORDER.forEach((id, i) => {
     const meta = TALK_STEPS[id];
-    assert.equal(meta.kicker, `Step ${i + 1} of 7`, `${id}: the kicker counts the steps, Gameshow-style`);
+    assert.equal(meta.kicker, `Step ${i + 1} of 8`, `${id}: the kicker counts the areas, Gameshow-style`);
     assert(typeof meta.intro === 'string' && meta.intro.length > 0, `${id}: an intro line`);
-    if (id !== 'toolbox') assert(meta.intro.startsWith('One subject here:'), `${id}: the intro names its one subject, like every Gameshow step`);
+    assert(meta.intro.startsWith('One subject here:'), `${id}: the intro names its one subject, like every Gameshow step`);
     assert(typeof meta.doneWhen === 'string' && meta.doneWhen.length <= 160, `${id}: the done-when line stays a short line, not a paragraph`);
     assert(typeof meta.jewelNote === 'string' && meta.jewelNote.length <= 220, `${id}: Jewel's strip message stays short`);
     for (const ask of meta.asks) assert(ask.chip.startsWith('“'), `${id}: example asks read as quoted examples, Gameshow-style`);
   });
   // Change lists are ChangeItems (label / sub / tap-to-ask say), the shape
   // the Gameshow ChangeList renders — never bare strings.
-  for (const [name, list] of Object.entries({ SIGN_CHANGES, BACKDROP_CHANGES, QUIZ_CHANGES, RESEARCH_CHANGES, YOUTUBE_CHANGES, SLIDES_CHANGES })) {
+  for (const [name, list] of Object.entries({ THEME_CHANGES, SIGN_CHANGES, BACKDROP_CHANGES, PROMPT_CHANGES, QUIZ_CHANGES, RESEARCH_CHANGES, MEDIA_CHANGES, SLIDES_CHANGES })) {
     assert(Array.isArray(list) && list.length >= 1, `${name}: a non-empty change list`);
     for (const item of list) assert(typeof item.label === 'string' && item.label.length > 0, `${name}: every row carries a label`);
   }
@@ -102,18 +103,28 @@ const quizTool = (overrides = {}) => ({
 // fields, no font/color pickers, no "short version" display block.)
 {
   const steps = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
-  const signSpan = steps.slice(steps.indexOf('export function SignStep'), steps.indexOf('export function BackdropsStep'));
+  const signSpan = steps.slice(steps.indexOf('export function SignStep'), steps.indexOf('export function PromptStep'));
   assert(!signSpan.includes('name: event.target.value'), 'the sign step has no name field');
   assert(!signSpan.includes('theme: event.target.value'), 'the sign step has no theme field');
   assert(!signSpan.includes('Your name & theme'), 'no name & theme duplication block on the step');
   assert(!signSpan.includes('tsw-fields'), 'no field block remains on the sign step');
-  assert(!signSpan.includes('LookControls'), 'no font/color picker controls on the sign step face — choosing happens by asking Jewel');
+  assert(!steps.includes('LookControls'), 'the old shared look-picker component is gone — the sign is chosen by asking Jewel');
   assert(signSpan.includes('BackdropTextLayer'), 'the sign demonstration still letters for real');
   assert(signSpan.includes('Upload your own sign'), 'the uploaded-sign door stays on the step');
-  assert(TALK_STEPS.sign.asks[0].say.startsWith("My show's title and theme are"), 'the first example ask is the title & theme answer');
-  const backdropsSpan = steps.slice(steps.indexOf('export function BackdropsStep'), steps.indexOf('export function ResearchStep'));
-  assert(backdropsSpan.includes('LookControls'), 'the backdrop lettering demonstration keeps its live look-switching');
-  console.log('PASS: sign step face — demonstration + the ask; no fields, no pickers, no duplication block.');
+  assert(signSpan.includes('Jewel suggests'), 'Jewel suggests the title sign once a background exists');
+  // The theme box lives in area 1 now (Jessica's layout): the one typing
+  // area, at the top of the path — not inside the sign step.
+  const themeSpan = steps.slice(steps.indexOf('export function ThemeStep'), steps.indexOf('export function BackgroundStep'));
+  assert(themeSpan.includes('theme: event.target.value'), 'area 1 carries the theme typing area');
+  assert(themeSpan.includes('Show theme / subject'), 'area 1 names the box as Jessica dictated');
+  // The opening prompt's look is chosen on its own step, live — the words,
+  // the font, the color, and the bubble/frame/plain presentation.
+  const promptSpan = steps.slice(steps.indexOf('export function PromptStep'), steps.indexOf('export function ResearchStep'));
+  assert(promptSpan.includes('DEMO_FONTS.map') && promptSpan.includes('PRESENTATIONS.map') && promptSpan.includes('promptOverlay'),
+    'the prompt step chooses font, color, and presentation, and writes the prompt layer');
+  assert(steps.includes('"Thought bubble"') && steps.includes('"Frame"') && steps.includes('"Plain"'),
+    'the three presentations are the ones Jessica named: bubble, frame, plain');
+  console.log('PASS: sign step face — demonstration + the ask; the theme box lives in area 1; the prompt look is chosen on the prompt step.');
 }
 
 // --- The lettering demonstration offers the site's real display fonts --------
@@ -133,8 +144,16 @@ const quizTool = (overrides = {}) => ({
   console.log('PASS: demo fonts — the sign demonstration letters in the site’s real display fonts only.');
 }
 
-// --- Talk step evaluators ----------------------------------------------------
+// --- Talk area evaluators (Jessica's layout, 2026-11-04) -------------------
 {
+  // theme: the first box — answered when gamePlan.theme is typed.
+  assert.equal(stepState(baseProject(), 'theme').complete, false, 'no theme yet');
+  assert.equal(stepState(baseProject({ gamePlan: { theme: 'a cozy life talk show' } }), 'theme').complete, true, 'the theme box is answered');
+  assert.equal(stepState(baseProject({ gamePlan: { theme: '   ' } }), 'theme').complete, false, 'whitespace is not an answer');
+  // background: any background-role asset.
+  assert.equal(stepState(baseProject(), 'background').complete, false);
+  assert.equal(stepState(baseProject({ assets: [bgAsset()] }), 'background').complete, true);
+  assert.equal(stepState(baseProject({ assets: [{ name: 'x.png', type: 'Image', role: 'layer' }] }), 'background').complete, false, 'a layer is not a background');
   // sign: real name + a sign present.
   assert.equal(stepState(baseProject(), 'sign').complete, false, 'placeholder name, no sign');
   assert.equal(stepState(baseProject({ name: 'Galaxy Talk' }), 'sign').complete, false, 'a name alone is not a sign');
@@ -144,36 +163,53 @@ const quizTool = (overrides = {}) => ({
   assert.equal(stepState(letteredOnly, 'sign').complete, true, 'a backdrop lettered with the show name is the sign, flag or not');
   const uploaded = baseProject({ name: 'Galaxy Talk', assets: [bgAsset({ name: 'my-sign.png', sign: true })] });
   assert.equal(stepState(uploaded, 'sign').complete, true, 'an uploaded sign counts');
-  // backdrops: any background-role asset.
-  assert.equal(stepState(baseProject(), 'backdrops').complete, false);
-  assert.equal(stepState(baseProject({ assets: [bgAsset()] }), 'backdrops').complete, true);
-  assert.equal(stepState(baseProject({ assets: [{ name: 'x.png', type: 'Image', role: 'layer' }] }), 'backdrops').complete, false, 'a layer is not a backdrop');
+  // prompt: a valid prompt layer on a background.
+  assert.equal(stepState(baseProject({ assets: [bgAsset()] }), 'prompt').complete, false, 'a background alone carries no prompt');
+  const withPrompt = baseProject({ assets: [bgAsset({ promptOverlay: { text: 'Tonight: habits', fontFamily: FONT, textColor: '#ffffff', presentation: 'bubble' } })] });
+  assert.equal(stepState(withPrompt, 'prompt').complete, true, 'the prompt layer is set');
+  const badPrompt = baseProject({ assets: [bgAsset({ promptOverlay: { text: 'Tonight', fontFamily: 'Nope', textColor: '#fff' } })] });
+  assert.equal(stepState(badPrompt, 'prompt').complete, false, 'an invalid prompt spec reads as absent');
   // research: only the recorded fact completes it.
   assert.equal(stepState(baseProject(), 'research').complete, false);
   assert.equal(stepState(baseProject({ workflowProgress: { researched: true } }), 'research').complete, true, 'Jewel ran a search in this project');
-  // quiz: an MCQ saved in a trivia list — plain trivia does not count.
+  // quiz: an MCQ saved in a trivia list — plain trivia does not count;
+  // the follow-up path (the creator's own question cards) completes it too.
   assert.equal(stepState(baseProject({ gameTools: [quizTool()] }), 'quiz').complete, true);
   const plain = quizTool({ config: { questions: [{ question: 'Q?', answer: 'A' }] } });
-  assert.equal(stepState(baseProject({ gameTools: [plain] }), 'quiz').complete, false, 'plain Q&A is not a multiple-choice quiz');
+  assert.equal(stepState(baseProject({ gameTools: [plain] }), 'quiz').complete, false, 'plain Q&A alone is not a quiz — and no cards draw from it yet');
   assert.equal(stepState(baseProject({ gameTools: [quizTool({ enabled: false })] }), 'quiz').complete, false, 'a disabled quiz does not count');
-  // youtube.
-  assert.equal(stepState(baseProject({ gameTools: [{ id: 'y1', type: 'youtube', name: 'YouTube', enabled: true, config: {} }] }), 'youtube').complete, true);
-  assert.equal(stepState(baseProject(), 'youtube').complete, false);
-  // slides: the deck needs at least two slides.
-  const slide = n => ({ id: `s${n}`, kind: 'backdrop', label: `Slide ${n}`, refKey: `k${n}` });
-  assert.equal(stepState(baseProject({ talkDeck: [slide(1)] }), 'slides').complete, false, 'one slide is not a deck');
-  assert.equal(stepState(baseProject({ talkDeck: [slide(1), slide(2)] }), 'slides').complete, true);
-  // toolbox: every earlier step + the opened fact.
-  const full = baseProject({
-    name: 'Galaxy Talk',
-    assets: [bgAsset({ sign: true, textOverlay: { text: 'Galaxy Talk', fontFamily: FONT, textColor: '#ffd700' } })],
-    gameTools: [quizTool(), { id: 'y1', type: 'youtube', name: 'YouTube', enabled: true, config: {} }],
-    workflowProgress: { researched: true },
-    talkDeck: [slide(1), slide(2)],
-  });
-  assert.equal(stepState(full, 'toolbox').complete, false, 'not opened yet');
-  assert.equal(stepState({ ...full, workflowProgress: { researched: true, toolboxOpened: true } }, 'toolbox').complete, true);
-  console.log('PASS: talk evaluators — sign, backdrops, research fact, quiz, youtube, deck ≥ 2, toolbox gating.');
+  const followCards = { id: 'cards-1', type: 'question-card', name: 'Follow-ups', enabled: true, config: { poolId: 'quiz-1' } };
+  assert.equal(stepState(baseProject({ gameTools: [plain, followCards] }), 'quiz').complete, true, 'follow-up cards drawing from the list complete the area');
+  // media: filed media beyond the background/sign, or YouTube added.
+  assert.equal(stepState(baseProject(), 'media').complete, false);
+  assert.equal(stepState(baseProject({ assets: [bgAsset()] }), 'media').complete, false, 'a background alone is not media');
+  assert.equal(stepState(baseProject({ assets: [bgAsset(), { name: 'song.mp3', type: 'Audio', storageKey: 'projects/p1/song.mp3', role: 'audio' }] }), 'media').complete, true, 'a filed theme song is media');
+  assert.equal(stepState(baseProject({ gameTools: [{ id: 'y1', type: 'youtube', name: 'YouTube', enabled: true, config: {} }] }), 'media').complete, true, 'YouTube added to the dashboard completes media');
+  // missed: the review was opened (the recorded toolbox fact).
+  assert.equal(stepState(baseProject(), 'missed').complete, false);
+  assert.equal(stepState(baseProject({ workflowProgress: { toolboxOpened: true } }), 'missed').complete, true, 'the Anything-we-missed review was opened');
+  console.log('PASS: talk evaluators — theme box, background, sign, prompt layer, research fact, quiz or follow-up cards, media, missed review.');
+}
+
+// --- Skips count as complete — and only where skipping is offered -----------
+{
+  for (const id of ['research', 'quiz', 'media', 'missed']) {
+    const state = stepState(baseProject({ workflowProgress: { skipped: [id] } }), id);
+    assert.equal(state.complete, true, `${id}: a recorded skip completes the area`);
+    assert.equal(state.skipped, true, `${id}: the state remembers it was a skip, not work done`);
+    assert(state.checkLine.includes('skip'), `${id}: Jewel's check-off line says it was skipped, honestly`);
+  }
+  for (const id of ['theme', 'background', 'sign', 'prompt']) {
+    const state = stepState(baseProject({ workflowProgress: { skipped: [id] } }), id);
+    assert.equal(state.complete, false, `${id}: the core areas cannot be skipped into completeness`);
+    assert.equal(state.skipped, undefined, `${id}: no skip state leaks onto a core area`);
+  }
+  // The gate: every area done or skipped → Imagine and Create is complete.
+  const allSkipped = baseProject({ gamePlan: { theme: 'x' }, name: 'Galaxy Talk', assets: [bgAsset({ sign: true, promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
+  assert.equal(allCreateStepsComplete(evaluateWorkflow(allSkipped)), true, 'done-or-skipped everywhere unlocks Set the Stage');
+  const oneOpen = baseProject({ gamePlan: { theme: 'x' }, workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
+  assert.equal(allCreateStepsComplete(evaluateWorkflow(oneOpen)), false, 'a missing background keeps the gate closed');
+  console.log('PASS: skips — optional areas complete by skip with an honest skipped flag; core areas never; the gate reads done-or-skipped.');
 }
 
 // --- The backdrop text spec: validation --------------------------------------
@@ -191,7 +227,16 @@ const quizTool = (overrides = {}) => ({
   assert.equal(assetBackdropText(bgAsset({ textOverlay: { text: 'Hi', fontFamily: 'Nope', textColor: '#abc' } })), null, 'a stored spec with an unknown font reads as no layer');
   assert.equal(findSignAsset(baseProject({ assets: [bgAsset({ sign: true })] })).name, 'Backdrop.png');
   assert.equal(signPresent(baseProject({ name: 'New Project', assets: [bgAsset({ sign: true })] })), true, 'flagged sign reads present; the evaluator adds the real-name test');
-  console.log('PASS: text-spec validation — catalog font required, hex colors only, length capped, invalid reads as absent.');
+  // The opening prompt's presentation variant rides the same validation.
+  eq(cleanBackdropText({ text: 'Talking point', fontFamily: FONT, textColor: '#3b2a63', presentation: 'bubble' }),
+    { text: 'Talking point', fontFamily: FONT, textColor: '#3b2a63', presentation: 'bubble' });
+  eq(cleanBackdropText({ text: 'Talking point', fontFamily: FONT, textColor: '#ffffff', presentation: 'frame' }).presentation, 'frame');
+  assert.equal(cleanBackdropText({ text: 'X', fontFamily: FONT, textColor: '#fff', presentation: 'sparkle' }), null, 'an unknown presentation is rejected whole');
+  eq(assetPromptText(bgAsset({ promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#abc', presentation: 'plain' } })),
+    { text: 'Hi', fontFamily: FONT, textColor: '#abc', presentation: 'plain' });
+  assert.equal(assetPromptText(bgAsset({ textOverlay: { text: 'Sign', fontFamily: FONT, textColor: '#abc' } })), null, 'the sign layer is not the prompt layer');
+  assert.equal(promptPresent(baseProject({ assets: [bgAsset({ promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#abc' } })] })), true);
+  console.log('PASS: text-spec validation — catalog font required, hex colors only, length capped, presentation validated, prompt layer reads separately.');
 }
 
 // --- The text layer renders in all three background render sites -------------
@@ -199,10 +244,14 @@ const quizTool = (overrides = {}) => ({
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   assert.equal((page.match(/BackdropTextLayer spec=\{assetBackdropText\(bg\)!\}/g) || []).length, 2,
     'the draft preview AND its duplicated preview-panel copy both render the layer (Build Space reuses the same draft overlay)');
+  assert.equal((page.match(/BackdropTextLayer spec=\{assetPromptText\(bg\)!\} placement="lower"/g) || []).length, 2,
+    'both preview copies render the opening prompt layer too, low on the background');
   assert(page.includes('overlay={draftOverlay}'), 'Build Space preview is the same draft overlay construction');
   const published = fs.readFileSync('app/published/[slug]/overlay/page.tsx', 'utf8');
   assert.equal((published.match(/BackdropTextLayer spec=\{assetBackdropText\(backgroundAsset\)!\}/g) || []).length, 1,
     'the published overlay renders the layer over its background');
+  assert.equal((published.match(/BackdropTextLayer spec=\{assetPromptText\(backgroundAsset\)!\} placement="lower"/g) || []).length, 1,
+    'the published overlay renders the opening prompt layer over its background, low');
   const layer = fs.readFileSync('components/BackdropText.tsx', 'utf8');
   assert(layer.includes('spec.text') && layer.includes('spec.fontFamily') && layer.includes('document.fonts'),
     'the layer is real DOM text in the chosen font, auto-fitted like the cards');
@@ -221,7 +270,15 @@ const quizTool = (overrides = {}) => ({
   assert.equal(cleared.project.assets[0].textOverlay, null, 'null clears the layer');
   const untouched = applyDraftChanges(project, { assets: [{ storageKey: 'projects/p1/backdrop.png', inProject: true }] });
   assert.equal(untouched.project.assets[0].textOverlay, undefined, 'other asset edits leave the layer alone');
-  console.log('PASS: draft-edit path — Jewel can set, restyle, and clear the text layer; invalid specs are refused.');
+  // The opening prompt layer rides the same validated path, in its own field.
+  const promptSet = applyDraftChanges(project, { assets: [{ storageKey: 'projects/p1/backdrop.png', promptOverlay: { text: 'Tonight: habits', fontFamily: FONT, textColor: '#3b2a63', presentation: 'bubble' } }] });
+  eq(promptSet.project.assets[0].promptOverlay, { text: 'Tonight: habits', fontFamily: FONT, textColor: '#3b2a63', presentation: 'bubble' });
+  assert.equal(promptSet.project.assets[0].textOverlay, undefined, 'setting the prompt never touches the sign layer');
+  const promptBad = applyDraftChanges(project, { assets: [{ storageKey: 'projects/p1/backdrop.png', promptOverlay: { text: 'X', fontFamily: FONT, textColor: '#fff', presentation: 'neon' } }] });
+  assert.equal(promptBad.project.assets[0].promptOverlay, undefined, 'an invalid prompt spec is dropped whole');
+  const promptCleared = applyDraftChanges(promptSet.project, { assets: [{ storageKey: 'projects/p1/backdrop.png', promptOverlay: null }] });
+  assert.equal(promptCleared.project.assets[0].promptOverlay, null, 'null clears the prompt layer');
+  console.log('PASS: draft-edit path — Jewel can set, restyle, and clear the text layer and the prompt layer; invalid specs are refused.');
 }
 
 // --- The quiz shape: options + correct index, host-side until reveal ---------
@@ -312,6 +369,16 @@ const quizTool = (overrides = {}) => ({
   assert(route.includes('Never invent a title or theme'), 'she never invents the title or theme for the creator');
   assert(route.includes('textOverlay'), 'she is taught the text-layer mechanism for the sign');
   assert(route.includes('never ask the image or video generator to render the title'), 'generated lettering is forbidden — the text layer does the lettering');
+  // Jessica's layout additions (2026-11-04): the prompt layer, the sign
+  // suggestion after the background, the quiz fork, and the skip rules.
+  assert(route.includes('promptOverlay'), 'she is taught the opening prompt layer mechanism');
+  assert(route.includes('gently suggest adding the title sign'), 'after a background exists, she suggests the title sign');
+  assert(route.includes('ASK THE FORK FIRST'), 'she asks quiz-or-follow-ups before building questions');
+  assert(route.includes('BASED ON the show\'s opening prompt'), 'follow-up suggestions grow from the initial prompt');
+  assert(route.includes('DATA POINTS'), 'research answers are data points with sources');
+  assert(route.includes('a skip counts as complete'), 'she knows the optional areas can be skipped, and that it counts');
+  assert(route.includes('skippedAreas'), 'her per-turn context carries the skipped areas');
+  assert(route.includes('promptSet'), 'her per-turn context carries the opening prompt fact');
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   assert(page.includes('recordWorkflowFact({ researched: true })'), 'a completed search records the researched fact');
   const researchAt = page.indexOf('recordWorkflowFact({ researched: true })');
@@ -323,9 +390,9 @@ const quizTool = (overrides = {}) => ({
 // --- The deck: a hand-arranged record, persisted through the page's save -----
 {
   const steps = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
-  assert(steps.includes('talkDeck: next'), 'the Slides step persists deck changes as the talkDeck record');
+  assert(steps.includes('talkDeck: next'), 'the deck (in the Anything-we-missed area now) persists changes as the talkDeck record');
   assert(steps.includes('onSaveProject'), 'deck writes go through the page save path handed to the workshop');
-  assert(!/controls:/.test(steps), 'the deck step creates no dashboard controls — clickers belong to Set the Stage');
+  assert(!/controls:/.test(steps), 'the deck creates no dashboard controls — clickers belong to Set the Stage');
   console.log('PASS: deck — ordered talkDeck record on the project, hand-arranged only, no dashboard controls built.');
 }
 
@@ -337,6 +404,13 @@ const quizTool = (overrides = {}) => ({
   assert.equal(occurrences, 1, 'the banner wording lives in exactly one place across the talk files');
   const shell = fs.readFileSync('components/TalkshowWorkshop.tsx', 'utf8');
   assert(shell.includes('{TALK_CREATIVITY_BANNER}'), 'the shell renders the banner once, above the step screens');
+  // Jewel's avatar and wand: ONCE on the page (Jessica's refinement,
+  // 2026-11-04) — in the guidance banner, not stamped on every control.
+  assert.equal((shell.match(/<JewelAvatar/g) || []).length, 1, 'her avatar appears exactly once on the talk page — in the banner');
+  const avatar = fs.readFileSync('components/JewelAvatar.tsx', 'utf8');
+  assert(avatar.includes('/redesign/jewel-wave.mp4'), 'the avatar is her real waving portrait, the Tips-card artwork');
+  assert(avatar.includes('🪄'), 'her magic wand rides with the avatar');
+  assert(!fs.readFileSync('components/TalkshowSteps.tsx', 'utf8').includes('JewelAvatar'), 'the avatar is not repeated across the areas');
   for (const file of ['components/TalkshowWorkshop.tsx', 'components/TalkshowSteps.tsx']) {
     const src = fs.readFileSync(file, 'utf8');
     assert(!src.includes('fetch('), `${file}: no direct network calls`);
@@ -414,6 +488,60 @@ const quizTool = (overrides = {}) => ({
   assert(flow.includes('setupPiecesForKind(kindInfo.id)'), 'the setup screen renders the kind’s own pieces');
   assert(flow.includes('project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme }'), 'the theme answer seeds gamePlan.theme at creation');
   console.log('PASS: fix build — locked stage names; from-scratch talk projects seed, picture, and list talk pieces only; the ask comes first.');
+}
+
+// --- Jessica's layout (2026-11-04): bare top, no generic frame, the gate ----
+// The page she dictated replaces the stacked generic workshop frame
+// above the talk path. Reference case remains a from-scratch talk
+// project (the Jewel Test Talk Show check) — never another project's data.
+{
+  const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
+  // The talk-create view exists and drives every frame removal.
+  assert(page.includes('const talkCreateView = project.kind === "talk" && workflowStep === 0'), 'the page computes the talk Imagine and Create view');
+  // Top of the page: Rename · Save · Delete only — the Ask Jewel header
+  // button, the status span, the kind picker, and the save-status line
+  // come off the top in that view (they render for every other view).
+  assert(page.includes('{!talkCreateView && <span>{project.status}</span>}'), 'the draft-status span leaves the talk top');
+  assert(page.includes('{!talkCreateView && <button type="button" className="build-btn ask-jewel-btn"'), 'the Ask Jewel header button leaves the talk top');
+  assert(page.includes('{!talkCreateView && <small role="status"'), 'the save-status clutter leaves the talk top');
+  assert(page.includes('✎ Rename') && page.includes('Delete Project'), 'Rename and Delete Project remain at the top');
+  // No generic frame above the talk areas: no Brainstorm & create heading
+  // block, no Current Task entry guide, no section tab trio (bare nav).
+  assert(page.includes('{!talkCreateView && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view');
+  assert(page.includes('entryGuide={talkCreateView ? undefined :'), 'the Current Task card leaves the talk view');
+  assert(page.includes('bare={talkCreateView}'), 'the nav renders bare for the talk view — stage buttons only');
+  assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && <details key="game-plan"'), 'the gameshow-shaped game plan form leaves the talk view — the theme lives in area 1');
+  // The gate: Set the Stage and Showtime! lock until every area is
+  // complete (done or skipped); the nav carries the lock state.
+  assert(page.includes('lockedStages={project.kind === "talk" && !talkCreateComplete ? [1, 2] : undefined}'), 'the page locks stages 1 and 2 for talk until the areas are complete');
+  assert(page.includes('allCreateStepsComplete(evaluateWorkflow(project))'), 'the gate reads the workflow model, done-or-skipped');
+  const nav = fs.readFileSync('components/ProjectWorkflowNav.tsx', 'utf8');
+  assert(nav.includes('lockedStages') && nav.includes('disabled={locked.has(index)}'), 'locked stages render disabled in the nav');
+  assert(nav.includes('bare') && nav.includes('!bare && stage === 0'), 'bare mode hides the section tab trio');
+  // The skip control lives in the workshop shell, on optional areas only.
+  const shell = fs.readFileSync('components/TalkshowWorkshop.tsx', 'utf8');
+  assert(shell.includes('Skip this area — it counts as complete'), 'the skip control is offered on the optional areas');
+  assert(shell.includes('TALK_SKIPPABLE_STEPS.includes(active.id'), 'skipping is scoped to the optional areas by the shared list');
+  assert(shell.includes('Set the Stage unlocks when every area is done'), 'the path continue carries the same gate');
+  assert(page.includes('function skipTalkArea(stepId: string)'), 'the page records skips on the project');
+  assert(page.includes('skipped: [...(current.skipped || []), stepId]'), 'a skip persists in workflowProgress.skipped');
+  // The areas read in Jessica's order on the page, examples shown not
+  // described: flat + animated background examples, media example tiles.
+  const steps = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
+  const bgSpan = steps.slice(steps.indexOf('export function BackgroundStep'), steps.indexOf('export function SignStep'));
+  assert(bgSpan.includes('First let’s decide on a background (flat/animated)'), 'the background area opens with Jessica\'s own line');
+  assert(steps.includes('/redesign/jewel-wave.mp4'), 'the animated example is a real playing visual');
+  assert(bgSpan.includes('AnimatedExampleMedia'), 'the background area shows the animated example beside the flat one');
+  assert(bgSpan.includes('Open Jewel — design my background'), 'the background area opens Jewel for designing');
+  const order = ['export function ThemeStep', 'export function BackgroundStep', 'export function SignStep', 'export function PromptStep', 'export function ResearchStep', 'export function QuizStep', 'export function MediaStep', 'export function MissedStep'];
+  const positions = order.map(marker => steps.indexOf(marker));
+  assert(positions.every((pos, i) => pos > -1 && (i === 0 || pos > positions[i - 1])), 'the eight area screens stand in Jessica\'s order');
+  const mediaSpan = steps.slice(steps.indexOf('export function MediaStep'), steps.indexOf('export function DeckArranger'));
+  assert(mediaSpan.includes('Opening sequence & theme song') && mediaSpan.includes('commercial cutscene'), 'media examples are pictured tiles, named as she named them');
+  assert(mediaSpan.includes('doors.uploadMedia') && mediaSpan.includes('doors.addYoutube'), 'the upload and the YouTube-to-dashboard option live in the Media area');
+  const missedSpan = steps.slice(steps.indexOf('export function MissedStep'));
+  assert(missedSpan.includes('Tell Jewel my idea') && missedSpan.includes('DeckArranger'), 'anything-we-missed opens Jewel and keeps the deck and toolbox doors');
+  console.log('PASS: Jessica\'s layout — bare top, no generic frame above the talk areas, skip control, the Set the Stage gate, areas in her order.');
 }
 
 console.log('talkshow-imagine-create: all assertions passed');
