@@ -17,6 +17,7 @@ import { mediaKind } from "../lib/board-design";
 import { normalizePlacement, movePlacement, resizePlacement, toolShapePlacement } from '../lib/overlay-placement';
 import { ControlAppearancePreview } from "./RuntimeActionLayers";
 import YouTubeHostPanel from "./YouTubeHostPanel";
+import { RemoteTopBar, controlGlyph } from "./DashboardRemote";
 import { reorderVisibleControls } from "../lib/stage-review";
 
 /**
@@ -232,6 +233,14 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
   const tool = (project.gameTools || []).find(t => selection?.kind === "tool" ? t.id === selection.id : control?.toolIds?.includes(t.id));
   const hasVisualResult = control?.action !== 'sequence' && !!control && tool?.type !== 'youtube' && !control.action.startsWith("result.hide.") && (!asset || mediaKind(asset) !== "audio");
   const youtube = (project.gameTools || []).find(t => t.type === "youtube" && t.enabled);
+  // The remote's second zone: the tool panels (host panels from
+  // the page's extras, wheel panels, the YouTube module). The zone
+  // caption renders only when at least one panel will.
+  const hasToolPanels = (project.gameTools || []).some(t => t.enabled && (
+    (t.inOverlayBuild && (infoTypes.includes(t.type) || t.type === "random-picker"))
+    || t.type === "question-card" || t.type === "blank-card"
+    || (t.inToolbox && t.type === "wheel")
+  )) || Boolean(youtubeOpen && youtube);
 
   // The save paths are the existing ones (the same helpers the old
   // Build Space inspector used): every update spreads the current
@@ -381,8 +390,16 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
         ) : (
         <section role="tabpanel" className="sr-canvas assembly-canvas" aria-label="Dashboard review">
           <div className="sr-review-head"><h3>Dashboard review</h3><span>Your host controls — press them: they work here exactly as they will live. Drag a button to reorder it. To change a button, ask Jewel below.</span></div>
-          {sequenceRunning && <button type="button" onClick={onStopSequence}>Stop sequence</button>}
-          <div role="status" aria-live="polite">{sequenceError || feedback}</div>
+          {/* The dashboard is a remote control for the overlay
+              (Jessica, 2026-11-04): the review wears the same
+              remote body the published host dashboard wears —
+              same chrome, same keys, same panels, shared through
+              components/DashboardRemote — because this surface IS
+              that dashboard before publish, not a picture of it. */}
+          <div className="dash-remote">
+          <RemoteTopBar name={project.name} />
+          {sequenceRunning && <button type="button" className="dash-stop" onClick={onStopSequence}>Stop sequence</button>}
+          <div role="status" aria-live="polite" className="dash-screen">{sequenceError || feedback}</div>
           {onResetGame && (
             <div className="build-reset-row">
               {!resetConfirm ? (
@@ -401,8 +418,11 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
           )}
           <div className="dashboard-canvas">
             {!visibleControls.length && !dashboardExtras && <p className="sr-empty">No buttons yet — ask Jewel to put your first control here.</p>}
+            {visibleControls.length > 0 && <div className="dash-zone-label" aria-hidden="true">Show controls</div>}
             <div className="dashboard-preview-buttons sr-buttons">
-              {visibleControls.map((c, index) => (
+              {visibleControls.map((c, index) => {
+                const glyph = controlGlyph(project, c);
+                return (
                 <div key={c.id} className={"sr-buttonwrap" + (draggingId === c.id ? " dragging" : "") + (dragOver === index && draggingId !== c.id ? " drop-target" : "")}>
                   <button type="button" style={controlButtonStyle(c)} aria-pressed={control?.id === c.id}
                     ref={el => { if (el) buttonRefs.current.set(c.id, el); else buttonRefs.current.delete(c.id); }}
@@ -420,11 +440,14 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
                       setSelection({ kind: "control", id: c.id });
                       onTrigger(c);
                     }}>
-                    {controlLabel(project, c, cardStates)}<small>{c.detail || "Choose an action"}</small>
+                    {glyph && <span className="dash-glyph" aria-hidden="true">{glyph}</span>}
+                    <span className="dash-key-text">{controlLabel(project, c, cardStates)}<small>{c.detail || "Choose an action"}</small></span>
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
+            {hasToolPanels && <div className="dash-zone-label" aria-hidden="true">Tool panels</div>}
             {dashboardExtras?.()}
             {(project.gameTools || []).filter(t => t.enabled && t.inToolbox && t.type === "wheel").map(t => (
               <WheelHostPanel key={t.id} tool={t} onSave={segments => onChange({ ...project, gameTools: (project.gameTools || []).map(x => x.id === t.id ? { ...x, config: { ...x.config, segments } } : x) })} />
@@ -436,6 +459,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
                 <YouTubeHostPanel canShow={true} onCommand={onYoutubeCommand} previewState={youtubeState} previewFeedback={youtubeFeedback} placement={safeYoutubePlacement(youtube.config.placement)} />
               </div>
             )}
+          </div>
           </div>
         </section>
         )}

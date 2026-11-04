@@ -57,6 +57,8 @@ assert(!review.includes('DashboardActionPicker') && !review.includes('DashboardS
 assert(!review.includes('sr-inspector') && !review.includes('Selected item settings') && !review.includes('sr-editbtn'), 'no inspector or editor panels on this page — selecting an item opens nothing; editing goes through Jewel');
 assert(!review.includes('QuestionCardEditor') && !review.includes('GameToolEditor') && !review.includes('FontPicker') && !review.includes('CountdownDuration') && !review.includes('YouTubePlacementEditor'), 'no in-place editor components are mounted on the staging page (they live on in their own surfaces)');
 assert(review.includes('setSelection({ kind: "control", id: c.id });'), 'firing a dashboard button points the overlay review at its result — its drag frame waits on the Overlay side');
+assert(review.includes('from "./DashboardRemote"') && review.includes('<RemoteTopBar name={project.name} />'), 'the dashboard review wears the shared remote chrome (components/DashboardRemote), not a review-only copy');
+assert(review.includes('className="dash-remote"'), 'the dashboard review is framed as the remote body — the dashboard reads as a remote control for the overlay');
 assert(review.includes('stage-review.css'), 'the surface carries its own stylesheet');
 
 // Drag and drop lives here: drag boxes persist through the placement
@@ -220,6 +222,33 @@ function compile(file, deps = {}) {
   return exports;
 }
 
+// ---------- The remote chrome: glyphs are information ----------
+const DashboardRemote = compile('components/DashboardRemote.tsx');
+{
+  const { controlGlyph } = DashboardRemote;
+  const glyphProject = {
+    assets: [
+      { name: 'Clip.mp4', storageKey: 'clip', url: 'https://example.test/clip.mp4', type: 'video/mp4' },
+      { name: 'Pic.png', storageKey: 'pic', url: 'https://example.test/pic.png', type: 'image/png' },
+      { name: 'Song.mp3', storageKey: 'song', url: 'https://example.test/song.mp3', type: 'audio/mpeg' },
+    ],
+    gameTools: [{ id: 'yt', type: 'youtube', name: 'YouTube' }, { id: 'wheel', type: 'wheel', name: 'Wheel' }],
+  };
+  const glyph = action => controlGlyph(glyphProject, { action, toolIds: [] });
+  assert.equal(glyph('sequence'), '▶▶', 'a sequence carries the run glyph');
+  assert.equal(glyph('result.hide.winner'), '✕', 'a hide carries ✕');
+  assert.equal(glyph('background.show.pic'), '▣', 'a background carries the frame glyph');
+  assert.equal(glyph('composition.play.comp1'), '▶', 'a composition plays');
+  assert.equal(glyph('asset.show.clip'), '▶', 'a video plays');
+  assert.equal(glyph('asset.show.song'), '▶', 'an audio clip plays');
+  assert.equal(glyph('asset.show.pic'), '▣', 'a picture carries the frame glyph');
+  assert.equal(glyph('cards.toggle.q1'), '▤', 'a card toggle carries the card glyph');
+  assert.equal(controlGlyph(glyphProject, { action: 'tool.yt', toolIds: ['yt'] }), '▶', 'the YouTube tool plays');
+  assert.equal(glyph('alert.show'), '', 'no obvious glyph, no forced icon');
+  assert.equal(glyph('effect.trigger'), '', 'the legacy effect control carries no invented glyph');
+}
+console.log('PASS: remote glyphs — obvious meanings only, always beside the label.');
+
 // A project saved by OLD code: no workflowProgress, no talkDeck,
 // default-era controls (including TRIGGER EFFECT, whose action the
 // current runtime only flashes for), an unknown legacy field on the
@@ -254,7 +283,7 @@ function legacyProject() {
 
 (async () => {
   const dom = freshDom();
-  const StageReview = compile('components/StageReview.tsx').default;
+  const StageReview = compile('components/StageReview.tsx', { './DashboardRemote': DashboardRemote }).default;
   const project = legacyProject();
   const changes = [];
   const fired = [];
@@ -303,6 +332,24 @@ function legacyProject() {
   for (const label of ['SHOW WINNER', 'TEST ALERT', 'TRIGGER EFFECT', 'WINNER PACKAGE'])
     assert(labels.some(t => t.includes(label)), `legacy control ${label} is present on the dashboard review`);
   assert(!labels.some(t => t.includes('HIDDEN STEP')), 'sequenceOnly steps stay off the dashboard, exactly as published');
+
+  // The dashboard review is framed as the remote it is (Jessica,
+  // 2026-11-04): the shared remote body wraps the controls, its
+  // top strip names the show, the zones are captioned, and every
+  // legacy control sits inside the remote — the same chrome the
+  // published host dashboard wears, so the rehearsal is the real
+  // remote, not a picture of one.
+  const remoteEl = container.querySelector('[aria-label="Dashboard review"] .dash-remote');
+  assert(remoteEl, 'the dashboard review is framed as a remote control');
+  assert(remoteEl.querySelector('.dash-remote-top')?.textContent.includes('Legacy Show'), 'the remote\'s top strip names the show it powers');
+  assert([...remoteEl.querySelectorAll('.dash-zone-label')].some(el => el.textContent === 'Show controls'), 'the show controls are captioned as their own zone of the remote');
+  assert([...remoteEl.querySelectorAll('.dash-zone-label')].some(el => el.textContent === 'Tool panels'), 'the tool panels are captioned as their own zone of the remote');
+  assert.equal(remoteEl.querySelectorAll('.sr-buttonwrap > button:first-child').length, labels.length, 'every dashboard control sits inside the remote');
+  const winnerKey = [...remoteEl.querySelectorAll('.sr-buttonwrap > button:first-child')].find(b => b.textContent.includes('SHOW WINNER'));
+  assert.equal(winnerKey.querySelector('.dash-glyph')?.textContent, '▣', 'the picture key carries its frame glyph beside the label');
+  assert(winnerKey.querySelector('.dash-key-text')?.textContent.includes('SHOW WINNER'), 'the label stays full text beside the glyph — never icon-only');
+  const effectKey = [...remoteEl.querySelectorAll('.sr-buttonwrap > button:first-child')].find(b => b.textContent.includes('TRIGGER EFFECT'));
+  assert(!effectKey.querySelector('.dash-glyph'), 'a control with no obvious glyph carries none — icons are information, not decoration');
 
   // A press fires — even the legacy no-handler control is handed to
   // the same runtime path, exactly as it behaves today.
@@ -422,6 +469,7 @@ function legacyProject() {
   freshDom();
   const container3 = document.getElementById('root');
   const StageReviewGhost = compile('components/StageReview.tsx', {
+    './DashboardRemote': DashboardRemote,
     './RuntimeActionLayers': { ControlAppearancePreview: ({ control }) => React.createElement('div', { className: 'preview-stub', 'data-preview-for': control.id }, 'appearance preview') },
   }).default;
   const quizProject = {

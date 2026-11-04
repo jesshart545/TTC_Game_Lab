@@ -22,7 +22,7 @@ export default function CliffhangerHostPanel({tool,slug,hostKey}:{tool:GameTool;
   }catch(e){setStatus(e instanceof Error?e.message:'Guess could not be sent.');}
   finally{setBusy(false);}
  }
- return <section aria-label={`${tool.name} price guess`}><h3>{tool.name} · price guess</h3>
+ return <section className="cliffhanger-host" aria-label={`${tool.name} price guess`}><h3>{tool.name} · price guess</h3>
   <p>Show an item with the Next item button, then enter the player's price guess here. Keep it private — the overlay only shows how far off the guess was.</p>
   <label>Player's guess ($)<input type="number" min={0} value={guess} disabled={busy} onChange={e=>setGuess(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void submit();}}}/></label>
   <button type="button" disabled={busy||!slug||!hostKey} onClick={()=>void submit()}>{busy?'Sending…':'Submit guess'}</button>

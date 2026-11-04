@@ -1,0 +1,444 @@
+/* The host dashboard as a REMOTE CONTROL (Jessica, 2026-11-04).
+   Shared by the two dashboard surfaces — the Set the Stage
+   dashboard review (components/StageReview.tsx) and the published
+   host dashboard (app/published/[slug]/page.tsx) — through
+   components/DashboardRemote.tsx, which both import. One sheet,
+   one remote: what the creator rehearses on is what the host
+   holds live.
+
+   The framing rule throughout: the remote's chrome frames the
+   creator's own buttons — it never overrides them. A button's
+   saved appearance (background color, text color, font, size,
+   corner radius) arrives as an inline style and wins over
+   everything here, because these rules style the properties the
+   appearance does not carry (border, depth shadows, padding,
+   press travel) and offer only a default base color underneath.
+   Depth is faked with box-shadows, never a background image, so
+   a creator-chosen flat color stays exactly that color.
+
+   Scoping: every rule hangs off .dash-remote, .dash-remote-module
+   or the published page's own .published-dashboard panel hooks.
+   Build Space (radio/multiplayer) renders none of those, so its
+   dashboard keeps its existing look untouched. */
+
+/* ---- The remote body ------------------------------------------ */
+/* The published page's own section rule (element + class) would
+   outrank a lone class, so the body is stated there with the page
+   scope attached; the review matches the plain class. */
+.dash-remote,
+.published-dashboard section.dash-remote {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 2px solid #4a3d78;
+  border-radius: 26px;
+  background: linear-gradient(180deg, #251b47 0%, #150f2c 78%);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .09), inset 0 -14px 28px rgba(0, 0, 0, .35);
+  color: #efeaff;
+}
+
+.dash-remote-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px 12px;
+  border-bottom: 1px solid rgba(233, 201, 121, .28);
+}
+
+.dash-remote-led {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #57ff9a;
+  box-shadow: 0 0 10px #57ff9a, 0 0 3px #57ff9a;
+}
+
+.dash-remote-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #e9c979;
+}
+
+.dash-remote-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #cfc8e6;
+}
+
+.dash-remote-tag {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #948bb3;
+}
+
+@media (max-width: 560px) {
+  .dash-remote-tag { display: none; }
+}
+
+/* The review's canvas stacks the remote's zones. */
+.dash-remote .dashboard-canvas {
+  display: grid;
+  gap: 12px;
+}
+
+/* Zone captions inside the remote — the grouping made visible:
+   show controls, then the tool panels. */
+.dash-zone-label,
+.dash-remote h2,
+.dash-remote-module h2 {
+  margin: 2px 2px 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #948bb3;
+}
+
+/* The remote's little display screen: status and feedback read
+   here, lit like an LCD. Empty screens stay invisible. */
+.dash-screen:not(:empty) {
+  padding: 9px 13px;
+  border: 1px solid #23402e;
+  border-radius: 9px;
+  background: #0a120c;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, .75);
+  color: #93f5ae;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: .3px;
+}
+
+/* ---- The keys -------------------------------------------------- */
+.dash-remote .dashboard-preview-buttons,
+.dash-remote .published-controls,
+.dash-remote-module .published-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+}
+
+.dash-remote .dashboard-preview-buttons .sr-buttonwrap > button,
+.dash-remote .published-controls > button,
+.dash-remote-module .published-controls > button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 58px;
+  padding: 13px 15px;
+  border: 2px solid rgba(255, 255, 255, .16);
+  border-radius: 14px;
+  background-color: #372a63;
+  color: #f4f0ff;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -10px 16px rgba(0, 0, 0, .28), 0 4px 0 #140d29, 0 10px 18px rgba(0, 0, 0, .4);
+  transition: transform .07s ease, box-shadow .07s ease, filter .15s ease;
+}
+
+.dash-remote .dashboard-preview-buttons .sr-buttonwrap > button:hover,
+.dash-remote .published-controls > button:hover,
+.dash-remote-module .published-controls > button:hover {
+  filter: brightness(1.13);
+}
+
+/* The press: the key travels down and its ledge shadow collapses —
+   the tactile half of "functions like a remote". */
+.dash-remote .dashboard-preview-buttons .sr-buttonwrap > button:active,
+.dash-remote .published-controls > button:active,
+.dash-remote-module .published-controls > button:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 -6px 12px rgba(0, 0, 0, .3), 0 1px 0 #140d29, 0 4px 9px rgba(0, 0, 0, .4);
+}
+
+.dash-remote .dashboard-preview-buttons .sr-buttonwrap > button:focus-visible,
+.dash-remote .published-controls > button:focus-visible,
+.dash-remote-module .published-controls > button:focus-visible {
+  outline: 2px solid #e9c979;
+  outline-offset: 2px;
+}
+
+/* The selected key stays lit — in the review this is the button
+   whose result the overlay is showing. */
+.dash-remote .dashboard-preview-buttons .sr-buttonwrap > button[aria-pressed="true"] {
+  border-color: #e9c979;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -10px 16px rgba(0, 0, 0, .28), 0 4px 0 #140d29, 0 0 0 2px rgba(233, 201, 121, .35), 0 0 18px rgba(233, 201, 121, .35);
+}
+
+.dash-remote .published-controls > button:disabled,
+.dash-remote-module .published-controls > button:disabled {
+  opacity: .45;
+  cursor: default;
+  transform: none;
+  filter: none;
+}
+
+.dash-glyph {
+  flex: none;
+  font-size: 16px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .55));
+}
+
+.dash-key-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.dash-key-text small,
+.dash-key-text > span {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: .72;
+}
+
+/* ---- Power zone: Reset game, the remote's power key ------------ */
+.dash-remote .build-reset-row,
+.dash-remote .published-reset {
+  margin: 0;
+}
+
+.dash-remote .build-reset-row > button,
+.dash-remote .published-reset > button {
+  padding: 10px 20px;
+  border: 2px solid rgba(255, 255, 255, .2);
+  border-radius: 999px;
+  background-color: #8c2438;
+  color: #ffe9ec;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), inset 0 -8px 14px rgba(0, 0, 0, .3), 0 3px 0 #42060f, 0 8px 14px rgba(0, 0, 0, .4);
+  transition: transform .07s ease, box-shadow .07s ease, filter .15s ease;
+}
+
+.dash-remote .build-reset-row > button::before,
+.dash-remote .published-reset > button::before {
+  content: "⏻\00a0";
+}
+
+.dash-remote .build-reset-row > button:hover,
+.dash-remote .published-reset > button:hover {
+  filter: brightness(1.13);
+}
+
+.dash-remote .build-reset-row > button:active,
+.dash-remote .published-reset > button:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), inset 0 -5px 10px rgba(0, 0, 0, .3), 0 1px 0 #42060f, 0 4px 8px rgba(0, 0, 0, .4);
+}
+
+.dash-remote .build-reset-confirm,
+.dash-remote .published-reset [role="alert"] {
+  padding: 13px 15px;
+  border: 1px solid rgba(233, 201, 121, .4);
+  border-radius: 14px;
+  background: rgba(233, 201, 121, .07);
+}
+
+/* Stop sequence: a wide amber key while a sequence runs. */
+.dash-remote .dash-stop {
+  justify-self: start;
+  padding: 10px 18px;
+  border: 2px solid rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  background-color: #8a6414;
+  color: #fff6dd;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 3px 0 #3d2b04, 0 8px 14px rgba(0, 0, 0, .4);
+  transition: transform .07s ease, box-shadow .07s ease, filter .15s ease;
+}
+
+.dash-remote .dash-stop:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 1px 0 #3d2b04, 0 4px 8px rgba(0, 0, 0, .4);
+}
+
+/* ---- Tool panels: modules seated in the remote ------------------ */
+.dash-remote .card-host,
+.dash-remote .wheel-host,
+.dash-remote .cliffhanger-host,
+.published-dashboard .card-host,
+.published-dashboard .wheel-host,
+.published-dashboard .cliffhanger-host,
+.dash-remote-module,
+.published-dashboard section.dash-remote-module {
+  border: 1px solid rgba(207, 200, 230, .18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  padding: 14px 16px;
+}
+
+.dash-remote-module {
+  color: #efeaff;
+}
+
+.dash-remote .card-host h3,
+.dash-remote .wheel-host h3,
+.dash-remote .cliffhanger-host h3,
+.published-dashboard .card-host h3,
+.published-dashboard .wheel-host h3,
+.published-dashboard .cliffhanger-host h3 {
+  margin-top: 0;
+  color: #e9c979;
+  font-size: 14px;
+  letter-spacing: .6px;
+}
+
+/* Panel keys: smaller than the show keys, same press. */
+.dash-remote .card-host button,
+.dash-remote .wheel-host button,
+.dash-remote .cliffhanger-host button,
+.dash-remote .build-reset-actions button,
+.dash-remote .published-reset [role="alert"] button,
+.dash-remote .youtube-draft-testing > button,
+.published-dashboard .card-host button,
+.published-dashboard .wheel-host button,
+.published-dashboard .cliffhanger-host button {
+  padding: 9px 14px;
+  border: 2px solid rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  background-color: #2c2150;
+  color: #f4f0ff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 3px 0 #120b26, 0 6px 12px rgba(0, 0, 0, .35);
+  transition: transform .07s ease, box-shadow .07s ease, filter .15s ease;
+}
+
+.dash-remote .card-host button:hover,
+.dash-remote .wheel-host button:hover,
+.dash-remote .cliffhanger-host button:hover,
+.dash-remote .build-reset-actions button:hover,
+.dash-remote .published-reset [role="alert"] button:hover,
+.dash-remote .youtube-draft-testing > button:hover,
+.published-dashboard .card-host button:hover,
+.published-dashboard .wheel-host button:hover,
+.published-dashboard .cliffhanger-host button:hover {
+  filter: brightness(1.15);
+}
+
+.dash-remote .card-host button:active,
+.dash-remote .wheel-host button:active,
+.dash-remote .cliffhanger-host button:active,
+.dash-remote .build-reset-actions button:active,
+.dash-remote .published-reset [role="alert"] button:active,
+.dash-remote .youtube-draft-testing > button:active,
+.published-dashboard .card-host button:active,
+.published-dashboard .wheel-host button:active,
+.published-dashboard .cliffhanger-host button:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 1px 0 #120b26, 0 3px 7px rgba(0, 0, 0, .35);
+}
+
+.dash-remote .card-host button:disabled,
+.dash-remote .wheel-host button:disabled,
+.dash-remote .cliffhanger-host button:disabled,
+.published-dashboard .card-host button:disabled,
+.published-dashboard .wheel-host button:disabled,
+.published-dashboard .cliffhanger-host button:disabled {
+  opacity: .45;
+  cursor: default;
+  transform: none;
+  filter: none;
+}
+
+.dash-remote .card-host button:focus-visible,
+.dash-remote .wheel-host button:focus-visible,
+.dash-remote .cliffhanger-host button:focus-visible,
+.dash-remote .youtube-draft-testing > button:focus-visible,
+.published-dashboard .card-host button:focus-visible,
+.published-dashboard .wheel-host button:focus-visible,
+.published-dashboard .cliffhanger-host button:focus-visible {
+  outline: 2px solid #e9c979;
+  outline-offset: 2px;
+}
+
+/* Panel fields read as the remote's inset slots. */
+.dash-remote .card-host input,
+.dash-remote .card-host select,
+.dash-remote .card-host textarea,
+.dash-remote .wheel-host textarea,
+.dash-remote .cliffhanger-host input,
+.published-dashboard .card-host input,
+.published-dashboard .card-host select,
+.published-dashboard .card-host textarea,
+.published-dashboard .wheel-host textarea,
+.published-dashboard .cliffhanger-host input {
+  border: 1px solid #4a3d78;
+  border-radius: 8px;
+  background: #171029;
+  color: #efeaff;
+  padding: 8px;
+}
+
+/* The YouTube search module inside the review's remote. */
+.dash-remote .youtube-draft-testing {
+  border: 1px solid rgba(207, 200, 230, .18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  padding: 14px 16px;
+}
+
+/* Trivia module (published): the clue values are keys too. */
+.dash-remote-module .published-trivia-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.dash-remote-module .published-trivia-column {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.dash-remote-module .published-trivia-column > strong {
+  color: #e9c979;
+  font-size: 13px;
+  letter-spacing: .6px;
+}
+
+.dash-remote-module .published-trivia-grid button {
+  padding: 10px 8px;
+  border: 2px solid rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  background-color: #2c2150;
+  color: #f4f0ff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 3px 0 #120b26, 0 6px 12px rgba(0, 0, 0, .35);
+  transition: transform .07s ease, box-shadow .07s ease, filter .15s ease;
+}
+
+.dash-remote-module .published-trivia-grid button:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 1px 0 #120b26, 0 3px 7px rgba(0, 0, 0, .35);
+}
+
+.dash-remote-module .published-trivia-grid button:disabled {
+  opacity: .45;
+  cursor: default;
+  transform: none;
+}
