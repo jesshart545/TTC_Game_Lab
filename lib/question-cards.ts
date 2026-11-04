@@ -2,17 +2,33 @@ import {gameEntries,infoTypes} from './game-tools';
 import {pickerCards,randomFraction} from './card-lists';
 import type { GameTool, Project, ProjectEvent } from './project';
 export type CardAction = 'toggle'|'score'|'award'|'draw'|'show'|'reveal'|'clear'|'new-game'|'blank';
-export type CardQuestion = {id:string;question:string;answer:string;category?:string};
+export type CardQuestion = {id:string;question:string;answer:string;category?:string;options?:string[];correctIndex?:number};
 export type CardState = {version:number;gameId:string;used:string[];question:CardQuestion|null;shownAt:number;revealAt:number|null;cleared:boolean;blankText?:string;selectedAssetKey?:string;scores?:Record<string,number>;awarded?:Record<string,string>;selectedDesign?:Record<string,unknown>};
 export const freshCardState = ():CardState => ({version:0,gameId:'game-'+Date.now(),used:[],question:null,shownAt:0,revealAt:null,cleared:true});
 const record=(value:unknown):Record<string,unknown> => value && typeof value==='object' ? value as Record<string,unknown> : {};
+const choiceText=(value:unknown):string=>typeof value==='string'?value.trim().replace(/\s+/g,' ').slice(0,160):'';
+/**
+ * Validate a multiple-choice quiz entry's choice set (lib/quiz.ts builds
+ * the full quiz shape on this): 2–6 distinct non-empty options and a
+ * correctIndex inside them. Lives here because the card pool is the
+ * strictest consumer — a question only reaches a card with a valid set.
+ */
+export function cleanQuizChoice(raw:Record<string,unknown>):{options:string[];correctIndex:number}|null{
+ if(!Array.isArray(raw.options))return null;
+ const options=raw.options.map(choiceText).filter(Boolean);
+ if(options.length<2||options.length>6)return null;
+ if(new Set(options.map(option=>option.toLowerCase())).size!==options.length)return null;
+ const correctIndex=typeof raw.correctIndex==='number'&&Number.isInteger(raw.correctIndex)?raw.correctIndex:-1;
+ if(correctIndex<0||correctIndex>=options.length)return null;
+ return {options,correctIndex};
+}
 export function bounded(value:unknown,fallback:number,min:number,max:number){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback;}
 export function cardDesign(tool:GameTool,answer=false){return record(tool.config[answer?'answerCard':'questionCard']);}
 export function questionPool(project:Project,tool:GameTool):CardQuestion[]{
  const pool=project.gameTools.find(t=>t.id===tool.config.poolId&&t.enabled&&t.type==='trivia-list');
  const raw=Array.isArray(pool?.config.questions)?pool.config.questions:[];
  const seen=new Set<string>();
- return raw.flatMap((item:unknown)=>{const q=record(item),question=String(q.question||q.prompt||'').trim(),answer=String(q.answer||'').trim();const id=question.toLocaleLowerCase().replace(/\s+/g,' ');if(!question||!answer||seen.has(id))return [];seen.add(id);return [{id,question,answer,category:String(q.category||'')}];});
+ return raw.flatMap((item:unknown)=>{const q=record(item),question=String(q.question||q.prompt||'').trim(),answer=String(q.answer||'').trim();const id=question.toLocaleLowerCase().replace(/\s+/g,' ');if(!question||!answer||seen.has(id))return [];seen.add(id);const choice=cleanQuizChoice(q);return [{id,question,answer,category:String(q.category||''),...(choice?{options:choice.options,correctIndex:choice.correctIndex}:{})}];});
 }
 export function cardPhase(project:Project,tool:GameTool,state:CardState,now=Date.now()):'hidden'|'question'|'exit'|'answer'{
  void project; void tool;
@@ -72,7 +88,17 @@ export function cardTransition(project:Project,tool:GameTool,previous:CardState,
  throw new Error('Invalid card action.');
 }
 export function publicCardState(project:Project,tool:GameTool,state:CardState,now=Date.now()):CardState{
- return {...state,used:[],question:state.question?{...state.question,answer:cardPhase(project,tool,state,now)==='answer'?state.question.answer:''}:null};
+ const revealed=cardPhase(project,tool,state,now)==='answer';
+ const question=state.question?{...state.question}:null;
+ if(question&&!revealed){question.answer='';delete question.correctIndex;}
+ return {...state,used:[],question};
+}
+/** The text a card shows: the answer at reveal; before that the question — with its choices lettered beneath when it is a multiple-choice quiz question. The choices are public; which one is correct never appears here. */
+export function cardDisplayText(question:CardQuestion|null|undefined,phase:'hidden'|'question'|'exit'|'answer'):string{
+ if(!question)return '';
+ if(phase==='answer')return question.answer;
+ if(question.options?.length)return `${question.question}\n\n${question.options.map((option,index)=>`${String.fromCharCode(65+index)}. ${option}`).join('\n')}`;
+ return question.question;
 }
 export function cardControl(action:string):{toolId:string;action:CardAction}|null{
  const m=action.match(/^cards\.(toggle|score|award|draw|show|reveal|clear|new-game|blank)\.(.+)$/);return m?{action:m[1] as CardAction,toolId:m[2]}:null;

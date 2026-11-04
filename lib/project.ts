@@ -34,7 +34,13 @@ export type ProjectAssetEdits = {
 };
 export type ProjectAssetGeneration = { type: string; prompt: string; aspectRatio?: string; durationSeconds?: number; lyrics?: string; instrumental?: boolean; voice?: string; stability?: number; sourceKey?: string | null };
 
-export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio"; generation?: ProjectAssetGeneration };
+/**
+ * A real text layer rendered over a background asset (see
+ * lib/backdrop-text.ts): the lettering is a DOM layer in the font the
+ * creator chose — never burned into the image by a generator.
+ */
+export type BackdropTextSpec = { text: string; fontFamily: string; textColor: string; accentColor?: string };
+export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; role?: "background" | "layer" | "video" | "audio"; generation?: ProjectAssetGeneration; textOverlay?: BackdropTextSpec | null; sign?: boolean };
 export type AssetPool = { id: string; name: string; assetKeys: string[] };
 export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
 export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
@@ -54,8 +60,19 @@ export type ProjectKind = "gameshow" | "talk" | "radio" | "multiplayer";
 export type WorkflowProgressRecord = {
   toolboxOpened?: boolean;
   rehearsed?: boolean;
+  /** Talk Show or Classroom: Jewel has run a web search in this project. */
+  researched?: boolean;
   issuedChecks?: string[];
 };
+/**
+ * One prepared moment in a Talk Show or Classroom deck (the Arrange your
+ * slides step): an ordered reference to something the creator already made —
+ * the sign, a backdrop, a quiz, the YouTube tool, a media asset, or a saved
+ * package. The deck only orders existing work; dashboard clicker controls
+ * are a later stage's concern.
+ */
+export type TalkSlideKind = "sign" | "backdrop" | "quiz" | "youtube" | "media" | "composition";
+export type TalkSlide = { id: string; kind: TalkSlideKind; label: string; refKey?: string };
 export type Project = {
   pendingVideos?: { videoId: string; model: string; prompt: string; durationSeconds?: number }[];
   id: string;
@@ -79,6 +96,8 @@ export type Project = {
   cardPreviewStates?:Record<string,CardState>;
   workflow?: { stage: number; workshopStep: number; promptDraft: string; generatorPrompt?: string };
   workflowProgress?: WorkflowProgressRecord;
+  /** Talk Show or Classroom: the creator's arranged slide deck (ordered). */
+  talkDeck?: TalkSlide[];
   templateId?: string;
   publishedSnapshot?: Omit<Project, "publishedSnapshot">;
 };
