@@ -18,6 +18,8 @@ import { getGameTemplate } from "../../../lib/game-templates";
 import { MuseApiError, MuseConnectionError, museChatCompletion, museConfigured } from "../../../lib/muse-client";
 import { assistantChatCompletion, assistantConfigured } from "../../../lib/assistant-provider";
 import { evaluateWorkflow, validateNavigate, workflowContextBlock } from "../../../lib/workflow-progress";
+import { backgroundAssets, findSignAsset } from "../../../lib/backdrop-text";
+import { quizQuestionsOf } from "../../../lib/quiz";
 import { checkedBoardRegenerateAction, checkedGenerationAction, checkedTriviaAction } from "../../../lib/jewel-generation";
 import { GENERATOR_VOICES } from "../../../lib/generator-voices";
 
@@ -63,6 +65,35 @@ WORKFLOW PROGRESS — The draftContext includes workflowProgress: the creator's 
 
 const JEWEL_GENERATION_ADDENDUM = `
 GENERATION OPTIONS — Every option the manual generator panels offer can be passed through your actions, and a creator should never lose an option by asking you instead of using a panel: image shape (aspectRatio) and a starting/reference image (sourceKey), video length (durationSeconds) and a reference image (sourceKey), voice choice (any voice from the shared catalog) and stability, sound-effect length (durationSeconds), music length (durationSeconds — seconds for a short track, 0 or null for a full song), lyrics, and the instrumental flag; trivia count and categories; the Trivia Board's regenerate and refresh operations (board-regenerate). When the creator names an option in their own words — "portrait shape", "30 seconds", "the deep voice", "with these lyrics", "no singing", "50 questions about music" — pass it through in the action. Never drop a named option silently. When an option the creator would care about is missing, either use the generator panel's usual default or ask ONE short question — never a stack of questions, and never let one missing option stall an otherwise clear request. The app files every generated result in the project's assets or toolbox, exactly where the panels file them; say where the result landed in plain words.`;
+
+const JEWEL_TALKSHOW_ADDENDUM = `
+TALK SHOW OR CLASSROOM — This project is a talk show or classroom show. Its Imagine and Create steps are: Name & sign your show, Make your backdrops, Research with Jewel, Build a quiz, Add YouTube, Arrange your slides, Review your toolbox. The draftContext includes talkShow: the show's saved facts (name, theme & style, sign, backdrop count, research done, quiz size, YouTube, deck size) — trust it over guessing.
+- THEME & STYLE IS YOUR RESEARCH COMPASS: the show's theme & style (gamePlan.theme, also talkShow.themeStyle) names the KIND of show this is — a gossip talk show, a science classroom, a spiritual discussion, and so on. Aim every web search and every fact you gather by it: it tells you what information to look for. Borrow from it secondarily for the sign's flavor and backdrop briefs. It is not decoration and never just a visual style.
+- THE NAME: help with the show's name ONLY when the creator asks for name help. Never brainstorm or suggest titles unprompted.
+- THE SIGN: every talk show gets a sign by default — the show's title lettered over a backdrop. When the creator has a name but no sign (talkShow.signPresent false), or asks for a sign, make it: FIRST generate the backdrop artwork (an image action for an artistic sign backdrop, or a video action for an animated one) whose prompt describes the scene and mood ONLY — never ask the image or video generator to render the title or any lettering; generated lettering comes out garbled. THEN, once that backdrop asset is saved, set the lettering as a real text layer with changes.assets [{storageKey:"the backdrop asset's exact key", role:"background", sign:true, textOverlay:{text:"the show's exact name", fontFamily:"one exact font from the available fonts list", textColor:"#hex", accentColor:"#hex"}}]. The app draws that text over the backdrop in the chosen font — in the workshop preview, in Build Space, and on the published overlay. To change the lettering later, send the same asset change with a new textOverlay; textOverlay:null removes the lettering. If the creator uploads their own sign instead (an asset with sign already true), use theirs and do not replace it.
+- BACKDROPS: make them with image actions (artistic) or video actions (animated). Any background asset can carry the same textOverlay lettering — set or change it with changes.assets exactly as for the sign. A backdrop the creator wants on the overlay is placed with the existing background flow (role "background", inProject true).
+- RESEARCH: use the existing search action for web research, aimed by the theme & style, and cite sources briefly as the research rules already require. When research findings shape a backdrop prompt or quiz questions, say briefly which finding or source informed it. Research results never become lettering inside generated artwork.
+- QUIZZES: a quiz is short multiple-choice questions saved as a question list. Create one with changes.newTools [{type:"trivia-list", name:"the quiz name", config:{questions:[{question:"...", options:["choice one","choice two","choice three"], correctIndex:0, answer:"choice one", category:"optional"}]}}] — 2 to 6 options per question, correctIndex is the 0-based index of the right choice, and answer MUST be exactly options[correctIndex]. Keep a quiz short (3 to 8 questions) unless the creator asks for more. Add questions to an existing quiz by editing that list with changes.gameTools [{id, config:{questions:[...]}}] including the questions that stay. Then present the quiz on cards with changes.newTools [{type:"question-card", name:"Quiz Cards", config:{poolId:"the quiz list's saved id", questionCard:{design}, answerCard:{design}}}] — include poolId when the quiz list's saved id is known from the project; the card system brings its own Show and Reveal buttons, so never add connect for it. The correct answers are host-side knowledge: they live in the saved quiz and the host's card controls, are stripped from the published snapshot, and reach the audience only at the reveal — never mark which choice is correct in anything the audience sees before a reveal.
+- YOUTUBE: add the feature with the existing tool action or changes.newTools [{type:"youtube"}] — its config stays as it is; the host searches for and sends videos during the show.
+- SLIDES: the deck (project.talkDeck) is arranged by the creator's own hand on the Arrange your slides step. You may read it, suggest an order, and point out what is missing — you cannot reorder it yourself, and must not claim you did.`;
+
+/** The compact Talk Show facts block Jewel receives each turn (talk kind only). */
+function talkShowContextBlock(project: any): Record<string, unknown> | undefined {
+  if (!project || project.kind !== "talk") return undefined;
+  const sign = findSignAsset(project);
+  const tools = Array.isArray(project.gameTools) ? project.gameTools : [];
+  return {
+    showName: typeof project.name === "string" ? project.name : "",
+    themeStyle: typeof project.gamePlan?.theme === "string" ? project.gamePlan.theme : "",
+    signPresent: Boolean(sign),
+    signAsset: sign ? (sign.storageKey || sign.name) : null,
+    backdropCount: backgroundAssets(project).length,
+    researched: project.workflowProgress?.researched === true,
+    quizQuestions: tools.reduce((total: number, tool: any) => total + quizQuestionsOf(tool).length, 0),
+    youtubeAdded: tools.some((tool: any) => tool?.type === "youtube" && tool.enabled),
+    deckSize: Array.isArray(project.talkDeck) ? project.talkDeck.length : 0,
+  };
+}
 
 const JEWEL_FEEDBACK_ADDENDUM = `
 GENERATION FEEDBACK — This request includes generationFeedback: a generation you previously asked the app to run has failed. Decide the next step and return it as a normal response in the same JSON contract:
@@ -141,7 +172,8 @@ Attaching media to the case: media already saved in this project attaches by set
   const editResult = rawEditResult && typeof rawEditResult.sourceKey === "string" && typeof rawEditResult.prompt === "string" && typeof rawEditResult.resultKey === "string"
     ? { sourceKey: rawEditResult.sourceKey.slice(0, 300), prompt: rawEditResult.prompt.slice(0, 3000), resultKey: rawEditResult.resultKey.slice(0, 300), resultName: typeof rawEditResult.resultName === "string" && rawEditResult.resultName ? rawEditResult.resultName.slice(0, 300) : rawEditResult.resultKey.slice(0, 300), layer: Number.isInteger(rawEditResult.layer) ? Math.min(5, Math.max(1, rawEditResult.layer)) : 1 }
     : undefined;
-  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM + JEWEL_GENERATION_ADDENDUM + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "") + (editResult ? JEWEL_EDIT_RESULT_ADDENDUM : "");
+  const talkShow = talkShowContextBlock(body.project);
+  const draftSystem = draftSystemBase + templateNote + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM + JEWEL_GENERATION_ADDENDUM + (talkShow ? JEWEL_TALKSHOW_ADDENDUM : "") + (generationFeedback ? JEWEL_FEEDBACK_ADDENDUM : "") + (editResult ? JEWEL_EDIT_RESULT_ADDENDUM : "");
   // Jewel's progress awareness: the workflow model, computed from the
   // project's real data on every turn (see lib/workflow-progress.ts).
   const workflowEvaluation = body.project ? evaluateWorkflow(body.project) : undefined;
@@ -150,6 +182,7 @@ Attaching media to the case: media already saved in this project attaches by set
     selectedImageKey: body.selectedImageKey, selectedAssetKey: body.selectedAssetKey, workspaceStage: body.workspaceStage,
     selectedItem: body.selectedItem, searchEvidence: body.searchEvidence,
     workflowProgress: workflowEvaluation ? workflowContextBlock(workflowEvaluation) : undefined,
+    ...(talkShow ? { talkShow } : {}),
     executionGuide: body.project ? executionContext(body.project) : undefined,
     backgroundVisual: checkedBackgroundContext(body.backgroundVisual),
     ...(generationFeedback ? { generationFeedback } : {}),
@@ -326,7 +359,7 @@ Attaching media to the case: media already saved in this project attaches by set
       if (attempt === 0) {
         try {
           const retryMessage = await jewelChatCompletion([
-            { role: "system", content: DRAFT_SYSTEM + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM + JEWEL_GENERATION_ADDENDUM },
+            { role: "system", content: DRAFT_SYSTEM + JEWEL_ADDENDUM + JEWEL_LAYERING_ADDENDUM + JEWEL_WORKFLOW_ADDENDUM + JEWEL_GENERATION_ADDENDUM + (talkShow ? JEWEL_TALKSHOW_ADDENDUM : "") },
             { role: "user", content: JSON.stringify(draftContext) },
             { role: "assistant", content: String(message) },
             { role: "user", content: (validationError instanceof Error ? "Correct this missing setting: " + validationError.message + " " : "") + "Return one complete JSON object with reply, changes, manualSteps, needsClarification, action. New sequences MUST omit id. Only existing sequence IDs from executionGuide are allowed when editing. Do not reuse selectedItem.id or a tool ID as a sequence ID. Put writing or a clarification question in reply. Put a requested supported operation in action using exactly its documented type and fields. Do not omit the requested operation or return an empty object. Use changes.newTools for new supported tools or card lists. Use changes.sequences for requested linked actions. Do not invent saved IDs. Include every requested size, position, color and font in the saved settings. Research pool entries require sourceId copied from the supplied searchEvidence and sourceQuote copied exactly from that result summary, with no added facts. Describe the final proposal in plain language, never the validation repair or JSON correction. The application attaches the real source URL. Trivia creation uses the documented trivia action with the requested count and categories." },
