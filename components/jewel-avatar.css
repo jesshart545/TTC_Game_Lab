@@ -7,8 +7,12 @@
    ignored its width/height entirely and the portrait video ballooned
    to intrinsic size — the giant ringless circle, 2026-11-04.)
 
-   Her real waving portrait in the gold-ringed bubble, exactly as the
-   home Tips card presents her. `display: inline-block` is the critical
+   Her real waving portrait in the gold-ringed bubble — her
+   continuity presentation wherever a small instance of her stands.
+   (Her full landing-page introduction — the pictured wand scene
+   with a bubble like this one small upon it — lives in
+   jewel-wand-scene.css, carried by JewelWandScene.)
+   `display: inline-block` is the critical
    line: a bare <span> is an inline box, and inline boxes ignore
    width/height — the rule below plus the inline display on the
    component make the bubble's box hold in ANY parent. */
@@ -37,23 +41,4 @@
   bottom: -6px;
   font-size: 20px;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .55));
-}
-
-/* The landing presentation of the avatar, replicated value-for-value
-   from the home Tips card's bubble (.rd-bubble in app/home.css): the
-   stronger landing glow and the gentle bobbing motion, so the entry
-   into Jewel shows her exactly the way the landing page introduces
-   her. Rendered at the landing bubble's own size (112px) by the
-   caller. The one deliberate difference: the landing bubble clips to
-   its circle and carries no wand badge (her wand reads there from
-   the tip's picture and words); here the badge rides outside the
-   circle as on every other JewelAvatar, so overflow stays visible. */
-.jewel-avatar-landing {
-  box-shadow: 0 0 0 4px rgba(233, 201, 121, .25), 0 0 34px 10px rgba(255, 215, 94, .45);
-  animation: jewel-bob 3.2s ease-in-out infinite;
-}
-
-@keyframes jewel-bob {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(-7px) rotate(2deg); }
 }
