@@ -96,3 +96,60 @@ export function findSignAsset(project: Project): ProjectAsset | null {
 export function signPresent(project: Project): boolean {
   return Boolean((project.name || "").trim()) && Boolean(findSignAsset(project));
 }
+
+/**
+ * Sizing the backdrop text layers (components/BackdropText.tsx). The fit
+ * finds the largest font size whose greedy wrap fits the background's
+ * box — for the SIGN that maximize-to-fill behavior is the design: a
+ * show's title should letter big. The opening PROMPT is a different
+ * role — a talking-point sentence worn LOW on the background, a
+ * lower-third caption — and the spec carries no size of its own, so
+ * left to the title's fit a sentence grows to title scale (at the
+ * overlay's native 1920×1080 the sample prompt fit near 180px a line,
+ * three lines deep, burying the sign and the backdrop under it). The
+ * prompt's fit is therefore capped like a broadcast lower-third: no
+ * line taller than this share of the frame's height…
+ */
+export const PROMPT_LINE_MAX_RATIO = 0.065;
+/** …and the whole prompt block within this share of the frame. */
+export const PROMPT_BLOCK_MAX_RATIO = 0.32;
+/** The block budget the title fit has always used. */
+const TITLE_BLOCK_MAX_RATIO = 0.78;
+
+/**
+ * The auto-fit both backdrop text layers share. `measure` reports a
+ * string's rendered width at a given px size (the component passes a
+ * canvas measure; tests pass a fixed one). `lower: true` applies the
+ * opening prompt's lower-third caps above; the sign's fit is unchanged.
+ * Render-time only — saved specs are never rewritten.
+ */
+export function fitBackdropTextSize(args: {
+  text: string;
+  width: number;
+  height: number;
+  lower?: boolean;
+  measure: (text: string, px: number) => number;
+}): number {
+  const { text, width, height, lower, measure } = args;
+  const words = text.split(/\s+/).filter(Boolean);
+  const blockRatio = lower ? PROMPT_BLOCK_MAX_RATIO : TITLE_BLOCK_MAX_RATIO;
+  const fits = (px: number) => {
+    const maxWidth = width * 0.88;
+    let lines = 1, line = "";
+    for (const word of words) {
+      const trial = line ? `${line} ${word}` : word;
+      if (measure(trial, px) > maxWidth && line) {
+        lines += 1; line = word;
+        if (measure(word, px) > maxWidth) return false;
+      } else line = trial;
+    }
+    return lines * px * 1.16 <= height * blockRatio;
+  };
+  let low = 10, high = Math.max(12, Math.floor(height * 0.85)), best = low;
+  if (lower) high = Math.min(high, Math.max(low, Math.floor(height * PROMPT_LINE_MAX_RATIO)));
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (fits(mid)) { best = mid; low = mid + 1; } else high = mid - 1;
+  }
+  return best;
+}

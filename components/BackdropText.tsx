@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BackdropTextSpec } from "../lib/project";
+import { fitBackdropTextSize } from "../lib/backdrop-text";
 import "./backdrop-text.css";
 
 /**
@@ -12,6 +13,12 @@ import "./backdrop-text.css";
  * (document.fonts.load + canvas measure + shrink to fit). Rendered in all
  * three places a background renders: the project page's draft preview
  * (which Build Space reuses), and the published overlay.
+ *
+ * Two roles share the layer: the SIGN (no placement) letters as large as
+ * the frame allows — a title's job — while the opening PROMPT
+ * (placement="lower") is a lower-third caption and fits under the
+ * prompt caps in fitBackdropTextSize, so a talking-point sentence can
+ * never grow to title scale and bury the sign beneath it.
  */
 export default function BackdropTextLayer({ spec, placement }: { spec: BackdropTextSpec; placement?: "center" | "lower" }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -27,25 +34,16 @@ export default function BackdropTextLayer({ spec, placement }: { spec: BackdropT
       if (!width || !height) return;
       const context = document.createElement("canvas").getContext("2d");
       if (!context) return;
-      const words = spec.text.split(/\s+/).filter(Boolean);
-      const fits = (px: number) => {
-        context.font = `800 ${px}px ${spec.fontFamily}`;
-        const maxWidth = width * 0.88;
-        let lines = 1, line = "";
-        for (const word of words) {
-          const trial = line ? `${line} ${word}` : word;
-          if (context.measureText(trial).width > maxWidth && line) {
-            lines += 1; line = word;
-            if (context.measureText(word).width > maxWidth) return false;
-          } else line = trial;
-        }
-        return lines * px * 1.16 <= height * 0.78;
-      };
-      let low = 10, high = Math.max(12, Math.floor(height * 0.85)), best = low;
-      while (low <= high) {
-        const mid = (low + high) >> 1;
-        if (fits(mid)) { best = mid; low = mid + 1; } else high = mid - 1;
-      }
+      const best = fitBackdropTextSize({
+        text: spec.text,
+        width,
+        height,
+        lower: placement === "lower",
+        measure: (value, px) => {
+          context.font = `800 ${px}px ${spec.fontFamily}`;
+          return context.measureText(value).width;
+        },
+      });
       if (live) setSize(best);
     };
     fit();
@@ -53,7 +51,7 @@ export default function BackdropTextLayer({ spec, placement }: { spec: BackdropT
     observer.observe(host);
     document.fonts?.load(`800 40px ${spec.fontFamily}`).then(() => { if (live) fit(); }).catch(() => {});
     return () => { live = false; observer.disconnect(); };
-  }, [spec.text, spec.fontFamily]);
+  }, [spec.text, spec.fontFamily, placement]);
 
   return (
     <div ref={hostRef} className={`backdrop-text-layer pres-${presentation}${placement === "lower" ? " place-lower" : ""}`} style={{ fontSize: size }} aria-label={spec.text}>
