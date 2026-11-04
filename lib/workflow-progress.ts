@@ -1,6 +1,8 @@
+import { backgroundAssets, signPresent } from "./backdrop-text";
 import { buildReadiness } from "./build-readiness";
 import { listCards, savedListEntries } from "./card-lists";
 import { questionPool } from "./question-cards";
+import { quizQuestionsOf } from "./quiz";
 import type { Project } from "./project";
 
 /**
@@ -113,6 +115,37 @@ function publishedComplete(project: Project): boolean {
   return Boolean(project.publishedSnapshot) || project.status === "Published";
 }
 
+/* ---- Talk Show or Classroom stage-0 evaluators ---- */
+
+function talkSignComplete(project: Project): boolean {
+  // A real show name AND a sign present: the sign Jewel made (a backdrop
+  // carrying the title as a text layer) or the creator's own uploaded sign.
+  return realName(project) && signPresent(project);
+}
+
+function talkBackdropsComplete(project: Project): boolean {
+  return backgroundAssets(project).length > 0;
+}
+
+function talkResearchComplete(project: Project): boolean {
+  // No evaluator can verify a conversation: the step completes on the one
+  // recorded fact — Jewel ran a web search in this project (recorded by
+  // the project page when her search returns results, like toolboxOpened).
+  return project.workflowProgress?.researched === true;
+}
+
+function talkQuizComplete(project: Project): boolean {
+  return (project.gameTools || []).some(tool => tool.enabled && quizQuestionsOf(tool).length > 0);
+}
+
+function talkYoutubeComplete(project: Project): boolean {
+  return (project.gameTools || []).some(tool => tool.enabled && tool.type === "youtube");
+}
+
+function talkSlidesComplete(project: Project): boolean {
+  return Array.isArray(project.talkDeck) && project.talkDeck.length >= 2;
+}
+
 type StepDef = { id: string; label: string; checkLine: string; evaluate: (project: Project) => boolean };
 
 function createStageSteps(project: Project): StepDef[] {
@@ -121,10 +154,22 @@ function createStageSteps(project: Project): StepDef[] {
     label: "Review your toolbox",
     checkLine: project.kind === "gameshow"
       ? "I've reviewed your toolbox with you: plan, media, questions, cards, tools and packages are all here."
-      : "I've reviewed your toolbox with you — everything you've made is filed here.",
+      : project.kind === "talk"
+        ? "I've reviewed your toolbox with you: your sign, backdrops, research, quiz, videos and slides are all here."
+        : "I've reviewed your toolbox with you — everything you've made is filed here.",
     evaluate: () => false, // replaced below: it depends on the other steps
   };
-  const steps: StepDef[] = project.kind === "gameshow"
+  const steps: StepDef[] = project.kind === "talk"
+    ? [
+      { id: "sign", label: "Name & sign your show", checkLine: "your show has its name and its sign — the title, lettered the way you chose. Step complete.", evaluate: talkSignComplete },
+      { id: "backdrops", label: "Make your backdrops", checkLine: "your backdrop is made and filed with your backgrounds. Step complete.", evaluate: talkBackdropsComplete },
+      { id: "research", label: "Research with Jewel", checkLine: "we've researched your topic together — the findings are shaping your show. Step complete.", evaluate: talkResearchComplete },
+      { id: "quiz", label: "Build a quiz", checkLine: "your quiz is saved — questions, choices, and the answers kept for the reveal. Step complete.", evaluate: talkQuizComplete },
+      { id: "youtube", label: "Add YouTube", checkLine: "YouTube is in your toolbox, ready to bring a video into your show. Step complete.", evaluate: talkYoutubeComplete },
+      { id: "slides", label: "Arrange your slides", checkLine: "your slides are arranged in order — your show's moments, lined up. Step complete.", evaluate: talkSlidesComplete },
+      toolbox,
+    ]
+    : project.kind === "gameshow"
     ? [
       { id: "plan", label: "Plan your show", checkLine: "your show has a name, a theme, and a way to win. Step complete.", evaluate: planComplete },
       { id: "media", label: "Make your media", checkLine: "your media is made and filed in your library. Step complete.", evaluate: mediaComplete },

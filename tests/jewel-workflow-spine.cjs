@@ -117,16 +117,20 @@ const step = (evaluation, stageIndex, stepId) => evaluation.stages[stageIndex].s
   console.log('PASS: stored records never override a false evaluator; transitions are reported exactly once.');
 }
 
-// --- Kind gating: non-gameshow projects get the honest generic set ---
+// --- Kind gating: each kind gets its own honest step set ---
 {
-  for (const kind of ['talk', 'radio', 'multiplayer', undefined]) {
+  for (const kind of ['radio', 'multiplayer', undefined]) {
     const evaluation = evaluateWorkflow(baseProject({ kind }));
     eq(evaluation.stages[0].steps.map(s => s.id), ['plan', 'media', 'tools', 'scenes', 'toolbox'], `kind ${kind} gets the generic Imagine and Create set`);
   }
+  // Talk Show or Classroom has its own designed path (the talkshow build);
+  // its evaluators live in lib/workflow-progress.ts beside these.
+  const talkEvaluation = evaluateWorkflow(baseProject({ kind: 'talk' }));
+  eq(talkEvaluation.stages[0].steps.map(s => s.id), ['sign', 'backdrops', 'research', 'quiz', 'youtube', 'slides', 'toolbox'], 'kind talk gets the Talk Show or Classroom set');
   const talk = evaluateWorkflow(baseProject({ kind: 'talk', name: 'Morning Show', gamePlan: { theme: 'chat', winning: 'n/a' }, assets: [{ name: 'Theme', type: 'audio/mp3', url: 'https://example.com/t.mp3' }] }));
-  assert.equal(step(talk, 0, 'plan').complete, true);
-  assert.equal(step(talk, 0, 'media').complete, true);
-  console.log('PASS: non-gameshow kinds get the generic step set (trivia cards and game board omitted, never faked).');
+  assert.equal(step(talk, 0, 'sign').complete, false, 'a name and a theme song are not a sign — the sign evaluator wants the sign itself');
+  assert.equal(step(talk, 0, 'backdrops').complete, false, 'an audio theme is not a backdrop');
+  console.log('PASS: kind gating — radio, multiplayer and unset kinds get the generic set; talk gets its own designed set, honestly evaluated.');
 }
 
 // --- Set the Stage and Showtime derive from Build Space / publish reality ---
@@ -199,10 +203,12 @@ const step = (evaluation, stageIndex, stepId) => evaluation.stages[stageIndex].s
   assert.equal(validateNavigate(project, { stage: 1, targetId: 'missing-id' }), null, 'an unknown target is stripped');
   assert.equal(validateNavigate(project, null), null);
   assert.equal(validateNavigate(project, 'stage 1'), null);
-  // Kind gating reaches navigation too: a talk project has no trivia-cards step to go to.
+  // Kind gating reaches navigation too: a talk project has no trivia-cards
+  // or generic tools step to go to — its own steps are the valid targets.
   const talk = baseProject({ kind: 'talk' });
   assert.equal(validateNavigate(talk, { stage: 0, stepId: 'trivia-cards' }), null);
-  eq(validateNavigate(talk, { stage: 0, stepId: 'tools' }), { stage: 0, stepId: 'tools' });
+  assert.equal(validateNavigate(talk, { stage: 0, stepId: 'tools' }), null);
+  eq(validateNavigate(talk, { stage: 0, stepId: 'quiz' }), { stage: 0, stepId: 'quiz' });
   console.log('PASS: navigate directives validate against stage range, per-kind step lists, and saved item ids — anything else is stripped.');
 }
 
