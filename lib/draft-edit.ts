@@ -59,6 +59,10 @@ export function applyDraftChanges(project: Project, input: unknown) {
     // overlong text) is dropped whole — never partially applied.
     if (edit.textOverlay === null) { if (asset.textOverlay) { asset.textOverlay = null; applied++; } }
     else if (edit.textOverlay !== undefined) { const spec = cleanBackdropText(edit.textOverlay); if (spec) { asset.textOverlay = spec; applied++; } }
+    // The opening prompt layer: the same validated real-text machinery in
+    // its own field (a background carries both its sign and its prompt).
+    if (edit.promptOverlay === null) { if (asset.promptOverlay) { asset.promptOverlay = null; applied++; } }
+    else if (edit.promptOverlay !== undefined) { const spec = cleanBackdropText(edit.promptOverlay); if (spec) { asset.promptOverlay = spec; applied++; } }
     if (typeof edit.sign === "boolean" && asset.sign !== edit.sign) { asset.sign = edit.sign; applied++; }
     const values = object(edit.edits);
     if (["contain", "cover", "fill"].includes(String(values.fit))) { asset.edits = {...asset.edits, fit: values.fit as ProjectAssetEdits["fit"]}; applied++; }

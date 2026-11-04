@@ -1,4 +1,4 @@
-import { backgroundAssets, signPresent } from "./backdrop-text";
+import { backgroundAssets, promptPresent, signPresent } from "./backdrop-text";
 import { buildReadiness } from "./build-readiness";
 import { listCards, savedListEntries } from "./card-lists";
 import { questionPool } from "./question-cards";
@@ -26,7 +26,7 @@ import type { Project } from "./project";
  */
 
 export type WorkflowStageId = "create" | "stage" | "showtime";
-export type WorkflowStepState = { id: string; label: string; complete: boolean; checkLine: string };
+export type WorkflowStepState = { id: string; label: string; complete: boolean; checkLine: string; skipped?: boolean };
 export type WorkflowStageState = { id: WorkflowStageId; index: number; label: string; steps: WorkflowStepState[] };
 export type WorkflowStepRef = { stageId: WorkflowStageId; stageIndex: number; stepId: string; label: string };
 export type WorkflowEvaluation = {
@@ -115,7 +115,23 @@ function publishedComplete(project: Project): boolean {
   return Boolean(project.publishedSnapshot) || project.status === "Published";
 }
 
-/* ---- Talk Show or Classroom stage-0 evaluators ---- */
+/* ---- Talk Show or Classroom stage-0 evaluators ----
+ * Jessica's own layout (2026-11-04): eight areas in her order — theme,
+ * background, title sign, opening prompt, then the four optional areas
+ * (research, quiz or follow-ups, media, anything-missed). The optional
+ * areas are skippable: a recorded skip counts as complete (applied in
+ * evaluateWorkflow), and completing — by fact or by skip — never locks
+ * an area against going back and changing it. */
+
+function talkThemeComplete(project: Project): boolean {
+  // The first box: the creator has answered what their show is all about
+  // (gamePlan.theme — the same field the new-project ask seeds).
+  return Boolean((project.gamePlan?.theme || "").trim());
+}
+
+function talkBackgroundComplete(project: Project): boolean {
+  return backgroundAssets(project).length > 0;
+}
 
 function talkSignComplete(project: Project): boolean {
   // A real show name AND a sign present: the sign Jewel made (a backdrop
@@ -123,8 +139,8 @@ function talkSignComplete(project: Project): boolean {
   return realName(project) && signPresent(project);
 }
 
-function talkBackdropsComplete(project: Project): boolean {
-  return backgroundAssets(project).length > 0;
+function talkPromptComplete(project: Project): boolean {
+  return promptPresent(project);
 }
 
 function talkResearchComplete(project: Project): boolean {
@@ -138,15 +154,32 @@ function talkQuizComplete(project: Project): boolean {
   return (project.gameTools || []).some(tool => tool.enabled && quizQuestionsOf(tool).length > 0);
 }
 
-function talkYoutubeComplete(project: Project): boolean {
-  return (project.gameTools || []).some(tool => tool.enabled && tool.type === "youtube");
+function talkFollowUpsComplete(project: Project): boolean {
+  // The follow-up path: the creator's own question cards exist — a card
+  // system drawing from a pool, or a saved list carrying entries/cards.
+  return (project.gameTools || []).some(tool => {
+    if (!tool.enabled) return false;
+    if (tool.type === "question-card") return questionPool(project, tool).length > 0;
+    if (tool.type === "card-list") return savedListEntries(tool).length > 0 || listCards(tool).length > 0;
+    return false;
+  });
 }
 
-function talkSlidesComplete(project: Project): boolean {
-  return Array.isArray(project.talkDeck) && project.talkDeck.length >= 2;
+function talkMediaComplete(project: Project): boolean {
+  // Media beyond the background/sign: a filed non-background asset, or
+  // the YouTube option added for the dashboard.
+  const filed = (project.assets || []).some(asset => asset.role !== "background" && (Boolean(asset.storageKey) || Boolean(asset.url)));
+  const youtube = (project.gameTools || []).some(tool => tool.enabled && tool.type === "youtube");
+  return filed || youtube;
 }
 
-type StepDef = { id: string; label: string; checkLine: string; evaluate: (project: Project) => boolean };
+function talkMissedComplete(project: Project): boolean {
+  // "Anything we missed?" holds the toolbox doors; opening that review is
+  // the recorded fact, exactly as the old toolbox step used it.
+  return project.workflowProgress?.toolboxOpened === true;
+}
+
+type StepDef = { id: string; label: string; checkLine: string; evaluate: (project: Project) => boolean; skippable?: boolean; skipLine?: string };
 
 function createStageSteps(project: Project): StepDef[] {
   const toolbox: StepDef = {
@@ -161,13 +194,14 @@ function createStageSteps(project: Project): StepDef[] {
   };
   const steps: StepDef[] = project.kind === "talk"
     ? [
-      { id: "sign", label: "Name & sign your show", checkLine: "your show has its name and its sign — the title, lettered the way you chose. Step complete.", evaluate: talkSignComplete },
-      { id: "backdrops", label: "Make your backdrops", checkLine: "your backdrop is made and filed with your backgrounds. Step complete.", evaluate: talkBackdropsComplete },
-      { id: "research", label: "Research with Jewel", checkLine: "we've researched your topic together — the findings are shaping your show. Step complete.", evaluate: talkResearchComplete },
-      { id: "quiz", label: "Build a quiz", checkLine: "your quiz is saved — questions, choices, and the answers kept for the reveal. Step complete.", evaluate: talkQuizComplete },
-      { id: "youtube", label: "Add YouTube", checkLine: "YouTube is in your toolbox, ready to bring a video into your show. Step complete.", evaluate: talkYoutubeComplete },
-      { id: "slides", label: "Arrange your slides", checkLine: "your slides are arranged in order — your show's moments, lined up. Step complete.", evaluate: talkSlidesComplete },
-      toolbox,
+      { id: "theme", label: "Show theme & subject", checkLine: "your show's theme & subject are set — I know what your show is all about. Step complete.", evaluate: talkThemeComplete },
+      { id: "background", label: "Decide on a background", checkLine: "your background is designed and saved with your show. Step complete.", evaluate: talkBackgroundComplete },
+      { id: "sign", label: "Add your title sign", checkLine: "your title sign is on your show — the title, lettered the way you chose. Step complete.", evaluate: talkSignComplete },
+      { id: "prompt", label: "Opening prompt", checkLine: "your opening prompt is on your background, in your font and your colors. Step complete.", evaluate: talkPromptComplete },
+      { id: "research", label: "Research your talking point", checkLine: "we've researched your talking point together — the data points are shaping your show. Step complete.", evaluate: talkResearchComplete, skippable: true, skipLine: "you skipped research for now — it counts as complete, and you can come back to it anytime. Step complete." },
+      { id: "quiz", label: "Quiz or follow-up questions", checkLine: "your questions are ready — a quiz, or follow-up cards your audience can play along with. Step complete.", evaluate: (project: Project) => talkQuizComplete(project) || talkFollowUpsComplete(project), skippable: true, skipLine: "you skipped questions for now — it counts as complete, and you can come back to it anytime. Step complete." },
+      { id: "media", label: "Add your media", checkLine: "your media is filed and ready — your clips, your uploads, your show's extras. Step complete.", evaluate: talkMediaComplete, skippable: true, skipLine: "you skipped media for now — it counts as complete, and you can come back to it anytime. Step complete." },
+      { id: "missed", label: "Anything we missed?", checkLine: "we've covered everything else you wanted — your show is fully imagined. Step complete.", evaluate: talkMissedComplete, skippable: true, skipLine: "skipped — nothing else to add, and that counts as complete. You can come back anytime. Step complete." },
     ]
     : project.kind === "gameshow"
     ? [
@@ -217,16 +251,25 @@ const STAGE_STEPS: { id: WorkflowStageId; label: string; steps: (project: Projec
 
 /** Evaluate the whole workflow for a project from its real data. */
 export function evaluateWorkflow(project: Project): WorkflowEvaluation {
+  const skippedIds = project.workflowProgress?.skipped || [];
   const stages: WorkflowStageState[] = STAGE_STEPS.map((stage, index) => ({
     id: stage.id,
     index,
     label: stage.label,
-    steps: stage.steps(project).map(step => ({
-      id: step.id,
-      label: step.label,
-      complete: step.evaluate(project),
-      checkLine: step.checkLine,
-    })),
+    steps: stage.steps(project).map(step => {
+      const byFact = step.evaluate(project);
+      // A skip counts as complete for the areas Jessica marked optional —
+      // but the state remembers it was a skip, so Jewel's check-off line
+      // says so honestly instead of claiming work that never happened.
+      const bySkip = !byFact && step.skippable === true && skippedIds.includes(step.id);
+      return {
+        id: step.id,
+        label: step.label,
+        complete: byFact || bySkip,
+        checkLine: bySkip && step.skipLine ? step.skipLine : step.checkLine,
+        ...(bySkip ? { skipped: true } : {}),
+      };
+    }),
   }));
   const flat: WorkflowStepRef[] = stages.flatMap(stage =>
     stage.steps.filter(step => !step.complete).map(step => ({ stageId: stage.id, stageIndex: stage.index, stepId: step.id, label: step.label })),
@@ -297,8 +340,15 @@ export function validateNavigate(project: Project, raw: unknown): JewelNavigate 
 }
 
 /** The compact progress block Jewel receives in her context each turn. */
+/** True when every Imagine and Create step is complete — by fact, or by
+ * a recorded skip where the step allows one. The talk stage-nav gate. */
+export function allCreateStepsComplete(evaluation: WorkflowEvaluation): boolean {
+  const create = evaluation.stages[0];
+  return Boolean(create) && create.steps.every(step => step.complete);
+}
+
 export function workflowContextBlock(evaluation: WorkflowEvaluation): {
-  stages: { stage: string; steps: { step: string; stepId: string; done: boolean; checkLine?: string }[] }[];
+  stages: { stage: string; steps: { step: string; stepId: string; done: boolean; skipped?: boolean; checkLine?: string }[] }[];
   currentTask: string | null;
   currentStepId: string | null;
   currentStage: number | null;
@@ -311,6 +361,7 @@ export function workflowContextBlock(evaluation: WorkflowEvaluation): {
         step: step.label,
         stepId: step.id,
         done: step.complete,
+        ...(step.skipped ? { skipped: true } : {}),
         ...(step.complete ? { checkLine: step.checkLine } : {}),
       })),
     })),

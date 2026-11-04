@@ -123,13 +123,16 @@ const step = (evaluation, stageIndex, stepId) => evaluation.stages[stageIndex].s
     const evaluation = evaluateWorkflow(baseProject({ kind }));
     eq(evaluation.stages[0].steps.map(s => s.id), ['plan', 'media', 'tools', 'scenes', 'toolbox'], `kind ${kind} gets the generic Imagine and Create set`);
   }
-  // Talk Show or Classroom has its own designed path (the talkshow build);
-  // its evaluators live in lib/workflow-progress.ts beside these.
+  // Talk Show or Classroom has its own designed path — Jessica's layout
+  // (2026-11-04): eight areas in her order; its evaluators live in
+  // lib/workflow-progress.ts beside these.
   const talkEvaluation = evaluateWorkflow(baseProject({ kind: 'talk' }));
-  eq(talkEvaluation.stages[0].steps.map(s => s.id), ['sign', 'backdrops', 'research', 'quiz', 'youtube', 'slides', 'toolbox'], 'kind talk gets the Talk Show or Classroom set');
+  eq(talkEvaluation.stages[0].steps.map(s => s.id), ['theme', 'background', 'sign', 'prompt', 'research', 'quiz', 'media', 'missed'], 'kind talk gets the Talk Show or Classroom set');
   const talk = evaluateWorkflow(baseProject({ kind: 'talk', name: 'Morning Show', gamePlan: { theme: 'chat', winning: 'n/a' }, assets: [{ name: 'Theme', type: 'audio/mp3', url: 'https://example.com/t.mp3' }] }));
+  assert.equal(step(talk, 0, 'theme').complete, true, 'the theme box is answered — area 1 checks off');
   assert.equal(step(talk, 0, 'sign').complete, false, 'a name and a theme song are not a sign — the sign evaluator wants the sign itself');
-  assert.equal(step(talk, 0, 'backdrops').complete, false, 'an audio theme is not a backdrop');
+  assert.equal(step(talk, 0, 'background').complete, false, 'an audio theme is not a background');
+  assert.equal(step(talk, 0, 'media').complete, true, 'a filed theme song is media beyond the background/sign');
   console.log('PASS: kind gating — radio, multiplayer and unset kinds get the generic set; talk gets its own designed set, honestly evaluated.');
 }
 

@@ -13,9 +13,10 @@ import "./backdrop-text.css";
  * three places a background renders: the project page's draft preview
  * (which Build Space reuses), and the published overlay.
  */
-export default function BackdropTextLayer({ spec }: { spec: BackdropTextSpec }) {
+export default function BackdropTextLayer({ spec, placement }: { spec: BackdropTextSpec; placement?: "center" | "lower" }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(44);
+  const presentation = spec.presentation || "plain";
 
   useEffect(() => {
     let live = true;
@@ -55,16 +56,17 @@ export default function BackdropTextLayer({ spec }: { spec: BackdropTextSpec }) 
   }, [spec.text, spec.fontFamily]);
 
   return (
-    <div ref={hostRef} className="backdrop-text-layer" style={{ fontSize: size }} aria-label={spec.text}>
+    <div ref={hostRef} className={`backdrop-text-layer pres-${presentation}${placement === "lower" ? " place-lower" : ""}`} style={{ fontSize: size }} aria-label={spec.text}>
       <div
         className="backdrop-text-line"
         style={{
           fontFamily: spec.fontFamily,
           color: spec.textColor,
-          ...(spec.accentColor ? { textShadow: `0 2px 22px rgba(0,0,0,.5), 0 0 34px ${spec.accentColor}` } : {}),
+          ...(presentation === "frame" && spec.accentColor ? { borderColor: spec.accentColor } : {}),
+          ...(spec.accentColor && presentation === "plain" ? { textShadow: `0 2px 22px rgba(0,0,0,.5), 0 0 34px ${spec.accentColor}` } : {}),
         }}
       >{spec.text}</div>
-      {spec.accentColor && <div className="backdrop-text-rule" style={{ background: spec.accentColor }} />}
+      {spec.accentColor && presentation === "plain" && <div className="backdrop-text-rule" style={{ background: spec.accentColor }} />}
     </div>
   );
 }
