@@ -8,6 +8,14 @@ import {toolDefaults} from './game-tools';
 import {cleanTriviaQuestions} from './quiz';
 import {createCardSystem} from './question-cards';
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
+/** A placement patch stated in a changes object: only finite x/y/width/height,
+ *  clamped to the same ranges applyDraftChanges accepts for placements. */
+const placementPatch=(raw:unknown):Partial<Record<'x'|'y'|'width'|'height',number>>|null=>{
+ const p=record(raw),out:Record<string,number>={};
+ for(const key of ['x','y'] as const){const n=p[key];if(typeof n==='number'&&Number.isFinite(n))out[key]=Math.min(99,Math.max(0,n));}
+ for(const key of ['width','height'] as const){const n=p[key];if(typeof n==='number'&&Number.isFinite(n))out[key]=Math.min(100,Math.max(1,n));}
+ return Object.keys(out).length?out as Partial<Record<'x'|'y'|'width'|'height',number>>:null;
+};
 export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','prize-wheel','blank-board','youtube','scoreboard','prize-list','game-tool-list','card-list','city-crime-scene','trivia-list','question-card'];
 export function applyBuildChanges(project:Project,input:unknown){
  const changes=normalizeDraftChanges(input),warnings:string[]=[];let extra=0;
@@ -104,10 +112,32 @@ export function applyBuildChanges(project:Project,input:unknown){
   if(mergedCase.problems.length){warnings.push(`The City Crime Scene case edit was not applied: ${mergedCase.problems.join(' ')}`);const{ mystery:_dropped,...restConfig}=cfg;return{...item,config:restConfig};}
   return{...item,config:{...cfg,mystery:mergedCase.config}};
  })}:changes;
+ // Asset placements THIS edit states, by saved key. A connection made in
+ // the same edit must honor them — see the connections loop below.
+ const statedAssetPlacements=new Set<string>();
+ for(const raw of Array.isArray(effectiveChanges.assets)?effectiveChanges.assets:[]){const item=record(raw);if(typeof item.storageKey==='string'&&placementPatch(record(item.edits).placement))statedAssetPlacements.add(item.storageKey);}
  const result=applyDraftChanges(next,effectiveChanges);next={...result.project,assetPools:next.assetPools};
  for(const item of [...created.map(id=>({kind:'tool',id})),...(Array.isArray(effectiveChanges.connections)?effectiveChanges.connections:[])]){
   if(!['asset','tool','composition'].includes(item?.kind)||typeof item?.id!=='string'){warnings.push('A requested connection was missing its saved item.');continue;}
-  try{const linked=addCreationControl(next,item.kind,item.id);next={...linked.project,assetPools:next.assetPools};if(typeof item.label==='string'&&item.label.trim())next.controls=next.controls.map(c=>c.id===linked.controlId?{...c,label:item.label.trim().slice(0,80)}:c);extra++;}catch{warnings.push('A requested item could not be connected because it is unavailable.');}
+  try{const linked=addCreationControl(next,item.kind,item.id);next={...linked.project,assetPools:next.assetPools};if(typeof item.label==='string'&&item.label.trim())next.controls=next.controls.map(c=>c.id===linked.controlId?{...c,label:item.label.trim().slice(0,80)}:c);
+   // A placement stated in this edit is part of the placing, and it lands
+   // on the connected button's shown result — the ONLY placement the
+   // overlay and the Set the Stage review render for a connected item.
+   // The statement may ride on the connection itself (overlayResult or
+   // placement), or, for an asset, in the asset's own placement in the
+   // same edit (the only field available for an item whose button does
+   // not exist yet). Without this, the created control kept the generic
+   // default frame (70% x 60% at 15,20) and the stated placement was
+   // silently lost: the connection also takes the asset out of the
+   // persistent overlay layer, so no render path ever read the asset's
+   // placement again, and after a save + reload the item was nowhere to
+   // be seen at the place it was supposedly put. An edit that states no
+   // placement leaves any existing placement untouched, so a creator's
+   // later drag (which edits this same overlayResult) is never stomped
+   // by an unrelated edit.
+   const stated=placementPatch(item.overlayResult)||placementPatch(item.placement)||(item.kind==='asset'&&statedAssetPlacements.has(item.id)?placementPatch(next.assets.find(a=>(a.storageKey||a.name)===item.id)?.edits?.placement):null);
+   if(stated)next.controls=next.controls.map(c=>c.id===linked.controlId&&c.overlayResult?{...c,overlayResult:{...c.overlayResult,...stated}}:c);
+   extra++;}catch{warnings.push('A requested item could not be connected because it is unavailable.');}
  }
  for(const raw of Array.isArray(effectiveChanges.sequences)?effectiveChanges.sequences:[]){
   const item=record(raw),old=next.controls.find(c=>c.id===item.id&&c.action==='sequence');

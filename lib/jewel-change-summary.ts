@@ -70,7 +70,7 @@ export function detailedChangeLines(before: Project, after: Project): string[] {
   const beforeControls = new Map((before.controls || []).map(control => [control.id, control]));
   for (const control of after.controls || []) {
     const old = beforeControls.get(control.id);
-    if (!old) { if (!control.sequenceOnly) lines.push(`Added button "${control.label}"`); continue; }
+    if (!old) { if (!control.sequenceOnly) { const r = control.overlayResult; lines.push(r ? `Added button "${control.label}" — its item is sized ${px(r.width, CANVAS_W)} × ${px(r.height, CANVAS_H)}, placed at ${px(r.x, CANVAS_W)}, ${px(r.y, CANVAS_H)}` : `Added button "${control.label}"`); } continue; }
     if (old.label !== control.label) lines.push(`Renamed button "${old.label}" to "${control.label}"`);
     const bo = old.overlayResult;
     const ao = control.overlayResult;

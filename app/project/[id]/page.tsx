@@ -350,10 +350,18 @@ export default function ProjectWorkspace() {
   async function saveProgress() {
     if (!project || saveBusy) return;
     setSaveBusy(true); setSaveStatus("Saving your progress…");
-    const next = { ...project, name: titleFromProjectTools(project), workflow: { stage: workflowStep, workshopStep, promptDraft: draft }, updatedAt: "just now" };
     try {
       await saveQueue.current;
+      // Save from the page's one source of truth — the copy persist()
+      // keeps current in projectRef — read AFTER the queue drains, never
+      // from the render snapshot in `project`. The snapshot can lag a
+      // Jewel-applied change that landed after the last render; saving
+      // it would clobber that newer state on the server and then revert
+      // the page to the stale copy.
+      const latest = projectRef.current || project;
+      const next = { ...latest, name: titleFromProjectTools(latest), workflow: { stage: workflowStep, workshopStep, promptDraft: draft }, updatedAt: "just now" };
       await saveProjectToServer({ ...next, assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
+      projectRef.current = next;
       setProject(next); setSaveStatus("All changes saved.");
     } catch(error) { setSaveStatus(error instanceof Error ? error.message : "Could not save. Please try again."); }
     finally { setSaveBusy(false); }
