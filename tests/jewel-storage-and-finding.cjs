@@ -89,7 +89,7 @@ function baseProject(overrides = {}) {
   assert(!page.includes('"-edited.mp4"') && !page.includes('"-edited.png"'), 'no save path stacks another "-edited" onto a name anymore');
   assert(page.includes('const resultName = await saveAssetAsNew({'), 'a layered video edit takes its saved name from the copy save itself');
   const library = fs.readFileSync('app/assets/page.tsx', 'utf8');
-  assert(library.includes('const copyName=nextEditName(project.assets.map(a=>a.name),nextAsset.name);'), 'the library save-as-new names copies through the same helper');
+  assert(library.includes('const copyName=nextEditName(fresh.assets.map(a=>a.name),nextAsset.name);'), 'the library save-as-new names copies through the same helper — from the project as freshly re-read, never the page-load snapshot');
   console.log('PASS: (b) edited copies are named "Base (edit N)" from the base name — the suffix continues the line and never compounds.');
 }
 

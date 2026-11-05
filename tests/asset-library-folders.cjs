@@ -50,6 +50,13 @@ const projectAPI = {
     database[index] = next;
     saved.push(next);
     return { ok: true };
+  },
+  // The library page re-reads each project immediately before saving
+  // onto it (never its page-load snapshot), so the fake API serves the
+  // same database as the source of truth for those reads too.
+  loadProjectFromServer: async id => {
+    const found = database.find(item => item.id === id);
+    return found ? clone(found) : null;
   }
 };
 const assetStoreAPI = {
