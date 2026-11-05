@@ -181,3 +181,9 @@ button.gsw-ei:hover { color:#ffffff; }
 .gsw-nextbtn { background:#e9c979; color:#1a1206; border:none; font-size:16px; font-weight:800; padding:14px 28px; border-radius:14px; cursor:pointer; }
 .gsw-backbtn { background:none; border:2px solid #2b2444; color:#b6add4; font-size:15px; font-weight:600; padding:12px 22px; border-radius:14px; cursor:pointer; }
 .gsw-backbtn:disabled { opacity:.35; cursor:default; }
+
+/* The light Gameshow stage (components/GameshowStage.tsx): screens
+   render there without their ask-strip column — Jewel's conversation
+   stands in the work area itself — so the two-column demo layout
+   collapses to the one work column. */
+.gsw-stage .gsw-cols { grid-template-columns: 1fr; }

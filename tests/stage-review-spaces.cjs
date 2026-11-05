@@ -31,9 +31,9 @@ assert(page.includes('{workflowStep===1 && stageReviewView && <StageReview'), 't
 assert(page.includes('{workflowStep===1 && !stageReviewView && <BuildSpace'), 'BuildSpace still serves stage 1 for the other kinds (radio/multiplayer untouched)');
 assert(page.includes('{!stageReviewView && <WorkshopAssetsPanel'), 'the workshop shelf leaves the stage-review page');
 assert(page.includes('workflowStep !== 2 && !stageReviewView && <details className="workshop-help">'), 'the guide details leave the stage-review page');
-assert(page.includes('entryGuide={talkCreateView || stageReviewView ? undefined :'), 'the entry guide leaves the stage-review views');
-assert(page.includes('{!talkBareFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the flow heading leaves the stage-review page — nothing pushes the surface down');
-assert(page.includes('bare={talkBareFrame || stageReviewView}'), 'the stage nav renders bare (stage buttons only) in the review view — no explanatory note stacked above the surface');
+assert(page.includes('entryGuide={talkCreateView || gameshowCreateView || stageReviewView ? undefined :'), 'the entry guide leaves the stage-review views');
+assert(page.includes('{!lightCreateFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the flow heading leaves the stage-review page — nothing pushes the surface down');
+assert(page.includes('bare={lightCreateFrame || stageReviewView}'), 'the stage nav renders bare (stage buttons only) in the review view — no explanatory note stacked above the surface');
 assert(page.includes('{!stageReviewView && mediaPlayback &&'), 'the video-trim notice leaves the stage-review page');
 assert(page.includes('{!stageReviewView && Boolean(project.pendingVideos?.length)'), 'pending-video blocks cannot sit above the review surface');
 assert(page.includes('{!stageReviewView && backgroundDestinationKey&&'), 'the background-destination editor leaves the stage-review page');
@@ -42,7 +42,7 @@ assert(page.includes('stageReview={stageReviewView}'), 'the page passes the revi
 assert(page.includes('<StageReview ccssEntitled={ccssEntitled} jewelPanel={jewelPanelElement} onEnterJewel={enterJewelFromScene}'), 'the review surface gets the one Jewel panel and the wand-scene entry');
 assert(page.includes('overlay={draftOverlay} onTrigger={trigger}'), 'the review receives the same draft overlay node and trigger the preview uses');
 
-assert(panel.includes('const stripWithheld = talkCreateView || stageReview;'), 'the progress strip is withheld in the review spaces as in talk create');
+assert(panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || stageReview;'), 'the progress strip is withheld in the review spaces as in talk create (and now gameshow create)');
 assert(panel.includes('{!stripWithheld && (()=>{const stageState=workflow.stages[workflowStep];'), 'the strip renders only when not withheld');
 assert(panel.includes('hidden={workflowStep===1&&!buildAiOpen&&!stageReview}'), 'in the review spaces Jewel\'s panel is never hidden behind Ask Jewel');
 assert(panel.includes('workflowStep===1&&!stageReview&&<button type="button" className="outline-btn"'), 'the Back to Set the Stage button belongs to the old Build Space page, not the review');

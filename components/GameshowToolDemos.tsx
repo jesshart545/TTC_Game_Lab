@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { GameTool } from "../lib/project";
 import type { WorkflowStepState } from "../lib/workflow-progress";
 import { gameEntries } from "../lib/game-tools";
@@ -9,7 +9,7 @@ import { freshCardState, type CardState } from "../lib/question-cards";
 import { WheelDisplay, DiceDisplay, CoinDisplay, PlinkoDisplay, HigherLowerDisplay, CliffhangerDisplay, PrizeWheelDisplay } from "./ChanceTools";
 import { StyledTimer } from "./QuestionCards";
 import { GameInfoOverlay } from "./GameInfoTools";
-import { AskStrip, ChangeList, StepShell, useNow, type GameshowWorkshopProps } from "./GameshowWorkshop";
+import { AskStrip, BareStageContext, ChangeList, StepShell, useNow, type GameshowWorkshopProps } from "./GameshowWorkshop";
 
 type ScreenProps = GameshowWorkshopProps & { step?: WorkflowStepState };
 
@@ -485,12 +485,15 @@ function CliffhangerDemo(props: GameshowWorkshopProps) {
 
 function YoutubeDemo(props: GameshowWorkshopProps) {
   const { onAskJewel: onAsk, onNavigateStep } = props;
+  const bare = useContext(BareStageContext);
   return (
     <>
       <div className="gsw-card">
-        <h4>▶ YouTube — plays inside Make your media</h4>
-        <p>A YouTube video isn’t a game tool with settings to demonstrate here — it’s media. Paste a link on the media step and it becomes a playable tile in your show.</p>
-        <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={() => onNavigateStep(0, "media")}>Go to Make your media</button></div>
+        <h4>▶ YouTube — plays inside your media</h4>
+        <p>{bare
+          ? "A YouTube video isn’t a game tool with settings to demonstrate here — it’s media. Ask Jewel to add a link and it becomes a playable tile in your show."
+          : "A YouTube video isn’t a game tool with settings to demonstrate here — it’s media. Paste a link on the media step and it becomes a playable tile in your show."}</p>
+        {!bare && <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={() => onNavigateStep(0, "media")}>Go to Make your media</button></div>}
       </div>
       <ChangeList title="What you can change — YouTube" items={TOOL_CHANGES.youtube} onAsk={onAsk} />
     </>

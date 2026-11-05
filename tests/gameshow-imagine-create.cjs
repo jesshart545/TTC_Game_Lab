@@ -2,11 +2,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const load = require('./load.cjs');
 
-// Gameshow "Imagine and Create" demonstrations (components/GameshowWorkshop.tsx,
-// GameshowSteps.tsx, GameshowToolDemos.tsx over lib/gameshow-path.ts).
-// The guided path is a presentation layer over Piece 1's evaluator: step
-// state comes from evaluateWorkflow only, demonstrations run the tools' real
-// renderers on real configs/defaults, and every ask routes to Jewel's input.
+// Gameshow "Imagine and Create" (components/GameshowStage.tsx over the
+// demonstration library in GameshowWorkshop.tsx, GameshowSteps.tsx,
+// GameshowToolDemos.tsx, over lib/gameshow-path.ts).
+// The light stage is a presentation layer over Piece 1's evaluator: the
+// area shown comes from evaluateWorkflow only, the checklist is Jewel's
+// (held in her conversation — no path, step list or progress machinery
+// stands on the page), demonstrations run the tools' real renderers on
+// real configs/defaults, and every ask routes to Jewel's input.
 
 const { evaluateWorkflow } = load('lib/workflow-progress.ts');
 const { toolDefaults } = load('lib/game-tools.ts');
@@ -44,11 +47,11 @@ function baseProject(overrides = {}) {
 // --- The creative-freedom banner: Jessica's exact wording, stored once -----
 {
   assert.equal(CREATIVE_LIBERTY_TEXT, 'These are examples, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.');
-  const files = ['components/GameshowWorkshop.tsx', 'components/GameshowSteps.tsx', 'components/GameshowToolDemos.tsx', 'lib/gameshow-path.ts'];
+  const files = ['components/GameshowWorkshop.tsx', 'components/GameshowSteps.tsx', 'components/GameshowToolDemos.tsx', 'components/GameshowStage.tsx', 'lib/gameshow-path.ts'];
   const occurrences = files.reduce((count, file) => count + (fs.readFileSync(file, 'utf8').match(/accommodate your creativity/g) || []).length, 0);
   assert.equal(occurrences, 1, 'the banner wording lives in exactly one place');
-  const shell = fs.readFileSync('components/GameshowWorkshop.tsx', 'utf8');
-  assert(shell.includes('{CREATIVE_LIBERTY_TEXT}'), 'the shell renders the banner text once, above the step screens');
+  const stage = fs.readFileSync('components/GameshowStage.tsx', 'utf8');
+  assert(stage.includes('{CREATIVE_LIBERTY_TEXT}'), 'the light stage renders the banner text once, above the areas');
   console.log('PASS: creative-freedom banner wording is exact and rendered exactly once.');
 }
 
@@ -95,19 +98,88 @@ function baseProject(overrides = {}) {
 // --- Page wiring: gameshow-only, evaluator-driven, asks fill Jewel's input --
 {
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
-  assert(/workflowStep === 0 && project\.kind === "gameshow" && \(\s*<GameshowWorkshop/.test(page), 'the guided path renders only for gameshow projects in the Workshop stage');
-  assert(page.includes('workflow={evaluateWorkflow(project)}'), 'the path receives the real evaluator output');
-  assert(page.includes('activeStep={gameshowStep}'), 'the visible step is page state the evaluator seeds');
+  assert(/workflowStep === 0 && project\.kind === "gameshow" && \(\s*<GameshowStage/.test(page), 'the light stage renders only for gameshow projects in the Workshop stage');
+  assert(page.includes('workflow={evaluateWorkflow(project)}'), 'the stage receives the real evaluator output');
+  assert(!page.includes('activeStep={gameshowStep}'), 'no user-navigated step state feeds the stage — the area comes from the workflow model, as on the Talk stage');
   assert(page.includes('const current = evaluateWorkflow(project).current;'), 'the initial step comes from the evaluator’s current step');
   assert(/function askJewel\(text: string\) \{\s*setDraft\(text\);\s*focusJewelPrompt\(\);/.test(page), 'example asks fill Jewel’s real input and focus it — fill only, never auto-send');
   assert(page.includes('openCityCrimeScene: ccssBuilder.openCityCrimeScene'), 'the CCS door is the existing builder opener');
   assert(page.includes('downloadTriviaPdf'), 'the trivia PDF door survives its move onto the saved list');
+  assert(page.includes('showPlanForm: () => openGamePlanEntry()'), 'the plan form stays reachable as a manual door, opened the same way as today');
   console.log('PASS: page wiring gates on kind=gameshow, feeds the evaluator in, and routes asks to Jewel’s input.');
+}
+
+// --- The light stage: Jewel's checklist, pictured examples, no machinery ---
+// Jessica's live review (2026-11-04): the old gameshow page carried a
+// guided path, a duplicate progress list in the sidebar, change piles
+// and Jewel buried at the bottom — and its empty-project demos were
+// empty frames and dark panels. The stage now mirrors the Talk stage
+// she approved: demonstrations first, Jewel's doorway + conversation
+// in the work area, shelves and doors after — and the checklist lives
+// only in her conversation.
+{
+  const stage = fs.readFileSync('components/GameshowStage.tsx', 'utf8');
+  const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
+  const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
+  // No user-handled checklist machinery anywhere in the stage's own
+  // composition: no path row, no Back/Next row, no change piles, no
+  // ask strips, no done-when or checked-off strips.
+  for (const machinery of ['gsw-path', 'gsw-nextrow', 'ChangeList', 'AskStrip', 'gsw-donewhen', 'gsw-jcheck', 'Your progress', 'Go there']) {
+    assert(!stage.includes(machinery), `the light stage carries none of the page machinery: ${machinery}`);
+  }
+  // The screens stand down their furniture under the stage's context.
+  const library = fs.readFileSync('components/GameshowWorkshop.tsx', 'utf8');
+  assert(library.includes('export const BareStageContext'), 'the stage context exists for the shared screens');
+  assert((library.match(/useContext\(BareStageContext\)/g) || []).length >= 3, 'the step shell, the change list and the ask strip all stand down under the stage');
+  // Jewel is prominent: her wand-scene doorway and her conversation
+  // stand inside the work area, starting at the plan.
+  assert(stage.includes('<JewelWandScene onEnter={onEnterJewel} />'), 'the plan area opens the way into Jewel with her landing-page wand scene');
+  assert(stage.includes('{jewelPanel}'), 'her conversation renders inside the areas, in the work area');
+  assert(page.includes('talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement'), 'the sidebar does not render a second copy of her panel in the gameshow create view');
+  assert(panel.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || stageReview;'),
+    'her panel carries no progress strip in the gameshow create view — no duplicate list, no Next/Go there');
+  assert(page.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && page.includes('entryGuide={talkCreateView || gameshowCreateView || stageReviewView ? undefined :'),
+    'no Current Task entry guide stands over the gameshow create view');
+  // The area shown is the model's first unfinished gameshow step, in
+  // Jewel's order; the toolbox is the resting area when all are done.
+  assert(stage.includes('"plan", "media", "trivia-cards", "board", "tools", "scenes", "toolbox"'), 'the stage’s areas stand in Jewel’s order, plan first');
+  assert(stage.includes('!step.complete') && stage.includes('workflow.stages[0]'), 'the stage reads the current area from the workflow model');
+  // Empty projects demonstrate with PICTURES: the plan visual, the
+  // backdrop demo and the effects stage all stand over the pictured
+  // example stage — never an empty frame, gradient void or dark panel.
+  assert(library.includes('export function GameshowExampleStage()') && library.includes('/redesign/kind-gameshow.webp'), 'the pictured example stage exists and is the site’s own Gameshow artwork');
+  assert(library.includes('<GameshowExampleStage />'), 'the plan visual and the backdrop demo stand over the pictured example while the project is empty');
+  assert(!library.includes('Example stage · yours will appear here'), 'the old text-placeholder chip is gone');
+  assert(!library.includes('linear-gradient(140deg,#251739,#154c69 60%,#1d1607)'), 'the old gradient-void backdrop demo is gone');
+  const steps = fs.readFileSync('components/GameshowSteps.tsx', 'utf8');
+  assert(steps.includes('/redesign/kind-gameshow.webp'), 'the effects stage fires over the pictured example stage on an empty project');
+  assert(!steps.includes('{backdrop?.url && <img src={backdrop.url}'), 'the effects stage no longer renders an empty panel when there is no backdrop');
+  assert(steps.includes('GameshowExampleStage'), 'the board area shows the pictured example stage while no board exists');
+  console.log('PASS: the light stage — Jewel holds the checklist invisibly, her doorway and conversation stand in the work area, and empty projects demonstrate with pictures.');
+}
+
+// --- Preservation round-trip: a full project survives the model intact -----
+// Music Showdown's shape: 38 assets, 24 tools, 203 Jewel messages.
+// Evaluation and demonstration lookups are reads — nothing about the
+// project changes by being shown on the light stage.
+{
+  const assets = Array.from({ length: 38 }, (_, i) => ({ name: `asset-${i}`, type: i % 3 ? 'image' : 'audio', role: i === 0 ? 'background' : undefined, url: `https://example.invalid/${i}`, inProject: i === 0 }));
+  const gameTools = Array.from({ length: 24 }, (_, i) => ({ id: `t${i}`, type: i === 0 ? 'wheel' : 'scoreboard', name: `Tool ${i}`, enabled: true, config: i === 0 ? { segments: ['A', 'B'] } : {} }));
+  const messages = Array.from({ length: 203 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: `message ${i}` }));
+  const full = baseProject({ kind: 'gameshow', assets, gameTools, messages, gamePlan: { theme: 'neon music', purpose: 'A music showdown' } });
+  const before = JSON.stringify([full.assets.length, full.gameTools.length, full.messages.length]);
+  const evaluation = evaluateWorkflow(full);
+  eq(evaluation.stages[0].steps.map(s => s.id), ['plan', 'media', 'trivia-cards', 'board', 'tools', 'scenes', 'toolbox']);
+  demoTool(full, 'wheel');
+  const after = JSON.stringify([full.assets.length, full.gameTools.length, full.messages.length]);
+  assert.equal(after, before, 'assets, tools and messages counts are intact after evaluation and demo lookups');
+  assert.equal(full.messages[202].text, 'message 202', 'the conversation itself is untouched');
+  console.log('PASS: preservation round-trip — a Music-Showdown-shaped project keeps every asset, tool and message.');
 }
 
 // --- New UI: no generation of its own, checks only from the evaluator -------
 {
-  const files = ['components/GameshowWorkshop.tsx', 'components/GameshowSteps.tsx', 'components/GameshowToolDemos.tsx'];
+  const files = ['components/GameshowWorkshop.tsx', 'components/GameshowSteps.tsx', 'components/GameshowToolDemos.tsx', 'components/GameshowStage.tsx'];
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
     assert(!source.includes('fetch('), `${file} makes no network calls`);
