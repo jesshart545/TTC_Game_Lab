@@ -78,6 +78,12 @@ type StageProps = {
   project: Project;
   doors: TalkshowDoors;
   onSaveProject: (project: Project) => void;
+  /** The topic Jewel directed the creator to in her last navigate
+   *  directive (e.g. "media" or "background", when she takes them
+   *  to the shelf that holds what they asked about): when it names
+   *  a talk topic, the stage surfaces THAT topic; otherwise the
+   *  model's current topic stands. Only TalkshowStage reads it. */
+  requestedTopic?: string | null;
   jewelPanel?: ReactNode;
   /** Stepping into Jewel through the wand scene: the page reveals
    *  her conversation if it was hidden and lands on her input. */
@@ -404,13 +410,19 @@ function MissedStage({ project, onSaveProject, jewelPanel }: StageProps) {
 
 /* ---------------- The stage itself ---------------- */
 
-export default function TalkshowStage({ project, workflow, doors, onSaveProject, jewelPanel, onEnterJewel }: StageProps & { workflow: WorkflowEvaluation }) {
+export default function TalkshowStage({ project, workflow, doors, onSaveProject, jewelPanel, onEnterJewel, requestedTopic }: StageProps & { workflow: WorkflowEvaluation }) {
   const steps = workflow.stages[0]?.steps || [];
   // Jewel's current topic: the model's first unfinished talk topic. Theme
   // is a creation-seeded fact, never a topic on this page — while it is
   // the only thing open, Jewel still begins at the background.
   const open = steps.find(step => !step.complete && (TALK_TOPICS as readonly string[]).includes(step.id));
-  const topic: TalkTopic = (open?.id as TalkTopic) || "missed";
+  const modelTopic: TalkTopic = (open?.id as TalkTopic) || "missed";
+  // Jewel's directing wins over the resting topic: when her navigate
+  // directive names a topic (she is taking the creator to the shelf
+  // that holds what they asked about), that topic is what stands here.
+  const topic: TalkTopic = requestedTopic && (TALK_TOPICS as readonly string[]).includes(requestedTopic)
+    ? (requestedTopic as TalkTopic)
+    : modelTopic;
   const stageProps: StageProps = { project, doors, onSaveProject, jewelPanel, onEnterJewel };
   return (
     <section className="gsw" aria-label="Imagine and Create — your show, as Jewel builds it with you">

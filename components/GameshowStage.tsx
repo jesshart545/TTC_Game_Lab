@@ -60,6 +60,11 @@ type GameshowArea = (typeof GAMESHOW_AREAS)[number];
 type StageProps = {
   project: Project;
   workflow: WorkflowEvaluation;
+  /** The area Jewel directed the creator to in her last navigate
+   *  directive (e.g. "media", when she takes them to the media she
+   *  made for them): when it names a gameshow area, the stage
+   *  surfaces THAT area; otherwise the model's current area stands. */
+  requestedArea?: string | null;
   onNavigateStep: (stage: number, stepId?: string) => void;
   onAskJewel: (text: string) => void;
   onOpenJewel: () => void;
@@ -209,7 +214,13 @@ export default function GameshowStage(props: StageProps) {
   // step. When every area is checked off, the toolbox — the
   // storage review — is where the stage rests.
   const open = steps.find(step => !step.complete && (GAMESHOW_AREAS as readonly string[]).includes(step.id));
-  const area: GameshowArea = (open?.id as GameshowArea) || "toolbox";
+  const modelArea: GameshowArea = (open?.id as GameshowArea) || "toolbox";
+  // Jewel's directing wins over the resting area: when her navigate
+  // directive names an area (she is taking the creator to the shelf
+  // that holds what they asked about), that area is what stands here.
+  const area: GameshowArea = props.requestedArea && (GAMESHOW_AREAS as readonly string[]).includes(props.requestedArea)
+    ? (props.requestedArea as GameshowArea)
+    : modelArea;
   const stepState = steps.find(step => step.id === area);
   const sp = screenProps(props, stepState);
   return (

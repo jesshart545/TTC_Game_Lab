@@ -27,6 +27,7 @@ import CollapsibleFolder from "../../../components/CollapsibleFolder";
 import AssetFolders from "../../../components/AssetFolders";
 import { instantiateTemplateTools } from "../../../lib/game-templates";
 import { assetCategory, categoryMatchesFilter } from "../../../lib/asset-folders";
+import { fileGeneratedAsset, nextEditName } from "../../../lib/asset-filing";
 import YouTubePlacementEditor from "../../../components/YouTubePlacementEditor";
 import YouTubeOverlayPlayer from "../../../components/YouTubeOverlayPlayer";
 import { youtubePlacement, youtubePosition, safeYoutubePlacement } from "../../../lib/youtube";
@@ -36,7 +37,7 @@ import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, ProjectAssetGeneration, saveProjectToServer, loadProjectFromServer, titleFromProjectTools, GameTool, GameToolType } from "../../../lib/project";
 
-type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number] };
+type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number]; forCaseItem?: boolean };
 import { deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { landscapeAnimationReference } from "../../../lib/overlay-media";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
@@ -105,6 +106,12 @@ export default function ProjectWorkspace() {
   const [workshopStep, setWorkshopStep] = useState(0);
   const [planOpen, setPlanOpen] = useState<boolean | null>(null);
   const [gameshowStep, setGameshowStep] = useState("plan");
+  // Where Jewel last directed the creator inside Imagine and Create
+  // (her validated navigate directive): the light stages show the
+  // area she named — the media shelf, say, when she takes them to
+  // the media she made for them — until she directs them elsewhere.
+  // Scoped to the project it was given in, so it never leaks across.
+  const [jewelStageArea, setJewelStageArea] = useState<{ projectId: string; stepId: string } | null>(null);
   const gameshowStepInit = useRef<string | null>(null);
   useEffect(() => {
     if (!project || project.kind !== "gameshow" || gameshowStepInit.current === project.id) return;
@@ -253,6 +260,14 @@ export default function ProjectWorkspace() {
   function honorJewelNavigate(navigate: JewelNavigate) {
     const latest = projectRef.current;
     if (!latest) return;
+    // The light stages (talk + gameshow Imagine and Create) show the
+    // ONE area Jewel is on, which the workflow model otherwise picks
+    // — so when she directs the creator to an Imagine and Create
+    // step, that step is what the stage surfaces. This is how she
+    // takes them to their generated media instead of describing a
+    // place: the shelf she named is the shelf on the page.
+    if (navigate.stage === 0 && navigate.stepId) setJewelStageArea({ projectId: latest.id, stepId: navigate.stepId });
+    else if (navigate.stage !== 0) setJewelStageArea(null);
     // A skip Jewel recorded in conversation (validated server-side
     // against the model's skippable steps) lands on the project first,
     // so the topic she directs to is already the current one.
@@ -967,9 +982,17 @@ export default function ProjectWorkspace() {
       checkGenerationScope();
       const generation: ProjectAssetGeneration = { type, prompt: requested, ...(options?.aspectRatio ? { aspectRatio: options.aspectRatio } : {}), ...(options?.durationSeconds ? { durationSeconds: options.durationSeconds } : {}), ...(options?.lyrics ? { lyrics: options.lyrics } : {}), ...(options?.instrumental ? { instrumental: true } : {}), ...(options?.voice ? { voice: options.voice } : {}), ...(typeof options?.stability === "number" ? { stability: options.stability } : {}), ...(referenceKey ? { sourceKey: referenceKey } : {}) };
       const fittedAsset: ProjectAsset = type === "image" || type === "video" ? { ...storedAsset, generation, edits: { ...storedAsset.edits, fit: "contain" } } : { ...storedAsset, generation };
-      const asset: ProjectAsset = !options && backgroundIntent && (type === "image"||type === "video") ? { ...fittedAsset, role: "background", inProject: false } : fittedAsset;
-
       const currentAfterStore = projectRef.current || latest;
+      // Media generated inside a project is filed INTO that project at
+      // generation time (lib/asset-filing): inProject, with the role
+      // "+ Add to Project" would give it, so it stands on the project's
+      // own shelves right away — the creator never has to leave the
+      // project and hunt the workspace library for something Jewel
+      // just made here. The one exception is the background-intent
+      // flow, whose destination chooser takes the asset from here.
+      const asset: ProjectAsset = !options && backgroundIntent && (type === "image"||type === "video")
+        ? { ...fittedAsset, role: "background", inProject: false }
+        : fileGeneratedAsset(currentAfterStore, fittedAsset, { backdropEligible: !options?.forCaseItem });
       const savedProject = { ...currentAfterStore, pendingVideos: type === "video" ? (currentAfterStore.pendingVideos || []).filter(job => job.videoId !== String(data.videoId)) : currentAfterStore.pendingVideos, assets: [...currentAfterStore.assets, asset], updatedAt: "just now" };
       projectRef.current = savedProject;
       setProject(savedProject);
@@ -1062,9 +1085,9 @@ export default function ProjectWorkspace() {
     persist({ ...current, assets: current.assets.map((item, i) => i === index ? { ...item, name: trimmed } : item), updatedAt: "just now" });
   }
 
-  async function saveAssetAsNew(nextAsset: ProjectAsset) {
+  async function saveAssetAsNew(nextAsset: ProjectAsset): Promise<string> {
     try {
-      await saveAssetAsNewImpl(nextAsset);
+      return await saveAssetAsNewImpl(nextAsset);
     } catch (error) {
       // Never leave a stale "Rendering…" / "Preparing…" status behind after
       // a failed save: the status line must say what actually happened.
@@ -1073,24 +1096,26 @@ export default function ProjectWorkspace() {
     }
   }
 
-  async function saveAssetAsNewImpl(nextAsset: ProjectAsset) {
-    // Edited and trimmed copies get numbered names, like generated assets:
-    // a second copy of the same source becomes "Name-edited 2", then " 3".
-    if (project && project.assets.some(a => a.name === nextAsset.name)) {
-      let n = 2;
-      while (project.assets.some(a => a.name === `${nextAsset.name} ${n}`)) n++;
-      nextAsset = { ...nextAsset, name: `${nextAsset.name} ${n}` };
-    }
+  async function saveAssetAsNewImpl(nextAsset: ProjectAsset): Promise<string> {
     if (!project || !nextAsset.url) throw new Error("The media source is unavailable.");
+    // Every copy saved through here is an edited copy of its source,
+    // and it takes the next name in the source's edit line — "Name
+    // (edit 1)", "Name (edit 2)" — computed from the BASE name by
+    // lib/asset-filing, so the suffix continues the line instead of
+    // stacking ("-edited" on "-edited" on "-edited" is the
+    // compounding this replaces). The copy also keeps its source's
+    // filing — the role and inProject the branches persist below —
+    // so it stands on the same shelf as the asset it was made from.
+    const copyName = nextEditName(project.assets.map(a => a.name), nextAsset.name);
     const origin = project.id;
     const checkCopyScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin || activeProjectId.current !== params.id) throw new Error("Return to the original project to finish this copy. No other project was changed."); };
     if (!nextAsset.edits) {
-      const stored=await storeGeneratedAsset(project.id,{name:nextAsset.name,type:nextAsset.type,url:nextAsset.url});
+      const stored=await storeGeneratedAsset(project.id,{name:copyName,type:nextAsset.type,url:nextAsset.url});
       checkCopyScope();
       const latest=projectRef.current || project;
-      persist({...latest,assets:[...latest.assets,stored],updatedAt:"just now"});
-      setAssetStatus(nextAsset.name+" saved as a new asset.");
-      return;
+      persist({...latest,assets:[...latest.assets,{...stored,role:nextAsset.role,inProject:nextAsset.inProject}],updatedAt:"just now"});
+      setAssetStatus(copyName+" saved as a new asset.");
+      return copyName;
     }
     const renderUrl=nextAsset.storageKey?.startsWith("projects/") ? `/api/assets/content?key=${encodeURIComponent(nextAsset.storageKey)}` : nextAsset.url;
     if (isVideo(nextAsset)) {
@@ -1138,26 +1163,26 @@ export default function ProjectWorkspace() {
       } finally {
         source.pause(); if(recorder.state!=="inactive")recorder.stop(); stream.getTracks().forEach(track=>track.stop());
       }
-      const file=new File([blob],(nextAsset.name.replace(/\.[^.]+$/,"")||"trimmed-video")+"-trimmed.webm",{type:blob.type||"video/webm"});
+      const file=new File([blob],copyName+".webm",{type:blob.type||"video/webm"});
       checkCopyScope();
       const stored=await storeUploadedAsset(project.id,file);
       checkCopyScope();
       const latest=projectRef.current || project;
-      persist({...latest,assets:[...latest.assets,{...stored,name:file.name,edits:undefined}],updatedAt:"just now"});
-      setAssetStatus(file.name+" saved as a new permanent video asset.");
-      return;
+      persist({...latest,assets:[...latest.assets,{...stored,name:copyName,edits:undefined,role:nextAsset.role,inProject:nextAsset.inProject}],updatedAt:"just now"});
+      setAssetStatus(copyName+" saved as a new permanent video asset.");
+      return copyName;
     }
     if (isAudio(nextAsset)) {
       setAssetStatus("Trimming audio…");
       const blob = await trimAudioToWav(renderUrl, Math.max(0, nextAsset.edits?.trimStart || 0), nextAsset.edits?.trimEnd || 0);
-      const file = new File([blob], (nextAsset.name.replace(/\.[^.]+$/, "") || "trimmed-audio") + "-trimmed.wav", { type: "audio/wav" });
+      const file = new File([blob], copyName + ".wav", { type: "audio/wav" });
       checkCopyScope();
       const stored = await storeUploadedAsset(project.id, file);
       checkCopyScope();
       const latest = projectRef.current || project;
-      persist({ ...latest, assets: [...latest.assets, { ...stored, name: file.name, edits: undefined }], updatedAt: "just now" });
-      setAssetStatus(file.name + " saved as a new permanent audio asset.");
-      return;
+      persist({ ...latest, assets: [...latest.assets, { ...stored, name: copyName, edits: undefined, role: nextAsset.role, inProject: nextAsset.inProject }], updatedAt: "just now" });
+      setAssetStatus(copyName + " saved as a new permanent audio asset.");
+      return copyName;
     }
     setAssetStatus("Rendering edited image…");
     const image = new Image();
@@ -1175,13 +1200,14 @@ export default function ProjectWorkspace() {
     ctx.scale((e.flipX ? -1 : 1) * (e.zoom || 1), (e.flipY ? -1 : 1) * (e.zoom || 1));
     ctx.drawImage(image,-drawWidth/2,-drawHeight/2,drawWidth,drawHeight);
     const blob = await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not render edited image.")),"image/png",.95));
-    const file = new File([blob], (nextAsset.name.replace(/\.[^.]+$/,"") || "edited-image") + "-edited.png", { type:"image/png" });
+    const file = new File([blob], copyName + ".png", { type:"image/png" });
     checkCopyScope();
     const stored = await storeUploadedAsset(project.id,file);
     checkCopyScope();
     const latest = projectRef.current || project;
-    persist({ ...latest, assets:[...latest.assets,{...stored,name:file.name}], updatedAt:"just now" });
-    setAssetStatus(file.name + " saved as a new permanent asset.");
+    persist({ ...latest, assets:[...latest.assets,{...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject}], updatedAt:"just now" });
+    setAssetStatus(copyName + " saved as a new permanent asset.");
+    return copyName;
   }
 
   function saveAssetPools(assetPools: NonNullable<Project["assetPools"]>) {
@@ -1330,8 +1356,11 @@ export default function ProjectWorkspace() {
               guard();
               const editedUrl = await pollForEditedVideoUrl(String(output.videoId), String(output.model || "fal-ai/wan-vace-apps/video-edit"));
               guard();
-              const resultName = layerSource.name.replace(/\.[^.]+$/, "") + "-edited.mp4";
-              await saveAssetAsNew({ ...layerHydrated, name: resultName, type: "video/mp4", url: editedUrl, storageKey: undefined, edits: undefined });
+              // The saved copy takes the next name in the source's
+              // edit line ("Name (edit 1)", then "(edit 2)") from
+              // saveAssetAsNew — never another "-edited" stacked onto
+              // the previous copy's name, layer after layer.
+              const resultName = await saveAssetAsNew({ ...layerHydrated, name: layerSource.name, type: "video/mp4", url: editedUrl, storageKey: undefined, edits: undefined });
               savedStepsThisTask += 1;
               const saved = [...(projectRef.current || baseProject).assets].reverse().find(asset => asset.name === resultName);
               return { resultKey: saved ? (saved.storageKey || saved.name) : resultName, resultName };
@@ -1383,7 +1412,7 @@ export default function ProjectWorkspace() {
         let generationFailure = "";
         const attemptGeneration = async (mediaAction: typeof action) => {
           try {
-            const attempt = await generateAsset(mediaAction.type as GeneratorType, mediaAction.prompt, { sourceKey: mediaAction.sourceKey, voice: mediaAction.voice, baseProject: working, durationSeconds: mediaAction.durationSeconds, lyrics: mediaAction.lyrics, aspectRatio: mediaAction.aspectRatio, stability: mediaAction.stability, instrumental: mediaAction.instrumental });
+            const attempt = await generateAsset(mediaAction.type as GeneratorType, mediaAction.prompt, { sourceKey: mediaAction.sourceKey, voice: mediaAction.voice, baseProject: working, durationSeconds: mediaAction.durationSeconds, lyrics: mediaAction.lyrics, aspectRatio: mediaAction.aspectRatio, stability: mediaAction.stability, instrumental: mediaAction.instrumental, forCaseItem: Boolean((mediaAction as any)?.ccssAttach) });
             if (!attempt) throw new Error("Generation could not start. Check whether another generation is already running.");
             return attempt;
           } catch (generationError) {
@@ -1792,6 +1821,7 @@ export default function ProjectWorkspace() {
           jewelPanel={jewelPanelElement}
           onEnterJewel={enterJewelFromScene}
           project={project}
+          requestedArea={jewelStageArea?.projectId === project.id ? jewelStageArea.stepId : null}
           workflow={evaluateWorkflow(project)}
           onSaveProject={persist}
           onNavigateStep={selectGameshowStep}
@@ -1823,6 +1853,7 @@ export default function ProjectWorkspace() {
           jewelPanel={jewelPanelElement}
           onEnterJewel={enterJewelFromScene}
           project={project}
+          requestedTopic={jewelStageArea?.projectId === project.id ? jewelStageArea.stepId : null}
           workflow={evaluateWorkflow(project)}
           onSaveProject={persist}
           doors={{
@@ -1968,7 +1999,7 @@ export default function ProjectWorkspace() {
         <article><h3>Test, save and publish</h3><p>Switch between Audience Overlay and Host Dashboard to test your build. Save progress whenever you stop. Return to Workshop for more creations at any time. Publish your approved preview, then check the two published pages together before going live.</p></article>
       </div></details>}
     {showAssetComposer && <AssetComposer assets={project.assets} compositions={project.compositions || []} initial={editingComposition} onSave={saveComposition} onClose={() => setShowAssetComposer(false)} />}
-    {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={saveAssetAsNew} />}
+    {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={async next => { await saveAssetAsNew(next); }} />}
     {confirmingProjectDelete && <ConfirmDialog title="Move project to Trash?" message={`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash in the project library, or delete it forever there.`} confirmLabel="Move to Trash" danger onConfirm={() => { setConfirmingProjectDelete(false); void doDeleteProject(); }} onCancel={() => setConfirmingProjectDelete(false)} />}
     {assetPendingDelete && <ConfirmDialog title="Delete this asset?" message={`Delete "${assetPendingDelete.name}" from this project?`} confirmLabel="Delete asset" danger onConfirm={() => { const asset = assetPendingDelete; setAssetPendingDelete(null); void doDeleteAsset(asset); }} onCancel={() => setAssetPendingDelete(null)} />}
     {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}

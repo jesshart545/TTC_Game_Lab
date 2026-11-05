@@ -8,6 +8,7 @@ import { Project, ProjectAsset, saveProjectToServer } from "../../lib/project";
 import AssetFolders from "../../components/AssetFolders";
 import CollapsibleFolder, { rememberFolderState, type FolderBulkAction } from "../../components/CollapsibleFolder";
 import { assetCategory, categoryMatchesFilter, mediaFolders } from "../../lib/asset-folders";
+import { nextEditName } from "../../lib/asset-filing";
 import { assetDownloadHref, assetFileName, downloadAssetToDevice } from "../../lib/download-asset";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string; assetIndex: number };
@@ -15,6 +16,7 @@ type Filter = "all" | "image" | "video" | "audio" | "other";
 
 export default function AssetLibraryPage() {
   const [assets,setAssets]=useState<LibraryAsset[]>([]);
+  const [loading,setLoading]=useState(true);
   const [projects,setProjects]=useState<Project[]>([]);
   const [query,setQuery]=useState("");
   const [filter,setFilter]=useState<Filter>("all");
@@ -31,7 +33,12 @@ export default function AssetLibraryPage() {
     setProjects(hydrated);
     setAssets(hydrated.flatMap(project=>(project.assets||[]).map((asset,assetIndex)=>({...asset,projectName:project.name,projectId:project.id,assetIndex}))));
   }
-  useEffect(()=>{void refreshAssets().catch(error=>setStatus(error instanceof Error?error.message:"Could not load assets."))},[]);
+  // Until the first load lands, the page must not claim the library
+  // is empty: "0 assets / No saved assets yet" on a fresh visit, while
+  // the projects and their media are still on their way, reads as a
+  // lost library. The empty state is only for a library that has
+  // actually loaded empty.
+  useEffect(()=>{void refreshAssets().catch(error=>setStatus(error instanceof Error?error.message:"Could not load assets.")).finally(()=>setLoading(false))},[]);
 
   async function persistProject(next:Project) {
     await saveProjectToServer(next);
@@ -72,14 +79,20 @@ export default function AssetLibraryPage() {
 
   async function saveAsNew(asset:LibraryAsset,nextAsset:ProjectAsset) {
     if(!nextAsset.url)return;
+    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
     setStatus("Saving edited image…");
     const response=await fetch(nextAsset.url);
     if(!response.ok)throw new Error("Could not load edited image.");
     const blob=await response.blob();
-    const file=new File([blob],nextAsset.name||"ai-edited-image.png",{type:blob.type||"image/png"});
+    // The copy takes the next name in its source's edit line — "Name
+    // (edit 1)", "Name (edit 2)" — from lib/asset-filing, never a
+    // stacked "-edited", and it keeps its source's filing, so it
+    // stands in the library exactly where its source stands.
+    const copyName=nextEditName(project.assets.map(a=>a.name),nextAsset.name);
+    const extension=/\.[a-z0-9]+$/i.exec(nextAsset.name||"")?.[0]||".png";
+    const file=new File([blob],copyName+extension,{type:blob.type||"image/png"});
     const stored=await storeUploadedAsset(asset.projectId,file);
-    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
-    await persistProject({...project,assets:[...project.assets,{...stored,name:file.name}],updatedAt:"just now"});
+    await persistProject({...project,assets:[...project.assets,{...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject}],updatedAt:"just now"});
     setStatus("Edited image saved as a new permanent asset.");
   }
 
@@ -131,9 +144,9 @@ export default function AssetLibraryPage() {
   return <main className="shell"><aside className="sidebar"><div className="brand"><div className="brand-mark"><span>TT</span></div><div><strong>TTCGameLab</strong><small>LIVE CREATIVE STUDIO</small></div></div><Link href="/project/new" className="new-project"><span>＋</span> New Project</Link><nav><div className="nav-label">WORKSPACE</div><Link href="/" className="nav-item"><span>⌂</span> Home</Link><Link href="/projects" className="nav-item"><span>▣</span> My Projects</Link><Link href="/assets" className="nav-item active"><span>✦</span> Asset Library</Link></nav></aside>
   <section className="main"><header className="topbar"><div className="crumb"><span>Workspace</span><em>/</em><strong>Asset Library</strong></div></header><div className="content">
     <div className="section-head"><div><h2>Asset Library</h2><p>Manage generated and uploaded media across your projects.</p></div><input type="search" aria-label="Search assets or projects" className="asset-library-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search assets or projects..." /></div>
-    <div className="asset-library-toolbar"><div className="asset-filter-tabs">{(["all","image","video","audio","other"] as Filter[]).map(x=><button key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{x==="all"?"All":x==="other"?"Other files":x[0].toUpperCase()+x.slice(1)}</button>)}</div><span>{filtered.length} asset{filtered.length===1?"":"s"}</span></div>
+    <div className="asset-library-toolbar"><div className="asset-filter-tabs">{(["all","image","video","audio","other"] as Filter[]).map(x=><button key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{x==="all"?"All":x==="other"?"Other files":x[0].toUpperCase()+x.slice(1)}</button>)}</div><span>{loading?"Loading…":`${filtered.length} asset${filtered.length===1?"":"s"}`}</span></div>
     {status&&<div className="asset-library-status">{status}</div>}
-    {assets.length===0?<div className="asset-library-empty"><strong>No saved assets yet.</strong><span>Generate or upload media in a project and it will appear here.</span><Link href="/project/new" className="build-btn">Create a project →</Link></div>:filtered.length===0?<div className="asset-library-empty"><strong>No matching assets.</strong><span>Try another search or media filter, or generate or upload new media in a project.</span></div>:<>
+    {loading?<div className="asset-library-empty"><strong>Loading your assets…</strong><span>Everything you have generated or uploaded, across your projects, is on its way here.</span></div>:assets.length===0?<div className="asset-library-empty"><strong>No saved assets yet.</strong><span>Generate or upload media in a project and it will appear here.</span><Link href="/project/new" className="build-btn">Create a project →</Link></div>:filtered.length===0?<div className="asset-library-empty"><strong>No matching assets.</strong><span>Try another search or media filter, or generate or upload new media in a project.</span></div>:<>
       <div className="folder-toolbar" role="group" aria-label="Asset library folder controls"><button type="button" onClick={()=>setAllFolders(true)}>Expand all folders</button><button type="button" onClick={()=>setAllFolders(false)}>Collapse all folders</button></div>
       <div className="asset-library-folders">{projectFolders.map(({project,assets:projectAssets})=><CollapsibleFolder key={project.id} title={project.name} count={projectAssets.length} description="Project assets" storageKey={`library:${project.id}`} defaultOpen={false} expandKey={folderSearchKey?`search:${folderSearchKey}`:""} bulkAction={folderAction}><AssetFolders assets={projectAssets} scope={`library:${project.id}`} renderAsset={renderLibraryAsset} gridClassName="asset-library-grid" searchKey={folderSearchKey} bulkAction={folderAction} showControls={false}/></CollapsibleFolder>)}</div>
     </>}

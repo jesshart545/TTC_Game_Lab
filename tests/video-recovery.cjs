@@ -14,7 +14,11 @@ function harness({ pendingVideo, pollError } = {}) {
   const project = { id: 'owned-project', assets: [], pendingVideos: pendingVideo ? [pendingVideo] : [] };
   const projectRef = { current: project }, saveQueue = { current: Promise.resolve() };
   const exports = {}, calls = [], statuses = [];
-  const context = { exports, Error, AbortSignal, project, projectRef, saveQueue, workspaceMounted: { current: true },
+  // generateAsset files its result into the project through
+  // lib/asset-filing (inProject + role) — the real helper, loaded the
+  // same way the other suites load lib modules.
+  const { fileGeneratedAsset } = require('./load.cjs')('lib/asset-filing.ts');
+  const context = { exports, Error, AbortSignal, project, projectRef, saveQueue, workspaceMounted: { current: true }, fileGeneratedAsset,
     assetBusy: false, videoReferenceKey: '', backgroundIntent: false,
     fetch: async () => { calls.push('submit'); return Response.json({ videoId: 'job', model: 'gen4.5', durationSeconds: 5 }); },
     persist(next) { calls.push('save-job'); projectRef.current = next; saveQueue.current = Promise.resolve(); },
@@ -39,6 +43,8 @@ test('video job is saved before polling and removed after storing its result', a
   assert.deepEqual(h.calls, ['submit','save-job','poll','store','save-result']);
   assert.equal(h.projectRef.current.pendingVideos.length, 0);
   assert.equal(h.projectRef.current.assets.length, 1);
+  assert.equal(h.projectRef.current.assets[0].inProject, true, 'the recovered video is filed into its project');
+  assert.equal(h.projectRef.current.assets[0].role, 'video');
 });
 test('reopened video job retrieves the result without another paid submission', async () => {
   const pendingVideo = { videoId: 'job', model: 'gen4.5', prompt: 'Game-show intro' };
