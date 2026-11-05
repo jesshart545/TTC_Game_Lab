@@ -68,8 +68,8 @@ const quizTool = (overrides = {}) => ({
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   assert(page.includes('project.kind === "talk"') && page.includes('<TalkshowStage'), 'the page renders the Talk Show visual stage for talk projects');
   assert(!page.includes('<TalkshowWorkshop'), 'the old guided-path workshop is no longer the page\'s skeleton');
-  assert(page.includes('project.kind === "gameshow"') && page.includes('<GameshowWorkshop'), 'the Gameshow Workshop still renders for gameshow projects');
-  console.log('PASS: kind gating — talk projects get Jewel\'s seven-step topic model (no sign step); gameshow and generic paths are unchanged.');
+  assert(page.includes('project.kind === "gameshow"') && page.includes('<GameshowStage'), 'the Gameshow light stage renders for gameshow projects');
+  console.log('PASS: kind gating — talk projects get Jewel\'s seven-step topic model (no sign step); the gameshow step model is unchanged and its page renders the light stage.');
 }
 
 // --- The page's shape: one visual stage, no path skeleton ------------------
@@ -139,7 +139,7 @@ const quizTool = (overrides = {}) => ({
     'the conversation is not parked between the banner and the topics — it lives inside the current topic');
   assert((stage.match(/\{jewelPanel\}/g) || []).length >= 6, 'her panel stands inside every topic section, after that topic\'s examples');
   assert(page.includes('jewelPanel={jewelPanelElement}'), 'the page hands its one Jewel panel to the talk stage');
-  assert(page.includes('talkCreateView || stageReviewView ? null : jewelPanelElement'), 'in the talk create view (and the stage-review view) the grid does not render the panel a second time');
+  assert(page.includes('talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement'), 'in the talk create view (and the gameshow create and stage-review views) the grid does not render the panel a second time');
   assert.equal((page.match(/<WorkshopAiPanel/g) || []).length, 1, 'the panel element is built exactly once and placed, never duplicated');
   const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
   assert(panel.includes('hidden={workflowStep===1&&!buildAiOpen&&!stageReview}'), 'the panel can only be hidden in Set the Stage outside the review spaces — in Imagine and Create it stands open by default, and in the review spaces it always stands open');
@@ -632,19 +632,20 @@ const quizTool = (overrides = {}) => ({
   // Top of the page: Rename · Save project · Delete only — the Ask Jewel
   // header button, the status span, the kind picker, and the save-status
   // line come off the top in that view (they render for every other view).
-  assert(page.includes('{!talkBareFrame && <span>{project.status}</span>}'), 'the draft-status span leaves the talk top');
+  assert(page.includes('{!lightCreateFrame && <span>{project.status}</span>}'), 'the draft-status span leaves the talk top');
   assert(page.includes('const talkBareFrame = talkCreateView || (project.kind === "talk" && stageReviewView)'), 'the bare talk frame covers both the talk create view and talk at Set the Stage');
-  assert(page.includes('{!talkBareFrame && <button type="button" className="build-btn ask-jewel-btn"'), 'the Ask Jewel header button leaves the talk top');
-  assert(page.includes('{!talkBareFrame && <small role="status"'), 'the save-status clutter leaves the talk top');
+  assert(page.includes('const lightCreateFrame = talkBareFrame || gameshowCreateView'), 'the light create frame extends the bare top to the gameshow create view — same removals, same "Save project"');
+  assert(page.includes('{!lightCreateFrame && <button type="button" className="build-btn ask-jewel-btn"'), 'the Ask Jewel header button leaves the talk top');
+  assert(page.includes('{!lightCreateFrame && <small role="status"'), 'the save-status clutter leaves the talk top');
   assert(page.includes('✎ Rename') && page.includes('Delete Project'), 'Rename and Delete Project remain at the top');
-  assert(page.includes('talkBareFrame ? "Save project" : "Save progress"'), 'in the talk top the save button reads exactly "Save project"');
+  assert(page.includes('lightCreateFrame ? "Save project" : "Save progress"'), 'in the talk top the save button reads exactly "Save project"');
   // No generic frame above the stage: no Brainstorm & create heading
   // block, no Current Task entry guide, no section tab trio (bare nav),
   // and no gameshow-shaped game plan form — the theme was settled at
   // creation and never becomes a page area again.
-  assert(page.includes('{!talkBareFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view (and the stage-review views)');
-  assert(page.includes('entryGuide={talkCreateView || stageReviewView ? undefined :'), 'the Current Task card leaves the talk view (and the stage-review views)');
-  assert(page.includes('bare={talkBareFrame || stageReviewView}'), 'the nav renders bare for the talk views (and the stage-review views) — stage buttons only');
+  assert(page.includes('{!lightCreateFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view (and the stage-review views)');
+  assert(page.includes('entryGuide={talkCreateView || gameshowCreateView || stageReviewView ? undefined :'), 'the Current Task card leaves the talk view (and the stage-review views)');
+  assert(page.includes('bare={lightCreateFrame || stageReviewView}'), 'the nav renders bare for the talk views (and the stage-review views) — stage buttons only');
   assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && <details key="game-plan"'), 'the gameshow-shaped game plan form leaves the talk view');
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(!stage.includes('gamePlan') || !stage.includes('theme: event.target.value'), 'the stage carries no theme editing — theme is a fact from creation');
@@ -704,8 +705,8 @@ const quizTool = (overrides = {}) => ({
   // stage.
   assert(panel.includes('const talkCreateView = project.kind === "talk" && workflowStep === 0'),
     'the panel computes the talk create view to withhold the strip');
-  assert(panel.includes('const stripWithheld = talkCreateView || stageReview;') && panel.includes('{!stripWithheld && (()=>{const stageState=workflow.stages[workflowStep];'),
-    'the progress strip renders only where it is not withheld (talk create, or the stage-review spaces)');
+  assert(panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || stageReview;') && panel.includes('{!stripWithheld && (()=>{const stageState=workflow.stages[workflowStep];'),
+    'the progress strip renders only where it is not withheld (talk create, gameshow create, or the stage-review spaces)');
   assert(panel.includes('jewel-progress') && panel.includes('Next: {nextTask.label}') && panel.includes('Go there →'),
     'the generic progress strip itself is untouched — other kinds keep their chips and Next line');
   assert(panel.includes('<CompactConversation') && panel.includes('AI CREATIVE DIRECTOR'),

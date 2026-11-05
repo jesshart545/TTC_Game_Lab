@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Project } from "../lib/project";
 import type { WorkflowEvaluation, WorkflowStepState } from "../lib/workflow-progress";
 import {
@@ -41,6 +41,7 @@ export type GameshowDoors = {
   openCityCrimeScene: () => void;
   downloadTriviaPdf: (questions: any[]) => void;
   showSavedWork: () => void;
+  showPlanForm: () => void;
 };
 
 export type GameshowWorkshopProps = {
@@ -53,6 +54,17 @@ export type GameshowWorkshopProps = {
   doors: GameshowDoors;
   ccssEntitled: boolean;
 };
+
+/**
+ * The light stage (components/GameshowStage.tsx) renders these same
+ * screens inside Jewel's checklist model (Jessica, 2026-11-04): she
+ * holds the steps and marks them herself, so the page furniture —
+ * step heads, "done when" strips, checked-off lines, change piles
+ * and ask strips — stands down. Screens under this context keep
+ * every demonstration, shelf and manual door; only the furniture
+ * is suppressed. The user just talks to Jewel.
+ */
+export const BareStageContext = createContext(false);
 
 /** A ticking clock for demonstration animations (the runtime's own pattern). */
 export function useNow(active: boolean): number {
@@ -68,6 +80,8 @@ export function useNow(active: boolean): number {
 }
 
 export function ChangeList({ title, items, onAsk, spring }: { title: string; items: ChangeItem[]; onAsk: (text: string) => void; spring?: string }) {
+  const bare = useContext(BareStageContext);
+  if (bare) return null;
   return (
     <div className="gsw-edits">
       <div className="gsw-eh">{title}</div>
@@ -91,6 +105,8 @@ export function ChangeList({ title, items, onAsk, spring }: { title: string; ite
 }
 
 export function AskStrip({ stepId, note, onAskJewel: onAsk, onOpenJewel, extra }: GameshowWorkshopProps & { stepId: string; note?: ReactNode; extra?: ReactNode }) {
+  const bare = useContext(BareStageContext);
+  if (bare) return null;
   const meta = GAMESHOW_STEP_META[stepId];
   const asks = STEP_ASKS[stepId] || [];
   return (
@@ -116,8 +132,9 @@ export function AskStrip({ stepId, note, onAskJewel: onAsk, onOpenJewel, extra }
 }
 
 export function StepShell({ stepId, step, children }: { stepId: string; step?: WorkflowStepState; children: ReactNode }) {
+  const bare = useContext(BareStageContext);
   const meta = GAMESHOW_STEP_META[stepId];
-  if (!meta || !step) return <>{children}</>;
+  if (bare || !meta || !step) return <>{children}</>;
   return (
     <section aria-label={step.label}>
       <div className="gsw-stephead"><span className="gsw-k">{meta.kicker}</span><div className="gsw-display">{step.label}</div></div>
@@ -162,53 +179,83 @@ export function DrawDemo({ title, entries, drawnLabel }: { title: string; entrie
 
 /* ---------------- Step 1 · Plan your show ---------------- */
 
-function PlanStep(props: GameshowWorkshopProps & { step?: WorkflowStepState }) {
-  const { project, doors, onAskJewel: onAsk } = props;
+/** The pictured example stage for an empty project: the site's own
+ * Gameshow artwork, so an area demonstrates with a real picture —
+ * never a flat gradient void or text placeholders. Labelled as an
+ * example wherever it stands in (the Talk stage's own pattern). */
+export function GameshowExampleStage() {
+  return <img className="gsw-bg" src="/redesign/kind-gameshow.webp" alt="" />;
+}
+
+/** The plan at a glance, over the show's own backdrop — or, while the
+ * project is still empty, over the pictured example stage. */
+export function PlanVisual({ project }: { project: Project }) {
   const plan = project.gamePlan || {};
   const backdrop = backdropAsset(project);
   const chips: [string, string][] = [
     ["Theme", plan.theme], ["Rounds", plan.rounds], ["Turns", plan.turns], ["Scoring", plan.scoring], ["Winning", plan.winning],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]?.trim())) as [string, string][];
+  return (
+    <div>
+      <div className="gsw-seclabel">Your game plan — as it stands</div>
+      <div className="gsw-stage-visual" style={{ minHeight: 280 }}>
+        {backdrop?.url ? <img className="gsw-bg" src={backdrop.url} alt="" /> : <GameshowExampleStage />}
+        <div className="gsw-shade" />
+        <div className="gsw-inner">
+          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 2.4, color: "#e9c979" }}>YOUR GAME PLAN</div>
+          <div className="gsw-display gsw-plan-title">{project.name}</div>
+          {plan.purpose
+            ? <p style={{ color: "#d9d3ec", fontSize: 14.5, marginTop: 6, lineHeight: 1.55 }}>{plan.purpose}</p>
+            : <p style={{ color: "#d9d3ec", fontSize: 14, marginTop: 6, lineHeight: 1.55 }}>No plan yet — tell Jewel your theme and she drafts the rest: rounds, scoring, how it ends.</p>}
+          {chips.length > 0 && (
+            <div className="gsw-chipsrow">
+              {chips.map(([label, value], i) => <span key={label} className={"gsw-vchip" + (i === 0 ? " gold" : "")}>{label} · {value}</span>)}
+            </div>
+          )}
+          <p style={{ color: "#948bb3", fontSize: 12.5, marginTop: 12 }}>Purpose, rules and play-through live on the plan itself — this card is the whole plan at a glance.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The ready-made shows shelf: pictured template tiles, as they are
+ * stored — tap one and it is applied to the project, as today. */
+export function PlanTemplates({ doors }: { doors: GameshowDoors }) {
   const templates = GAME_TEMPLATES.slice(0, 3);
+  return (
+    <div>
+      <div className="gsw-seclabel" style={{ marginTop: 22 }}>…or start from a ready-made show — here’s what one hands you</div>
+      <div className="gsw-shelf">
+        {templates.map(template => (
+          <button key={template.id} type="button" className="gsw-asset" onClick={() => doors.applyTemplate(template.id)}>
+            <img src="/redesign/kind-gameshow.webp" alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            <div className="gsw-shade" />
+            <span className="gsw-ak">Template</span>
+            <span className="gsw-an">{template.name}<br />
+              <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{template.description}</span>
+            </span>
+          </button>
+        ))}
+        <button type="button" className="gsw-asset plain" onClick={doors.showTemplates}>
+          <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>All {GAME_TEMPLATES.length} templates →<br />
+            <span style={{ color: "#948bb3", fontWeight: 600, fontSize: 12 }}>{GAME_TEMPLATES.slice(3, 9).map(t => t.name).join(" · ")}</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PlanStep(props: GameshowWorkshopProps & { step?: WorkflowStepState }) {
+  const { project, doors, onAskJewel: onAsk } = props;
   return (
     <StepShell stepId="plan" step={props.step}>
       <div className="gsw-cols">
         <div>
-          <div className="gsw-seclabel">Your game plan — as it stands</div>
-          <div className="gsw-stage-visual" style={{ minHeight: 280 }}>
-            {backdrop?.url && <img className="gsw-bg" src={backdrop.url} alt="" />}
-            <div className="gsw-shade" />
-            <div className="gsw-inner">
-              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 2.4, color: "#e9c979" }}>YOUR GAME PLAN</div>
-              <div className="gsw-display gsw-plan-title">{project.name}</div>
-              {plan.purpose
-                ? <p style={{ color: "#d9d3ec", fontSize: 14.5, marginTop: 6, lineHeight: 1.55 }}>{plan.purpose}</p>
-                : <p style={{ color: "#948bb3", fontSize: 14, marginTop: 6, lineHeight: 1.55 }}>No plan yet — tell Jewel your idea and she drafts it: name, theme, rounds, scoring, how it ends.</p>}
-              {chips.length > 0 && (
-                <div className="gsw-chipsrow">
-                  {chips.map(([label, value], i) => <span key={label} className={"gsw-vchip" + (i === 0 ? " gold" : "")}>{label} · {value}</span>)}
-                </div>
-              )}
-              <p style={{ color: "#948bb3", fontSize: 12.5, marginTop: 12 }}>Purpose, rules and play-through live on the plan itself — this card is the whole plan at a glance.</p>
-            </div>
-          </div>
+          <PlanVisual project={project} />
           <ChangeList title="What you can change — the game plan" items={PLAN_CHANGES} onAsk={onAsk} />
-          <div className="gsw-seclabel" style={{ marginTop: 22 }}>…or start from a ready-made show — here’s what one hands you</div>
-          <div className="gsw-shelf">
-            {templates.map(template => (
-              <button key={template.id} type="button" className="gsw-asset plain" onClick={() => doors.applyTemplate(template.id)}>
-                <span className="gsw-ak">Template</span>
-                <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>{template.name}<br />
-                  <span style={{ fontWeight: 600, fontSize: 11.5, color: "#cfc8e6" }}>{template.description}</span>
-                </span>
-              </button>
-            ))}
-            <button type="button" className="gsw-asset plain" onClick={doors.showTemplates}>
-              <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>All {GAME_TEMPLATES.length} templates →<br />
-                <span style={{ color: "#948bb3", fontWeight: 600, fontSize: 12 }}>{GAME_TEMPLATES.slice(3, 9).map(t => t.name).join(" · ")}</span>
-              </span>
-            </button>
-          </div>
+          <PlanTemplates doors={doors} />
         </div>
         <AskStrip
           {...props}
@@ -236,6 +283,9 @@ function AudioDemo({ project, kind, label }: { project: Project; kind: "voice" |
     return (
       <div className="gsw-card">
         <span className="gsw-vchip gold">{label} · nothing yet</span>
+        <div className="gsw-wave" aria-hidden="true">
+          {WAVE_HEIGHTS.map((h, i) => <i key={i} style={{ height: `${h}%` }} />)}
+        </div>
         <p>No {label.toLowerCase()} in your library yet. Ask Jewel to make one — the moment it exists, it plays right here, exactly as your audience will hear it.</p>
       </div>
     );
@@ -261,38 +311,38 @@ function AudioDemo({ project, kind, label }: { project: Project; kind: "voice" |
   );
 }
 
-function MediaStep(props: GameshowWorkshopProps & { step?: WorkflowStepState }) {
-  const { project, doors, onAskJewel: onAsk } = props;
-  const [kind, setKind] = useState<string>("image");
+/** The media demonstrations: one living demo per media kind. On an
+ * empty project the image demo stands over the pictured example
+ * stage — never an empty frame with text placeholders. */
+export function MediaDemos(props: GameshowWorkshopProps & { kind: string; onKindChange: (kind: string) => void }) {
+  const { project, kind, onKindChange } = props;
   const [shape, setShape] = useState("16/9");
   const backdrop = backdropAsset(project);
   const video = latestAssetOfKind(project, "video");
   const pending = project.pendingVideos || [];
-  const shelf = (project.assets || []).slice(-7);
   const shapeWidth: Record<string, string> = { "16/9": "520px", "9/16": "230px", "1/1": "360px", "4/3": "440px" };
   return (
-    <StepShell stepId="media" step={props.step}>
+    <div>
       <div className="gsw-mtypes">
         {GENERATORS.map(generator => (
-          <button key={generator.type} type="button" className={"gsw-mtype" + (kind === generator.type ? " on" : "")} onClick={() => setKind(generator.type)}>
+          <button key={generator.type} type="button" className={"gsw-mtype" + (kind === generator.type ? " on" : "")} onClick={() => onKindChange(generator.type)}>
             <div className="gsw-ic">{generator.icon}</div>
             <div className="gsw-mt">{generator.label}</div>
             <div className="gsw-md">{MEDIA_DESCRIPTIONS[generator.type]}</div>
           </button>
         ))}
       </div>
-      <div className="gsw-cols">
-        <div>
+      <div>
           <span className="gsw-demotag">Live demonstration — try it</span>
           {kind === "image" && (
             <div>
-              <div className="gsw-seclabel">{backdrop ? "Image — your backdrop. Change its shape and watch the frame follow" : "Image — your backdrop will stand here. Change its shape and watch the frame follow"}</div>
+              <div className="gsw-seclabel">{backdrop ? "Image — your backdrop & sign, one piece. Change its shape and watch the frame follow" : "Image — your backdrop & sign will stand here, one piece. Change its shape and watch the frame follow"}</div>
               <div className="gsw-imgframe" style={{ aspectRatio: shape.replace("/", " / "), maxWidth: shapeWidth[shape] || "520px" }}>
                 <div className="gsw-stage-visual" style={{ height: "100%" }}>
                   {backdrop?.url
                     ? <img className="gsw-bg" src={backdrop.url} alt="" />
-                    : <div className="gsw-shade" style={{ background: "linear-gradient(140deg,#251739,#154c69 60%,#1d1607)" }} />}
-                  <div className="gsw-inner"><span className="gsw-vchip gold">{backdrop ? `Stage backdrop · ${backdrop.name}` : "Example stage · yours will appear here"}</span></div>
+                    : <GameshowExampleStage />}
+                  <div className="gsw-inner"><span className="gsw-vchip gold">{backdrop ? `Stage backdrop · ${backdrop.name}` : "Example stage"}</span></div>
                 </div>
               </div>
               <div className="gsw-chipsrow">
@@ -331,30 +381,54 @@ function MediaStep(props: GameshowWorkshopProps & { step?: WorkflowStepState }) 
           {kind === "voice" && (<><div className="gsw-seclabel">Voice — press play and hear your announcer line</div><AudioDemo project={project} kind="voice" label="Voice" /></>)}
           {kind === "music" && (<><div className="gsw-seclabel">Music — press play for your theme</div><AudioDemo project={project} kind="music" label="Music" /></>)}
           {kind === "sfx" && (<><div className="gsw-seclabel">Sound effect — press play and hear it</div><AudioDemo project={project} kind="sfx" label="Sound Effect" /></>)}
+      </div>
+    </div>
+  );
+}
+
+/** The media library shelf: the most recent work, stored — plus the
+ * upload door, exactly as it works today. */
+export function MediaShelf({ project, doors }: { project: Project; doors: GameshowDoors }) {
+  const shelf = (project.assets || []).slice(-7);
+  return (
+    <div>
+      <div className="gsw-seclabel" style={{ marginTop: 22 }}>Your media library — everything you’ve made &amp; uploaded</div>
+      <div className="gsw-shelf">
+        {shelf.map(asset => {
+          const key = asset.storageKey || asset.name;
+          return (
+            <button key={key} type="button" className="gsw-asset" onClick={() => doors.showAsset(key)}>
+              <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
+              <div className="gsw-shade" />
+              <span className="gsw-ak">{assetCategory(asset)}</span>
+              <span className="gsw-an">{asset.name}</span>
+            </button>
+          );
+        })}
+        <button type="button" className="gsw-asset plain" onClick={doors.upload}>
+          <span className="gsw-big">＋</span>
+          <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>Upload assets</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MediaStep(props: GameshowWorkshopProps & { step?: WorkflowStepState }) {
+  const { project, doors, onAskJewel: onAsk } = props;
+  const [kind, setKind] = useState<string>("image");
+  return (
+    <StepShell stepId="media" step={props.step}>
+      <MediaDemos {...props} kind={kind} onKindChange={setKind} />
+      <div className="gsw-cols">
+        <div>
           <ChangeList
             title="What you can change"
             items={[...(MEDIA_CHANGES[kind] || []), ...MEDIA_SHARED_CHANGES]}
             onAsk={onAsk}
             spring="Springboards, not a menu — every line here is something Jewel can do, and anything you can describe goes on the list too."
           />
-          <div className="gsw-seclabel" style={{ marginTop: 22 }}>Your media library — everything you’ve made &amp; uploaded</div>
-          <div className="gsw-shelf">
-            {shelf.map(asset => {
-              const key = asset.storageKey || asset.name;
-              return (
-                <button key={key} type="button" className="gsw-asset" onClick={() => doors.showAsset(key)}>
-                  <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
-                  <div className="gsw-shade" />
-                  <span className="gsw-ak">{assetCategory(asset)}</span>
-                  <span className="gsw-an">{asset.name}</span>
-                </button>
-              );
-            })}
-            <button type="button" className="gsw-asset plain" onClick={doors.upload}>
-              <span className="gsw-big">＋</span>
-              <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>Upload assets</span>
-            </button>
-          </div>
+          <MediaShelf project={project} doors={doors} />
         </div>
         <AskStrip
           {...props}
