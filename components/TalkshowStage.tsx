@@ -154,14 +154,17 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
           {backgrounds.map(asset => {
             const lettering = assetBackdropText(asset);
             return (
-              <button key={assetKey(asset)} type="button" className="gsw-asset" onClick={() => doors.applyBackground(assetKey(asset))}>
-                <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
-                <div className="gsw-shade" />
-                <span className="gsw-ak">{isVideo(asset) ? "Animated backdrop" : "Backdrop"}{asset.sign ? " · Your sign" : ""}</span>
-                <span className="gsw-an">{asset.name}<br />
-                  <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{assetPlaced(asset) ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{lettering ? ` · Lettered: “${lettering.text}”` : ""}</span>
-                </span>
-              </button>
+              <div key={assetKey(asset)} className="gsw-asset-wrap">
+                <button type="button" className="gsw-asset" onClick={() => doors.applyBackground(assetKey(asset))}>
+                  <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
+                  <div className="gsw-shade" />
+                  <span className="gsw-ak">{isVideo(asset) ? "Animated backdrop" : "Backdrop"}{asset.sign ? " · Your sign" : ""}</span>
+                  <span className="gsw-an">{asset.name}<br />
+                    <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{assetPlaced(asset) ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{lettering ? ` · Lettered: “${lettering.text}”` : ""}</span>
+                  </span>
+                </button>
+                <button type="button" className="gsw-asset-del" aria-label={`Delete ${asset.name}`} onClick={() => doors.deleteAsset(asset)}>Delete</button>
+              </div>
             );
           })}
         </div>
@@ -329,11 +332,14 @@ function MediaStage({ project, doors, jewelPanel }: StageProps) {
           <div className="gsw-seclabel">Your media — stored here</div>
           <div className="gsw-shelf">
             {media.map(asset => (
-              <div key={assetKey(asset)} className="gsw-asset">
-                <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
-                <div className="gsw-shade" />
-                <span className="gsw-ak">{asset.type}</span>
-                <span className="gsw-an">{asset.name}</span>
+              <div key={assetKey(asset)} className="gsw-asset-wrap">
+                <div className="gsw-asset">
+                  <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
+                  <div className="gsw-shade" />
+                  <span className="gsw-ak">{asset.type}</span>
+                  <span className="gsw-an">{asset.name}</span>
+                </div>
+                <button type="button" className="gsw-asset-del" aria-label={`Delete ${asset.name}`} onClick={() => doors.deleteAsset(asset)}>Delete</button>
               </div>
             ))}
           </div>

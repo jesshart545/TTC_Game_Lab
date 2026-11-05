@@ -115,6 +115,10 @@ button.gsw-ei:hover { color:#ffffff; }
 .gsw-asset.plain { display:flex; flex-direction:column; justify-content:flex-end; padding:11px; }
 .gsw-asset .gsw-big { font-size:26px; }
 .gsw-asset.plain .gsw-an { position:static; }
+.gsw-asset-wrap { display:flex; flex-direction:column; min-width:0; }
+.gsw-asset-wrap .gsw-asset { flex:1; }
+.gsw-asset-del { margin-top:6px; align-self:flex-end; border:1px solid rgba(255,92,124,.42); background:rgba(255,92,124,.07); color:#ff9aae; border-radius:7px; padding:4px 9px; font-size:10.5px; font-weight:700; letter-spacing:.4px; cursor:pointer; font-family:inherit; }
+.gsw-asset-del:hover { border-color:rgba(255,92,124,.7); background:rgba(255,92,124,.12); color:#ffc1cd; }
 .gsw-imgframe { transition:aspect-ratio .45s ease, max-width .45s ease; margin:0 auto; width:100%; }
 .gsw-plan-title { font-size:30px; margin-top:6px; text-transform:uppercase; }
 

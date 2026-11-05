@@ -1983,6 +1983,7 @@ export default function ProjectWorkspace() {
             downloadTriviaPdf,
             showSavedWork: () => openSavedWorkshop(1),
             showPlanForm: () => openGamePlanEntry(),
+            deleteAsset: handleDeleteAsset,
           }}
         />
       )}
@@ -2005,6 +2006,7 @@ export default function ProjectWorkspace() {
             addYoutube: () => { void addGameTool("youtube"); },
             openComposer: () => { setEditingComposition(undefined); setShowAssetComposer(true); },
             showSavedWork: () => openSavedWorkshop(1),
+            deleteAsset: handleDeleteAsset,
           }}
         />
       )}

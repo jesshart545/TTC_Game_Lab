@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Project } from "../lib/project";
+import type { Project, ProjectAsset } from "../lib/project";
 import type { WorkflowEvaluation, WorkflowStepState } from "../lib/workflow-progress";
 import {
   CREATIVE_LIBERTY_TEXT, GAMESHOW_STEP_META, STEP_ASKS, PLAN_CHANGES, MEDIA_CHANGES, MEDIA_SHARED_CHANGES,
@@ -38,6 +38,9 @@ export type GameshowDoors = {
   openBoardTemplates: () => void;
   openToolTemplates: () => void;
   showAsset: (key: string) => void;
+  /** Ask the page to delete one stored asset (the page confirms first,
+   *  then runs its normal asset-deletion path). */
+  deleteAsset: (asset: ProjectAsset) => void;
   openCityCrimeScene: () => void;
   downloadTriviaPdf: (questions: any[]) => void;
   showSavedWork: () => void;
@@ -396,12 +399,15 @@ export function MediaShelf({ project, doors }: { project: Project; doors: Gamesh
         {shelf.map(asset => {
           const key = asset.storageKey || asset.name;
           return (
-            <button key={key} type="button" className="gsw-asset" onClick={() => doors.showAsset(key)}>
-              <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
-              <div className="gsw-shade" />
-              <span className="gsw-ak">{assetCategory(asset)}</span>
-              <span className="gsw-an">{asset.name}</span>
-            </button>
+            <div key={key} className="gsw-asset-wrap">
+              <button type="button" className="gsw-asset" onClick={() => doors.showAsset(key)}>
+                <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
+                <div className="gsw-shade" />
+                <span className="gsw-ak">{assetCategory(asset)}</span>
+                <span className="gsw-an">{asset.name}</span>
+              </button>
+              <button type="button" className="gsw-asset-del" aria-label={`Delete ${asset.name}`} onClick={() => doors.deleteAsset(asset)}>Delete</button>
+            </div>
           );
         })}
         <button type="button" className="gsw-asset plain" onClick={doors.upload}>
