@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { BackdropTextSpec, ProjectAsset, TalkSlide } from "../lib/project";
 import type { WorkflowStepState } from "../lib/workflow-progress";
 import { assetBackdropText, assetPromptText, backgroundAssets, findSignAsset, promptAsset } from "../lib/backdrop-text";
+import { assetPlaced } from "../lib/asset-filing";
 import { assetCategory } from "../lib/asset-folders";
 import { quizQuestionsOf } from "../lib/quiz";
 import { isVideo } from "../lib/workshop-libraries";
@@ -143,7 +144,7 @@ export function BackgroundStep(props: ScreenProps) {
                     <div className="gsw-shade" />
                     <span className="gsw-ak">{isVideo(asset) ? "Animated backdrop" : "Backdrop"}{asset.sign ? " · Your sign" : ""}</span>
                     <span className="gsw-an">{asset.name}<br />
-                      <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{asset.inProject ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{lettering ? ` · Lettered: “${lettering.text}”` : ""}</span>
+                      <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{assetPlaced(asset) ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{lettering ? ` · Lettered: “${lettering.text}”` : ""}</span>
                     </span>
                   </button>
                 );
@@ -211,7 +212,7 @@ const PRESENTATIONS: { id: NonNullable<BackdropTextSpec["presentation"]>; label:
 export function PromptStep(props: ScreenProps) {
   const { project, onSaveProject, onNavigateStep, onAskJewel: onAsk } = props;
   const backgrounds = backgroundAssets(project);
-  const target = backgrounds.find(asset => asset.inProject) || backgrounds[0] || null;
+  const target = backgrounds.find(asset => assetPlaced(asset)) || backgrounds[0] || null;
   const current = target ? assetPromptText(target) : null;
 
   const save = (patch: Partial<BackdropTextSpec>) => {
@@ -757,7 +758,7 @@ export function MissedStep(props: ScreenProps) {
                 <AssetThumbnail asset={asset} kind={assetCategory(asset)} />
                 <div className="gsw-shade" />
                 <span className="gsw-ak">{asset.sign ? "Your sign" : "Backdrop"}</span>
-                <span className="gsw-an">{asset.name}<br /><span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{lettering ? `Lettered: “${lettering.text}”` : asset.inProject ? "On your overlay" : "Saved"}</span></span>
+                <span className="gsw-an">{asset.name}<br /><span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{lettering ? `Lettered: “${lettering.text}”` : assetPlaced(asset) ? "On your overlay" : "Saved"}</span></span>
               </button>
             );
           })}

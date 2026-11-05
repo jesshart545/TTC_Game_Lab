@@ -8,7 +8,7 @@ import { Project, ProjectAsset, loadProjectFromServer, saveProjectToServer } fro
 import AssetFolders from "../../components/AssetFolders";
 import CollapsibleFolder, { rememberFolderState, type FolderBulkAction } from "../../components/CollapsibleFolder";
 import { assetCategory, categoryMatchesFilter, mediaFolders } from "../../lib/asset-folders";
-import { nextEditName } from "../../lib/asset-filing";
+import { fileEditedCopy, nextEditName } from "../../lib/asset-filing";
 import { assetDownloadHref, assetFileName, downloadAssetToDevice } from "../../lib/download-asset";
 
 type LibraryAsset = ProjectAsset & { projectName: string; projectId: string; assetIndex: number };
@@ -111,8 +111,10 @@ export default function AssetLibraryPage() {
     const blob=await response.blob();
     // The copy takes the next name in its source's edit line — "Name
     // (edit 1)", "Name (edit 2)" — from lib/asset-filing, never a
-    // stacked "-edited", and it keeps its source's filing, so it
-    // stands in the library exactly where its source stands. Its text
+    // stacked "-edited", and it files ITSELF into the source's
+    // project with the source's role (fileEditedCopy) — a copy made
+    // here belongs to the project even when its source was never
+    // filed, and the copy is not placed on the overlay. Its text
     // layer (textOverlay) rides along when it has one, so an edited
     // backdrop keeps its lettering. The name line is computed from a
     // fresh re-read of the project, and the append itself goes through
@@ -123,7 +125,7 @@ export default function AssetLibraryPage() {
     const extension=/\.[a-z0-9]+$/i.exec(nextAsset.name||"")?.[0]||".png";
     const file=new File([blob],copyName+extension,{type:blob.type||"image/png"});
     const stored=await storeUploadedAsset(asset.projectId,file);
-    const copy:ProjectAsset={...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})};
+    const copy:ProjectAsset=fileEditedCopy({...stored,name:copyName,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})},nextAsset);
     const saved=await saveFreshProject(asset.projectId,current=>({...current,assets:[...current.assets,copy],updatedAt:"just now"}));
     if(saved) setStatus("Edited image saved as a new permanent asset.");
   }

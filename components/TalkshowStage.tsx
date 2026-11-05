@@ -5,6 +5,7 @@ import type { BackdropTextSpec, Project, ProjectAsset } from "../lib/project";
 import type { WorkflowEvaluation } from "../lib/workflow-progress";
 import { assetBackdropText, assetPromptText, backgroundAssets, promptAsset } from "../lib/backdrop-text";
 import { assetCategory } from "../lib/asset-folders";
+import { assetPlaced } from "../lib/asset-filing";
 import { quizQuestionsOf } from "../lib/quiz";
 import { isVideo } from "../lib/workshop-libraries";
 import {
@@ -158,7 +159,7 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
                 <div className="gsw-shade" />
                 <span className="gsw-ak">{isVideo(asset) ? "Animated backdrop" : "Backdrop"}{asset.sign ? " · Your sign" : ""}</span>
                 <span className="gsw-an">{asset.name}<br />
-                  <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{asset.inProject ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{lettering ? ` · Lettered: “${lettering.text}”` : ""}</span>
+                  <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{assetPlaced(asset) ? "✓ On your overlay — tap another to switch" : "Tap to put it on your overlay"}{lettering ? ` · Lettered: “${lettering.text}”` : ""}</span>
                 </span>
               </button>
             );
@@ -176,7 +177,7 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
 
 function PromptStage({ project, jewelPanel }: StageProps) {
   const backgrounds = backgroundAssets(project);
-  const target = backgrounds.find(asset => asset.inProject) || backgrounds[0] || null;
+  const target = backgrounds.find(asset => assetPlaced(asset)) || backgrounds[0] || null;
   const current = target ? assetPromptText(target) : null;
   const exampleSpec = (presentation: NonNullable<BackdropTextSpec["presentation"]>): BackdropTextSpec => ({
     text: SAMPLE_PROMPT,

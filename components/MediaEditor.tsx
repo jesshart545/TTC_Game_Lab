@@ -84,8 +84,10 @@ export default function MediaEditor({ asset, onSaveAsNew, onClose }: {
       // The result saves as a NEW copy through this dialog's save-as-new
       // path, exactly like every other edit here: the host stores it
       // under the next name in this asset's edit line ("Name (edit N)",
-      // lib/asset-filing) and files it where this asset stands — same
-      // project, same inProject. edits: undefined keeps the host on its
+      // lib/asset-filing) and files the copy into this project with
+      // this asset's role (fileEditedCopy — filed even if this asset
+      // was not; the copy itself is not placed on the overlay).
+      // edits: undefined keeps the host on its
       // store-the-result branch: the AI result is finished media, not a
       // manual render. The original is never touched, and a failure
       // above saves nothing and says so.

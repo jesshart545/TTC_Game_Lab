@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Project } from "../lib/project";
 import { assetCategory } from "../lib/asset-folders";
+import { assetPlaced } from "../lib/asset-filing";
 import AssetThumbnail from "./AssetThumbnail";
 import CollapsibleFolder, { type FolderBulkAction } from "./CollapsibleFolder";
 
@@ -19,7 +20,7 @@ export default function BackgroundBrowser({ project, onChoose, onWorkshop }: Pro
   const matches = (name: string) => !search || name.toLowerCase().includes(search);
   const media = project.assets.filter(asset => ["image", "video"].includes(assetCategory(asset)) && matches(asset.name));
   const boards = project.gameTools.filter(tool => tool.enabled && ["blank-board", "trivia-board"].includes(tool.type) && matches(tool.name));
-  const current = project.assets.find(asset => asset.inProject && asset.role === "background")?.name
+  const current = project.assets.find(asset => assetPlaced(asset) && asset.role === "background")?.name
     || project.gameTools.find(tool => tool.enabled && tool.inOverlayBuild && ["blank-board", "trivia-board"].includes(tool.type))?.name;
 
   return <section className="build-background-browser" aria-label="Initial background">
@@ -40,7 +41,7 @@ export default function BackgroundBrowser({ project, onChoose, onWorkshop }: Pro
           <div className="creation-tray">
             {assets.map(asset => {
               const id = asset.storageKey || asset.name;
-              const selected = Boolean(asset.inProject && asset.role === "background");
+              const selected = Boolean(assetPlaced(asset) && asset.role === "background");
               return <article key={id}>
                 <button type="button" className="build-asset-thumbnail" aria-label={`Use ${asset.name} as initial background`} aria-pressed={selected} onClick={() => onChoose(id)}>
                   <AssetThumbnail key={asset.url || id} asset={asset} kind={kind}/>
