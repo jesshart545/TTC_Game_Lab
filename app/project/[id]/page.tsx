@@ -1793,6 +1793,7 @@ export default function ProjectWorkspace() {
           onEnterJewel={enterJewelFromScene}
           project={project}
           workflow={evaluateWorkflow(project)}
+          onSaveProject={persist}
           onNavigateStep={selectGameshowStep}
           onAskJewel={askJewel}
           onOpenJewel={openJewel}
