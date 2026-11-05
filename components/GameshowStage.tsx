@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Project } from "../lib/project";
 import type { WorkflowEvaluation, WorkflowStepState } from "../lib/workflow-progress";
 import { CREATIVE_LIBERTY_TEXT } from "../lib/gameshow-path";
@@ -25,7 +25,11 @@ import "./gameshow-workshop.css";
  * piles — the user never handles the checklist. The user's own
  * inputs are the two creation already asks for (the show's title,
  * and its theme — given to Jewel as her starting input at the
- * plan); everything else happens by talking to her.
+ * plan); everything else happens by talking to her. Those two
+ * inputs also keep a compact, visible home at the start of the
+ * work area (the "Your show" block): inside the project the theme
+ * otherwise lived only in the collapsed plan form, where the
+ * user could not see where to put it (Jessica, 2026-11-04).
  *
  * What the page shows is the ONE area Jewel is on (the workflow
  * model's first unfinished gameshow step): pictured, living
@@ -65,6 +69,9 @@ type StageProps = {
   /** Stepping into Jewel through the wand scene: the page reveals
    *  her conversation if it was hidden and lands on her input. */
   onEnterJewel: () => void;
+  /** The page's own save path, handed down (as on the Talk stage)
+   *  so the user's two inputs can write through it. */
+  onSaveProject: (project: Project) => void;
 };
 
 function screenProps(props: StageProps, step?: WorkflowStepState): GameshowWorkshopProps & { step?: WorkflowStepState } {
@@ -83,6 +90,80 @@ function screenProps(props: StageProps, step?: WorkflowStepState): GameshowWorks
 
 function AreaHeading({ children }: { children: ReactNode }) {
   return <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>{children}</div>;
+}
+
+/* ------------- Your show — the user's two inputs ------------- */
+
+/**
+ * The two things only the user can give — the show's title and
+ * its theme, vibe, or subject — asked at creation, and kept here
+ * in one compact block at the start of the work area so they are
+ * never hidden inside the collapsed plan form (Jessica,
+ * 2026-11-04). Exactly two inputs and nothing else: edits save on
+ * blur or Enter through the page's own save path (onSaveProject),
+ * writing the same two fields creation seeds — the project name
+ * and gamePlan.theme — and preserving every other plan field. No
+ * save button, no status text, no explanation.
+ */
+function YourShow({ project, onSaveProject }: { project: Project; onSaveProject: (project: Project) => void }) {
+  const savedTitle = project.name;
+  const savedTheme = project.gamePlan?.theme || "";
+  const [title, setTitle] = useState(savedTitle);
+  const [theme, setTheme] = useState(savedTheme);
+  // The saved pair as last seen: when the saved values change
+  // underneath the block (Jewel sets them in conversation, the
+  // top-bar rename lands), a field the user is not editing follows
+  // the saved value, while a field mid-edit keeps their text.
+  const seen = useRef({ title: savedTitle, theme: savedTheme });
+  useEffect(() => {
+    const prev = seen.current;
+    if (prev.title !== savedTitle) setTitle(current => (current === prev.title ? savedTitle : current));
+    if (prev.theme !== savedTheme) setTheme(current => (current === prev.theme ? savedTheme : current));
+    seen.current = { title: savedTitle, theme: savedTheme };
+  }, [savedTitle, savedTheme]);
+
+  function saveTitle() {
+    if (!title.trim()) { setTitle(savedTitle); return; }
+    if (title !== savedTitle) onSaveProject({ ...project, name: title, updatedAt: "just now" });
+  }
+  function saveTheme() {
+    if (theme !== savedTheme) onSaveProject({ ...project, gamePlan: { ...(project.gamePlan || {}), theme }, updatedAt: "just now" });
+  }
+  function blurOnEnter(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") event.currentTarget.blur();
+  }
+
+  return (
+    <div className="gsw-card gsw-show">
+      <div className="gsw-display gsw-show-head">Your show</div>
+      <div className="gsw-show-fields">
+        <label className="gsw-show-field" htmlFor="gsw-show-title">
+          <span>Title of your show</span>
+          <input
+            id="gsw-show-title"
+            type="text"
+            maxLength={100}
+            value={title}
+            onChange={event => setTitle(event.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={blurOnEnter}
+          />
+        </label>
+        <label className="gsw-show-field" htmlFor="gsw-show-theme">
+          <span>Theme, vibe, or subject</span>
+          <input
+            id="gsw-show-theme"
+            type="text"
+            maxLength={200}
+            value={theme}
+            onChange={event => setTheme(event.target.value)}
+            onBlur={saveTheme}
+            onKeyDown={blurOnEnter}
+          />
+        </label>
+      </div>
+    </div>
+  );
 }
 
 /* ---------------- Plan — the entry area ---------------- */
@@ -141,6 +222,7 @@ export default function GameshowStage(props: StageProps) {
         </div>
         <div className="gsw-lwand" aria-hidden="true">🪄</div>
       </div>
+      <YourShow key={props.project.id} project={props.project} onSaveProject={props.onSaveProject} />
       <BareStageContext.Provider value={true}>
         {area === "plan" && <PlanArea {...props} />}
         {area === "media" && <MediaArea {...props} step={stepState} />}

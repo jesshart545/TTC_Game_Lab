@@ -205,6 +205,46 @@ function baseProject(overrides = {}) {
   console.log('PASS: gameshow creation asks title + theme, the stage opens on Jewel (no plan showpiece), and template cards are picture + name only.');
 }
 
+// --- The two user inputs keep a compact, visible home on the stage --------
+// Jessica (2026-11-04 19:22 CST), looking at the live page: she could
+// not see where the user inputs the two pieces of information —
+// creation asks them, but inside the project the theme lived only
+// inside the collapsed plan form. The stage now opens its work area
+// with one compact block holding exactly those two inputs, bound to
+// the same fields creation seeds (the project name, gamePlan.theme)
+// and saved through the page's existing save path.
+{
+  const stage = fs.readFileSync('components/GameshowStage.tsx', 'utf8');
+  const block = stage.slice(stage.indexOf('function YourShow'), stage.indexOf('/* ---------------- Plan'));
+  assert(block.length > 0, 'the stage carries the Your show block');
+  // Exactly two inputs and nothing else — no textarea, select or button.
+  assert.equal((block.match(/<input/g) || []).length, 2, 'the Your show block holds exactly two inputs');
+  assert(!block.includes('<textarea') && !block.includes('<select') && !block.includes('<button'), 'the block holds nothing but the two inputs — no save button, no extra controls');
+  assert(block.includes('>Your show</div>'), 'the block heading is one short line');
+  assert(block.includes('<span>Title of your show</span>'), 'the first input is the title, labeled exactly as creation labels it');
+  assert(block.includes('<span>Theme, vibe, or subject</span>'), 'the second input is the theme, labeled exactly as creation labels it');
+  // Bound to the creation-seeded fields, pre-filled from them; a
+  // project without a theme shows the theme input empty.
+  assert(block.includes('const savedTitle = project.name') && block.includes('useState(savedTitle)'), 'the title input starts from the project name');
+  assert(block.includes('project.gamePlan?.theme || ""'), 'the theme input starts from gamePlan.theme, empty when unset');
+  // Writes go through the page's save path and touch only the two
+  // seeded fields, preserving every other plan field.
+  assert(block.includes('onSaveProject({ ...project, name: title, updatedAt: "just now" })'), 'a title edit saves the project name through the page save path');
+  assert(block.includes('gamePlan: { ...(project.gamePlan || {}), theme }'), 'a theme edit writes gamePlan.theme and preserves the rest of the plan');
+  assert(block.includes('onBlur={saveTitle}') && block.includes('onBlur={saveTheme}'), 'both inputs save on blur — no save button needed');
+  assert(block.includes('event.currentTarget.blur()'), 'Enter saves too, by leaving the field');
+  // Placement: the first block of the work area — under the banner
+  // (never above it), ahead of every area, so in the plan area it
+  // stands before Jewel's wand-scene doorway.
+  const render = stage.slice(stage.indexOf('return (\n    <section'));
+  assert(render.indexOf('gsw-liberty') < render.indexOf('<YourShow'), 'the block is not above the creative-liberty banner');
+  assert(render.indexOf('<YourShow') < render.indexOf('<BareStageContext.Provider'), 'the block stands ahead of the areas — before the wand-scene doorway in the plan area');
+  const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
+  const stageElement = page.slice(page.indexOf('<GameshowStage'), page.indexOf('/>', page.indexOf('<GameshowStage')));
+  assert(stageElement.includes('onSaveProject={persist}'), 'the page wires the stage to its existing persist — the same save the plan form and the rename use');
+  console.log('PASS: the two user inputs — title and theme — sit in one compact block at the start of the stage and save through the page’s existing save path.');
+}
+
 // --- Preservation round-trip: a full project survives the model intact -----
 // Music Showdown's shape: 38 assets, 24 tools, 203 Jewel messages.
 // Evaluation and demonstration lookups are reads — nothing about the
@@ -226,7 +266,7 @@ function baseProject(overrides = {}) {
 
 // --- New UI: no generation of its own, checks only from the evaluator -------
 {
-  const files = ['components/GameshowWorkshop.tsx', 'components/GameshowSteps.tsx', 'components/GameshowToolDemos.tsx', 'components/GameshowStage.tsx'];
+  const files = ['components/GameshowWorkshop.tsx', 'components/GameshowSteps.tsx', 'components/GameshowToolDemos.tsx'];
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
     assert(!source.includes('fetch('), `${file} makes no network calls`);
@@ -234,6 +274,13 @@ function baseProject(overrides = {}) {
     assert(!source.includes('generateAsset'), `${file} never generates directly — Jewel is the only generation door`);
     assert(!source.includes('persist('), `${file} never writes the project — demonstrations are local and free to try`);
   }
+  // The stage itself: no network, no generation — and it never calls
+  // the page's save directly. Its one write is the user's two inputs,
+  // through the onSaveProject prop the page wires to that same save
+  // (pinned in the Your show block above).
+  const stageSource = fs.readFileSync('components/GameshowStage.tsx', 'utf8');
+  assert(!stageSource.includes('fetch(') && !stageSource.includes('/api/') && !stageSource.includes('generateAsset'), 'the light stage makes no network calls and generates nothing itself');
+  assert(!stageSource.includes('persist('), 'the light stage writes only through the onSaveProject prop — never the page save directly');
   const shell = fs.readFileSync('components/GameshowWorkshop.tsx', 'utf8');
   assert(shell.includes('step.complete'), 'green checks read the evaluator’s step.complete');
   assert(!shell.includes('setGameshowStep') && !/useState\([^)]*complete/i.test(shell), 'the shell keeps no completion state of its own');
@@ -241,7 +288,7 @@ function baseProject(overrides = {}) {
   assert(demos.includes('ccssEntitled'), 'the City Crime Scene tile is gated on entitlement');
   assert(/ccssEntitled \? \[\{ type: "city-crime-scene"/.test(demos) && demos.includes('ccssEntitled && ('), 'no CCS tile exists at all for non-entitled accounts');
   assert(shell.includes('ChanceTools') === false, 'renderers are imported by the demo screens, not re-implemented in the shell');
-  console.log('PASS: the new components generate nothing, save nothing, and take every check from the evaluator.');
+  console.log('PASS: the new components generate nothing of their own, write only the two user inputs through the page save, and take every check from the evaluator.');
 }
 
 // --- Preservation: every existing Workshop capability is still reachable ----
