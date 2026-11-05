@@ -27,7 +27,7 @@ test('the failure reply branches on what the task actually saved', () => {
 });
 
 test('saved work is counted where it actually happens', () => {
-  const layerSaveAt = page.indexOf('name: resultName, type: "video/mp4"');
+  const layerSaveAt = page.indexOf('name: layerSource.name, type: "video/mp4"');
   assert.ok(layerSaveAt > -1, 'the edit-layer save exists');
   assert.ok(page.slice(layerSaveAt, layerSaveAt + 400).includes('savedStepsThisTask += 1'), 'each saved edit layer is counted');
 
