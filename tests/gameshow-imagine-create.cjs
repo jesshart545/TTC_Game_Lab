@@ -158,6 +158,53 @@ function baseProject(overrides = {}) {
   console.log('PASS: the light stage — Jewel holds the checklist invisibly, her doorway and conversation stand in the work area, and empty projects demonstrate with pictures.');
 }
 
+// --- Creation asks both inputs; the stage carries no plan showpiece --------
+// Jessica's universal creation start (2026-11-04): a gameshow, like a
+// talk show, is created from exactly the title and the theme/vibe/
+// subject the user gives. The project page therefore carries NO giant
+// plan visual — Jewel holds the stored plan in conversation — and the
+// template shelf is picture + name only, never a paragraph card.
+{
+  const flow = fs.readFileSync('app/project/new/flow.tsx', 'utf8');
+  assert(flow.includes('kind === "talk" || kind === "gameshow" ? ('), 'the gameshow scratch screen shares the talk title + theme ask');
+  assert(flow.includes('theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined'), 'starting a gameshow scratch project carries the theme answer forward');
+  assert(flow.includes('if ((start.kind === "talk" || start.kind === "gameshow") && start.theme)'), 'gameshow creation seeds the theme exactly like talk creation');
+  assert(flow.includes('project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme }'), 'the creation theme lands in gamePlan.theme');
+
+  const stage = fs.readFileSync('components/GameshowStage.tsx', 'utf8');
+  const planArea = stage.slice(stage.indexOf('function PlanArea'), stage.indexOf('/* ---------------- Media'));
+  assert(!stage.includes('<PlanVisual'), 'the light stage renders no plan visual showpiece');
+  assert(!stage.includes('Your game plan — as it stands'), 'the giant “Your game plan” card is off the stage');
+  assert(planArea.indexOf('<JewelWandScene') < planArea.indexOf('{jewelPanel}'), 'the plan area opens with Jewel’s wand-scene doorway');
+  assert(planArea.indexOf('{jewelPanel}') < planArea.indexOf('<PlanTemplates'), 'her conversation comes before the template shelf');
+  assert(planArea.includes('<span>Prefer to type it yourself?</span>'), 'the plan door is one short line');
+  assert(planArea.includes('>Open the plan form</button>'), 'the plan door keeps its working button');
+  assert(!planArea.includes('<p>'), 'the plan area carries no explanatory paragraph');
+  assert(!planArea.includes('title, theme, purpose, rules, rounds, turns, scoring, winning'), 'the old plan-form paragraph is gone');
+
+  const library = fs.readFileSync('components/GameshowWorkshop.tsx', 'utf8');
+  const templates = library.slice(library.indexOf('export function PlanTemplates'), library.indexOf('function PlanStep'));
+  assert(templates.includes('<span className="gsw-an">{template.name}</span>'), 'a template card is its picture plus the template name');
+  assert(templates.includes('<span className="gsw-an">All {GAME_TEMPLATES.length} templates →</span>'), 'the all-templates tile is picture-led and name-only');
+  assert(!templates.includes('template.description'), 'template cards carry no description paragraph');
+  assert(!templates.includes('gsw-ak'), 'template cards carry no kicker/label to collide with the name');
+  assert(!templates.includes('GAME_TEMPLATES.slice(3, 9)'), 'the all-templates tile is not a text list of names');
+  assert((templates.match(/\/redesign\/kind-gameshow\.webp/g) || []).length >= 2, 'the featured templates and the all-templates tile are both pictured');
+  const css = fs.readFileSync('components/gameshow-workshop.css', 'utf8');
+  assert(css.includes('.gsw-asset.gsw-template-card .gsw-an') && css.includes('white-space:nowrap'), 'template names stay on one line inside their cards — no header collision');
+
+  const steps = fs.readFileSync('components/GameshowSteps.tsx', 'utf8');
+  const demos = fs.readFileSync('components/GameshowToolDemos.tsx', 'utf8');
+  for (const wordy of ['Where packages get used', 'Your questions, in your own words', 'Give Jewel a topic and a count']) {
+    assert(!steps.includes(wordy), `the swept steps carry no paragraph block: ${wordy}`);
+  }
+  for (const wordy of ['Every tool above demonstrates itself', 'A whole mystery game: a storyline', 'A YouTube video isn’t a game tool']) {
+    assert(!demos.includes(wordy), `the swept tool demos carry no paragraph block: ${wordy}`);
+  }
+  assert(!steps.includes('{tile.description}') && !demos.includes('{tile.description}'), 'tool and editor tiles render icon + name, not description lines');
+  console.log('PASS: gameshow creation asks title + theme, the stage opens on Jewel (no plan showpiece), and template cards are picture + name only.');
+}
+
 // --- Preservation round-trip: a full project survives the model intact -----
 // Music Showdown's shape: 38 assets, 24 tools, 203 Jewel messages.
 // Evaluation and demonstration lookups are reads — nothing about the

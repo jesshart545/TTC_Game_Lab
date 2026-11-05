@@ -490,9 +490,6 @@ function YoutubeDemo(props: GameshowWorkshopProps) {
     <>
       <div className="gsw-card">
         <h4>▶ YouTube — plays inside your media</h4>
-        <p>{bare
-          ? "A YouTube video isn’t a game tool with settings to demonstrate here — it’s media. Ask Jewel to add a link and it becomes a playable tile in your show."
-          : "A YouTube video isn’t a game tool with settings to demonstrate here — it’s media. Paste a link on the media step and it becomes a playable tile in your show."}</p>
         {!bare && <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={() => onNavigateStep(0, "media")}>Go to Make your media</button></div>}
       </div>
       <ChangeList title="What you can change — YouTube" items={TOOL_CHANGES.youtube} onAsk={onAsk} />
@@ -506,7 +503,6 @@ function CityCrimeSceneDemo(props: GameshowWorkshopProps) {
     <>
       <div className="gsw-card">
         <h4>🔎 City Crime Scene — the whodunnit</h4>
-        <p>A whole mystery game: a storyline, suspects, evidence and a map, built inside its own builder. It opens from here, exactly as it does today.</p>
         <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.openCityCrimeScene}>Open the City Crime Scene builder</button></div>
       </div>
       <ChangeList title="What you can change — City Crime Scene" items={TOOL_CHANGES["city-crime-scene"]} onAsk={onAsk} />
@@ -568,7 +564,7 @@ export default function ToolsStep(props: ScreenProps) {
               <div className="gsw-tiles">
                 {tiles.filter(tile => !tile.jewelMade && tile.type !== "city-crime-scene").map(tile => (
                   <button key={tile.type} type="button" className={"gsw-tile" + (active === tile.type ? " on" : "")} onClick={() => setSelected(tile.type)}>
-                    <div className="gsw-ic">{tile.icon}</div><div className="gsw-tt">{tile.name}</div><div className="gsw-td">{tile.description}</div>
+                    <div className="gsw-ic">{tile.icon}</div><div className="gsw-tt">{tile.name}</div>
                   </button>
                 ))}
               </div>
@@ -578,13 +574,13 @@ export default function ToolsStep(props: ScreenProps) {
           <div className="gsw-tiles">
             {JEWEL_ONLY_TILES.map(tile => (
               <button key={tile.type} type="button" className={"gsw-tile" + (active === tile.type ? " on" : "")} onClick={() => setSelected(tile.type)}>
-                <div className="gsw-ic">{tile.icon}</div><div className="gsw-tt">{tile.name}</div><div className="gsw-td">{tile.description}</div>
+                <div className="gsw-ic">{tile.icon}</div><div className="gsw-tt">{tile.name}</div>
                 <span className="gsw-jmade">✦ Made by Jewel</span>
               </button>
             ))}
             {ccssEntitled && (
               <button type="button" className={"gsw-tile" + (active === "city-crime-scene" ? " on" : "")} onClick={() => setSelected("city-crime-scene")}>
-                <div className="gsw-ic">🔎</div><div className="gsw-tt">City Crime Scene</div><div className="gsw-td">The whodunnit builder</div>
+                <div className="gsw-ic">🔎</div><div className="gsw-tt">City Crime Scene</div>
               </button>
             )}
           </div>
@@ -596,7 +592,6 @@ export default function ToolsStep(props: ScreenProps) {
           extra="Adjust opens the tools folder below — every tool’s own editor (Name · Setup · Look · Preview) exactly as it works today. Tools you switched off in the toolbox stay off; nothing is added behind your back."
         />
       </div>
-      <p className="gsw-hint" style={{ marginTop: 14 }}>Every tool above demonstrates itself with your real settings — or with the tool’s own built-in defaults when you don’t have one yet. Nothing here saves or changes your project; trying things is free.</p>
     </StepShell>
   );
 }
