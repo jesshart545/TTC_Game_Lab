@@ -156,6 +156,6 @@ export function validateRequestedTargets(request:string,project:any,input:unknow
   if(c.action.startsWith('background.show.'))return c.action.slice(16);
   if(c.action.startsWith('result.hide.')){const shown=controls.find((other:any)=>other.id===c.action.slice(12));if(shown?.action?.startsWith('asset.show.'))return shown.action.slice(11);}
  };
- const referenced=[...(changes.assets||[]).filter((a:any)=>a.inProject!==false).map((a:any)=>a.storageKey),...(changes.connections||[]).filter((c:any)=>c.kind==='asset').map((c:any)=>c.id),...(changes.sequences||[]).flatMap((s:any)=>(s.steps||[]).map((step:any)=>step.kind==='asset'?step.refId:assetForControl(step.controlId))),...(changes.controls||[]).map((c:any)=>assetForControl(c.id))].filter(Boolean);
+ const referenced=[...(changes.assets||[]).filter((a:any)=>a.inProject!==false&&a.inOverlayBuild!==false).map((a:any)=>a.storageKey),...(changes.connections||[]).filter((c:any)=>c.kind==='asset').map((c:any)=>c.id),...(changes.sequences||[]).flatMap((s:any)=>(s.steps||[]).map((step:any)=>step.kind==='asset'?step.refId:assetForControl(step.controlId))),...(changes.controls||[]).map((c:any)=>assetForControl(c.id))].filter(Boolean);
  for(const key of referenced)if(!allowed.has(key))throw new Error('Use the explicitly named media, not a different selected image. Named media IDs: '+namedAssets.map((a:any)=>a.name+' = '+(a.storageKey||a.name)).join(', '));
 }

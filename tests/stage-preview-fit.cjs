@@ -122,7 +122,7 @@ const rowStart = buildSpace.indexOf('aria-label="Placed overlay items"');
 assert(rowStart >= 0, 'The Placed overlay items row still renders');
 assert(buildSpace.indexOf('aria-label="Items and editing"') < rowStart && rowStart < buildSpace.indexOf('paired-canvases'), 'The Placed overlay items row renders in the left Items and editing panel, outside the preview area');
 const rowJsx = buildSpace.slice(rowStart, buildSpace.indexOf('</section>', rowStart));
-assert(rowJsx.includes('project.assets.filter(a=>a.inProject)') && rowJsx.includes('project.gameTools.filter(t=>t.inOverlayBuild)'), 'The relocated row lists the same placed assets and overlay tools');
+assert(rowJsx.includes('project.assets.filter(a=>assetPlaced(a))') && rowJsx.includes('project.gameTools.filter(t=>t.inOverlayBuild)'), 'The relocated row lists the same placed assets and overlay tools');
 assert(rowJsx.indexOf('project.assets.filter') < rowJsx.indexOf('project.gameTools.filter'), 'The relocated row keeps the same order: assets first, then tools');
 assert(rowJsx.includes('setSelection({kind:"asset",id:key(a)})') && rowJsx.includes('setSelection({kind:"tool",id:t.id})'), 'The relocated pills keep the same click-to-select behaviour');
 

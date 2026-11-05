@@ -1,4 +1,5 @@
 import type { Project } from "./project";
+import { assetPlaced } from "./asset-filing";
 
 /** Describes saved executable references, never invents IDs or edits a project. */
 export function executionContext(project: Project) {
@@ -8,7 +9,7 @@ export function executionContext(project: Project) {
   const assetRows = assets.map(asset => {
     const key = asset.storageKey || asset.name;
     const buttons = controls.filter(control => JSON.stringify(control).includes(key)).map(control => control.label);
-    return { name: asset.name, onDashboard: Boolean(asset.inProject) || buttons.length > 0, buttons };
+    return { name: asset.name, onDashboard: assetPlaced(asset) || buttons.length > 0, buttons };
   });
   return {
     dashboardGuide: {

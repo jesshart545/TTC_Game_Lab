@@ -1,4 +1,5 @@
 import type { Project, ProjectAsset } from "./project";
+import { assetPlaced } from "./asset-filing";
 
 /**
  * Plain-language, value-level summary of what a Jewel draft edit actually
@@ -63,7 +64,8 @@ export function detailedChangeLines(before: Project, after: Project): string[] {
     const old = beforeAssets.get(assetKey(asset));
     if (!old) { lines.push(`Added "${asset.name}" to your assets`); continue; }
     lines.push(...assetEditLines(old, asset));
-    if (Boolean(old.inProject) !== Boolean(asset.inProject)) lines.push(asset.inProject ? `"${asset.name}" is now on the overlay` : `"${asset.name}" was taken off the overlay`);
+    if (assetPlaced(old) !== assetPlaced(asset)) lines.push(assetPlaced(asset) ? `"${asset.name}" is now on the overlay` : `"${asset.name}" was taken off the overlay`);
+    if (!old.inProject && asset.inProject) lines.push(`"${asset.name}" is now saved in your project`);
     if (old.role !== asset.role && asset.role === "background") lines.push(`"${asset.name}" is now the background`);
   }
 

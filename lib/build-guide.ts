@@ -1,4 +1,5 @@
 import type { Project, ProjectEvent } from './project';
+import { assetPlaced } from './asset-filing';
 import { mediaKind } from './board-design';
 
 export const additionTypes = [
@@ -27,7 +28,7 @@ export type AdditionType = typeof additionTypes[number]['id'];
 export type BuildCreation = { kind: 'asset'|'tool'|'composition'; id: string; name: string };
 export function creationsForType(project: Project, type: AdditionType): BuildCreation[] {
   if (type === 'image' || type === 'video' || type === 'audio') return project.assets
-    .filter(a => mediaKind(a) === type && !(a.role === 'background' && a.inProject))
+    .filter(a => mediaKind(a) === type && !(a.role === 'background' && assetPlaced(a)))
     .map(a => ({ kind: 'asset', id: a.storageKey || a.name, name: a.name }));
   if (type === 'composition') return (project.compositions || []).map(c => ({ kind: 'composition', id: c.id, name: c.name }));
   return project.gameTools.filter(t => t.enabled && t.type === type).map(t => ({ kind: 'tool', id: t.id, name: t.name }));

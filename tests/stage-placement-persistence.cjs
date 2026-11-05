@@ -114,7 +114,8 @@ test('a connection with no stated placement keeps the established default frame'
   assert.equal(result.warnings.length, 0, 'no warnings: ' + result.warnings.join(' '));
   const control = showControl(result.project);
   assert.deepEqual(frameOf(control), DEFAULT_FRAME, 'unstated placements behave exactly as before');
-  assert.equal(result.project.assets.find(a => a.storageKey === STAR).inProject, false, 'a connected asset still waits for its button');
+  assert.equal(result.project.assets.find(a => a.storageKey === STAR).inProject, false, 'wiring leaves the asset\'s filing exactly as it was');
+  assert.equal(result.project.assets.find(a => a.storageKey === STAR).inOverlayBuild, false, 'a connected asset still waits for its button — off the standing overlay');
 });
 
 test('an unrelated later edit never stomps a placement the creator dragged', () => {

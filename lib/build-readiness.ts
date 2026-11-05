@@ -1,5 +1,6 @@
 import {gameEntries,infoTypes} from './game-tools';
 import {pickerCards} from './card-lists';
+import {assetPlaced} from './asset-filing';
 import type { Project } from './project';
 import { controlConnectionError } from './control-connections';
 import { questionPool } from './question-cards';
@@ -37,10 +38,10 @@ export function buildReadiness(project: Project): BuildIssue[] {
    if((tool.inToolbox||tool.inOverlayBuild)&&!linked)issues.push({id:'controls-'+tool.id,message:tool.name+': add at least one dashboard button so the host can show or run it.',kind:'tool',targetId:tool.id,fix:'connect'});
   }
  }
- for(const asset of project.assets.filter(a=>a.inProject||project.controls.some(c=>c.action==='asset.show.'+(a.storageKey||a.name))||project.gameTools.some(t=>t.inOverlayBuild&&t.config.backgroundAssetKey===(a.storageKey||a.name)))){
+ for(const asset of project.assets.filter(a=>assetPlaced(a)||project.controls.some(c=>c.action==='asset.show.'+(a.storageKey||a.name))||project.gameTools.some(t=>t.inOverlayBuild&&t.config.backgroundAssetKey===(a.storageKey||a.name)))){
   if(!asset.url||asset.url.startsWith('blob:')||asset.url.startsWith('data:'))issues.push({id:'asset-'+(asset.storageKey||asset.name),message:asset.name+': upload a saved media file in Workshop before publishing.',kind:'asset',targetId:asset.storageKey||asset.name,fix:'background'});
  }
- for(const asset of project.assets.filter(a=>a.inProject||project.controls.some(c=>c.action==='background.show.'+(a.storageKey||a.name)))){
+ for(const asset of project.assets.filter(a=>assetPlaced(a)||project.controls.some(c=>c.action==='background.show.'+(a.storageKey||a.name)))){
   const assetKey=asset.storageKey||asset.name;
   if(asset.storageKey&&!asset.storageKey.startsWith('projects/')&&!issues.some(i=>i.id==='asset-'+assetKey))issues.push({id:'cloud-'+assetKey,message:asset.name+': this file is saved only in your browser. Re-upload it in Workshop before publishing.',kind:'asset',targetId:assetKey,fix:'background'});
  }

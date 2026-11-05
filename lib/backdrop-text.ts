@@ -1,4 +1,5 @@
 import type { BackdropTextSpec, Project, ProjectAsset } from "./project";
+import { assetPlaced } from "./asset-filing";
 import { isSupportedFont, resolveFont } from "./fonts";
 
 /**
@@ -60,10 +61,11 @@ export function assetPromptText(asset: ProjectAsset | null | undefined): Backdro
 }
 
 /** The background asset that carries the show's opening prompt, if any:
- * the overlay background first, then backgrounds in saved order. */
+ * the PLACED background first (the one the overlay shows), then
+ * backgrounds in saved order. */
 export function promptAsset(project: Project): ProjectAsset | null {
   const backgrounds = backgroundAssets(project);
-  return backgrounds.find(asset => asset.inProject && assetPromptText(asset))
+  return backgrounds.find(asset => assetPlaced(asset) && assetPromptText(asset))
     || backgrounds.find(asset => assetPromptText(asset))
     || null;
 }

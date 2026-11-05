@@ -1,4 +1,5 @@
 import type { Project, ProjectEvent, TalkSlide } from './project';
+import { assetPlaced } from './asset-filing';
 import { creationControls, type BuildCreation } from './build-guide';
 
 /**
@@ -47,7 +48,10 @@ export function deckMomentStaged(project: Project, slide: TalkSlide): boolean {
   const controls = project.controls || [];
   if (slide.kind === 'sign' || slide.kind === 'backdrop') {
     const asset = (project.assets || []).find(a => (a.storageKey || a.name) === slide.refKey);
-    if (asset?.inProject && asset.role === 'background') return true;
+    // Staged means the moment IS the overlay's starting scene: the
+    // asset is PLACED as the background. Being merely filed on the
+    // shelf (inProject) is not staging (lib/asset-filing).
+    if (asset && assetPlaced(asset) && asset.role === 'background') return true;
     return controls.some(c => c.action === `background.show.${slide.refKey}` || c.action === `asset.show.${slide.refKey}`);
   }
   const creation = deckSlideCreation(slide);

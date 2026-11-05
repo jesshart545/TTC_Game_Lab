@@ -1,4 +1,5 @@
 import {isSupportedFont,resolveFont} from './fonts';
+import {assetPlaced} from "./asset-filing";
 import {assignControlAction,controlConnectionError} from "./control-connections";
 import {cleanBackdropText} from "./backdrop-text";
 import {cleanTriviaQuestions} from "./quiz";
@@ -52,7 +53,24 @@ export function applyDraftChanges(project: Project, input: unknown) {
   for (const key of ["showChat", "showAlerts", "showCharacter"] as const) if (typeof overlay[key] === "boolean" && next.overlay[key] !== overlay[key]) { next.overlay[key] = overlay[key] as boolean; applied++; }
   if (Array.isArray(changes.assets)) for (const raw of changes.assets) {
     const edit = object(raw), asset = next.assets.find(a => (a.storageKey||a.name) === edit.storageKey); if (!asset) continue;
-    if (typeof edit.inProject === "boolean") { asset.inProject = edit.inProject; applied++; }
+    // Filing is sticky (lib/asset-filing): inProject says an asset
+    // belongs to this project, and a draft change can never un-file
+    // one — removal lives only in the app's explicit delete and
+    // library paths, and Jewel has no delete power. An inProject:false
+    // patch is the legacy shape of "take it off the overlay" (the
+    // conflation her old doctrine taught), so it is honored as a
+    // PLACEMENT change only: the asset leaves the overlay and stays
+    // filed on its shelf. inProject:true files the asset, as before.
+    if (edit.inProject === true) { if (!asset.inProject) { asset.inProject = true; applied++; } }
+    else if (edit.inProject === false && assetPlaced(asset)) { asset.inOverlayBuild = false; applied++; }
+    // Placement is its own field: placing an asset on the overlay
+    // also files it (an item cannot stand in a project it is not
+    // saved in); taking it off clears placement and nothing else.
+    if (typeof edit.inOverlayBuild === "boolean" && assetPlaced(asset) !== edit.inOverlayBuild) {
+      asset.inOverlayBuild = edit.inOverlayBuild;
+      if (edit.inOverlayBuild) asset.inProject = true;
+      applied++;
+    }
     if (["background", "layer", "video", "audio"].includes(String(edit.role))) { asset.role = edit.role as typeof asset.role; applied++; }
     // The backdrop text layer (lib/backdrop-text.ts): a validated spec, or
     // null to clear it. An invalid spec (unknown font, non-hex color,
