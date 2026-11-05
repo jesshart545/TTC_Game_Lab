@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Project } from "../lib/project";
+import type { Project, ProjectAsset } from "../lib/project";
 import { allCreateStepsComplete, type WorkflowEvaluation, type WorkflowStepState } from "../lib/workflow-progress";
 import { TALK_CREATIVITY_BANNER, TALK_SKIPPABLE_STEPS, TALK_STEPS, type TalkStepId } from "../lib/talkshow-path";
 import JewelAvatar from "./JewelAvatar";
@@ -42,6 +42,9 @@ export type TalkshowDoors = {
   addYoutube: () => void;
   openComposer: () => void;
   showSavedWork: () => void;
+  /** Ask the page to delete one stored asset (the page confirms first,
+   *  then runs its normal asset-deletion path). */
+  deleteAsset: (asset: ProjectAsset) => void;
 };
 
 export type TalkshowWorkshopProps = {
