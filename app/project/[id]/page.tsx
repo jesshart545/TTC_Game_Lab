@@ -372,12 +372,16 @@ export default function ProjectWorkspace() {
       // from the render snapshot in `project`. The snapshot can lag a
       // Jewel-applied change that landed after the last render; saving
       // it would clobber that newer state on the server and then revert
-      // the page to the stale copy.
+      // the page to the stale copy. The write itself goes through the
+      // same guarded queue as every other save (enqueueSave), with the
+      // ref updated first so anything saved concurrently derives from
+      // this copy rather than racing it.
       const latest = projectRef.current || project;
       const next = { ...latest, name: titleFromProjectTools(latest), workflow: { stage: workflowStep, workshopStep, promptDraft: draft }, updatedAt: "just now" };
-      await saveProjectToServer({ ...next, assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
       projectRef.current = next;
-      setProject(next); setSaveStatus("All changes saved.");
+      setProject(next);
+      await enqueueSave(next);
+      setSaveStatus("All changes saved.");
     } catch(error) { setSaveStatus(error instanceof Error ? error.message : "Could not save. Please try again."); }
     finally { setSaveBusy(false); }
   }
@@ -470,6 +474,13 @@ export default function ProjectWorkspace() {
   const saveQueue = useRef(Promise.resolve());
   const saveRevision=useRef(0);
   const queuedSaveRevisions=useRef(new Map<string,number>());
+  // The exact object most recently written to the server for the open
+  // project (set inside enqueueSave when a write actually lands). Jewel's
+  // check-off surfacing evaluates against the saved document — this, or a
+  // fresh re-read of it — never against the in-memory draft alone.
+  const lastSavedProject = useRef<Project | null>(null);
+  // Check-off surfacing runs one evaluation at a time, in turn order.
+  const checkoffChain = useRef(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
@@ -765,9 +776,52 @@ export default function ProjectWorkspace() {
 
   function updateWheelField(field: "title" | "segments", value: string) { if (!project) return; const wheel = project.wheel || { enabled:true,title:"Game Wheel",segments:["Prize","Challenge","Bonus","Mystery"],spinning:false,visible:false }; persist({ ...project, wheel: { ...wheel, [field]: field === "segments" ? value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,12) : value }, updatedAt:"just now" }); }
 
-  function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); setTimeout(()=>{ setProject(current => { if (!current?.wheel) return current; const next={ ...current, wheel:{...current.wheel, spinning:false, visible:false}, updatedAt:"just now" }; const storedNext={...next,assets:next.assets.map(asset=>asset.storageKey?.startsWith("projects/")?asset:asset.storageKey?{...asset,url:undefined}:asset)}; saveQueue.current=saveQueue.current.then(()=>saveProjectToServer(storedNext)).then(()=>undefined).catch(error=>{setAssetStatus(error instanceof Error?error.message:"Project save failed.");}); return next; }); }, 3200); }
+  function spinWheel() { if (!project?.wheel?.enabled || project.wheel.segments.length < 2) return; const latest = project; persist({ ...latest, wheel: { ...latest.wheel, spinning: true, visible: true }, updatedAt:"just now" }); setTimeout(()=>{ const current = projectRef.current; if (!current?.wheel) return; const next = { ...current, wheel: { ...current.wheel, spinning: false, visible: false }, updatedAt: "just now" }; projectRef.current = next; setProject(next); void enqueueSave(next); }, 3200); }
 
   const historyRef = useRef<ReturnType<typeof useManualHistory> | null>(null);
+  // THE one writer for the open project's document. Every whole-document
+  // save — persist(), generation, uploads, asset deletion, the wheel,
+  // undo, Save progress, publish — funnels through this queue: writes
+  // land in the order they were enqueued, every object derives from the
+  // page's current projectRef lineage, and a queued write whose revision
+  // a newer save has overtaken never lands, so a stale snapshot cannot
+  // silently overwrite newer state on the server (the lost-backdrop
+  // failure: an unqueued direct save erased a generated asset that a
+  // queued save had just landed, while the check-offs it earned stayed
+  // behind). The returned promise resolves with the save's result once
+  // this write lands, resolves undefined when a newer save carries the
+  // state instead, and rejects when the write itself fails.
+  function enqueueSave(next: Project, opts?: { publish?: boolean; hostKey?: string }): Promise<{ ok: boolean; hostKey?: string } | undefined> {
+    const revision = ++saveRevision.current;
+    queuedSaveRevisions.current.set(next.id, revision);
+    const storedNext: Project = {
+      ...next,
+      assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset),
+    };
+    let settle: { resolve: (value: { ok: boolean; hostKey?: string } | undefined) => void; reject: (error: unknown) => void } = { resolve: () => undefined, reject: () => undefined };
+    const written = new Promise<{ ok: boolean; hostKey?: string } | undefined>((resolve, reject) => { settle = { resolve, reject }; });
+    // Fire-and-forget callers (persist) never await this promise; mark
+    // its rejection handled here so it cannot surface as an unhandled
+    // rejection. Awaiting callers still see the rejection themselves.
+    written.catch(() => undefined);
+    saveQueue.current = saveQueue.current.then(async () => {
+      if (queuedSaveRevisions.current.get(next.id) !== revision) { settle.resolve(undefined); return; }
+      try {
+        const result = await saveProjectToServer(storedNext, opts?.publish, opts?.hostKey);
+        lastSavedProject.current = storedNext;
+        if (revision === saveRevision.current) setSaveStatus("Changes saved.");
+        settle.resolve(result);
+      } catch (error) {
+        if (revision === saveRevision.current) {
+          if (taskRunning.current) taskSaveError.current = error instanceof Error ? error.message : "Save failed";
+          setSaveStatus("Save failed. Use Save progress to retry.");
+          setAssetStatus(error instanceof Error ? error.message : "Project save failed.");
+        }
+        settle.reject(error);
+      }
+    });
+    return written;
+  }
   function persist(next: Project, opts?: { keepAiUndo?: boolean }) {
     // A stored City Crime Scene case title names the project: sync it here,
     // at the page's central save, so every flow that persists through this
@@ -775,17 +829,11 @@ export default function ProjectWorkspace() {
     next = { ...next, name: titleFromProjectTools(next) };
     const prev = projectRef.current;
     if (prev && prev.id === next.id) historyRef.current?.recordHistory(prev);
-    const revision=++saveRevision.current;
-    queuedSaveRevisions.current.set(next.id,revision);
     if (!opts?.keepAiUndo) setAiUndo(null);
     setSaveStatus("Saving changes…");
-    const storedNext: Project = {
-      ...next,
-      assets: next.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset),
-    };
     projectRef.current = next;
     setProject(next);
-    saveQueue.current = saveQueue.current.then(() => { if(queuedSaveRevisions.current.get(next.id)!==revision)return; return saveProjectToServer(storedNext); }).then(() => { if(revision===saveRevision.current)setSaveStatus("Changes saved."); }).catch(error => { if(revision!==saveRevision.current)return; if(taskRunning.current)taskSaveError.current = error instanceof Error ? error.message : "Save failed"; if(revision===saveRevision.current)setSaveStatus("Save failed. Use Save progress to retry."); setAssetStatus(error instanceof Error ? error.message : "Project save failed."); });
+    void enqueueSave(next);
   }
   const history = useManualHistory(projectRef, persist);
   historyRef.current = history;
@@ -836,7 +884,11 @@ export default function ProjectWorkspace() {
 
   async function doDeleteAsset(asset: ProjectAsset) {
     if (!project) return;
-    const current = project;
+    // Derive from projectRef — the page's current lineage — never the
+    // render snapshot, and save through the guarded queue: a direct
+    // save from a lagging snapshot could resurrect state another flow
+    // had already moved past (or erase what it just added).
+    const current = projectRef.current || project;
     const index = current.assets.findIndex(item =>
       asset.storageKey ? item.storageKey === asset.storageKey : item.name === asset.name && item.type === asset.type
     );
@@ -844,7 +896,9 @@ export default function ProjectWorkspace() {
     const assetKey = asset.storageKey || asset.name;
     const next = { ...current, assets: current.assets.filter((_, i) => i !== index), assetPools: removeAssetFromPools(current.assetPools || [], assetKey), updatedAt: "just now" };
     try {
-      await saveProjectToServer(next);
+      projectRef.current = next;
+      setProject(next);
+      await enqueueSave(next);
       if (asset.storageKey) await deleteStoredAsset(asset.storageKey);
       setProject(await hydrateProjectAssets(next));
       if (selectedAssetKey === assetKey) setSelectedAssetKey(null);
@@ -862,11 +916,15 @@ export default function ProjectWorkspace() {
     try {
       const uploaded = await Promise.all(files.map(file => storeUploadedAsset(project.id, file)));
       const hydratedUploaded = (await Promise.all(uploaded.map(asset => hydrateAsset(asset)))).map(asset => backgroundIntent && isImage(asset) ? { ...asset, role: "background" as const, inProject: false } : asset);
-      const latest = project;
+      // Derive from projectRef and save through the guarded queue: the
+      // render snapshot in `project` can lag changes another flow just
+      // made, and a direct save built on it would erase them on the
+      // server — the same stale-save loss as any other unqueued writer.
+      const latest = projectRef.current || project;
       const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" };
       projectRef.current = savedProject;
       setProject(savedProject);
-      await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
+      await enqueueSave(savedProject);
       if (backgroundIntent && hydratedUploaded.length === 1 && (isImage(hydratedUploaded[0])||isVideo(hydratedUploaded[0]))) setBackgroundDestinationKey(hydratedUploaded[0].storageKey||hydratedUploaded[0].name);
       setBackgroundIntent(false);
       setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} uploaded and saved` : `${uploaded.length} files uploaded and saved`);
@@ -996,7 +1054,12 @@ export default function ProjectWorkspace() {
       const savedProject = { ...currentAfterStore, pendingVideos: type === "video" ? (currentAfterStore.pendingVideos || []).filter(job => job.videoId !== String(data.videoId)) : currentAfterStore.pendingVideos, assets: [...currentAfterStore.assets, asset], updatedAt: "just now" };
       projectRef.current = savedProject;
       setProject(savedProject);
-      await saveProjectToServer({ ...savedProject, assets: savedProject.assets.map(item => item.storageKey?.startsWith("projects/") ? item : item.storageKey ? { ...item, url: undefined } : item) });
+      // Through the guarded queue, never a direct save: this is the
+      // write that once landed a generated backdrop which an unqueued
+      // stale save then erased from the server while its check-offs
+      // stayed behind. In the queue, the asset's write is ordered with
+      // every other save and cannot be overtaken by an older snapshot.
+      await enqueueSave(savedProject);
       if (backgroundIntent && (type === "image"||type === "video")) setBackgroundDestinationKey(asset.storageKey||asset.name);
       setBackgroundIntent(false);
       setAssetStatus(`${name} generated and saved`);
@@ -1251,17 +1314,49 @@ export default function ProjectWorkspace() {
     const progressBefore = evaluateWorkflow(project);
     let jewelNavigate: JewelNavigate | null = null;
     const surfaceJewelCheckoffs = () => {
-      const latest = projectRef.current;
-      if (!latest || latest.id !== originId || !workspaceMounted.current || activeProjectId.current !== originRoute) return;
-      const issued = latest.workflowProgress?.issuedChecks || [];
-      const fresh = newlyCompletedSteps(progressBefore, evaluateWorkflow(latest))
-        .filter(step => !issued.includes(workflowStepKey(step.stageId, step.stepId)));
-      if (!fresh.length) return;
-      persist({
-        ...latest,
-        messages: [...latest.messages, ...fresh.map(step => ({ role: "assistant" as const, text: `✓ Checked off — ${step.checkLine}` }))],
-        workflowProgress: { ...latest.workflowProgress, issuedChecks: [...issued, ...fresh.map(step => workflowStepKey(step.stageId, step.stepId))] },
-      }, { keepAiUndo: true });
+      const run = async () => {
+        // Check-offs are verified against the SAVED document, never
+        // the in-memory draft alone: wait for this turn's saves to
+        // drain through the guarded queue, then evaluate against the
+        // project as last written to the server — a fresh re-read of
+        // it, falling back to the exact object last passed to the
+        // save. A check is spoken only for evidence that actually
+        // survived to the server.
+        await saveQueue.current;
+        let saved: Project | null = null;
+        try { saved = await loadProjectFromServer(originId); } catch { saved = null; }
+        const basis = saved && saved.id === originId ? saved
+          : lastSavedProject.current && lastSavedProject.current.id === originId ? lastSavedProject.current
+          : null;
+        const current = projectRef.current;
+        if (!basis || !current || current.id !== originId || !workspaceMounted.current || activeProjectId.current !== originRoute) return;
+        const issued = basis.workflowProgress?.issuedChecks || [];
+        const fresh = newlyCompletedSteps(progressBefore, evaluateWorkflow(basis))
+          .filter(step => {
+            // A previously issued check settles a step only while its
+            // evidence stands: issued on the saved record AND complete
+            // in the saved evaluation AND already complete when this
+            // turn began. A check whose evidence has vanished is
+            // history, not a settled check — when the evidence
+            // genuinely returns (the step newly completes again), the
+            // check is spoken again. The record itself is kept intact
+            // below; only its power to settle a step is revalidated.
+            const key = workflowStepKey(step.stageId, step.stepId);
+            if (!issued.includes(key)) return true;
+            const beforeStep = progressBefore.stages.find(stage => stage.id === step.stageId)?.steps.find(candidate => candidate.id === step.stepId);
+            return beforeStep?.complete !== true;
+          });
+        if (!fresh.length) return;
+        const recorded = current.workflowProgress?.issuedChecks || [];
+        persist({
+          ...current,
+          messages: [...current.messages, ...fresh.map(step => ({ role: "assistant" as const, text: `✓ Checked off — ${step.checkLine}` }))],
+          workflowProgress: { ...current.workflowProgress, issuedChecks: [...recorded, ...fresh.map(step => workflowStepKey(step.stageId, step.stepId)).filter(key => !recorded.includes(key))] },
+        }, { keepAiUndo: true });
+      };
+      // Surfacing runs one evaluation at a time, in turn order, so a
+      // slow verification can never race the next turn's own surfacing.
+      checkoffChain.current = checkoffChain.current.then(run).catch(() => undefined);
     };
     setBuilding(true);
     progress?.("Preparing the requested draft task…");
@@ -1536,8 +1631,11 @@ export default function ProjectWorkspace() {
     setAiUndo(null);
     setSaveStatus("Saving undo…");
     try {
-      // The existing queue intentionally swallows failures; confirm this particular undo save.
-      await saveProjectToServer({ ...restored, assets: restored.assets.map(asset => asset.storageKey?.startsWith("projects/") ? asset : asset.storageKey ? { ...asset, url: undefined } : asset) });
+      // The undo's save goes through the same guarded queue as every
+      // other write, and this call confirms its outcome: a resolved
+      // write landed — or a newer save of the restored lineage carries
+      // it — while a rejection means the write itself failed.
+      await enqueueSave(restored);
       setSaveStatus("Changes saved.");
       return "The last AI draft edit has been undone and saved. Your published game is unchanged. Generated media files remain in storage; no original was deleted.";
     } catch {
@@ -1571,7 +1669,11 @@ export default function ProjectWorkspace() {
     setPublishing(true);
     try {
       await saveQueue.current;
-      const saved = await saveProjectToServer(next, true, hostKey);
+      // The publish write joins the same guarded queue as every other
+      // save; if a newer save overtook it, the publish did not land and
+      // must be attempted again rather than silently lost.
+      const saved = await enqueueSave(next, { publish: true, hostKey });
+      if (!saved) throw new Error("A newer save overtook this publish. Publish again so the live version matches this draft.");
       if (!saved.hostKey) throw new Error("The server did not return host access.");
       window.localStorage.setItem(`ttc-host-key-${next.id}`, saved.hostKey);
       setHostKey(saved.hostKey);

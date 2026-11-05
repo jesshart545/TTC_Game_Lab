@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { deleteStoredAsset, hydrateProjectAssets, storeUploadedAsset } from "../../lib/asset-store";
 import MediaEditor from "../../components/MediaEditor";
-import { Project, ProjectAsset, saveProjectToServer } from "../../lib/project";
+import { Project, ProjectAsset, loadProjectFromServer, saveProjectToServer } from "../../lib/project";
 import AssetFolders from "../../components/AssetFolders";
 import CollapsibleFolder, { rememberFolderState, type FolderBulkAction } from "../../components/CollapsibleFolder";
 import { assetCategory, categoryMatchesFilter, mediaFolders } from "../../lib/asset-folders";
@@ -40,46 +40,71 @@ export default function AssetLibraryPage() {
   // actually loaded empty.
   useEffect(()=>{void refreshAssets().catch(error=>setStatus(error instanceof Error?error.message:"Could not load assets.")).finally(()=>setLoading(false))},[]);
 
-  async function persistProject(next:Project) {
+  // Every save on this page re-reads the project from the server
+  // immediately before writing and applies its single change onto that
+  // fresh copy. Saving the page-load snapshot instead silently erases
+  // anything another surface saved in the meantime — the project page
+  // above all: a stale library save once overwrote a project right
+  // after a generated backdrop landed in it, deleting the asset from
+  // the document while the rest of the project carried on without it.
+  function freshAssetIndex(fresh:Project,asset:LibraryAsset) {
+    return fresh.assets.findIndex(item=>asset.storageKey?item.storageKey===asset.storageKey:item.name===asset.name&&item.type===asset.type);
+  }
+
+  async function saveFreshProject(projectId:string,change:(fresh:Project)=>Project|null):Promise<Project|null> {
+    const fresh=await loadProjectFromServer(projectId);
+    if(!fresh)return null;
+    const next=change(fresh);
+    if(!next){await refreshAssets();return null;}
     await saveProjectToServer(next);
-    setProjects(v=>v.map(p=>p.id===next.id?next:p));
+    const hydratedNext=await hydrateProjectAssets(next).catch(()=>next);
+    setProjects(v=>v.map(p=>p.id===next.id?hydratedNext:p));
     await refreshAssets();
+    return next;
   }
 
   async function handleDelete(asset:LibraryAsset) {
     if(!window.confirm(`Delete "${asset.name}" from ${asset.projectName}?`)) return;
-    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
-    const next={...project,assets:project.assets.filter((_,i)=>i!==asset.assetIndex),updatedAt:"just now"};
-    await saveProjectToServer(next);
+    const saved=await saveFreshProject(asset.projectId,fresh=>{
+      const index=freshAssetIndex(fresh,asset); if(index<0)return null;
+      return {...fresh,assets:fresh.assets.filter((_,i)=>i!==index),updatedAt:"just now"};
+    });
+    if(!saved){setStatus("That asset is no longer in the project.");return;}
     if(asset.storageKey) try{await deleteStoredAsset(asset.storageKey)}catch{}
-    await refreshAssets(); setStatus("Asset deleted.");
+    setStatus("Asset deleted.");
   }
 
   async function rename(asset:LibraryAsset) {
     const value=window.prompt("Rename asset",asset.name)?.trim(); if(!value||value===asset.name)return;
-    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
-    const next={...project,assets:project.assets.map((a,i)=>i===asset.assetIndex?{...a,name:value}:a),updatedAt:"just now"};
-    await persistProject(next); setStatus("Asset renamed.");
+    const saved=await saveFreshProject(asset.projectId,fresh=>{
+      const index=freshAssetIndex(fresh,asset); if(index<0)return null;
+      return {...fresh,assets:fresh.assets.map((a,i)=>i===index?{...a,name:value}:a),updatedAt:"just now"};
+    });
+    if(saved) setStatus("Asset renamed.");
   }
 
   async function toggleInProject(asset:LibraryAsset) {
-    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
-    const current=project.assets[asset.assetIndex]; const adding=!current.inProject;
-    let role=current.role;
-    if(adding&&!role){const k=assetCategory(current);role=k==="image"?(project.assets.some(a=>a.inProject&&a.role==="background")?"layer":"background"):k==="video"?"video":"audio"}
-    const next={...project,assets:project.assets.map((a,i)=>i===asset.assetIndex?{...a,inProject:adding,role}:a),updatedAt:"just now"};
-    await persistProject(next); setStatus(adding?"Added to project preview.":"Removed from project preview.");
+    let adding=false;
+    const saved=await saveFreshProject(asset.projectId,fresh=>{
+      const index=freshAssetIndex(fresh,asset); if(index<0)return null;
+      const current=fresh.assets[index]; adding=!current.inProject;
+      let role=current.role;
+      if(adding&&!role){const k=assetCategory(current);role=k==="image"?(fresh.assets.some(a=>a.inProject&&a.role==="background")?"layer":"background"):k==="video"?"video":"audio"}
+      return {...fresh,assets:fresh.assets.map((a,i)=>i===index?{...a,inProject:adding,role}:a),updatedAt:"just now"};
+    });
+    if(saved) setStatus(adding?"Added to project preview.":"Removed from project preview.");
   }
 
   async function saveEdits(asset:LibraryAsset,nextAsset:ProjectAsset) {
-    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
-    await persistProject({...project,assets:project.assets.map((a,i)=>i===asset.assetIndex?nextAsset:a),updatedAt:"just now"});
-    setStatus("Asset edit settings saved.");
+    const saved=await saveFreshProject(asset.projectId,fresh=>{
+      const index=freshAssetIndex(fresh,asset); if(index<0)return null;
+      return {...fresh,assets:fresh.assets.map((a,i)=>i===index?nextAsset:a),updatedAt:"just now"};
+    });
+    if(saved) setStatus("Asset edit settings saved.");
   }
 
   async function saveAsNew(asset:LibraryAsset,nextAsset:ProjectAsset) {
     if(!nextAsset.url)return;
-    const project=projects.find(p=>p.id===asset.projectId); if(!project)return;
     setStatus("Saving edited image…");
     const response=await fetch(nextAsset.url);
     if(!response.ok)throw new Error("Could not load edited image.");
@@ -89,21 +114,26 @@ export default function AssetLibraryPage() {
     // stacked "-edited", and it keeps its source's filing, so it
     // stands in the library exactly where its source stands. Its text
     // layer (textOverlay) rides along when it has one, so an edited
-    // backdrop keeps its lettering.
-    const copyName=nextEditName(project.assets.map(a=>a.name),nextAsset.name);
+    // backdrop keeps its lettering. The name line is computed from a
+    // fresh re-read of the project, and the append itself goes through
+    // saveFreshProject's re-read — never the page-load snapshot.
+    const fresh=await loadProjectFromServer(asset.projectId);
+    if(!fresh){setStatus("That project could not be reloaded, so nothing was saved.");return;}
+    const copyName=nextEditName(fresh.assets.map(a=>a.name),nextAsset.name);
     const extension=/\.[a-z0-9]+$/i.exec(nextAsset.name||"")?.[0]||".png";
     const file=new File([blob],copyName+extension,{type:blob.type||"image/png"});
     const stored=await storeUploadedAsset(asset.projectId,file);
-    await persistProject({...project,assets:[...project.assets,{...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})}],updatedAt:"just now"});
-    setStatus("Edited image saved as a new permanent asset.");
+    const copy:ProjectAsset={...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})};
+    const saved=await saveFreshProject(asset.projectId,current=>({...current,assets:[...current.assets,copy],updatedAt:"just now"}));
+    if(saved) setStatus("Edited image saved as a new permanent asset.");
   }
 
   async function copyToProject(asset:LibraryAsset,targetId:string) {
     if(!targetId||targetId===asset.projectId)return;
     const target=projects.find(p=>p.id===targetId); if(!target)return;
     const copy:ProjectAsset={name:asset.name,type:asset.type,url:asset.url,storageKey:asset.storageKey,edits:asset.edits,inProject:false,role:asset.role};
-    await persistProject({...target,assets:[...target.assets,copy],updatedAt:"just now"});
-    setStatus(`${asset.name} added to ${target.name} library.`);
+    const saved=await saveFreshProject(targetId,fresh=>({...fresh,assets:[...fresh.assets,copy],updatedAt:"just now"}));
+    if(saved) setStatus(`${asset.name} added to ${target.name} library.`);
   }
 
   const filtered=useMemo(()=>assets.filter(a=>{

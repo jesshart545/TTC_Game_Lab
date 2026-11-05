@@ -4,11 +4,12 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
-// persist gained an opts parameter after this harness was written; match
-// the signature up to the parameter list so the extraction finds it again.
-const start = page.indexOf('  function persist(next: Project');
+// The queue machinery persist() once carried inline now lives in
+// enqueueSave, the page's single guarded writer, which persist() calls;
+// extract from there so the span holds both halves of the save path.
+const start = page.indexOf('  function enqueueSave(next: Project');
 const end = page.indexOf('\n  function saveProjectTitle', start);
-const code = ts.transpileModule('export ' + page.slice(start, end).trim(), {
+const code = ts.transpileModule('export ' + page.slice(start, end).trim() + '\nexports.persist = persist;', {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function harness(save) {
@@ -17,6 +18,8 @@ function harness(save) {
   const saveQueue = { current: new Promise(resolve => { release = resolve; }) };
   const context = { exports, Error, saveQueue, saveRevision: { current: 0 }, queuedSaveRevisions: { current: new Map() },
     projectRef: {}, taskRunning: { current: true }, taskSaveError: {},
+    // enqueueSave records the object last written to the server here.
+    lastSavedProject: { current: null },
     // Stubs for the collaborators persist has since grown: the CCS title
     // sync (identity for these fixtures) and the manual-history hook
     // (the extracted span builds it at module level).

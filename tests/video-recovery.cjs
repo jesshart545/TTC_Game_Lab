@@ -29,7 +29,9 @@ function harness({ pendingVideo, pollError } = {}) {
       return 'https://fal.media/result.mp4';
     },
     storeGeneratedAsset: async () => { calls.push('store'); return { storageKey: 'projects/owned-project/video.mp4', name: 'Video 1', type: 'video/mp4' }; },
-    saveProjectToServer: async () => calls.push('save-result'),
+    // generateAsset's result save goes through the page's one guarded
+    // writer now (enqueueSave), never a direct saveProjectToServer.
+    enqueueSave: async () => { calls.push('save-result'); },
     setProject: next => { projectRef.current = next; },
     setAssetStatus: value => statuses.push(value),
   };
