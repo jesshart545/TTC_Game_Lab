@@ -5,7 +5,7 @@ import type { Project } from "../lib/project";
 import type { WorkflowEvaluation, WorkflowStepState } from "../lib/workflow-progress";
 import { CREATIVE_LIBERTY_TEXT } from "../lib/gameshow-path";
 import {
-  BareStageContext, MediaDemos, MediaShelf, PlanTemplates, PlanVisual,
+  BareStageContext, MediaDemos, MediaShelf, PlanTemplates,
   type GameshowDoors, type GameshowWorkshopProps,
 } from "./GameshowWorkshop";
 import TriviaStep, { BoardStep, ScenesStep, ToolboxStep } from "./GameshowSteps";
@@ -31,13 +31,14 @@ import "./gameshow-workshop.css";
  * model's first unfinished gameshow step): pictured, living
  * demonstrations first — the creator's own saved work when it
  * exists, pictured examples until then, INCLUDING on an empty
- * project (the plan stands over the pictured example stage, the
- * backdrop demo frames the example stage, the effects fire over
- * it) — then Jewel's conversation, then the area's storage
- * shelves and genuine manual doors. In the plan area, the entry
- * area, the movement into Jewel is her landing-page wand scene
- * itself, the whole pictured card one button into the
- * conversation below it — the same doorway as the Talk stage.
+ * project (the backdrop demo frames the example stage and the
+ * effects fire over it) — then Jewel's conversation, then the
+ * area's storage shelves and genuine manual doors. The plan area
+ * carries no showpiece: creation already asked for the title and
+ * theme, so it opens with Jewel's landing-page wand scene itself,
+ * the whole pictured card one button into the conversation below
+ * it — the same doorway as the Talk stage — followed by the
+ * pictured template shelf and the quiet plan-form door.
  *
  * The screens themselves are the workshop's own (GameshowWorkshop /
  * GameshowSteps / GameshowToolDemos), rendered under
@@ -87,20 +88,19 @@ function AreaHeading({ children }: { children: ReactNode }) {
 /* ---------------- Plan — the entry area ---------------- */
 
 function PlanArea(props: StageProps) {
-  const { project, doors, jewelPanel, onEnterJewel } = props;
+  const { doors, jewelPanel, onEnterJewel } = props;
   return (
     <div>
-      <AreaHeading>Your show’s plan — Jewel drafts it from your theme</AreaHeading>
-      <PlanVisual project={project} />
       <div style={{ marginTop: 20, marginBottom: 12 }}>
         <JewelWandScene onEnter={onEnterJewel} />
       </div>
       {jewelPanel}
       <PlanTemplates doors={doors} />
       <div className="gsw-card" style={{ marginTop: 14 }}>
-        <h4>Prefer to type the plan yourself?</h4>
-        <p>The plan form — title, theme, purpose, rules, rounds, turns, scoring, winning — is the same form as always, kept here as a manual option. Nothing about it is required: Jewel drafts the plan from your theme in your conversation.</p>
-        <div className="gsw-chipsrow"><button type="button" className="gsw-jchip" onClick={doors.showPlanForm}>Open the plan form</button></div>
+        <div className="gsw-chipsrow" style={{ marginTop: 0, justifyContent: "space-between" }}>
+          <span>Prefer to type it yourself?</span>
+          <button type="button" className="gsw-jchip" onClick={doors.showPlanForm}>Open the plan form</button>
+        </div>
       </div>
     </div>
   );

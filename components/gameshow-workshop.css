@@ -100,6 +100,7 @@ button.gsw-ei:hover { color:#ffffff; }
 .gsw-asset .gsw-shade { position:absolute; inset:0; background:linear-gradient(180deg, rgba(8,6,14,.05) 30%, rgba(8,6,14,.92)); }
 .gsw-asset .gsw-an { position:absolute; left:11px; right:11px; bottom:9px; font-weight:800; font-size:13.5px; line-height:1.25; }
 .gsw-asset .gsw-ak { position:absolute; top:9px; left:11px; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#e9c979; z-index:2; }
+.gsw-asset.gsw-template-card .gsw-an { z-index:2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .gsw-asset.plain { display:flex; flex-direction:column; justify-content:flex-end; padding:11px; }
 .gsw-asset .gsw-big { font-size:26px; }
 .gsw-asset.plain .gsw-an { position:static; }

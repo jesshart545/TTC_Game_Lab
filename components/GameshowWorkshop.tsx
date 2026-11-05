@@ -219,28 +219,25 @@ export function PlanVisual({ project }: { project: Project }) {
   );
 }
 
-/** The ready-made shows shelf: pictured template tiles, as they are
- * stored — tap one and it is applied to the project, as today. */
+/** The ready-made shows shelf: each tile is its picture and name —
+ * tap one and it is applied to the project, as today. */
 export function PlanTemplates({ doors }: { doors: GameshowDoors }) {
   const templates = GAME_TEMPLATES.slice(0, 3);
   return (
     <div>
-      <div className="gsw-seclabel" style={{ marginTop: 22 }}>…or start from a ready-made show — here’s what one hands you</div>
+      <div className="gsw-seclabel" style={{ marginTop: 22 }}>Ready-made shows</div>
       <div className="gsw-shelf">
         {templates.map(template => (
-          <button key={template.id} type="button" className="gsw-asset" onClick={() => doors.applyTemplate(template.id)}>
+          <button key={template.id} type="button" className="gsw-asset gsw-template-card" onClick={() => doors.applyTemplate(template.id)}>
             <img src="/redesign/kind-gameshow.webp" alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
             <div className="gsw-shade" />
-            <span className="gsw-ak">Template</span>
-            <span className="gsw-an">{template.name}<br />
-              <span style={{ color: "#cfc8e6", fontWeight: 600, fontSize: 12 }}>{template.description}</span>
-            </span>
+            <span className="gsw-an">{template.name}</span>
           </button>
         ))}
-        <button type="button" className="gsw-asset plain" onClick={doors.showTemplates}>
-          <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>All {GAME_TEMPLATES.length} templates →<br />
-            <span style={{ color: "#948bb3", fontWeight: 600, fontSize: 12 }}>{GAME_TEMPLATES.slice(3, 9).map(t => t.name).join(" · ")}</span>
-          </span>
+        <button type="button" className="gsw-asset gsw-template-card" onClick={doors.showTemplates}>
+          <img src="/redesign/kind-gameshow.webp" alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          <div className="gsw-shade" />
+          <span className="gsw-an">All {GAME_TEMPLATES.length} templates →</span>
         </button>
       </div>
     </div>
@@ -286,7 +283,6 @@ function AudioDemo({ project, kind, label }: { project: Project; kind: "voice" |
         <div className="gsw-wave" aria-hidden="true">
           {WAVE_HEIGHTS.map((h, i) => <i key={i} style={{ height: `${h}%` }} />)}
         </div>
-        <p>No {label.toLowerCase()} in your library yet. Ask Jewel to make one — the moment it exists, it plays right here, exactly as your audience will hear it.</p>
       </div>
     );
   }
@@ -363,7 +359,11 @@ export function MediaDemos(props: GameshowWorkshopProps & { kind: string; onKind
                   <div className="gsw-inner" style={{ position: "absolute", left: 0, bottom: 0, pointerEvents: "none" }}><span className="gsw-vchip gold">▶ {video.name}</span></div>
                 </div>
               ) : (
-                <div className="gsw-card" style={{ maxWidth: 520 }}><h4>No video yet</h4><p>Ask Jewel for an intro clip — when it lands in your library it plays right here.</p></div>
+                <div className="gsw-stage-visual" style={{ maxWidth: 520, minHeight: 220 }}>
+                  <GameshowExampleStage />
+                  <div className="gsw-shade" />
+                  <div className="gsw-inner"><span className="gsw-vchip gold">No video yet</span></div>
+                </div>
               )}
               <div className="gsw-chipsrow">
                 <span style={{ fontSize: 13, color: "#948bb3", fontWeight: 600 }}>Length:</span>
@@ -373,7 +373,6 @@ export function MediaDemos(props: GameshowWorkshopProps & { kind: string; onKind
               {pending.map(job => (
                 <div key={job.videoId} className="gsw-card" style={{ marginTop: 14 }}>
                   <h4>⏳ {job.prompt} — still rendering</h4>
-                  <p>Long videos finish in the background. Its “Check video result” button sits with your project tools — check back without generating a second copy.</p>
                 </div>
               ))}
             </div>
