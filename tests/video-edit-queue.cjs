@@ -113,11 +113,17 @@ test('the status route still rejects fal task endpoints outside the allowlist', 
 });
 
 test('the video edit client polls against a 60-minute deadline, not a 300-attempt cap', () => {
-  // Jewel Piece 2 Half B removed the MediaEditor's own AI-edit request, so
-  // the project page (Jewel's executor path) is the one video edit client.
+  // Jewel Piece 2 Half B removed the MediaEditor's own AI-edit request;
+  // Jessica restored it on 2026-11-04 ("the AI is the main editing
+  // tool"), so there are again two video edit clients — Jewel's executor
+  // path on the project page, and the dialog — but the dialog submits
+  // through the SAME shared pipeline (lib/ai-edit: /api/edit-video +
+  // this shared poller), never a second implementation of its own.
   const editor = fs.readFileSync('components/MediaEditor.tsx', 'utf8');
-  assert.ok(!editor.includes('editMedia'), 'Half B: the MediaEditor AI-edit request is gone — video edits run through Jewel');
-  assert.ok(!editor.includes('/api/edit-video'), 'Half B: the MediaEditor no longer submits video edits');
+  assert.ok(editor.includes('aiEditVideo'), 'the MediaEditor AI Edit section submits video edits through lib/ai-edit');
+  const aiEditLib = fs.readFileSync('lib/ai-edit.ts', 'utf8');
+  assert.ok(aiEditLib.includes('/api/edit-video'), 'lib/ai-edit submits video edits to the shared endpoint');
+  assert.ok(aiEditLib.includes('pollForEditedVideoUrl'), 'lib/ai-edit polls video edits through the shared poller');
 
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   const submitAt = page.indexOf('fetch("/api/edit-video"');

@@ -87,12 +87,14 @@ export default function AssetLibraryPage() {
     // The copy takes the next name in its source's edit line — "Name
     // (edit 1)", "Name (edit 2)" — from lib/asset-filing, never a
     // stacked "-edited", and it keeps its source's filing, so it
-    // stands in the library exactly where its source stands.
+    // stands in the library exactly where its source stands. Its text
+    // layer (textOverlay) rides along when it has one, so an edited
+    // backdrop keeps its lettering.
     const copyName=nextEditName(project.assets.map(a=>a.name),nextAsset.name);
     const extension=/\.[a-z0-9]+$/i.exec(nextAsset.name||"")?.[0]||".png";
     const file=new File([blob],copyName+extension,{type:blob.type||"image/png"});
     const stored=await storeUploadedAsset(asset.projectId,file);
-    await persistProject({...project,assets:[...project.assets,{...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject}],updatedAt:"just now"});
+    await persistProject({...project,assets:[...project.assets,{...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})}],updatedAt:"just now"});
     setStatus("Edited image saved as a new permanent asset.");
   }
 

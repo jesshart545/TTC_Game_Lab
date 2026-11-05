@@ -61,10 +61,21 @@ assert.ok(assetsPanel.includes('onDownloadTriviaPdf(Array.isArray(tool.config.qu
   'the trivia PDF export lives on the saved list item');
 assert.ok(page.includes('async function downloadTriviaPdf(questions'), 'page downloadTriviaPdf takes the list questions');
 
-// ---------- Door 5: the Media Editor AI-edit request ----------
-for (const gone of ['WHAT SHOULD I CHANGE?', 'Make this change', 'Adapt artwork for full overlay',
-  'editMedia', '/api/edit-image', '/api/edit-video', 'pollForEditedVideoUrl', 'request an AI edit']) {
-  assert.ok(!mediaEditor.includes(gone), `MediaEditor: ${gone} is removed`);
+// ---------- Door 5: the Media Editor AI edit — reopened by request ----------
+// Half B removed the editor's own AI-edit request with the other doors.
+// Jessica reversed that for this one surface on 2026-11-04: "I would
+// rather it offer the AI edit in there also, since the AI is the main
+// editing tool." The dialog's AI Edit section is back — wired to the
+// SAME pipeline Jewel's media edits run through (lib/ai-edit), saving
+// through the dialog's save-as-new path. Doors 1–4 above stay closed.
+for (const kept of ['AI EDIT', 'Describe the AI edit', 'Apply AI edit',
+  'aiEditImage', 'aiEditVideo', 'onSaveAsNew']) {
+  assert.ok(mediaEditor.includes(kept), `MediaEditor AI edit keeps ${kept}`);
+}
+const aiEditLib = fs.readFileSync('lib/ai-edit.ts', 'utf8');
+for (const kept of ['/api/generate-asset', 'promptImage', 'pollImageGeneration',
+  '/api/edit-video', 'pollForEditedVideoUrl']) {
+  assert.ok(aiEditLib.includes(kept), `lib/ai-edit uses the shared pipeline: ${kept}`);
 }
 // Manual editing is not generation and stays: trim, crop/resize, adjustments,
 // and saving the edited copy.

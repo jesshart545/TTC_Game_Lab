@@ -1106,6 +1106,10 @@ export default function ProjectWorkspace() {
     // compounding this replaces). The copy also keeps its source's
     // filing — the role and inProject the branches persist below —
     // so it stands on the same shelf as the asset it was made from.
+    // And it carries its source's text layer (textOverlay) when it has
+    // one: the lettering is a spec rendered over the art, not part of
+    // the pixels, so an edited backdrop keeps its sign — with whatever
+    // font/colors the media editor's Text section set on the copy.
     const copyName = nextEditName(project.assets.map(a => a.name), nextAsset.name);
     const origin = project.id;
     const checkCopyScope = () => { if (!workspaceMounted.current || projectRef.current?.id !== origin || activeProjectId.current !== params.id) throw new Error("Return to the original project to finish this copy. No other project was changed."); };
@@ -1113,7 +1117,7 @@ export default function ProjectWorkspace() {
       const stored=await storeGeneratedAsset(project.id,{name:copyName,type:nextAsset.type,url:nextAsset.url});
       checkCopyScope();
       const latest=projectRef.current || project;
-      persist({...latest,assets:[...latest.assets,{...stored,role:nextAsset.role,inProject:nextAsset.inProject}],updatedAt:"just now"});
+      persist({...latest,assets:[...latest.assets,{...stored,role:nextAsset.role,inProject:nextAsset.inProject,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})}],updatedAt:"just now"});
       setAssetStatus(copyName+" saved as a new asset.");
       return copyName;
     }
@@ -1168,7 +1172,7 @@ export default function ProjectWorkspace() {
       const stored=await storeUploadedAsset(project.id,file);
       checkCopyScope();
       const latest=projectRef.current || project;
-      persist({...latest,assets:[...latest.assets,{...stored,name:copyName,edits:undefined,role:nextAsset.role,inProject:nextAsset.inProject}],updatedAt:"just now"});
+      persist({...latest,assets:[...latest.assets,{...stored,name:copyName,edits:undefined,role:nextAsset.role,inProject:nextAsset.inProject,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})}],updatedAt:"just now"});
       setAssetStatus(copyName+" saved as a new permanent video asset.");
       return copyName;
     }
@@ -1180,7 +1184,7 @@ export default function ProjectWorkspace() {
       const stored = await storeUploadedAsset(project.id, file);
       checkCopyScope();
       const latest = projectRef.current || project;
-      persist({ ...latest, assets: [...latest.assets, { ...stored, name: copyName, edits: undefined, role: nextAsset.role, inProject: nextAsset.inProject }], updatedAt: "just now" });
+      persist({ ...latest, assets: [...latest.assets, { ...stored, name: copyName, edits: undefined, role: nextAsset.role, inProject: nextAsset.inProject, ...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {}) }], updatedAt: "just now" });
       setAssetStatus(copyName + " saved as a new permanent audio asset.");
       return copyName;
     }
@@ -1205,7 +1209,7 @@ export default function ProjectWorkspace() {
     const stored = await storeUploadedAsset(project.id,file);
     checkCopyScope();
     const latest = projectRef.current || project;
-    persist({ ...latest, assets:[...latest.assets,{...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject}], updatedAt:"just now" });
+    persist({ ...latest, assets:[...latest.assets,{...stored,name:copyName,role:nextAsset.role,inProject:nextAsset.inProject,...(nextAsset.textOverlay ? { textOverlay: nextAsset.textOverlay } : {})}], updatedAt:"just now" });
     setAssetStatus(copyName + " saved as a new permanent asset.");
     return copyName;
   }
