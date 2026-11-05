@@ -39,6 +39,7 @@ import { AssetComposition, createProject, deleteProjectFromServer, Project, Proj
 
 type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number]; forCaseItem?: boolean };
 import { deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
+import { reattachDeckOrphans } from "../../../lib/deck-orphans";
 import { landscapeAnimationReference } from "../../../lib/overlay-media";
 import { waitForGeneratedVideo } from "../../../lib/video-generation";
 import { useManualHistory } from "../../../lib/manual-history";
@@ -502,8 +503,26 @@ export default function ProjectWorkspace() {
       } catch {
         hydrated = found;
       }
+      // Heal a wound from before the single-writer save lineage: a
+      // stale save could erase a generated asset's entry from the
+      // project while the file itself stayed in storage and the talk
+      // deck kept referencing it — the slide then shows a placeholder
+      // for a picture that was never deleted. Re-attach any deck
+      // reference whose file still resolves (lib/deck-orphans) and,
+      // only when something was actually re-attached, save the healed
+      // project once through the same guarded queue as every other
+      // write, so the repair joins the page's one save lineage instead
+      // of racing it. An unhealed project is loaded exactly as before.
+      let healed = hydrated;
+      try {
+        healed = (await reattachDeckOrphans(hydrated, hydrateAsset)) || hydrated;
+      } catch {
+        healed = hydrated;
+      }
       if (cancelled) return;
-      setProject(removeLegacyCardTimers({ ...clarifyYoutubeSearch(hydrated), gameTools: (clarifyYoutubeSearch(hydrated).gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) }));
+      const loadedProject = removeLegacyCardTimers({ ...clarifyYoutubeSearch(healed), gameTools: (clarifyYoutubeSearch(healed).gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) });
+      setProject(loadedProject);
+      if (healed !== hydrated) void enqueueSave(loadedProject);
       setWorkflowStep(Math.max(0, Math.min(2, found.workflow?.stage ?? 0)));
       setWorkshopStep(Math.max(0, Math.min(2, found.workflow?.workshopStep ?? 0)));
       setDraft(found.workflow?.promptDraft || "");
