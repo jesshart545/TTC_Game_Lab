@@ -122,14 +122,7 @@ export default function TriviaStep(props: ScreenProps) {
     <StepShell stepId="trivia-cards" step={props.step}>
       <div className="gsw-cols">
         <div>
-          <div className="gsw-seclabel">Two ways to get your questions</div>
-          <div className="gsw-grid2">
-            <div className="gsw-card"><h4>Write your own</h4><p>Your questions, in your own words — type them or paste them as a list, one per line. They become your trivia cards exactly as you wrote them.</p></div>
-            <div className="gsw-card"><h4>Have Jewel generate</h4><p>Give Jewel a topic and a count. She writes the questions, verifies every answer against its source, and saves the list in your toolbox.</p></div>
-          </div>
-          <p className="gsw-demostatus" style={{ marginTop: 10 }}>Either way, the words end up on the same cards — and the last part of this step is making those cards yours.</p>
-
-          <div className="gsw-seclabel" style={{ marginTop: 22 }}>Route 1 · Write your own — your words become a list of cards</div>
+          <div className="gsw-seclabel">Route 1 · Write your own</div>
           {cardList ? (
             <>
               <DrawDemo title={`${cardList.name} · card list`} entries={listEntries} drawnLabel="Now drawn" />
@@ -138,7 +131,6 @@ export default function TriviaStep(props: ScreenProps) {
           ) : (
             <div className="gsw-card">
               <h4>No card list yet</h4>
-              <p>Start one with your own words — Jewel never rewrites them unless you ask her to.</p>
               <div className="gsw-chipsrow">
                 <button type="button" className="gsw-jchip" onClick={doors.openNewList}>Create list and cards</button>
                 <button type="button" className="gsw-jchip" onClick={() => onAsk("I want to write my own questions and add them to my list")}>Add my own questions — ask Jewel</button>
@@ -146,15 +138,14 @@ export default function TriviaStep(props: ScreenProps) {
             </div>
           )}
 
-          <div className="gsw-seclabel" style={{ marginTop: 22 }}>Route 2 · Have Jewel generate — verified questions, saved for you</div>
+          <div className="gsw-seclabel" style={{ marginTop: 22 }}>Route 2 · Have Jewel generate</div>
           <span className="gsw-demotag">Live demonstration — tap a card to flip it</span>
-          {!savedQuestions.length && <p className="gsw-hint" style={{ marginBottom: 10 }}>Example questions — yours will be saved here, flipped the same way.</p>}
+          {!savedQuestions.length && <p className="gsw-hint" style={{ marginBottom: 10 }}>Example questions</p>}
           <div className="gsw-grid2">
             {questions.map((q, i) => <MiniFlip key={i} q={q} />)}
             {triviaList && (
               <div className="gsw-card" style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <h4>{triviaList.name} · {(triviaList.config.questions as any[]).length} questions</h4>
-                <p>Saved in your toolbox. Connect it to a dashboard button in Set the Stage when you need it.</p>
                 <div className="gsw-chipsrow">
                   <button type="button" className="gsw-jchip" onClick={() => doors.downloadTriviaPdf(Array.isArray(triviaList.config.questions) ? triviaList.config.questions : [])}>Download PDF</button>
                   <button type="button" className="gsw-jchip" onClick={doors.showSavedWork}>Open the list</button>
@@ -230,7 +221,6 @@ export function BoardStep(props: ScreenProps) {
           ) : blank ? (
             <div className="gsw-card">
               <h4>{blank.name} — your Blank Board</h4>
-              <p>Your board is a Blank Board: its background and interactive areas are set in the board designer.</p>
               <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={() => doors.openBoardDesigner(blank.id)}>Open the board designer</button></div>
             </div>
           ) : (
@@ -238,11 +228,10 @@ export function BoardStep(props: ScreenProps) {
               <div className="gsw-stage-visual" style={{ minHeight: 190, marginBottom: 14 }}>
                 <GameshowExampleStage />
                 <div className="gsw-shade" />
-                <div className="gsw-inner"><span className="gsw-vchip gold">Example stage — the board Jewel builds with you stands here</span></div>
+                <div className="gsw-inner"><span className="gsw-vchip gold">Example stage</span></div>
               </div>
               <div className="gsw-card">
                 <h4>No board yet</h4>
-                <p>Start from the 5×5 trivia board, or from a Blank Board you design yourself — pick a template, or ask Jewel to build yours.</p>
                 <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.openBoardTemplates}>Choose a board template</button></div>
               </div>
             </>
@@ -332,7 +321,6 @@ export function ScenesStep(props: ScreenProps) {
           ) : (
             <div className="gsw-card" style={{ marginTop: 22 }}>
               <h4>No packages yet</h4>
-              <p>When you save a scene, its timeline appears here and plays for real. Open the Asset Composer to build one by hand, or describe the moment to Jewel.</p>
               <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.openComposer}>Open Asset Composer</button></div>
             </div>
           )}
@@ -350,10 +338,6 @@ export function ScenesStep(props: ScreenProps) {
               <span className="gsw-big">＋</span>
               <span className="gsw-an" style={{ position: "static" }}>Open Asset Composer</span>
             </button>
-          </div>
-          <div className="gsw-card" style={{ marginTop: 14 }}>
-            <h4>Where packages get used</h4>
-            <p>A saved package is one reusable action. Where it sits on your overlay or dashboard — and what triggers it — is your choice in Set the Stage; nothing is placed for you.</p>
           </div>
         </div>
         <AskStrip
@@ -376,15 +360,15 @@ export function ToolboxStep(props: ScreenProps) {
   const firstCard = (project.gameTools || []).find(tool => tool.type === "question-card" || tool.type === "blank-card");
   const firstList = (project.gameTools || []).find(tool => tool.type === "card-list");
   const firstBoard = (project.gameTools || []).find(tool => tool.type === "trivia-board" || tool.type === "blank-board");
-  const editorTiles: { icon: string; title: string; description: string; action: () => void }[] = [
-    { icon: "▭", title: "Card designer", description: "Look · Size & position · Content · Review", action: () => firstCard ? doors.openCardEditor(firstCard.id) : bare ? onAsk("Make a question card for my show") : onNavigateStep(0, "trivia-cards") },
-    { icon: "≣", title: "Pool and card designer", description: "Entries in, designed cards out", action: () => firstList ? doors.openListEditor(firstList.id) : bare ? onAsk("Make a card list for my show") : onNavigateStep(0, "trivia-cards") },
-    { icon: "▦", title: "Board designer", description: "Background art & interactive areas", action: () => firstBoard ? doors.openBoardDesigner(firstBoard.id) : bare ? onAsk("Make a game board for my show") : onNavigateStep(0, "board") },
-    { icon: "✂", title: "Media editor", description: "Trim · Resize · Save an edited copy", action: () => project.assets.length ? doors.openMediaEditor(0) : bare ? onAsk("Make a backdrop for my show") : onNavigateStep(0, "media") },
-    { icon: "⚙", title: "Tool editors", description: "Name · Setup · Look · Preview — per tool", action: doors.showSavedWork },
-    { icon: "⚡", title: "Asset Composer", description: "The timeline workbench", action: doors.openComposer },
-    { icon: "✎", title: "Game plan form", description: "Title, theme, rules, rounds, scoring…", action: () => doors.showPlanForm() },
-    { icon: "🗂", title: "Organize assets & pools", description: "Search, filter, group your media", action: doors.showSavedWork },
+  const editorTiles: { icon: string; title: string; action: () => void }[] = [
+    { icon: "▭", title: "Card designer", action: () => firstCard ? doors.openCardEditor(firstCard.id) : bare ? onAsk("Make a question card for my show") : onNavigateStep(0, "trivia-cards") },
+    { icon: "≣", title: "Pool and card designer", action: () => firstList ? doors.openListEditor(firstList.id) : bare ? onAsk("Make a card list for my show") : onNavigateStep(0, "trivia-cards") },
+    { icon: "▦", title: "Board designer", action: () => firstBoard ? doors.openBoardDesigner(firstBoard.id) : bare ? onAsk("Make a game board for my show") : onNavigateStep(0, "board") },
+    { icon: "✂", title: "Media editor", action: () => project.assets.length ? doors.openMediaEditor(0) : bare ? onAsk("Make a backdrop for my show") : onNavigateStep(0, "media") },
+    { icon: "⚙", title: "Tool editors", action: doors.showSavedWork },
+    { icon: "⚡", title: "Asset Composer", action: doors.openComposer },
+    { icon: "✎", title: "Game plan form", action: () => doors.showPlanForm() },
+    { icon: "🗂", title: "Organize assets & pools", action: doors.showSavedWork },
   ];
   const toolStatus = (tool: GameTool) => tool.type === "trivia-list"
     ? `${Array.isArray(tool.config.questions) ? tool.config.questions.length : 0} questions`
@@ -406,7 +390,7 @@ export function ToolboxStep(props: ScreenProps) {
           ))}
         </div>
       ) : (
-        <p className="gsw-hint">Nothing in the toolbox yet — the tools you make on the earlier steps land here.</p>
+        <p className="gsw-hint">Nothing in the toolbox yet.</p>
       )}
       {compositions.length > 0 && (
         <>
@@ -421,18 +405,16 @@ export function ToolboxStep(props: ScreenProps) {
           </div>
         </>
       )}
-      <p className="gsw-hint" style={{ marginTop: 10 }}>Anything you switched off can still be made on its step, any time. Nothing is ever locked out.</p>
-
       <div className="gsw-seclabel" style={{ marginTop: 22 }}>Every manual editor — the doors</div>
       <div className="gsw-tiles" style={{ marginTop: 0 }}>
         {editorTiles.map(tile => (
           <button key={tile.title} type="button" className="gsw-tile" onClick={tile.action}>
-            <div className="gsw-ic">{tile.icon}</div><div className="gsw-tt">{tile.title}</div><div className="gsw-td">{tile.description}</div>
+            <div className="gsw-ic">{tile.icon}</div><div className="gsw-tt">{tile.title}</div>
           </button>
         ))}
       </div>
       <div className="gsw-grid2" style={{ marginTop: 16 }}>
-        <div className="gsw-card"><h4>Published links &amp; sharing</h4><p>The links for this project, where they already live today.</p>
+        <div className="gsw-card"><h4>Published links &amp; sharing</h4>
           <div className="gsw-chipsrow"><button type="button" className="gsw-jchip" onClick={doors.showSavedWork}>Open sharing</button></div></div>
         {!bare && <div className="gsw-card"><h4>Mistake? Take it back</h4><p>Jewel’s edits can be undone, one step at a time — the Undo button appears in her panel after she changes something.</p>
           <div className="gsw-chipsrow"><button type="button" className="gsw-jchip" onClick={props.onOpenJewel}>Open Jewel</button></div></div>}

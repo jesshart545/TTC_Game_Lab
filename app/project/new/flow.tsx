@@ -91,10 +91,11 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
           // Scratch start from the kind flow: stamp the kind and add the
           // pieces the user tapped, using the Workshop's own creators.
           project.kind = start.kind;
-          // A talk show starts with the ask (Jessica, 2026-11-03): the
-          // title and the theme/vibe/subject the creator gave on the
-          // setup screen seed the project before anything else exists.
-          if (start.kind === "talk" && start.theme) {
+          // A gameshow or talk show starts with the ask (Jessica,
+          // 2026-11-03/04): the title and the theme/vibe/subject the
+          // creator gave on the setup screen seed the project before
+          // anything else exists.
+          if ((start.kind === "talk" || start.kind === "gameshow") && start.theme) {
             project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
           }
           project = applySetupPieces(project, start.pieces);
@@ -140,7 +141,7 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
 
   function startScratch() {
     if (!kind || isKindComingSoon(kind)) return;
-    setStart({ kind, pieces: [...pieces], theme: kind === "talk" ? theme.trim() || undefined : undefined });
+    setStart({ kind, pieces: [...pieces], theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined });
     setBegun(true);
   }
 
@@ -205,11 +206,11 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
                 <div className="display">{kindInfo.scratchHeading}</div>
                 <div className="np-chip set">From scratch</div>
               </div>
-              {kind === "talk" ? (
+              {kind === "talk" || kind === "gameshow" ? (
                 <>
                   <div className="np-ask">First things first — two things only you can give: <b>the title of your show</b>, and <b>its theme, vibe, or subject</b>. Then tap the pieces your show needs.</div>
                   <input className="np-nameinput" aria-label="Show title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
-                  <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder="Its theme, vibe, or subject — e.g. cozy faith-and-life chat" value={theme} onChange={event => setTheme(event.target.value)} />
+                  <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder={kind === "talk" ? "Its theme, vibe, or subject — e.g. cozy faith-and-life chat" : "Its theme, vibe, or subject — e.g. neon 90s music trivia"} value={theme} onChange={event => setTheme(event.target.value)} />
                 </>
               ) : (
                 <>
