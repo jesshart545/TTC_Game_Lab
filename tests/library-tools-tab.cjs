@@ -175,7 +175,8 @@ function propsFor(testProject, changes) {
   let saved = changes2[changes2.length - 1];
   assert(saved.controls.some(control => control.action === 'asset.show.red-star'), 'Overlay choice wires the Show button');
   assert(saved.controls.some(control => control.action.startsWith('result.hide.')), 'Overlay choice wires the matching Hide button');
-  assert.equal(saved.assets[0].inProject, true, 'Overlay choice puts the item on the overlay');
+  assert.equal(saved.assets[0].inProject, true, 'Overlay choice files the item in the project');
+  assert.equal(saved.assets[0].inOverlayBuild, true, 'Overlay choice puts the item on the overlay');
   assert.equal(container2.querySelector('.build-stage-toggle [role="tab"][aria-selected="true"]').textContent, 'Overlay preview', 'Stage follows the choice to the Overlay preview');
 
   await clickButton('Use this in my game', container2);
@@ -183,7 +184,8 @@ function propsFor(testProject, changes) {
   await clickButton('Add to dashboard', container2);
   saved = changes2[changes2.length - 1];
   assert(saved.controls.some(control => control.action === 'asset.show.red-star'), 'Dashboard choice wires the Show button');
-  assert.equal(saved.assets[0].inProject, false, 'Dashboard choice leaves the item off the overlay');
+  assert.equal(saved.assets[0].inOverlayBuild, false, 'Dashboard choice leaves the item off the overlay');
+  assert.equal(saved.assets[0].inProject, false, 'Dashboard choice leaves the library item un-filed — wiring a button never changes filing either way');
 
   // Dismissing by clicking away adds nothing.
   await clickButton('Use this in my game', container2);

@@ -1,4 +1,5 @@
 import type { Project, ProjectAsset } from "./project";
+import { assetPlaced } from "./asset-filing";
 export type BackgroundContext = { status: "sampled" | "unavailable" | "missing"; name?: string; palette?: string[]; brightness?: "dark" | "mid" | "light"; note: string };
 export function wantsBackgroundMatch(request: string) {
   return /\b(?:background|backdrop)\b/i.test(request) && /\b(?:match|matching|aesthetic|style|styling|colou?rs?|theme|blend|complement|coordinate)\b/i.test(request);
@@ -26,7 +27,7 @@ export function checkedBackgroundContext(value: unknown): BackgroundContext | un
 }
 const sampleCache = new Map<string, { at: number; value: BackgroundContext }>();
 export async function backgroundContext(project: Project, hydrate: (asset: ProjectAsset) => Promise<ProjectAsset>): Promise<BackgroundContext> {
-  const background = project.assets.find(a => a.inProject && a.role === "background");
+  const background = project.assets.find(a => assetPlaced(a) && a.role === "background");
   if (!background) return { status: "missing", note: "No active saved background image. Ask which background to match." };
   const unavailable = { status: "unavailable" as const, name: background.name, note: "Background pixels could not be sampled. Ask for colors or a readable still; do not guess that the artwork has been inspected." };
   const cacheKey = `${project.id}:${background.storageKey || background.name}:${JSON.stringify(background.edits || {})}`;

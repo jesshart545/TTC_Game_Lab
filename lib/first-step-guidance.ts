@@ -1,4 +1,5 @@
 import type { Project } from "./project";
+import { assetPlaced } from "./asset-filing";
 
 export type EntryStages = Partial<Record<number, boolean>>;
 const storageKey = (projectId: string) => `ttc-entry-guide:${projectId}`;
@@ -21,7 +22,7 @@ export function rememberEntryStages(projectId: string, stages: EntryStages) {
 export function hasExistingEntryAction(project: Project, stage: number): boolean {
   if (stage === 0) return Object.values(project.gamePlan || {}).some(value => String(value || "").trim().length > 0)
     || project.assets.length > 0 || project.gameTools.length > 0 || (project.compositions || []).length > 0;
-  if (stage === 1) return project.assets.some(asset => asset.inProject && asset.role === "background")
+  if (stage === 1) return project.assets.some(asset => assetPlaced(asset) && asset.role === "background")
     || project.gameTools.some(tool => tool.enabled && tool.inOverlayBuild && ["blank-board", "trivia-board"].includes(tool.type));
   return stage === 2 && Boolean(project.publishedSnapshot);
 }

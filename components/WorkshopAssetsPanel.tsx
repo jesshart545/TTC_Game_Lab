@@ -4,6 +4,7 @@ import { Dispatch, SetStateAction, useState } from "react";
 import GameToolEditor from "./GameToolEditor";
 import { isImage } from "../lib/workshop-libraries";
 import { assetCategory } from "../lib/asset-folders";
+import { assetPlaced } from "../lib/asset-filing";
 import { assetDownloadHref, assetFileName, downloadAssetToDevice } from "../lib/download-asset";
 import { savedListEntries } from "../lib/card-lists";
 import type { Project, ProjectAsset, AssetPool } from "../lib/project";
@@ -203,21 +204,21 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       }}
     /> : <p className="empty-note">{project.assets.length===0?"Your saved assets will appear here. Create or upload something to get started.":"No assets match that search. Try a different name or media type."}</p>}
     {selectedAsset && <AssetDetailsDialog key={selectedAsset.storageKey||selectedAsset.name} label={`Actions for ${selectedAsset.name}`} onClose={()=>setSelectedAssetKey(null)}><section className="asset-detail-panel">
-      <header><AssetThumbnail key={selectedAsset.url||selectedAsset.name} asset={selectedAsset} kind={assetCategory(selectedAsset)}/><div><h3>{selectedAsset.name}</h3><p>{selectedAsset.type} · {selectedAsset.inProject?"On the overlay":"In your library"}</p></div><button type="button" className="asset-detail-close" aria-label="Close asset details" onClick={()=>setSelectedAssetKey(null)}>×</button></header>
+      <header><AssetThumbnail key={selectedAsset.url||selectedAsset.name} asset={selectedAsset} kind={assetCategory(selectedAsset)}/><div><h3>{selectedAsset.name}</h3><p>{selectedAsset.type} · {assetPlaced(selectedAsset)?"On the overlay":selectedAsset.inProject?"Saved in your project":"In your library"}</p></div><button type="button" className="asset-detail-close" aria-label="Close asset details" onClick={()=>setSelectedAssetKey(null)}>×</button></header>
       <AssetPoolAssignment key={selectedAsset.storageKey||selectedAsset.name} asset={selectedAsset} pools={project.assetPools||[]} onChange={saveAssetPools}/>
       <p role="status">{saveStatus}</p>
       <div className="asset-detail-actions">
         <button type="button" className="build-btn" onClick={()=>{setSelectedAssetKey(null);chooseWorkflowStep(1);}}>Use with dashboard buttons</button>
         {assetDownloadHref(selectedAsset) ? <a className="build-btn asset-download-link" href={assetDownloadHref(selectedAsset) ?? undefined} download={assetFileName(selectedAsset)}>Download to your device</a> : (selectedAsset.url||selectedAsset.storageKey)&&<button type="button" className="build-btn" onClick={()=>void downloadSelectedAsset()}>Download to your device</button>}
         {(isImage(selectedAsset)||isVideo(selectedAsset)||isAudio(selectedAsset))&&<button type="button" className="outline-btn" onClick={()=>{setSelectedAssetKey(null);setEditingAssetIndex(selectedAssetIndex);}}>Edit {isImage(selectedAsset)?"image":isVideo(selectedAsset)?"video":"audio"}</button>}
-        {isAudio(selectedAsset)&&<button type="button" className="outline-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
-        {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"background");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"layer");setSelectedAssetKey(null);}}>{selectedAsset.inProject&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
-        {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&!isAudio(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{selectedAsset.inProject?"Remove from overlay":"Add to overlay"}</button>}
+        {isAudio(selectedAsset)&&<button type="button" className="outline-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{assetPlaced(selectedAsset)?"Remove from overlay":"Add to overlay"}</button>}
+        {(isImage(selectedAsset)||isVideo(selectedAsset))&&<><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"background");setSelectedAssetKey(null);}}>{assetPlaced(selectedAsset)&&selectedAsset.role==="background"?"Background selected":"Use as background"}</button><button type="button" className="outline-btn" onClick={()=>{placeSceneImage(selectedAssetIndex,"layer");setSelectedAssetKey(null);}}>{assetPlaced(selectedAsset)&&selectedAsset.role==="layer"?"Added as overlay layer":"Add as overlay layer"}</button></>}
+        {!isImage(selectedAsset)&&!isVideo(selectedAsset)&&!isAudio(selectedAsset)&&<button type="button" className="build-btn" onClick={()=>toggleAssetInProject(selectedAssetIndex)}>{assetPlaced(selectedAsset)?"Remove from overlay":"Add to overlay"}</button>}
         {selectedAsset.generation?.prompt&&<p className="asset-dialog-prompt"><small>Generated from: “{selectedAsset.generation.prompt}”{selectedAsset.generation.voice ? ` · Voice: ${selectedAsset.generation.voice}` : ""}</small></p>}
         {selectedAsset.generation&&<button type="button" className="outline-btn" onClick={()=>{setSelectedAssetKey(null);setRenameDraft(null);onMakeVariation(selectedAsset);}}>Make a variation</button>}
         
         {renameDraft===null ? <button type="button" className="outline-btn" onClick={()=>setRenameDraft(selectedAsset.name)}>Rename</button> : <span className="asset-rename-row"><input aria-label="New asset name" value={renameDraft} onChange={e=>setRenameDraft(e.target.value)} /><button type="button" className="build-btn" onClick={()=>{onRenameAsset(selectedAssetIndex, renameDraft);setRenameDraft(null);}}>Save name</button><button type="button" className="outline-btn" onClick={()=>setRenameDraft(null)}>Cancel</button></span>}
-        {selectedAsset.inProject&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);setSelectedAssetKey(null);}}>Position and size on overlay</button>}
+        {assetPlaced(selectedAsset)&&selectedAsset.role!=="background"&&<button type="button" className="outline-btn" onClick={()=>{setPositionAssetKey(selectedAsset.storageKey||selectedAsset.name);setSideBySideTesting(true);setSelectedAssetKey(null);}}>Position and size on overlay</button>}
       </div>
       {downloadNote&&<p role="status">{downloadNote}</p>}
       {isAudio(selectedAsset)&&selectedAsset.url&&<audio controls src={selectedAsset.url} style={{width:"100%"}} aria-label={`Play ${selectedAsset.name}`}/>}

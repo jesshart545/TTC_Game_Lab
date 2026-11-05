@@ -253,12 +253,16 @@ const quizTool = (overrides = {}) => ({
   assert.equal(stepState(baseProject(), 'theme').complete, false, 'no theme yet');
   assert.equal(stepState(baseProject({ gamePlan: { theme: 'a cozy life talk show' } }), 'theme').complete, true, 'the creation-seeded theme fact is present');
   assert.equal(stepState(baseProject({ gamePlan: { theme: '   ' } }), 'theme').complete, false, 'whitespace is not an answer');
-  // background: any background-role asset — the combined background+sign
-  // piece. Completion never waits on a separate sign fact.
+  // background: a background-role asset FILED in the project — the
+  // combined background+sign piece. Completion never waits on a
+  // separate sign fact, and a backdrop still sitting in the library
+  // (inProject false) completes nothing: filing and placement are
+  // separate states, and this create step reads the filing.
   assert.equal(stepState(baseProject(), 'background').complete, false);
-  assert.equal(stepState(baseProject({ assets: [bgAsset()] }), 'background').complete, true, 'a saved background completes the topic, sign lettering or not');
-  assert.equal(stepState(baseProject({ assets: [bgAsset({ sign: true, textOverlay: { text: 'Galaxy Talk', fontFamily: FONT, textColor: '#ffd700' } })] }), 'background').complete, true, 'the lettered backdrop is the same one piece of work');
-  assert.equal(stepState(baseProject({ assets: [bgAsset({ name: 'my-sign.png', sign: true })] }), 'background').complete, true, 'an uploaded sign is the combined piece too');
+  assert.equal(stepState(baseProject({ assets: [bgAsset()] }), 'background').complete, false, 'a library backdrop is not filed in the project yet');
+  assert.equal(stepState(baseProject({ assets: [bgAsset({ inProject: true })] }), 'background').complete, true, 'a filed background completes the topic, sign lettering or not');
+  assert.equal(stepState(baseProject({ assets: [bgAsset({ inProject: true, sign: true, textOverlay: { text: 'Galaxy Talk', fontFamily: FONT, textColor: '#ffd700' } })] }), 'background').complete, true, 'the lettered backdrop is the same one piece of work');
+  assert.equal(stepState(baseProject({ assets: [bgAsset({ inProject: true, name: 'my-sign.png', sign: true })] }), 'background').complete, true, 'an uploaded sign is the combined piece too');
   assert.equal(stepState(baseProject({ assets: [{ name: 'x.png', type: 'Image', role: 'layer' }] }), 'background').complete, false, 'a layer is not a background');
   // prompt: a valid prompt layer on a background.
   assert.equal(stepState(baseProject({ assets: [bgAsset()] }), 'prompt').complete, false, 'a background alone carries no prompt');
@@ -312,7 +316,7 @@ const quizTool = (overrides = {}) => ({
   assert(page.includes('if (navigate.skipStepId) skipTalkArea(navigate.skipStepId)'), 'the page records Jewel\'s conversational skip on the project');
   assert(page.includes('skipped: [...(current.skipped || []), stepId]'), 'a skip persists in workflowProgress.skipped');
   // The gate: every topic done or skipped → Imagine and Create is complete.
-  const allSkipped = baseProject({ gamePlan: { theme: 'x' }, name: 'Galaxy Talk', assets: [bgAsset({ sign: true, promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
+  const allSkipped = baseProject({ gamePlan: { theme: 'x' }, name: 'Galaxy Talk', assets: [bgAsset({ inProject: true, sign: true, promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
   assert.equal(allCreateStepsComplete(evaluateWorkflow(allSkipped)), true, 'done-or-skipped everywhere unlocks Set the Stage');
   const oneOpen = baseProject({ gamePlan: { theme: 'x' }, workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
   assert.equal(allCreateStepsComplete(evaluateWorkflow(oneOpen)), false, 'a missing background keeps the gate closed');
@@ -718,7 +722,7 @@ const quizTool = (overrides = {}) => ({
     'no per-topic check-off status line stands on the stage anymore');
   // The model underneath is untouched: topics still complete by work
   // or by skip, and done-or-skipped still opens the gate.
-  const gated = baseProject({ gamePlan: { theme: 'x' }, assets: [bgAsset({ promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
+  const gated = baseProject({ gamePlan: { theme: 'x' }, assets: [bgAsset({ inProject: true, promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
   assert.equal(allCreateStepsComplete(evaluateWorkflow(gated)), true, 'the Set the Stage gate still reads the model, done-or-skipped');
   assert(page.includes('lockedStages={project.kind === "talk" && !talkCreateComplete ? [1, 2] : undefined}'), 'the gate wiring on the page is unchanged');
   console.log('PASS: doorway + strip — the wand scene is the button into Jewel (label on the picture, reveal + focus wired); no chips/Next strip in the talk create view; the generic strip and the workflow gate are untouched.');

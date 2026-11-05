@@ -10,10 +10,18 @@ global.HTMLElement = dom.window.HTMLElement;
 global.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
 const { createRoot } = require('react-dom/client');
+const loadTs = require('./load.cjs');
+const path = require('node:path');
 function moduleFrom(file) {
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  vm.runInNewContext(code, { exports, require, window: dom.window, console });
+  // Relative imports resolve through the repo's TS loader (lib modules
+  // gained cross-imports, e.g. first-step-guidance reads lib/asset-filing).
+  const localRequire = (id) => {
+    if (id.startsWith('.')) return loadTs(path.posix.normalize(path.posix.join(path.posix.dirname(file), id)) + '.ts');
+    return require(id);
+  };
+  vm.runInNewContext(code, { exports, require: localRequire, window: dom.window, console });
   return exports;
 }
 const Guide = moduleFrom('components/WorkflowEntryGuide.tsx').default;

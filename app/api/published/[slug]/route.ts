@@ -16,7 +16,7 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
   const gameTools = (snapshot.gameTools || []).filter(tool => tool.enabled && (tool.inToolbox || tool.inOverlayBuild));
   const compositions = (snapshot.compositions || []).filter(comp => comp.inProject);
   const referenced = JSON.stringify({ gameTools, compositions, controls: snapshot.controls });
-  const assets = await Promise.all((snapshot.assets || []).filter(asset => asset.inProject || referenced.includes(asset.storageKey || asset.name)).map(async asset => ({
+  const assets = await Promise.all((snapshot.assets || []).filter(asset => asset.inProject || asset.inOverlayBuild || referenced.includes(asset.storageKey || asset.name)).map(async asset => ({
     ...asset, url: asset.storageKey?.startsWith("projects/") ? await getAssetUrl(asset.storageKey) : asset.url,
   })));
   const project = {

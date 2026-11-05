@@ -1,3 +1,4 @@
+import { assetPlaced } from "./asset-filing";
 import { backgroundAssets, promptPresent } from "./backdrop-text";
 import { buildReadiness } from "./build-readiness";
 import { listCards, savedListEntries } from "./card-lists";
@@ -88,12 +89,16 @@ function scenesComplete(project: Project): boolean {
 }
 
 function backgroundComplete(project: Project): boolean {
-  return (project.assets || []).some(asset => asset.inProject && asset.role === "background")
+  // Set the Stage's background step is about PLACEMENT: the backdrop
+  // standing on the overlay. A filed backdrop on the shelf completes
+  // the create step, not this one (lib/asset-filing: filing and
+  // placement are separate states).
+  return (project.assets || []).some(asset => assetPlaced(asset) && asset.role === "background")
     || (project.gameTools || []).some(tool => tool.enabled && tool.inOverlayBuild && BOARD_TYPES.includes(tool.type));
 }
 
 function placedComplete(project: Project): boolean {
-  const placedAssets = (project.assets || []).filter(asset => asset.inProject && asset.role !== "background").length;
+  const placedAssets = (project.assets || []).filter(asset => assetPlaced(asset) && asset.role !== "background").length;
   const placedTools = (project.gameTools || []).filter(tool => tool.inOverlayBuild).length;
   return placedAssets + placedTools > 0 || (project.controls || []).length > 0;
 }
@@ -134,9 +139,11 @@ function talkThemeComplete(project: Project): boolean {
 }
 
 function talkBackgroundComplete(project: Project): boolean {
-  // The combined background+sign piece: a saved background is the work —
-  // never gated on a separate sign fact.
-  return backgroundAssets(project).length > 0;
+  // The combined background+sign piece: a FILED background is the
+  // work — never gated on a separate sign fact, and not on placement
+  // either (standing on the overlay is Set the Stage's background
+  // step, not this one).
+  return backgroundAssets(project).some(asset => asset.inProject);
 }
 
 function talkPromptComplete(project: Project): boolean {

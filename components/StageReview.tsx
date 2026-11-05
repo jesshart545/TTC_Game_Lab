@@ -13,6 +13,7 @@ import { safeYoutubePlacement } from "../lib/youtube";
 import { defaultOverlayResult } from "./CompositionPlayer";
 import WheelHostPanel from "./WheelHostPanel";
 import { stageFitWidth } from "../lib/build-controls";
+import { assetPlaced } from "../lib/asset-filing";
 import { mediaKind } from "../lib/board-design";
 import { normalizePlacement, movePlacement, resizePlacement, toolShapePlacement } from '../lib/overlay-placement';
 import { ControlAppearancePreview } from "./RuntimeActionLayers";
@@ -199,7 +200,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
   const overlayCanvasRef = useRef<HTMLElement>(null);
   const stageFrameRef = useRef<HTMLDivElement>(null);
   const [fittedStageWidth, setFittedStageWidth] = useState<number | null>(null);
-  const placedFitCount = (project.assets || []).filter(a => a.inProject).length + (project.gameTools || []).filter(t => t.inOverlayBuild).length;
+  const placedFitCount = (project.assets || []).filter(a => assetPlaced(a)).length + (project.gameTools || []).filter(t => t.inOverlayBuild).length;
   useLayoutEffect(() => {
     const canvas = overlayCanvasRef.current; if (!canvas) return;
     const view = canvas.ownerDocument.defaultView; if (!view) return;
@@ -322,7 +323,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
   }
   function buttonPointerCancel() { buttonDrag.current = null; setDraggingId(null); setDragOver(null); }
 
-  const placedAssets = (project.assets || []).filter(a => a.inProject && a.url && a.role !== "background" && mediaKind(a) !== "audio");
+  const placedAssets = (project.assets || []).filter(a => assetPlaced(a) && a.url && a.role !== "background" && mediaKind(a) !== "audio");
   const placedBoards = (project.gameTools || []).filter(t => t.enabled && t.inOverlayBuild && (t.type === "blank-board" || t.type === "trivia-board"));
   const toolPlacement = (t: GameTool): Placement => {
     const p = (t.config.placement || {}) as Partial<Placement>;
@@ -380,10 +381,10 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
               )}
             </div>
           </div>
-          {!(project.assets || []).some(a => a.inProject) && !(project.gameTools || []).some(t => t.inOverlayBuild) && !controls.length && (
+          {!(project.assets || []).some(a => assetPlaced(a)) && !(project.gameTools || []).some(t => t.inOverlayBuild) && !controls.length && (
             <p className="sr-empty">Nothing staged yet — ask Jewel to place your background and your first items, and they will appear here exactly as your audience will see them.</p>
           )}
-          {!(project.assets || []).some(a => a.inProject) && !(project.gameTools || []).some(t => t.inOverlayBuild) && controls.length > 0 && (
+          {!(project.assets || []).some(a => assetPlaced(a)) && !(project.gameTools || []).some(t => t.inOverlayBuild) && controls.length > 0 && (
             <p className="sr-empty">Your buttons are ready — press one on the dashboard review and its result appears here. A background is optional; ask Jewel to add one anytime.</p>
           )}
         </section>

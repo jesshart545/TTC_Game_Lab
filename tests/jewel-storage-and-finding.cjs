@@ -39,7 +39,7 @@ function baseProject(overrides = {}) {
   const withBackdrop = baseProject({ kind: 'talk', assets: [{ name: 'Set', type: 'image/png', inProject: true, role: 'background' }] });
   const second = fileGeneratedAsset(withBackdrop, { name: 'Guest chair', type: 'image/png', url: 'https://x/z.png' });
   assert.equal(second.inProject, true);
-  assert.equal(second.role, 'layer', 'with a background already on the overlay, a new image files as a layer');
+  assert.equal(second.role, 'layer', 'with a background already filed, a new image files as a layer');
 
   const video = fileGeneratedAsset(empty, { name: 'Intro', type: 'video/mp4', url: 'https://x/v.mp4' });
   assert.equal(video.inProject, true);
@@ -60,7 +60,7 @@ function baseProject(overrides = {}) {
   // the panel queue, variations and pending-video recovery alike.
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   assert(page.includes('fileGeneratedAsset(currentAfterStore, fittedAsset'), 'generateAsset files every generated asset into the project');
-  assert(page.includes('inProject: false }\n        : fileGeneratedAsset') || page.includes('role: "background", inProject: false }'), 'the background-intent destination flow keeps its deliberate exception');
+  assert(page.includes('role: "background", inProject: true, inOverlayBuild: false }'), 'the background-intent flow files its backdrop like everything else — its destination chooser decides the PLACEMENT, never the filing');
   assert(page.includes('forCaseItem: Boolean((mediaAction as any)?.ccssAttach)'), 'case-item generations are marked so they are filed without becoming the backdrop');
   console.log('PASS: (a) media Jewel generates inside a project is filed into that project at generation time — inProject, with the "+ Add to Project" role — so it stands on the project\'s own shelves.');
 }
@@ -93,11 +93,14 @@ function baseProject(overrides = {}) {
   console.log('PASS: (b) edited copies are named "Base (edit N)" from the base name — the suffix continues the line and never compounds.');
 }
 
-// --- Edited copies keep their source's filing --------------------------------
+// --- Edited copies file themselves into the project ---------------------------
 {
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
-  assert(page.includes('role:nextAsset.role,inProject:nextAsset.inProject'), 'a saved copy persists with the role and inProject of the asset it was made from, so it stands on the same shelf');
-  console.log('PASS: edited copies keep their source\'s filing — same shelf, same project membership.');
+  assert(!page.includes('inProject:nextAsset.inProject'), 'no save-as-new branch inherits an un-filed state from its source anymore');
+  assert.equal(page.split('fileEditedCopy(').length - 1, 4, 'every project save-as-new branch files its copy through fileEditedCopy');
+  const library = fs.readFileSync('app/assets/page.tsx', 'utf8');
+  assert(library.includes('fileEditedCopy('), 'the library save-as-new files its copy the same way');
+  console.log('PASS: edited copies file themselves into the project with their source\'s role — and are not placed (see tests/placement-is-not-filing.cjs).');
 }
 
 // --- (c) "Where is my X" — Jewel takes them there ----------------------------
