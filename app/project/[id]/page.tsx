@@ -65,8 +65,6 @@ import AssetDetailsDialog from "../../../components/AssetDetailsDialog";
 import AssetThumbnail from "../../../components/AssetThumbnail";
 import { createAssetPool, removeAssetFromPools } from "../../../lib/asset-pools";
 import { audioMimeTypeForName, isZipFileName, planZipPlaylist, playlistPoolName, zipEntryBaseName } from "../../../lib/zip-playlist";
-import { isTriviaTextFileName, parseTriviaText, triviaListBaseName, type TriviaUploadResult } from "../../../lib/trivia-upload";
-import { cleanTriviaQuestions } from "../../../lib/quiz";
 import { unzipSync } from "fflate";
 import { removeLegacyCardTimers } from "../../../lib/control-connections";
 import {createCardList,savedListEntries} from "../../../lib/card-lists";
@@ -892,6 +890,7 @@ export default function ProjectWorkspace() {
   const [confirmingProjectDelete, setConfirmingProjectDelete] = useState(false);
   const [assetPendingDelete, setAssetPendingDelete] = useState<ProjectAsset | null>(null);
   const [confirmingClearChat, setConfirmingClearChat] = useState(false);
+  const [messagePendingRemove, setMessagePendingRemove] = useState<number | null>(null);
 
   function handleDeleteProject() {
     if (!project) return;
@@ -947,8 +946,7 @@ export default function ProjectWorkspace() {
     setAssetStatus(files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} files…`);
     try {
       const zipFiles = files.filter(file => isZipFileName(file.name));
-      const triviaFiles = files.filter(file => isTriviaTextFileName(file.name));
-      const plainFiles = files.filter(file => !isZipFileName(file.name) && !isTriviaTextFileName(file.name));
+      const plainFiles = files.filter(file => !isZipFileName(file.name));
       const uploaded = await Promise.all(plainFiles.map(file => storeUploadedAsset(project.id, file)));
       // Zip playlists (owner request, 2026-11-08): a .zip is unpacked
       // in the browser and every song inside goes through the same
@@ -973,16 +971,6 @@ export default function ProjectWorkspace() {
         }
         playlists.push({ zipName: zipFile.name, tracks, skipped: plan.skipped });
       }
-      // Plain-text trivia uploads (owner request, 2026-11-09): a .txt
-      // of the creator's own questions is read as text — never stored
-      // as a media asset — and parsed into a new question list named
-      // after the file, created below alongside the other upload
-      // outcomes. The parsing rules live in lib/trivia-upload.
-      const triviaUploads: { fileName: string; result: TriviaUploadResult }[] = [];
-      for (const triviaFile of triviaFiles) {
-        setAssetStatus(`Reading ${triviaFile.name}…`);
-        triviaUploads.push({ fileName: triviaFile.name, result: parseTriviaText(await triviaFile.text()) });
-      }
       const hydratedUploaded = (await Promise.all([...uploaded, ...playlists.flatMap(playlist => playlist.tracks)].map(asset => hydrateAsset(asset)))).map(asset => backgroundIntent && isImage(asset) ? { ...asset, role: "background" as const, inProject: true, inOverlayBuild: false } : asset);
       // Derive from projectRef and save through the guarded queue: the
       // render snapshot in `project` can lag changes another flow just
@@ -1006,32 +994,7 @@ export default function ProjectWorkspace() {
         playlistNotes.push(`Added the “${poolName}” playlist — ${playlist.tracks.length} ${playlist.tracks.length === 1 ? "track" : "tracks"} from ${playlist.zipName}, saved in your asset pools.`);
         if (playlist.skipped) playlistNotes.push(`${playlist.skipped} ${playlist.skipped === 1 ? "file" : "files"} in ${playlist.zipName} ${playlist.skipped === 1 ? "wasn't" : "weren't"} audio and ${playlist.skipped === 1 ? "was" : "were"} skipped.`);
       }
-      // Each parsed .txt becomes ONE new trivia-list tool named after
-      // its file — the same tool shape a generated list is saved as,
-      // with its questions cleaned by the same cleaner every other
-      // trivia-list write goes through — so the uploaded list is
-      // usable and customizable everywhere existing lists are. A file
-      // with no usable questions creates nothing.
-      let nextTools = latest.gameTools || [];
-      let toolsChanged = false;
-      const triviaNotes: string[] = [];
-      triviaUploads.forEach((upload, uploadIndex) => {
-        const { result } = upload;
-        if (!result.questions.length) {
-          triviaNotes.push(`No trivia questions could be read from ${upload.fileName}, so nothing was added. The file needs each question laid out like “Q: Your question?” then “A: The answer”, with a blank line between questions.`);
-          return;
-        }
-        const listName = uniqueTriviaListName(nextTools.filter(t => t.type === "trivia-list").map(t => t.name), triviaListBaseName(upload.fileName));
-        const questions = cleanTriviaQuestions(result.questions.map(q => ({ question: q.question, answer: q.answer, ...(q.category ? { category: q.category } : {}), ...(q.options ? { options: q.options, correctIndex: q.correctIndex } : {}) })));
-        const tool: GameTool = { id: `trivia-list-${Date.now()}-${uploadIndex}`, type: "trivia-list", name: listName, enabled: true, inToolbox: true, config: { title: listName, questions } };
-        nextTools = [...nextTools, tool];
-        toolsChanged = true;
-        triviaNotes.push(`Added ${questions.length} trivia ${questions.length === 1 ? "question" : "questions"} from ${upload.fileName} as a new list “${listName}”.`);
-        if (result.skipped) triviaNotes.push(`${result.skipped} ${result.skipped === 1 ? "entry was" : "entries were"} skipped in ${upload.fileName} — each question needs a question and an answer.`);
-        if (result.duplicates) triviaNotes.push(`${result.duplicates} duplicate ${result.duplicates === 1 ? "question was" : "questions were"} left out of ${upload.fileName}.`);
-        if (result.cappedCount) triviaNotes.push(`${upload.fileName} had more than 500 questions — only the first 500 were added to “${listName}”.`);
-      });
-      const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], ...(poolsChanged ? { assetPools: nextPools } : {}), ...(toolsChanged ? { gameTools: nextTools } : {}), updatedAt: "just now" };
+      const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], ...(poolsChanged ? { assetPools: nextPools } : {}), updatedAt: "just now" };
       projectRef.current = savedProject;
       setProject(savedProject);
       await enqueueSave(savedProject);
@@ -1040,7 +1003,6 @@ export default function ProjectWorkspace() {
       const notes: string[] = [];
       if (uploaded.length) notes.push(uploaded.length === 1 ? `${uploaded[0].name} uploaded and saved` : `${uploaded.length} files uploaded and saved`);
       notes.push(...playlistNotes);
-      notes.push(...triviaNotes);
       setAssetStatus(notes.join(" "));
       const newestPlaylist = createdPlaylists[createdPlaylists.length - 1];
       if (newestPlaylist) setAddedPlaylist({ projectId: project.id, poolName: newestPlaylist.poolName, tracks: newestPlaylist.tracks });
@@ -2038,6 +2000,7 @@ export default function ProjectWorkspace() {
         stageReview={stageReviewView}
         viewerIsAdmin={viewerIsAdmin}
         onClearChat={() => setConfirmingClearChat(true)}
+        onRemoveMessage={(index) => setMessagePendingRemove(index)}
       />
   );
   return <main className="workspace-page">
@@ -2243,6 +2206,7 @@ export default function ProjectWorkspace() {
     {confirmingProjectDelete && <ConfirmDialog title="Move project to Trash?" message={`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash in the project library, or delete it forever there.`} confirmLabel="Move to Trash" danger onConfirm={() => { setConfirmingProjectDelete(false); void doDeleteProject(); }} onCancel={() => setConfirmingProjectDelete(false)} />}
     {assetPendingDelete && <ConfirmDialog title="Delete this asset?" message={`Delete "${assetPendingDelete.name}" from this project?`} confirmLabel="Delete asset" danger onConfirm={() => { const asset = assetPendingDelete; setAssetPendingDelete(null); void doDeleteAsset(asset); }} onCancel={() => setAssetPendingDelete(null)} />}
     {confirmingClearChat && <ConfirmDialog title="Clear Jewel's conversation?" message="This removes every message in Jewel's chat for this project. The project itself — its assets, tools and settings — is not touched." confirmLabel="Clear chat" danger onConfirm={() => { setConfirmingClearChat(false); persist({ ...project, messages: [] }); }} onCancel={() => setConfirmingClearChat(false)} />}
+    {messagePendingRemove !== null && project.messages[messagePendingRemove] && <ConfirmDialog title="Remove this message?" message="This removes just this one message from Jewel's chat for this project. Every other message stays exactly as it is, and the project itself — its assets, tools and settings — is not touched." confirmLabel="Remove message" danger onConfirm={() => { const index = messagePendingRemove; setMessagePendingRemove(null); persist({ ...project, messages: project.messages.filter((_, i) => i !== index) }); }} onCancel={() => setMessagePendingRemove(null)} />}
     {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}
     {listEditorId&&listEditorTool&&<dialog ref={listDialog} className="card-creation-dialog" aria-label="List and card creator" onCancel={()=>{setListEditorId("");setListDraft(null);}}><button type="button" onClick={()=>{listDialog.current?.close();setListEditorId("");setListDraft(null);}}>Close list creator</button><CardListEditor key={listEditorId} project={project} tool={listEditorTool} onSave={next=>{const current=projectRef.current||project;persist({...current,gameTools:current.gameTools.some(t=>t.id===next.id)?current.gameTools.map(t=>t.id===next.id?next:t):[...current.gameTools,next]});}}/></dialog>}
     {newCardEditorId&&cardEditorTool&&<dialog ref={newCardDialog} className="card-creation-dialog" aria-label="Card designer" onCancel={()=>{setNewCardEditorId("");setCardDraft(null);}}><button type="button" className="outline-btn" onClick={()=>{newCardDialog.current?.close();setNewCardEditorId("");setCardDraft(null);}}>Close card editor</button><p role="status">Follow the steps below to customize your card, then save your changes.</p><QuestionCardEditor key={newCardEditorId} project={project} tool={cardEditorTool} deferSave={!project.gameTools.some(t=>t.id===newCardEditorId)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist(exists?{...current,gameTools:current.gameTools.map(t=>t.id===next.id?next:t)}:{...current,gameTools:[...current.gameTools,next],controls:[...current.controls,...(cardDraft&&cardDraft.tool.id===next.id?cardDraft.controls.filter(c=>!current.controls.some(x=>x.id===c.id)):[])]});if(!exists)setAssetStatus(next.type==='blank-card'?'Blank card created. Customize it in the editor.':'Question and answer cards created. Choose their question pool and customize their appearance.');}}/></dialog>}
