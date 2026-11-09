@@ -372,6 +372,9 @@ test('video input errors from fal do not fall back', async () => {
 
 test('video surfaces the fal billing failure unchanged when Agnes cannot take the request either', async () => {
   const alerts = [];
+  // The Agnes 503 below is transient, so the create now retries first;
+  // tiny override waits keep this test about the surfaced failure, not
+  // the retry timing (the retry behavior itself is covered below).
   const route = loadRoute(alerts, async (url) => {
     const target = String(url);
     if (target.startsWith('https://api.dev.runwayml.com/')) {
@@ -382,7 +385,7 @@ test('video surfaces the fal billing failure unchanged when Agnes cannot take th
     }
     if (target === AGNES_VIDEO_URL) return Response.json({ error: { message: 'Service unavailable' } }, { status: 503 });
     throw new Error(`Unexpected fetch ${target}`);
-  });
+  }, { FAL_KEY: 'test-fal', AGNES_API_KEY: 'test-agnes', RUNWAYML_API_SECRET: 'test-runway', AGNES_VIDEO_RETRY_WAITS_MS: '1,1,1' });
   const response = await post(route, { type: 'video', prompt: 'Neon dragons over a game stage', durationSeconds: 8 });
   assert.equal(response.status, 502);
   const data = await response.json();
@@ -546,4 +549,125 @@ test('video seam: a fallback submit flows through the real client poller and sta
     '/api/generate-asset/status?id=vid-999&model=agnes-video-2.5-flash&provider=agnes',
   ]);
   assert.equal(agnesPolls, 2);
+});
+
+test('video retries a queue-full Agnes create and serves the request when the queue clears', async () => {
+  // The production failure this fixes (2026-11-08): fal down, then Agnes
+  // refused the create with 503 "video queue is full" and the request
+  // died because no rung sits behind Agnes. The create now retries on
+  // transient refusals; this proves a cleared queue serves the request
+  // and that both providers' failures are visible in the server log.
+  const alerts = [];
+  const errorLines = [];
+  const fakeConsole = { error: (...args) => errorLines.push(args.join(' ')), log() {}, warn() {} };
+  let agnesCalls = 0;
+  const route = load('app/api/generate-asset/route.ts', {
+    env: { FAL_KEY: 'test-fal', AGNES_API_KEY: 'test-agnes', RUNWAYML_API_SECRET: 'test-runway', AGNES_VIDEO_RETRY_WAITS_MS: '1,1,1' },
+    console: fakeConsole,
+    fetch: async (url) => {
+      const target = String(url);
+      if (target.startsWith('https://queue.fal.run/')) {
+        return Response.json({ detail: 'User is locked. Reason: TOP_UP' }, { status: 403 });
+      }
+      if (target === AGNES_VIDEO_URL) {
+        agnesCalls += 1;
+        if (agnesCalls === 1) {
+          return Response.json({ error: { message: 'video queue is full, please retry later' } }, { status: 503 });
+        }
+        return Response.json({ video_id: 'vid-retry', status: 'queued' });
+      }
+      throw new Error(`Unexpected fetch ${target}`);
+    },
+    modules: { '../../../lib/admin-alerts': alertMock(alerts) },
+  });
+  const response = await post(route, {
+    type: 'video', prompt: 'Animate this stage', promptImage: 'https://example.com/frame.png', durationSeconds: 6,
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.provider, 'agnes');
+  assert.equal(data.videoId, 'vid-retry');
+  assert.equal(agnesCalls, 2, 'one refusal, one retry, then success');
+  assert.equal(alerts.length, 1);
+  const logged = errorLines.join('\n');
+  assert.match(logged, /\[fal-video\] outage \(HTTP 403\): User is locked\. Reason: TOP_UP/, 'the fal outage is logged with its status and reason');
+  assert.match(logged, /\[agnes-video\] create refused \(HTTP 503\): video queue is full, please retry later — retrying/, 'the queue-full refusal is logged as a retry, not a final failure');
+});
+
+test('Agnes video create gives up after the bounded retries on a persistent queue-full refusal', async () => {
+  let calls = 0;
+  const media = load('lib/agnes-media.ts', {
+    env: { AGNES_API_KEY: 'test-agnes', AGNES_VIDEO_RETRY_WAITS_MS: '1,1,1' },
+    fetch: async (url) => {
+      assert.equal(String(url), AGNES_VIDEO_URL);
+      calls += 1;
+      return Response.json({ error: { message: 'video queue is full, please retry later' } }, { status: 503 });
+    },
+  });
+  const result = await media.submitAgnesVideo({ prompt: 'Neon dragons', durationSeconds: 8 });
+  assert.equal(result, null);
+  assert.equal(calls, 4, 'the initial create plus three bounded retries, then it stops');
+});
+
+test('Agnes video create does not retry a non-transient refusal', async () => {
+  let calls = 0;
+  const media = load('lib/agnes-media.ts', {
+    env: { AGNES_API_KEY: 'test-agnes', AGNES_VIDEO_RETRY_WAITS_MS: '1,1,1' },
+    fetch: async () => {
+      calls += 1;
+      return Response.json({ error: { message: 'prompt: invalid value' } }, { status: 400 });
+    },
+  });
+  const result = await media.submitAgnesVideo({ prompt: 'Neon dragons', durationSeconds: 8 });
+  assert.equal(result, null);
+  assert.equal(calls, 1, 'a 400-class refusal is final on the first attempt');
+});
+
+test('video chain: a Runway 429 falls through to fal, which serves the request', async () => {
+  // A 429 is an explicit rejection before Runway creates any job, so —
+  // like the credit failures — the fal rung may take the request.
+  // Ambiguous Runway failures (5xx) keep surfacing instead; that guard
+  // lives in tests/video-duration.cjs and is untouched.
+  const alerts = [];
+  const calls = [];
+  const route = loadRoute(alerts, async (url) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.startsWith('https://api.dev.runwayml.com/')) {
+      return Response.json({ error: { message: 'Too many requests' } }, { status: 429 });
+    }
+    if (target.startsWith('https://queue.fal.run/')) {
+      return Response.json({
+        request_id: 'fal-job-429',
+        status_url: 'https://queue.fal.run/alibaba/wan-3.0/text-to-video/requests/fal-job-429/status',
+        response_url: 'https://queue.fal.run/alibaba/wan-3.0/text-to-video/requests/fal-job-429',
+      });
+    }
+    throw new Error(`Unexpected fetch ${target}`);
+  });
+  const response = await post(route, { type: 'video', prompt: 'Neon dragons over a game stage', durationSeconds: 8 });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.provider, 'fal');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].startsWith('https://api.dev.runwayml.com/'), true, 'Runway is tried first');
+  assert.equal(calls[1].startsWith('https://queue.fal.run/'), true, 'fal takes the request after the 429');
+  assert.equal(alerts.length, 0);
+});
+
+test('Jewel generation feedback no longer authorizes substituting an image for a failed video', () => {
+  // The addendum is the instruction Jewel follows on a generation
+  // failure; its old rule 2 told her she may answer a failed video with
+  // a still image, which is how the user got a picture instead of the
+  // video — twice (2026-11-08). The retry must stay the same media kind.
+  const source = fs.readFileSync('app/api/jewel/route.ts', 'utf8');
+  const start = source.indexOf('const JEWEL_FEEDBACK_ADDENDUM = `');
+  assert.ok(start >= 0, 'the feedback addendum exists');
+  const addendum = source.slice(start, source.indexOf('`;', start));
+  assert.match(addendum, /GENERATION FEEDBACK/);
+  assert.doesNotMatch(addendum, /you may instead return an image action/);
+  assert.doesNotMatch(addendum, /still frame/);
+  assert.match(addendum, /SAME media kind/, 'the retry stays the kind that failed');
+  assert.match(addendum, /NEVER resubmit the failed prompt unchanged/, 'rule 1 survives: no identical resubmission');
+  assert.match(addendum, /Never mention credits, balances, billing, top-ups, or provider names/, 'the closing lines survive');
 });
