@@ -63,7 +63,9 @@ import AssetPoolManager from "../../../components/AssetPoolManager";
 import AssetPoolAssignment from "../../../components/AssetPoolAssignment";
 import AssetDetailsDialog from "../../../components/AssetDetailsDialog";
 import AssetThumbnail from "../../../components/AssetThumbnail";
-import { removeAssetFromPools } from "../../../lib/asset-pools";
+import { createAssetPool, removeAssetFromPools } from "../../../lib/asset-pools";
+import { audioMimeTypeForName, isZipFileName, planZipPlaylist, playlistPoolName, zipEntryBaseName } from "../../../lib/zip-playlist";
+import { unzipSync } from "fflate";
 import { removeLegacyCardTimers } from "../../../lib/control-connections";
 import {createCardList,savedListEntries} from "../../../lib/card-lists";
 import GameToolEditor, { overlayToolPlacement } from "../../../components/GameToolEditor";
@@ -934,20 +936,62 @@ export default function ProjectWorkspace() {
     if (!files.length) return;
     setAssetStatus(files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} files…`);
     try {
-      const uploaded = await Promise.all(files.map(file => storeUploadedAsset(project.id, file)));
-      const hydratedUploaded = (await Promise.all(uploaded.map(asset => hydrateAsset(asset)))).map(asset => backgroundIntent && isImage(asset) ? { ...asset, role: "background" as const, inProject: true, inOverlayBuild: false } : asset);
+      const zipFiles = files.filter(file => isZipFileName(file.name));
+      const plainFiles = files.filter(file => !isZipFileName(file.name));
+      const uploaded = await Promise.all(plainFiles.map(file => storeUploadedAsset(project.id, file)));
+      // Zip playlists (owner request, 2026-11-08): a .zip is unpacked
+      // in the browser and every song inside goes through the same
+      // upload path as a single file, filed in the project like any
+      // upload (in the project, never placed on the overlay), then
+      // grouped into one pool named after the zip. Non-audio entries
+      // are skipped and system junk (__MACOSX, dotfiles) ignored —
+      // the planning rules live in lib/zip-playlist.
+      const playlists: { zipName: string; tracks: ProjectAsset[]; skipped: number }[] = [];
+      for (const zipFile of zipFiles) {
+        setAssetStatus(`Unpacking ${zipFile.name}…`);
+        const entries = unzipSync(new Uint8Array(await zipFile.arrayBuffer()));
+        const plan = planZipPlaylist(Object.keys(entries));
+        const tracks: ProjectAsset[] = [];
+        for (const entryPath of plan.tracks) {
+          const baseName = zipEntryBaseName(entryPath);
+          const bytes = entries[entryPath];
+          const exactBytes = new Uint8Array(bytes.byteLength);
+          exactBytes.set(bytes);
+          const stored = await storeUploadedAsset(project.id, new File([exactBytes], baseName, { type: audioMimeTypeForName(baseName) }));
+          tracks.push({ ...stored, inProject: true, inOverlayBuild: false });
+        }
+        playlists.push({ zipName: zipFile.name, tracks, skipped: plan.skipped });
+      }
+      const hydratedUploaded = (await Promise.all([...uploaded, ...playlists.flatMap(playlist => playlist.tracks)].map(asset => hydrateAsset(asset)))).map(asset => backgroundIntent && isImage(asset) ? { ...asset, role: "background" as const, inProject: true, inOverlayBuild: false } : asset);
       // Derive from projectRef and save through the guarded queue: the
       // render snapshot in `project` can lag changes another flow just
       // made, and a direct save built on it would erase them on the
       // server — the same stale-save loss as any other unqueued writer.
       const latest = projectRef.current || project;
-      const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], updatedAt: "just now" };
+      let nextPools = latest.assetPools || [];
+      let poolsChanged = false;
+      const playlistNotes: string[] = [];
+      for (const playlist of playlists) {
+        if (!playlist.tracks.length) {
+          playlistNotes.push(`${playlist.zipName} had no audio files in it, so nothing was added.`);
+          continue;
+        }
+        const poolName = playlistPoolName(playlist.zipName, nextPools.map(pool => pool.name));
+        nextPools = createAssetPool(nextPools, poolName, playlist.tracks.map(track => track.storageKey || track.name)).pools;
+        poolsChanged = true;
+        playlistNotes.push(`Added the “${poolName}” playlist — ${playlist.tracks.length} ${playlist.tracks.length === 1 ? "track" : "tracks"} from ${playlist.zipName}, saved in your asset pools.`);
+        if (playlist.skipped) playlistNotes.push(`${playlist.skipped} ${playlist.skipped === 1 ? "file" : "files"} in ${playlist.zipName} ${playlist.skipped === 1 ? "wasn't" : "weren't"} audio and ${playlist.skipped === 1 ? "was" : "were"} skipped.`);
+      }
+      const savedProject = { ...latest, assets: [...latest.assets, ...hydratedUploaded], ...(poolsChanged ? { assetPools: nextPools } : {}), updatedAt: "just now" };
       projectRef.current = savedProject;
       setProject(savedProject);
       await enqueueSave(savedProject);
       if (backgroundIntent && hydratedUploaded.length === 1 && (isImage(hydratedUploaded[0])||isVideo(hydratedUploaded[0]))) setBackgroundDestinationKey(hydratedUploaded[0].storageKey||hydratedUploaded[0].name);
       setBackgroundIntent(false);
-      setAssetStatus(uploaded.length === 1 ? `${uploaded[0].name} uploaded and saved` : `${uploaded.length} files uploaded and saved`);
+      const notes: string[] = [];
+      if (uploaded.length) notes.push(uploaded.length === 1 ? `${uploaded[0].name} uploaded and saved` : `${uploaded.length} files uploaded and saved`);
+      notes.push(...playlistNotes);
+      setAssetStatus(notes.join(" "));
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "The file could not be added.");
     } finally {
