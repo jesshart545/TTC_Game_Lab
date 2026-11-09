@@ -447,6 +447,13 @@ export default function ProjectWorkspace() {
   const generationBusyRef = useRef(false);
   const [assetBusy, setAssetBusy] = useState(false);
   const [assetStatus, setAssetStatus] = useState("");
+  // The playlist a just-finished zip upload created (owner standard,
+  // 2026-11-09: a zip must ACT as a playable playlist). The panel
+  // presents its player with the upload's completion status, so the
+  // creator can press Play immediately instead of hunting through
+  // the asset pools for it. Local presentation state only — the pool
+  // and its tracks are already saved into the project by handleFiles.
+  const [addedPlaylist, setAddedPlaylist] = useState<{ projectId: string; poolName: string; tracks: ProjectAsset[] } | null>(null);
   useEffect(() => { if (assetStatus) taskProgress.current?.(assetStatus); }, [assetStatus]);
   // Generation queue: when the current generation finishes, start the next
   // queued request for this project automatically.
@@ -934,6 +941,7 @@ export default function ProjectWorkspace() {
     if (!project) return;
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
+    setAddedPlaylist(null);
     setAssetStatus(files.length === 1 ? `Uploading ${files[0].name}…` : `Uploading ${files.length} files…`);
     try {
       const zipFiles = files.filter(file => isZipFileName(file.name));
@@ -971,14 +979,17 @@ export default function ProjectWorkspace() {
       let nextPools = latest.assetPools || [];
       let poolsChanged = false;
       const playlistNotes: string[] = [];
+      const createdPlaylists: { poolName: string; tracks: ProjectAsset[] }[] = [];
       for (const playlist of playlists) {
         if (!playlist.tracks.length) {
           playlistNotes.push(`${playlist.zipName} had no audio files in it, so nothing was added.`);
           continue;
         }
         const poolName = playlistPoolName(playlist.zipName, nextPools.map(pool => pool.name));
-        nextPools = createAssetPool(nextPools, poolName, playlist.tracks.map(track => track.storageKey || track.name)).pools;
+        const created = createAssetPool(nextPools, poolName, playlist.tracks.map(track => track.storageKey || track.name));
+        nextPools = created.pools;
         poolsChanged = true;
+        createdPlaylists.push({ poolName: created.pool.name, tracks: created.pool.assetKeys.map(poolKey => hydratedUploaded.find(asset => (asset.storageKey || asset.name) === poolKey)).filter((asset): asset is ProjectAsset => Boolean(asset)) });
         playlistNotes.push(`Added the “${poolName}” playlist — ${playlist.tracks.length} ${playlist.tracks.length === 1 ? "track" : "tracks"} from ${playlist.zipName}, saved in your asset pools.`);
         if (playlist.skipped) playlistNotes.push(`${playlist.skipped} ${playlist.skipped === 1 ? "file" : "files"} in ${playlist.zipName} ${playlist.skipped === 1 ? "wasn't" : "weren't"} audio and ${playlist.skipped === 1 ? "was" : "were"} skipped.`);
       }
@@ -992,6 +1003,8 @@ export default function ProjectWorkspace() {
       if (uploaded.length) notes.push(uploaded.length === 1 ? `${uploaded[0].name} uploaded and saved` : `${uploaded.length} files uploaded and saved`);
       notes.push(...playlistNotes);
       setAssetStatus(notes.join(" "));
+      const newestPlaylist = createdPlaylists[createdPlaylists.length - 1];
+      if (newestPlaylist) setAddedPlaylist({ projectId: project.id, poolName: newestPlaylist.poolName, tracks: newestPlaylist.tracks });
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "The file could not be added.");
     } finally {
@@ -1978,6 +1991,7 @@ export default function ProjectWorkspace() {
         addGameTool={addGameTool}
         jewelProgress={jewelProgress}
         assetStatus={assetStatus}
+        addedPlaylist={addedPlaylist && addedPlaylist.projectId === project.id ? addedPlaylist : null}
         persist={persist}
         setAiUndo={setAiUndo}
         ccssEntitled={ccssEntitled}
