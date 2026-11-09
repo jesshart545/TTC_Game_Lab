@@ -520,6 +520,7 @@ export function MediaStep(props: ScreenProps) {
             <div className="gsw-card">
               <h4>Upload your media</h4>
               <p>Your own clips, images, and sounds file here — ready for your show.</p>
+              <p>A .zip of songs becomes a playable playlist.</p>
               <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.uploadMedia}>Upload media</button></div>
             </div>
             <div className="gsw-card">
