@@ -125,8 +125,8 @@ For TALK projects, talkShow.deckMoments lists the show's deck in the creator's o
 const JEWEL_FEEDBACK_ADDENDUM = `
 GENERATION FEEDBACK — This request includes generationFeedback: a generation you previously asked the app to run has failed. Decide the next step and return it as a normal response in the same JSON contract:
 1. Prefer a NEW media action with an adjusted approach: rewrite or simplify the prompt, change the wording or framing, or adjust the length. NEVER resubmit the failed prompt unchanged — an identical retry will be rejected.
-2. If the failed kind was video, you may instead return an image action whose prompt describes one strong still frame for the same idea, and say in your reply that you made a still the creator can animate or use with motion treatment. Do the same for other media kinds only when a still genuinely serves the request.
-3. If no sensible retry exists, return action null and explain in plain, friendly language what happened and what the creator could try next.
+2. The retry must stay the SAME media kind as the generation that failed. If a video failed, return another video action — adjust the prompt, the wording or framing, or the length — never an image or any other kind in its place, and never present a different kind as if it were what the creator asked for.
+3. If no sensible retry of the same kind exists, return action null and explain in plain, friendly language what happened and what the creator could try next.
 Never mention credits, balances, billing, top-ups, or provider names. Do not claim the retry already happened — the app runs the action you return and will tell the creator the result.`;
 
 const JEWEL_LAYERING_ADDENDUM = `

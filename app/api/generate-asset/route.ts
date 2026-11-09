@@ -229,6 +229,10 @@ export async function POST(request: Request) {
         const message = String(payload?.detail || payload?.error || payload?.message || "");
         const billing = isCreditError(status, message) || isLockError(message);
         if (connectionFailed || isProviderOutage(status, message)) {
+          // Outages used to leave no server-side trace of fal's own status
+          // or reason (only the Agnes rung behind it logged), which made a
+          // two-provider failure look like an Agnes-only one in the logs.
+          console.error(`[fal-video] outage (HTTP ${status}): ${message || "no provider message"}`);
           return {
             outage: {
               status, message, billing,
@@ -294,7 +298,12 @@ export async function POST(request: Request) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const providerError = String(payload?.error?.message || payload?.error || payload?.message || "");
-      if ((response.status === 402 || /(?:not have enough|insufficient|not enough) credits/i.test(providerError)) && readSecret("FAL_KEY")) {
+      // A 429, like the credit failures, is an explicit rejection before
+      // Runway creates any job, so the fal rung can safely take the
+      // request. Ambiguous Runway failures (5xx, connection errors) keep
+      // surfacing instead: a job may exist provider-side, and submitting
+      // a second billable job elsewhere is worse than the error.
+      if ((response.status === 402 || response.status === 429 || /(?:not have enough|insufficient|not enough) credits/i.test(providerError)) && readSecret("FAL_KEY")) {
         return submitFalVideo();
       }
       return jsonError(
