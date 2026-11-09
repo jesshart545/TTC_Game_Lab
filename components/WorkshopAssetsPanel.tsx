@@ -184,7 +184,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     <button type="button" className="workshop-upload-box" onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>
       <span aria-hidden="true">⬆</span>
       <strong>Upload from your device</strong>
-      <small>Add images, video, or audio. After uploading, select a file to place it on the overlay or use it as the background.</small>
+      <small>Add images, video, or audio — or a .zip of songs, which becomes a playlist in your asset pools. After uploading, select a file to place it on the overlay or use it as the background.</small>
     </button>
     <CollapsibleFolder title="Asset pools" count={(project.assetPools || []).length} description="Named groups used by your game controls" storageKey={`${project.id}:pools`} keepMounted><AssetPoolManager pools={project.assetPools || []} assets={project.assets} onChange={saveAssetPools} saveStatus={saveStatus} /></CollapsibleFolder>
     <div className="workshop-assets-toolbar">

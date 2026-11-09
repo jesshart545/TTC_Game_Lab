@@ -1,15 +1,17 @@
 "use client";
 import { useState } from "react";
 import type { AssetPool, ProjectAsset } from "../lib/project";
-import { createAssetPool, setPoolAssetMembership } from "../lib/asset-pools";
+import { createAssetPool, poolAudioTracks, setPoolAssetMembership } from "../lib/asset-pools";
 import { mediaKind } from "../lib/board-design";
 import AssetThumbnail from "./AssetThumbnail";
+import PlaylistPlayer from "./PlaylistPlayer";
 function Thumbnail({asset}:{asset:ProjectAsset}){const kind=mediaKind(asset);return <AssetThumbnail key={asset.url||asset.storageKey||asset.name} asset={asset} kind={kind==='unknown'?'other':kind}/>;}
 export default function AssetPoolManager({pools,assets,onChange,saveStatus}:{pools:AssetPool[];assets:ProjectAsset[];onChange:(pools:AssetPool[])=>void;saveStatus?:string}) {
  const [poolName,setPoolName]=useState(''),[activeId,setActiveId]=useState<string|null>(null),[adding,setAdding]=useState(false),[selected,setSelected]=useState<string[]>([]),[message,setMessage]=useState(''),[search,setSearch]=useState('');
  const active=pools.find(pool=>pool.id===activeId);
  const key=(asset:ProjectAsset)=>asset.storageKey||asset.name;
  const members=active?assets.filter(asset=>active.assetKeys.includes(key(asset))):[];
+ const audioTracks=active?poolAudioTracks(active,assets):[];
  const choices=active?assets.filter(asset=>!active.assetKeys.includes(key(asset))&&asset.name.toLowerCase().includes(search.toLowerCase())):[];
  function open(id:string){setActiveId(id);setSelected([]);setAdding(false);setSearch('');setMessage('');}
  function create(){try{const result=createAssetPool(pools,poolName);onChange(result.pools);setPoolName('');open(result.pool.id);setAdding(true);setMessage(`Created ${result.pool.name}. Choose assets below to fill it.`);}catch(error){setMessage(error instanceof Error?error.message:'Could not create the pool.');}}
@@ -18,7 +20,7 @@ export default function AssetPoolManager({pools,assets,onChange,saveStatus}:{poo
  <form className="asset-pool-create" onSubmit={event=>{event.preventDefault();create();}}><label>New pool name<input value={poolName} onChange={event=>setPoolName(event.target.value)} placeholder="Example: Music round images" maxLength={80}/></label><button type="submit" className="build-btn" disabled={!poolName.trim()}>Create pool</button></form>
  {!pools.length&&<p>No pools yet. Name your first pool above.</p>}
  <div className="pool-tabs" aria-label="Choose a pool">{pools.map(pool=><button type="button" key={pool.id} aria-pressed={active?.id===pool.id} onClick={()=>open(pool.id)}>{pool.name}<small>{assets.filter(asset=>pool.assetKeys.includes(key(asset))).length} assets</small></button>)}</div>
- {active&&<div className="pool-contents"><h4>{active.name}</h4><p>{members.length} {members.length===1?'asset':'assets'} in this pool</p><button type="button" className="build-btn" onClick={()=>{setAdding(!adding);setSelected([]);setSearch('');}}>{adding?'Cancel adding':'Add assets to this pool'}</button>
+ {active&&<div className="pool-contents"><h4>{active.name}</h4><p>{members.length} {members.length===1?'asset':'assets'} in this pool</p>{audioTracks.length>0&&<PlaylistPlayer key={active.id} poolName={active.name} tracks={audioTracks}/>}<button type="button" className="build-btn" onClick={()=>{setAdding(!adding);setSelected([]);setSearch('');}}>{adding?'Cancel adding':'Add assets to this pool'}</button>
  {adding&&<section aria-label={`Add assets to ${active.name}`}><label className="pool-search">Find assets<input type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search by name"/></label><p>Click the thumbnails you want, then press Add selected assets.</p><div className="pool-asset-grid">{choices.map(asset=><button type="button" key={key(asset)} aria-pressed={selected.includes(key(asset))} className="pool-asset-choice" onClick={()=>setSelected(previous=>previous.includes(key(asset))?previous.filter(id=>id!==key(asset)):[...previous,key(asset)])}><Thumbnail asset={asset}/><span>{asset.name}</span><small>{selected.includes(key(asset))?'✓ Selected':'Select'}</small></button>)}</div>{!choices.length&&<p>{assets.length?'No matching assets outside this pool.':'Upload or generate assets in Workshop first.'}</p>}<button type="button" className="build-btn" disabled={!selected.length} onClick={add}>Add selected assets ({selected.length})</button></section>}
  {!adding&&!members.length&&<p>This pool is empty. Press Add assets to this pool to fill it.</p>}
  {members.length>0&&<div className="pool-asset-grid" aria-label={`Assets in ${active.name}`}>{members.map(asset=><article className="pool-asset-member" key={key(asset)}><Thumbnail asset={asset}/><span>{asset.name}</span><button type="button" aria-label={`Remove ${asset.name} from ${active.name}`} onClick={()=>{onChange(setPoolAssetMembership(pools,active.id,key(asset),false));setMessage(`Removed ${asset.name} from ${active.name}. The asset is still in your library.`);}}>Remove</button></article>)}</div>}
