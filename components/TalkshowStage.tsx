@@ -376,6 +376,7 @@ function MediaStage({ project, doors, jewelPanel }: StageProps) {
         <h4>Upload your media</h4>
         <p>Your own clips, images, and sounds file here — ready for your show.</p>
         <p>A .zip of songs becomes a playable playlist.</p>
+        <p>A .txt file of your own trivia questions becomes a question list.</p>
         <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.uploadMedia}>Upload media</button></div>
       </div>
     </div>
