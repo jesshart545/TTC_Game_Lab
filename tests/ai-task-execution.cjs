@@ -11,7 +11,9 @@ const exact='I would like to make my answer timer aesthetic better match my back
 const original={id:'test-only',assets:[{name:'Background.jpg',storageKey:'background',type:'image/jpeg',inProject:true,role:'background'}],overlay:{},gameTools:[{id:'answer-timer',name:'Answer Timer',type:'countdown',enabled:true,inToolbox:true,inOverlayBuild:true,config:{seconds:30,triggerOnly:true,placement:{x:37,y:15,width:16,height:19},appearance:{backgroundColor:'#352768',textColor:'#fff2d6',accentColor:'#57c1d6'}}}],controls:[{id:'start',label:'Start Answer Timer',action:'tool.answer-timer',toolIds:['answer-timer']},{id:'hide',label:'Hide Answer Timer',action:'result.hide.start'}],publishedSnapshot:{untouched:true}};
 const copy=JSON.stringify(original),guide=executionContext(original);
 assert.equal(guide.countdowns[0].seconds,30);assert.deepEqual(Array.from(guide.sequenceContract.existingSequenceIds),[]);assert.equal(guide.countdowns[0].newAutoRemoveSequenceExample.steps[1].delaySeconds,30);
-assert.throws(()=>validateSavedReferences(original,{sequences:[{id:'start',name:'Automatic',steps:[]}]}),/NEW sequence omit id/);
+const mislabeledSequence={sequences:[{id:'start',name:'Automatic',steps:[]}]};
+validateSavedReferences(original,mislabeledSequence);
+assert.equal(mislabeledSequence.sequences[0].id,undefined,'a sequence id naming no saved sequence (here the Start button id) is dropped so the entry is created as a new sequence instead of refused');
 assert.throws(()=>validateSavedReferences(original,{controls:[{id:'start',action:'sequence.fake'}]}),/cannot execute/);
 assert.throws(()=>validateSavedReferences(original,{controls:[{id:'made-up-control',label:'Timer'}]}),/unknown saved/);
 assert.throws(()=>validateSavedReferences(original,{controlOrder:['made-up-control']}),/unknown control/);

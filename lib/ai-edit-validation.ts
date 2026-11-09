@@ -89,7 +89,14 @@ export function validateSavedReferences(project:any,input:unknown) {
   const item=record(raw);
   for(const step of item.steps||[])validateOverlayResult(step.overlayResult);
   if(item.sequenceMode!==undefined&&!['all','per-press'].includes(item.sequenceMode))throw new Error('Use sequenceMode all or per-press.');
-  if(item.id!==undefined&&!project?.controls?.some((c:any)=>c.id===item.id&&c.action==='sequence'))throw new Error('That id is not an existing sequence. For a NEW sequence omit id entirely; do not use the selected button or tool ID. For editing use executionGuide.sequenceContract.existingSequenceIds.');
+  // A sequence entry whose id names no saved sequence is a NEW sequence
+  // the model mislabeled — it invented an id, or reused the selected
+  // button/tool id. Drop the id so the entry is created as a new sequence
+  // instead of refusing the creator's request over a label they never
+  // saw. An id that DOES name a saved sequence keeps edit behavior
+  // exactly as before. item is the caller's own entry object, so the
+  // delete lands in the changes the routes go on to apply and return.
+  if(item.id!==undefined&&!project?.controls?.some((c:any)=>c.id===item.id&&c.action==='sequence'))delete item.id;
  }
 }
 export function validateCompletionClaim(response:unknown) {
@@ -117,25 +124,31 @@ export function validateRequestedAutomation(request:string,input:unknown) {
  if(timed&&!requested)throw new Error('Timed automation was not explicitly requested. Preserve manual controls; apply unambiguous edits and ask whether removal should be automatic at countdown end or manual. Do not assume automatic behavior from a vague request to streamline.');
 }
 
-/** Sequences create their own button; additional tools need independent request grounding. */
+/**
+ * Sequences create their own dashboard button, and a creator may ask for
+ * a sequence and other tools in one breath. The applier already creates
+ * bundled tools and the sequence independently in a single pass (a
+ * sequence step can only reference controls and saved items that already
+ * exist, never a same-pass tool's fresh id), so a combined payload is
+ * applied whole rather than refused for mixing the two — the creator
+ * never has to split their request into pieces. The one addition still
+ * rejected is the placeholder this rule was written against: a blank
+ * board bundled with a sequence the creator never asked a board for can
+ * only be a stand-in for the sequence's own button, so it is dropped
+ * from changes.newTools while the rest of the request applies. As the
+ * response's action it cannot be dropped silently — the route derives
+ * the executed action from it — so that one case still refuses and the
+ * validation retry lets the model drop it and keep the sequence.
+ */
 export function validateSequenceAdditions(request:string,input:unknown,action?:unknown) {
  const changes=record(input);
  if(!Array.isArray(changes.sequences)||!changes.sequences.length)return;
  const toolAction=record(action);
- const additions=[...(Array.isArray(changes.newTools)?changes.newTools:[]),...(toolAction.type==='tool'?[{type:toolAction.toolType}]:[])];
- const mentions:Record<string,RegExp>={
-  'blank-board':/\b(?:boards?|panels?)\b/i,
-  scoreboard:/\b(?:score\s*boards?|leader\s*boards?|score\s+trackers?|team\s+scores?|strike\s+(?:tally|counter))\b/i,
-  countdown:/\b(?:countdown|timer)\b/i,
-  wheel:/\bwheel\b/i,'random-picker':/\b(?:picker|random\s+(?:image|card|item|choice))\b/i,
-  poll:/\b(?:poll|vote|voting)\b/i,dice:/\b(?:dice|die)\b/i,'coin-toss':/\bcoin\b/i,plinko:/\bplinko\b/i,'higher-lower':/\bhigher\s+or\s+lower\b/i,cliffhanger:/\bcliffhanger\b/i,'prize-wheel':/\b(?:big\s+wheel|price\s+is\s+right\s+wheel)\b/i,'city-crime-scene':/\bcity\s+crime\s+scene\b/i,
-  youtube:/\byoutube\b/i,'prize-list':/\bprize\b/i,'game-tool-list':/\b(?:gift|tool\s+list)\b/i,
-  'card-list':/\b(?:cards?|list|pool|trivia)\b/i,
- };
- for(const raw of additions){
-  const tool=record(raw),pattern=mentions[String(tool.type)];
-  if(pattern&&!pattern.test(request))throw new Error(`A new ${String(tool.type)} is unrelated to this sequence request. changes.sequences creates its own dashboard button; omit placeholder or unrelated newTools. Add a separate tool only when that tool is part of the user's request.`);
+ const boardGrounded=/\b(?:boards?|panels?)\b/i.test(request);
+ if(Array.isArray(changes.newTools)){
+  changes.newTools=changes.newTools.filter((raw:unknown)=>!(String(record(raw).type)==='blank-board'&&!boardGrounded));
  }
+ if(toolAction.type==='tool'&&String(toolAction.toolType)==='blank-board'&&!boardGrounded)throw new Error('A new blank-board is unrelated to this sequence request. changes.sequences creates its own dashboard button; omit placeholder or unrelated newTools. Add a separate tool only when that tool is part of the user\'s request.');
 }
 
 /** Saved IDs can be valid and still identify the wrong item explicitly named by the user. */

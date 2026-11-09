@@ -234,7 +234,15 @@ export async function POST(request: Request) {
       }
       const reason=validationError instanceof Error&&validationError.message&&! (validationError instanceof SyntaxError)?validationError.message:'The assistant returned incomplete or invalid JSON.';
       console.warn('AI draft validation failed:',reason);
-      return NextResponse.json({error:`I could not apply that request: ${reason} No changes were made.`},{status:502});
+      // The creator only ever sees plain language here: the technical
+      // reason stays in the server log above (the model already received
+      // it on the retry). The one refusal that keeps its specific wording
+      // is the City Crime Scene entitlement boundary — a safety limit
+      // stated in plain terms the creator needs to hear as-is.
+      if(reason.startsWith('City Crime Scene is only available to select accounts')){
+        return NextResponse.json({error:`I could not apply that request: ${reason} No changes were made.`},{status:502});
+      }
+      return NextResponse.json({error:"I couldn't finish that one just now. Nothing was changed, and everything you've made is safe. Ask me again and I'll take another run at it — for a big build, I'll do it in steps."},{status:502});
     }
     }
   }
