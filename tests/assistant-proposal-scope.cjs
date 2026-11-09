@@ -4,8 +4,12 @@ const {SUPPORT_CATALOG}=load('lib/site-support.ts');
 const timer={sequences:[{name:'Auto start and hide',steps:[{controlId:'start',delaySeconds:0},{controlId:'hide',delaySeconds:30}]}]};
 const request='Add one button that starts my existing Answer Timer and automatically hides it when the countdown finishes.';
 validateSequenceAdditions(request,timer);
-assert.throws(()=>validateSequenceAdditions(request,{...timer,newTools:[{type:'blank-board',name:'Start & Auto-Hide Timer',connect:true}]}),/unrelated/);
-assert.throws(()=>validateSequenceAdditions(request,{...timer,newTools:[{type:'scoreboard',name:'Scores',connect:true}]}),/unrelated/);
+const placeholderBoard={...timer,newTools:[{type:'blank-board',name:'Start & Auto-Hide Timer',connect:true}]};
+validateSequenceAdditions(request,placeholderBoard);
+assert.equal(placeholderBoard.newTools.length,0,'a blank board the creator never asked for is dropped as a placeholder for the sequence button, without refusing the sequence');
+const bundledScoreboard={...timer,newTools:[{type:'scoreboard',name:'Scores',connect:true}]};
+validateSequenceAdditions(request,bundledScoreboard);
+assert.equal(bundledScoreboard.newTools.length,1,'a real tool bundled with a sequence is kept so the combined request applies in one pass');
 validateSequenceAdditions(request+' Also add a blank board for announcements.',{...timer,newTools:[{type:'blank-board',name:'Announcements',connect:true}]});
 validateSequenceAdditions(request+' Also add a scoreboard for my teams.',{...timer,newTools:[{type:'scoreboard',name:'Scores',connect:true}]});
 validateSequenceAdditions('Create a blank board',{newTools:[{type:'blank-board',connect:true}]});
@@ -18,7 +22,7 @@ assert.throws(()=>validateSequenceAdditions(request,timer,{type:'tool',toolType:
 validateSequenceAdditions('Add a team leaderboard and an intro sequence',{...timer,newTools:[{type:'scoreboard',connect:true}]});
 const entry=SUPPORT_CATALOG.find(e=>e.id==='countdown');assert(entry);assert(entry.excerpt.includes('not implemented countdown features'));assert(entry.excerpt.includes('start/pause'));assert(entry.excerpt.includes('fade'));
 const route=fs.readFileSync('app/api/ai/route.ts','utf8');assert(route.includes('validateSequenceAdditions(String(body.request||""), parsed.changes, parsed.action)'));assert(route.includes('FINAL accepted proposal'));
-console.log('PASS: sequences create their own button without unrelated placeholder tools; explicitly requested compound tools remain possible; repair cannot claim nonexistent removals; countdown support is grounded.');
+console.log('PASS: sequences create their own button; a placeholder stand-in board is dropped without refusing the sequence; tools bundled with a sequence are kept so combined requests apply in one pass; repair cannot claim nonexistent removals; countdown support is grounded.');
 
 const {normalizeDraftChanges,applyDraftChanges}=load('lib/draft-edit.ts');
 const input={gameTools:[{id:'timer',appearance:{backgroundColor:'#000000',textColor:'#ffffff'},placement:{x:30},config:{appearance:{backgroundColor:'#281912'}}}]};
