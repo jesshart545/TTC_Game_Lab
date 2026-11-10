@@ -192,8 +192,9 @@ export async function POST(request: Request) {
      * configuration, input-class failures, incomplete tasks), or an
      * outage description when fal failed provider-side. On an outage the
      * caller alerts the admin once on billing failures and tries the
-     * Agnes Flash rung before surfacing failureResponse, which is
-     * byte-identical to what this rung used to return on its own.
+     * fallback rungs (the Runway backup for animation, then Agnes Flash)
+     * before surfacing failureResponse, which is byte-identical to what
+     * this rung used to return on its own.
      */
     async function attemptFalVideo(): Promise<
       | { response: NextResponse; outage?: undefined }
@@ -251,11 +252,75 @@ export async function POST(request: Request) {
       return { response: NextResponse.json({ type, status: "processing", videoId, model, provider: "fal", durationSeconds }) };
     }
     /**
-     * The fal video rung with the Agnes Flash rung behind it (the chain
-     * is Runway → fal → Agnes Flash): a provider-side fal failure alerts
-     * the admin once when it is a billing failure, then Agnes gets its
-     * chance; only when Agnes cannot take the request does the fal
-     * failure surface, unchanged.
+     * The Runway backup rung for ANIMATION requests, entered only from a
+     * fal provider-side outage: while fal is down (e.g. locked for an
+     * exhausted balance), Runway's image-to-video takes the animation
+     * before the free Agnes rung is tried — the animation chain is
+     * fal → Runway → Agnes. Returns the processing response when Runway
+     * accepts the job, or null when the backup cannot take it (not
+     * configured, any HTTP error, a connection failure, or an acceptance
+     * with no task id), in which case the caller moves on to Agnes
+     * exactly as fal outages always have. Every backup failure is logged
+     * in the same style as the fal/Agnes rungs so a multi-provider
+     * outage stays diagnosable from Vercel logs. No duplicate-job guard
+     * applies here: fal has already failed definitively and the rung
+     * behind this one is free, so an ambiguous Runway failure must not
+     * strand the creator — the paid-rung guard on the Runway → fal text
+     * path below is unchanged.
+     */
+    async function attemptRunwayAnimationBackup(): Promise<NextResponse | null> {
+      const key = readSecret("RUNWAYML_API_SECRET");
+      if (!key) {
+        console.error("[runway-video] backup rung unavailable: RUNWAYML_API_SECRET is not configured");
+        return null;
+      }
+      const model = "gen4.5";
+      let response: Response | null = null;
+      let payload: any = {};
+      let connectionFailure = "";
+      try {
+        response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+            "X-Runway-Version": "2024-11-06",
+          },
+          body: JSON.stringify({
+            model,
+            promptText: prompt,
+            promptImage,
+            ratio: "1280:720",
+            duration: durationSeconds,
+          }),
+          cache: "no-store",
+        });
+        payload = await response.json().catch(() => ({}));
+      } catch (error) {
+        connectionFailure = error instanceof Error ? error.message : String(error);
+      }
+      if (connectionFailure || !response || !response.ok) {
+        const status = response?.status ?? 0;
+        const message = connectionFailure || String(payload?.error?.message || payload?.error || payload?.message || "");
+        console.error(`[runway-video] backup failed (HTTP ${status}): ${message || "no provider message"}`);
+        return null;
+      }
+      const videoId = payload?.id || payload?.taskId || "";
+      if (!videoId) {
+        console.error("[runway-video] backup failed (HTTP 200): Runway accepted the request but returned no task id");
+        return null;
+      }
+      const url = `/api/generate-asset/video?id=${encodeURIComponent(String(videoId))}&model=${encodeURIComponent(model)}&provider=runway`;
+      return NextResponse.json({ type, status: "processing", videoId: String(videoId), url, model, provider: "runway", durationSeconds });
+    }
+    /**
+     * The fal video rung with its fallback rungs behind it (the overall
+     * chain is Runway → fal → Agnes Flash; behind a fal outage, animation
+     * requests get the Runway backup rung before Agnes, so their chain
+     * is fal → Runway → Agnes): a provider-side fal failure alerts the
+     * admin once when it is a billing failure, then the next rung gets
+     * its chance; only when no fallback can take the request does the
+     * fal failure surface, unchanged.
      */
     async function submitFalVideo() {
       const outcome = await attemptFalVideo();
@@ -263,6 +328,14 @@ export async function POST(request: Request) {
       const { outage } = outcome;
       if (outage.billing) {
         await notifyAdminOfCreditIssue("generate-asset/video", `fal.ai request failed (HTTP ${outage.status}): ${outage.message || "no detail"}`);
+      }
+      // Animation only: Runway backs up fal before Agnes is tried.
+      // Text-to-video behavior is exactly as before — its requests reach
+      // this rung only from the primary Runway branch's guarded
+      // fall-through or the >10s entry, always without a prompt image.
+      if (promptImage) {
+        const runwayBackup = await attemptRunwayAnimationBackup();
+        if (runwayBackup) return runwayBackup;
       }
       const fallback = await submitAgnesVideo({ prompt, promptImage, durationSeconds });
       if (fallback) {

@@ -288,6 +288,11 @@ test('video chain: Runway credit failure, then fal lock, then Agnes Flash serves
 });
 
 test('video fal-first failure engages Agnes keyframe with the duration clamped to 12 seconds', async () => {
+  // Updated for the owner-directed animation chain fal → Runway → Agnes:
+  // the Runway backup rung now sits between fal and Agnes for animation,
+  // so this mock's Runway rejects explicitly (402) and Agnes still serves
+  // the request with the clamp intact. The old assertion pinned that
+  // Runway was never called for reference/longer requests.
   const alerts = [];
   const calls = [];
   let agnesBody;
@@ -296,6 +301,9 @@ test('video fal-first failure engages Agnes keyframe with the duration clamped t
     calls.push(target);
     if (target.startsWith('https://queue.fal.run/')) {
       return Response.json({ detail: 'Internal error' }, { status: 500 });
+    }
+    if (target.startsWith('https://api.dev.runwayml.com/')) {
+      return Response.json({ error: { message: 'You do not have enough credits' } }, { status: 402 });
     }
     if (target === AGNES_VIDEO_URL) {
       agnesBody = JSON.parse(options.body);
@@ -311,7 +319,9 @@ test('video fal-first failure engages Agnes keyframe with the duration clamped t
   assert.equal(data.provider, 'agnes');
   assert.equal(data.model, 'agnes-video-2.5-flash');
   assert.equal(data.durationSeconds, 12, 'the clamped duration is what the response reports');
-  assert.equal(calls.some(url => url.includes('runwayml')), false, 'reference/longer requests still go to fal first');
+  assert.equal(calls[0].startsWith('https://queue.fal.run/'), true, 'fal is still tried first');
+  assert.equal(calls[1], 'https://api.dev.runwayml.com/v1/image_to_video', 'the Runway backup rung is tried second for animation');
+  assert.equal(calls[2], AGNES_VIDEO_URL, 'Agnes is the final rung after the backup rejects');
   assert.equal(agnesBody.mode, 'keyframe');
   assert.equal(agnesBody.first_frame, 'https://example.com/frame.png');
   assert.equal(agnesBody.seconds, '12');
@@ -323,6 +333,9 @@ test('video fal connection failure engages Agnes', async () => {
   const route = loadRoute(alerts, async (url) => {
     const target = String(url);
     if (target.startsWith('https://queue.fal.run/')) throw new Error('socket hang up');
+    // The animation backup rung is attempted between fal and Agnes; its
+    // own connection failure must be logged and tolerated, not fatal.
+    if (target.startsWith('https://api.dev.runwayml.com/')) throw new Error('socket hang up');
     if (target === AGNES_VIDEO_URL) return Response.json({ video_id: 'vid-125', status: 'queued' });
     throw new Error(`Unexpected fetch ${target}`);
   });
@@ -652,6 +665,153 @@ test('video chain: a Runway 429 falls through to fal, which serves the request',
   assert.equal(calls.length, 2);
   assert.equal(calls[0].startsWith('https://api.dev.runwayml.com/'), true, 'Runway is tried first');
   assert.equal(calls[1].startsWith('https://queue.fal.run/'), true, 'fal takes the request after the 429');
+  assert.equal(alerts.length, 0);
+});
+
+test('animation backup: a fal lock outage is served by Runway and Agnes is never called', async () => {
+  // The production case this rung exists for (2026-11-09): fal locked
+  // for an exhausted balance while a creator animates an image. Runway's
+  // image-to-video takes the request; the free Agnes queue is the last
+  // resort, not the only backup.
+  const alerts = [];
+  const calls = [];
+  let runwayBody;
+  const route = loadRoute(alerts, async (url, options) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.startsWith('https://queue.fal.run/')) {
+      return Response.json({ detail: 'User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing.' }, { status: 403 });
+    }
+    if (target.startsWith('https://api.dev.runwayml.com/')) {
+      runwayBody = JSON.parse(options.body);
+      return Response.json({ id: 'runway-anim-1', status: 'PENDING' });
+    }
+    if (target === AGNES_VIDEO_URL) return Response.json({ video_id: 'vid-should-not-happen', status: 'queued' });
+    throw new Error(`Unexpected fetch ${target}`);
+  });
+  const response = await post(route, {
+    type: 'video', prompt: 'Animate this stage', promptImage: 'https://example.com/frame.png', durationSeconds: 6,
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.type, 'video');
+  assert.equal(data.status, 'processing');
+  assert.equal(data.provider, 'runway');
+  assert.equal(data.model, 'gen4.5');
+  assert.equal(data.videoId, 'runway-anim-1');
+  assert.equal(data.durationSeconds, 6);
+  assert.match(data.url, /provider=runway/, 'the returned poll URL names the runway provider');
+  assert.equal(calls.length, 2, 'fal, then the Runway backup — Agnes is never reached');
+  assert.equal(calls[0].startsWith('https://queue.fal.run/'), true, 'fal is tried first');
+  assert.equal(calls[1], 'https://api.dev.runwayml.com/v1/image_to_video', 'the backup uses the image-to-video endpoint');
+  assert.equal(runwayBody.model, 'gen4.5');
+  assert.equal(runwayBody.promptText, 'Animate this stage');
+  assert.equal(runwayBody.promptImage, 'https://example.com/frame.png');
+  assert.equal(runwayBody.ratio, '1280:720');
+  assert.equal(runwayBody.duration, 6);
+  assert.equal(alerts.length, 1, 'the fal lock still alerts the admin exactly once');
+  assert.equal(alerts[0].source, 'generate-asset/video');
+});
+
+test('animation backup: a Runway rejection moves on to Agnes', async () => {
+  const alerts = [];
+  const calls = [];
+  const route = loadRoute(alerts, async (url) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.startsWith('https://queue.fal.run/')) {
+      return Response.json({ detail: 'Internal error' }, { status: 500 });
+    }
+    if (target.startsWith('https://api.dev.runwayml.com/')) {
+      return Response.json({ error: { message: 'You do not have enough credits' } }, { status: 402 });
+    }
+    if (target === AGNES_VIDEO_URL) return Response.json({ video_id: 'vid-backup-fell-through', status: 'queued' });
+    throw new Error(`Unexpected fetch ${target}`);
+  });
+  const response = await post(route, {
+    type: 'video', prompt: 'Animate this stage', promptImage: 'https://example.com/frame.png', durationSeconds: 6,
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.provider, 'agnes');
+  assert.equal(data.videoId, 'vid-backup-fell-through');
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].startsWith('https://queue.fal.run/'), true, 'fal is tried first');
+  assert.equal(calls[1], 'https://api.dev.runwayml.com/v1/image_to_video', 'the Runway backup is tried second');
+  assert.equal(calls[2], AGNES_VIDEO_URL, 'Agnes is the final rung');
+  assert.equal(alerts.length, 0, 'a plain fal 5xx is not a billing event');
+});
+
+test('animation: fal success calls neither the Runway backup nor Agnes', async () => {
+  const alerts = [];
+  const calls = [];
+  const route = loadRoute(alerts, async (url) => {
+    calls.push(String(url));
+    return Response.json({
+      request_id: 'fal-anim-1',
+      status_url: 'https://queue.fal.run/alibaba/wan-3.0/image-to-video/requests/fal-anim-1/status',
+      response_url: 'https://queue.fal.run/alibaba/wan-3.0/image-to-video/requests/fal-anim-1',
+    });
+  });
+  const response = await post(route, {
+    type: 'video', prompt: 'Animate this stage', promptImage: 'https://example.com/frame.png', durationSeconds: 6,
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.provider, 'fal');
+  assert.equal(data.model, 'alibaba/wan-3.0/image-to-video');
+  assert.equal(calls.length, 1, 'a healthy fal rung leaves both fallbacks untouched');
+  assert.equal(calls[0].startsWith('https://queue.fal.run/'), true);
+  assert.equal(alerts.length, 0);
+});
+
+test('animation backup: Runway not configured moves on to Agnes', async () => {
+  const alerts = [];
+  const calls = [];
+  const route = loadRoute(alerts, async (url) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.startsWith('https://queue.fal.run/')) {
+      return Response.json({ detail: 'User is locked. Reason: TOP_UP' }, { status: 403 });
+    }
+    if (target === AGNES_VIDEO_URL) return Response.json({ video_id: 'vid-no-runway-key', status: 'queued' });
+    throw new Error(`Unexpected fetch ${target}`);
+  }, { FAL_KEY: 'test-fal', AGNES_API_KEY: 'test-agnes' });
+  const response = await post(route, {
+    type: 'video', prompt: 'Animate this stage', promptImage: 'https://example.com/frame.png', durationSeconds: 6,
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.provider, 'agnes');
+  assert.equal(data.videoId, 'vid-no-runway-key');
+  assert.equal(calls.some(url => url.includes('runwayml')), false, 'no Runway call is attempted without its key');
+  assert.equal(alerts.length, 1);
+});
+
+test('text-to-video over 10 seconds: a fal outage goes to Agnes and the Runway backup is not engaged', async () => {
+  // The backup rung is animation-only: a long text-to-video request
+  // keeps today's exact chain (fal → Agnes) and never touches Runway
+  // from behind a fal outage.
+  const alerts = [];
+  const calls = [];
+  const route = loadRoute(alerts, async (url) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.startsWith('https://queue.fal.run/')) {
+      return Response.json({ detail: 'Internal error' }, { status: 500 });
+    }
+    if (target === AGNES_VIDEO_URL) return Response.json({ video_id: 'vid-long-text', status: 'queued' });
+    throw new Error(`Unexpected fetch ${target}`);
+  });
+  const response = await post(route, { type: 'video', prompt: 'Neon dragons over a game stage', durationSeconds: 15 });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.provider, 'agnes');
+  assert.equal(data.videoId, 'vid-long-text');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].startsWith('https://queue.fal.run/'), true, 'fal is tried first');
+  assert.equal(calls[1], AGNES_VIDEO_URL, 'Agnes follows fal directly for text-to-video');
+  assert.equal(calls.some(url => url.includes('runwayml')), false);
   assert.equal(alerts.length, 0);
 });
 
