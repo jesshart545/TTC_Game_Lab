@@ -15,7 +15,7 @@ import {GameInfoOverlay} from './GameInfoTools';
 import {infoTypes} from '../lib/game-tools';
 import {toolShowsTitle,toolTitle} from '../lib/tool-style';
 import QuestionCards,{FittedCard,StyledTimer} from './QuestionCards';
-import {cardControl,cardTransition,freshCardState,isCardTool,questionPool,type CardState,type CardAction} from '../lib/question-cards';
+import {cardControl,cardPhase,cardTransition,freshCardState,isCardTool,questionPool,type CardState,type CardAction} from '../lib/question-cards';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
@@ -201,6 +201,12 @@ export function ControlAppearancePreview({control,project,state}:{control:Projec
  // staged quiz card could look dragged in-session yet be back at its
  // design position after reload, and vanish when the preview closed.
  if(isCardTool(tool)){
+  // A provided state is the card's live truth: when it says the card
+  // is cleared, the preview renders NO card — never the sample-question
+  // design render below, which exists only for stateless appearance
+  // checks (the press-3 ghost card, 2026-11-12: the state cleared but
+  // this preview kept a pool question standing on the overlay).
+  if(state&&cardPhase(project,tool,state)==='hidden')return null;
   const ownQuestions=Array.isArray(tool.config.questions)?tool.config.questions as Array<Record<string,unknown>>:[];
   const text=tool.type==='blank-card'?String(tool.config.text||'Your text appears here'):(questionPool(project,tool)[0]?.question||String(ownQuestions[0]?.question||ownQuestions[0]?.prompt||'Your question appears here'));
   return <div style={{position:"absolute",inset:0,pointerEvents:"none"}}><FittedCard project={project} tool={tool} text={text} shownAt={Date.now()}/></div>;

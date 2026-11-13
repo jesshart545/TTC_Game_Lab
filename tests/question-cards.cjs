@@ -61,5 +61,20 @@ assert.equal(createCardSystem(p,undefined,'answer'),p,'the answer kind is guarde
 const blankAgain=createCardSystem(b,undefined,'blank');
 assert.equal(blankAgain.gameTools.filter(t=>t.type==='blank-card').length,2,'blank cards are exempt — several may coexist');
 assert.equal(blankAgain.gameTools.filter(t=>t.type==='question-card').length,1);
+// Steady remote label (2026-11-12): the question-card cycle button keeps
+// its saved label in every state. The draw/remove "Remove …" label swap
+// belongs to the random picker's toggle only — while a question or its
+// answer is up, the cycle button must NOT rename itself "Remove Question
+// Cards"; its one label names the cycle, not the current press.
+const {controlLabel}=require('./load.cjs')('lib/game-tools.ts');
+const cycleControl=p.controls.find(c=>c.action==='cards.toggle.'+tool.id);
+assert(cycleControl,'the minted cycle control is present');
+assert.equal(controlLabel(p,cycleControl,{}),'Question Cards','no state yet — the saved label');
+assert.equal(controlLabel(p,cycleControl,{[tool.id]:freshCardState()}),'Question Cards','cleared — the saved label');
+let labelState=cardTransition(p,tool,freshCardState(),'toggle',30000,()=>0);
+assert.equal(controlLabel(p,cycleControl,{[tool.id]:labelState}),'Question Cards','question showing — still the saved label, never "Remove Question Cards"');
+labelState=cardTransition(p,tool,labelState,'toggle',31000);
+assert.equal(cardPhase(p,tool,labelState,31000),'answer');
+assert.equal(controlLabel(p,cycleControl,{[tool.id]:labelState}),'Question Cards','answer showing — still the saved label');
 console.log('PASS: one-button question card cycle — draw, reveal, clear, next draw; no repeats; exhaustion refused; answer hidden before reveal; new systems mint the single cycle button.');
 console.log('PASS: paired answers, random unused draw, no repeats after reload, timer-free manual reveal, exhaustion, explicit game reset and blank cards.');

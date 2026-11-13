@@ -7,7 +7,7 @@ import type { Project, ProjectEvent, ProjectAsset, GameTool } from "../lib/proje
 import { titleFromToolSave } from "../lib/project";
 import { controlLabel, controlButtonStyle, infoTypes } from "../lib/game-tools";
 import type { CardState } from "../lib/question-cards";
-import { cardDesignPlacement, isCardTool, withCardDesignPlacement } from "../lib/question-cards";
+import { cardControl, cardDesignPlacement, isCardTool, withCardDesignPlacement } from "../lib/question-cards";
 import type { YouTubeState } from "../lib/youtube";
 import { safeYoutubePlacement } from "../lib/youtube";
 import { defaultOverlayResult } from "./CompositionPlayer";
@@ -346,7 +346,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
               {tool && !control && !(infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && !['question-card', 'blank-card', 'card-list', 'youtube', 'random-picker'].includes(tool.type) && (
                 <ControlAppearancePreview state={cardStates[tool.id]} control={{ id: 'editing-' + tool.id, label: tool.name, detail: 'Editing preview', action: `tool.${tool.id}`, toolIds: [tool.id], overlayResult: { ...defaultOverlayResult, ...(tool.config.placement as Partial<typeof defaultOverlayResult> || {}) } }} project={project} />
               )}
-              {control && hasVisualResult && !liveControlIds?.includes(control.id) && !(tool && (infoTypes.includes(tool.type) || isCardTool(tool)) && cardStates[tool.id] && !cardStates[tool.id].cleared) && (
+              {control && hasVisualResult && !liveControlIds?.includes(control.id) && !(tool && infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && (!cardControl(control.action) || (tool && infoTypes.includes(tool.type))) && (
                 <ControlAppearancePreview state={tool ? cardStates[tool.id] : undefined} control={{ ...control, overlayResult: control.overlayResult || defaultOverlayResult }} project={project} />
               )}
             </BuildOverlayPreview>

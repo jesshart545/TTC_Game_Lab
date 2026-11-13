@@ -23,9 +23,16 @@ export function toolDefaults(type:GameToolType):Record<string,unknown>{
 }
 export function controlLabel(project:Project,control:ProjectEvent,states:Record<string,CardState>){
  const match=control.action.match(/^cards\.toggle\.(.+)$/);if(!match)return control.label;
- const tool=project.gameTools.find(t=>t.id===match[1]);if(!tool)return control.label;
+ const tool=project.gameTools.find(t=>t.id===match[1]);
+ // The draw/remove label swap belongs to the random picker's toggle
+ // only: its one button draws an item, then removes that same item.
+ // A question-card toggle is a three-press cycle (draw, reveal,
+ // clear) under one steady saved label — swapping it to "Remove …"
+ // while a card is up misnames the button mid-game (2026-11-12), so
+ // card-cycle controls always keep their saved label.
+ if(!tool||tool.type!=='random-picker')return control.label;
  const visible=states[tool.id]&&!states[tool.id].cleared;
- const noun=tool.type==='random-picker'?(tool.config.source==='images'?'image':'card'):tool.name;
- return visible?`Remove ${noun}`:tool.type==='random-picker'&&/^Draw random (image|card):/.test(control.label)?`Draw random ${noun}: ${tool.name}`:control.label;
+ const noun=tool.config.source==='images'?'image':'card';
+ return visible?`Remove ${noun}`:/^Draw random (image|card):/.test(control.label)?`Draw random ${noun}: ${tool.name}`:control.label;
 }
 export function controlButtonStyle(control:ProjectEvent){return control.appearance||{};}

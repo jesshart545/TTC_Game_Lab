@@ -505,5 +505,58 @@ function legacyProject() {
   assert(container3.querySelector('.preview-stub[data-preview-for="c-quiz"]'), 'when the run ends, the preview returns for the still-selected control');
   await React.act(async () => root3.unmount());
   console.log('PASS: ghost guard — the appearance preview stands down while the selected control\'s own run is live, and returns when it ends.');
+
+  // Press-3 ghost guard (2026-11-12): a question-card cycle control
+  // NEVER gets an appearance preview — the runtime card layer owns
+  // the card in every phase. The preview's card branch renders the
+  // card design with the pool's first question, and a
+  // mis-parenthesized stand-down condition once let it in exactly
+  // when the card state cleared: press 3 cleared the state, the real
+  // card left, and the preview's pool question kept standing on the
+  // overlay until a reload reset the selection. Cleared, question
+  // up, answer up — no preview stub in any phase.
+  freshDom();
+  const container4 = document.getElementById('root');
+  const StageReviewCards = compile('components/StageReview.tsx', {
+    './DashboardRemote': DashboardRemote,
+    './RuntimeActionLayers': { ControlAppearancePreview: ({ control }) => React.createElement('div', { className: 'preview-stub', 'data-preview-for': control.id }, 'appearance preview') },
+  }).default;
+  const cardProject = {
+    ...legacyProject(), id: 'cards-1', name: 'Card Cycle Check',
+    gameTools: [
+      { id: 'tl1', type: 'trivia-list', name: 'Pool', enabled: true, inToolbox: true, inOverlayBuild: false, config: { questions: [{ question: 'Q1?', answer: 'A1' }] } },
+      { id: 'qc1', type: 'question-card', name: 'Question Cards', enabled: true, inToolbox: true, inOverlayBuild: true, config: { poolId: 'tl1' } },
+    ],
+    controls: [{ id: 'c-qc', label: 'Question Cards', detail: 'Press to draw a random unused question, press again to reveal the answer, and press once more to clear the card.', action: 'cards.toggle.qc1', toolIds: ['qc1'], overlayResult: { x: 15, y: 12, width: 70, height: 30, layer: 10, entrance: 'fade', exit: 'fade', entranceSeconds: 0.3, exitSeconds: 0.3 } }],
+  };
+  const root4 = createRoot(container4);
+  const baseCardState = { version: 1, gameId: 'g1', used: ['q1?'], question: { id: 'q1?', question: 'Q1?', answer: 'A1' }, shownAt: 1000, revealAt: null, cleared: true };
+  const renderCards = states => root4.render(React.createElement(StageReviewCards, {
+    jewelPanel: React.createElement('div', { className: 'jewel-stub' }, 'Jewel conversation'),
+    onEnterJewel: noop,
+    sequenceRunning: false, sequenceError: '', onStopSequence: noop, onResetGame: noop,
+    cardStates: states, liveControlIds: [], onSelect: noop, focusControl: null,
+    project: cardProject, onChange: noop,
+    overlay: React.createElement('div', null, 'overlay'),
+    onTrigger: noop, onWorkshop: noop,
+    youtubeOpen: false, onOpenYoutube: noop, onCloseYoutube: noop,
+    onYoutubeCommand: async () => null, youtubeState: null, youtubeFeedback: null,
+    dashboardExtras: () => null, feedback: '',
+  }));
+  await React.act(async () => renderCards({ qc1: baseCardState }));
+  const dashTab4 = [...container4.querySelectorAll('.sr-review-toggle button')].find(b => b.textContent === 'Dashboard');
+  await React.act(async () => dashTab4.click());
+  const cycleButton = [...container4.querySelectorAll('.sr-buttonwrap > button:first-child')].find(b => b.textContent.includes('Question Cards'));
+  assert(cycleButton, 'the cycle control is on the dashboard review');
+  await React.act(async () => cycleButton.click());
+  const overlayTab4 = [...container4.querySelectorAll('.sr-review-toggle button')].find(b => b.textContent === 'Overlay');
+  await React.act(async () => overlayTab4.click());
+  assert(!container4.querySelector('.preview-stub'), 'cleared card state — no appearance preview resurrects a pool question on the overlay');
+  await React.act(async () => renderCards({ qc1: { ...baseCardState, cleared: false } }));
+  assert(!container4.querySelector('.preview-stub'), 'question showing — the runtime card is the only copy; no appearance preview');
+  await React.act(async () => renderCards({ qc1: { ...baseCardState, cleared: false, revealAt: 500 } }));
+  assert(!container4.querySelector('.preview-stub'), 'answer showing — still no appearance preview');
+  await React.act(async () => root4.unmount());
+  console.log('PASS: press-3 ghost guard — a card cycle control never gets an appearance preview, cleared or live.');
   console.log('PASS: stage review spaces — Jewel plus one toggled review spot, and legacy survival.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
