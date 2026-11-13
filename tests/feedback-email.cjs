@@ -123,29 +123,37 @@ function moduleFrom(file, deps = {}, globals = {}) {
   assert.equal(emailCalls.length, 0);
   currentUser = { id: 'user-1', email: 'user@example.test' };
 
-  // ---- Header wiring (source-level) ---------------------------------------
-  const header = fs.readFileSync('components/SiteHeader.tsx', 'utf8');
-  assert(header.includes('authClient.useSession()'), 'the header learns sign-in state from the auth client session');
-  assert(header.includes('signedIn && <SubmitFeedback />'), 'the feedback button renders only for signed-in users');
-  // Signed-in users live under the workspace header (app/workspace-home.tsx),
-  // not the public SiteHeader — the button must render there too, with no
-  // session gate (the workspace only renders for signed-in users). The My
-  // Projects and Trash pages render their own signed-in headers, and each
-  // carries the button as well.
-  const workspace = fs.readFileSync('app/workspace-home.tsx', 'utf8');
-  assert(workspace.includes('import SubmitFeedback from "../components/SubmitFeedback"'), 'the workspace header imports the feedback button');
-  assert(workspace.includes('<SubmitFeedback />'), 'the workspace header renders the feedback button');
-  const projectsPage = fs.readFileSync('app/projects/page.tsx', 'utf8');
-  assert(projectsPage.includes('import SubmitFeedback from "../../components/SubmitFeedback"'), 'the My Projects header imports the feedback button');
-  assert(projectsPage.includes('<SubmitFeedback />'), 'the My Projects header renders the feedback button');
-  const trashPage = fs.readFileSync('app/projects/trash/page.tsx', 'utf8');
-  assert(trashPage.includes('import SubmitFeedback from "../../../components/SubmitFeedback"'), 'the Trash header imports the feedback button');
-  assert(trashPage.includes('<SubmitFeedback />'), 'the Trash header renders the feedback button');
+  // ---- Everywhere wiring (source-level) ------------------------------------
+  // The button is no longer placed in any header: ONE floating pill renders
+  // from the root layout so it is reachable from every page, in place.
+  const layout = fs.readFileSync('app/layout.tsx', 'utf8');
+  assert(layout.includes("import FloatingFeedback from '../components/FloatingFeedback'"), 'the root layout imports the floating feedback gate');
+  assert(layout.includes('<FloatingFeedback/>'), 'the root layout renders the floating feedback button on every page');
+  const gate = fs.readFileSync('components/FloatingFeedback.tsx', 'utf8');
+  assert(gate.includes('authClient.useSession()'), 'the floating button learns sign-in state from the auth client session (the endpoint refuses signed-out posts)');
+  assert(gate.includes('!session?.user'), 'the floating button renders only for signed-in users');
+  assert(gate.includes('path.endsWith("/overlay")'), 'the floating button never renders on a published overlay — the overlay shows only what the user put there');
+  assert(gate.includes('window.self !== window.top'), 'the floating button stays out of embedded frames');
+  assert(gate.includes('import SubmitFeedback from "./SubmitFeedback"'), 'the gate renders the shared feedback dialog component');
+  assert(gate.includes('return <SubmitFeedback />'), 'the gate renders the feedback button itself');
+  // No header carries the button anymore — exactly one affordance per page.
+  for (const [file, label] of [
+    ['components/SiteHeader.tsx', 'the public SiteHeader'],
+    ['app/workspace-home.tsx', 'the workspace header'],
+    ['app/projects/page.tsx', 'the My Projects header'],
+    ['app/projects/trash/page.tsx', 'the Trash header'],
+  ]) {
+    assert(!fs.readFileSync(file, 'utf8').includes('SubmitFeedback'), `${label} no longer renders its own feedback button`);
+  }
+  const globals = fs.readFileSync('app/globals.css', 'utf8');
+  assert(globals.includes('.feedback-fab{position:fixed;left:18px'), 'the feedback pill is a fixed bottom-left floating button');
+  assert(globals.includes('z-index:140'), 'the floating pill sits below modal dialogs and editors');
   const dialog = fs.readFileSync('components/SubmitFeedback.tsx', 'utf8');
+  assert(dialog.includes('className="feedback-fab"'), 'the feedback trigger is the floating pill');
   for (const label of ['"Issue"', '"Comment"', '"Request"', '"Other"']) assert(dialog.includes(`label: ${label}`), `the dialog offers the ${label} kind`);
   assert(dialog.includes('"/api/help"') || dialog.includes("'/api/help'") || dialog.includes('"/api/help"'), 'the dialog posts to /api/help');
   assert(dialog.includes('window.location.pathname'), 'the dialog includes the page the user was on');
   assert(dialog.includes('confirm-dialog'), 'the dialog follows the in-page ConfirmDialog styling');
 
-  console.log('PASS: feedback topics widened with originals intact, save-first email to the fixed admin address, not-configured and send-failure paths stay clean, header button is signed-in only.');
+  console.log('PASS: feedback topics widened with originals intact, save-first email to the fixed admin address, not-configured and send-failure paths stay clean, one floating button renders from the root layout for signed-in users and never on overlays.');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
