@@ -458,8 +458,8 @@ const quizTool = (overrides = {}) => ({
   const cards = result.project.gameTools.find(t => t.type === 'question-card');
   assert(cards, 'the card system was created');
   assert.equal(cards.config.poolId, list.id, 'the cards draw from the quiz list created in the same turn');
-  assert(result.project.controls.some(c => c.action === `cards.show.${cards.id}`), 'the card system brings its Show control');
-  assert(result.project.controls.some(c => c.action === `cards.reveal.${cards.id}`), 'the card system brings its Reveal control');
+  assert(result.project.controls.some(c => c.action === `cards.toggle.${cards.id}`), 'the card system brings its one Question Card cycle button');
+  assert(!result.project.controls.some(c => c.action === `cards.show.${cards.id}` || c.action === `cards.reveal.${cards.id}`), 'the card system no longer mints separate Show/Reveal controls');
   assert.equal(stepState(result.project, 'quiz').complete, true, 'a Jewel-built quiz completes the quiz topic');
   const edited = applyDraftChanges(result.project, { gameTools: [{ id: list.id, config: { questions: [{ question: 'New?', options: ['X', 'Y'], correctIndex: 0, answer: 'Y' }] } }] });
   const editedList = edited.project.gameTools.find(t => t.id === list.id);

@@ -6,7 +6,7 @@ export const additionTypes = [
   { id: 'image', label: 'Images & logos', help: 'Choose an image, position it on the overlay, then name its Show and Hide buttons.' },
   { id: 'video', label: 'Video & animation', help: 'Choose a clip, set its size and playback, then connect Play and Stop buttons.' },
   { id: 'audio', label: 'Music, voices & sounds', help: 'Choose audio, set its volume and looping, then connect Play and Stop buttons. Audio has no visible overlay item.' },
-  { id: 'question-card', label: 'Question & answer cards', help: 'Choose cards and their question pool, design both faces, then connect Show Question, Reveal Answer and Clear. Answers are revealed by the host.' },
+  { id: 'question-card', label: 'Question & answer cards', help: 'Choose cards and their question pool, design both faces, then connect the one Question Card button — press it to draw a question, press again to reveal the answer, press once more to clear the card.' },
   { id: 'blank-card', label: 'Text cards', help: 'Choose a card, set its text and appearance, then connect Show and Clear buttons.' },
   { id: 'wheel', label: 'Wheels', help: 'Choose a wheel, review its choices and placement, then connect Spin and Hide buttons.' },
   { id: 'random-picker', label: 'Random pickers', help: 'Choose an image pool or a saved card list. One button draws an unused item at random, then removes it. No repeats during a game.' },

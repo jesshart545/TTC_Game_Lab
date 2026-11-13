@@ -43,7 +43,7 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
  if(tool?.type==='question-card'){
   next=connectQuestionCard(project,id);
   if(!next.controls.some(c=>c.action===`cards.clear.${id}`))next={...next,controls:[...next.controls,{id:crypto.randomUUID(),label:'Clear '+tool.name,action:`cards.clear.${id}`,detail:'Hide the question or answer card',toolIds:[id]}]};
-  return {project:next,controlId:next.controls.find(c=>c.action===`cards.show.${id}`)!.id};
+  return {project:next,controlId:next.controls.find(c=>c.action===`cards.toggle.${id}`)!.id};
  }
  const action=asset?`asset.show.${id}`:composition?`composition.play.${id}`:tool?.type==='blank-card'?`cards.blank.${id}`:`tool.${id}`;
  const name=(asset||tool||composition)!.name;
@@ -71,6 +71,7 @@ export function buttonFacts(control:ProjectEvent,project:Project):ButtonFacts{
  if(action.startsWith('coin.cycle.'))return {does:'Coin: show, flip, hide',clicks:'One step per click',effect:false};
  if(action.startsWith('timer.')){const op=action.split('.')[1];return {does:op==='toggle'?'Starts / pauses the timer':op==='reset'?'Resets the timer':op==='hide'?'Hides the timer':'Shows the timer',clicks:op==='toggle'?'Click to start · click again to pause':op==='reset'?'One click resets it':op==='hide'?'One click hides it':'One click shows it',effect:false};}
  if(card){const kind=card[1];const name=tool?.name||factObject(control.label);
+  if(kind==='toggle'&&tool?.type==='question-card')return {does:'Question card: draw, reveal, clear',clicks:'One button: press to draw · press again to reveal · press again to clear',effect:false};
   if(kind==='toggle')return {does:'Shows: '+name,clicks:'Click to show · click again to hide',effect:false};
   if(kind==='draw')return {does:'Draws: '+name,clicks:'Click to draw · click again to remove',effect:false};
   if(kind==='reveal')return {does:'Reveals the answer',clicks:'One click reveals it',effect:false};

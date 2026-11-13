@@ -31,7 +31,7 @@ export function controlConnectionError(project: Project, control: ProjectEvent):
   for (const id of ids) {
     const tool = project.gameTools.find(t => t.id === id && t.enabled);
     if (!tool) return 'A connected tool is unavailable. Choose an available tool in Build Space.';
-    if (tool.type === 'question-card') return 'Choose a specific card action, such as Show Question or Reveal Answer, in Build Space.';
+    if (tool.type === 'question-card') return 'Choose a specific card action, such as the Question Card button or Show Question, in Build Space.';
     if (tool.type === 'blank-card') return 'Use the blank card panel on the dashboard to enter text and show the card.';
   }
   return null;
@@ -49,12 +49,14 @@ export function assignControlAction(project: Project, control: ProjectEvent, act
 export function connectQuestionCard(project: Project, toolId: string): Project {
   const tool = project.gameTools.find(t => t.id === toolId && t.type === 'question-card' && t.enabled);
   if (!tool) return project;
-  // Repair legacy generic buttons without changing their labels or appearance.
+  // Repair legacy generic buttons without changing their labels or appearance:
+  // a generic tool button becomes the one Question Card button, whose presses
+  // cycle draw → reveal → clear. Existing Show/Reveal/Clear buttons are left
+  // exactly as they are — only the default connection minted here is the
+  // single cycle button now.
   const controls = project.controls
     .filter(c => c.action !== `cards.turn.${toolId}` && c.action !== `cards.steal.${toolId}`)
-    .map(c => c.action === `tool.${toolId}` ? assignControlAction(project, c, `cards.show.${toolId}`) : c);
-  for (const [action, label] of [['show', 'Show Question'], ['reveal', 'Reveal Answer']]) {
-    if (!controls.some(c => c.action === `cards.${action}.${toolId}`)) controls.push({id: crypto.randomUUID(), label: `${label}: ${tool.name}`, action: `cards.${action}.${toolId}`, detail: `${label}: ${tool.name}`, toolIds: [toolId]});
-  }
+    .map(c => c.action === `tool.${toolId}` ? assignControlAction(project, c, `cards.toggle.${toolId}`) : c);
+  if (!controls.some(c => c.action === `cards.toggle.${toolId}`)) controls.push({id: crypto.randomUUID(), label: `Question Card: ${tool.name}`, action: `cards.toggle.${toolId}`, detail: 'Press to draw a random unused question, press again to reveal the answer, and press once more to clear the card.', toolIds: [toolId]});
   return {...project, controls, gameTools: project.gameTools.map(t => t.id === toolId ? {...t, config: Object.fromEntries(Object.entries(t.config).filter(([key]) => key !== 'turnTimerId' && key !== 'stealTimerId')), inToolbox: true, inOverlayBuild: true} : t)};
 }
