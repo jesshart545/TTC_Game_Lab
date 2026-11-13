@@ -1,4 +1,4 @@
-import { requireCreator } from "../../../lib/auth/server";
+import { requireCreator, isAdmin } from "../../../lib/auth/server";
 import { canUseCityCrimeScene } from "../../../lib/city-crime-scene";
 import NewProjectFlow from "./flow";
 
@@ -12,11 +12,17 @@ export const dynamic = "force-dynamic";
 // creator, so the creator's own entitlement is the right verdict.
 export default async function NewProjectPage() {
   let ccssEntitled = false;
+  // The admin testing exception to the Coming Soon gate (Jessica,
+  // 2026-11-12) is decided here too, with the site's own isAdmin —
+  // the flow receives a plain boolean, never the rule itself.
+  let viewerIsAdmin = false;
   try {
     const user = await requireCreator();
     ccssEntitled = canUseCityCrimeScene(user?.email);
+    viewerIsAdmin = isAdmin(user);
   } catch {
     ccssEntitled = false;
+    viewerIsAdmin = false;
   }
-  return <NewProjectFlow ccssEntitled={ccssEntitled} />;
+  return <NewProjectFlow ccssEntitled={ccssEntitled} viewerIsAdmin={viewerIsAdmin} />;
 }

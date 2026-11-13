@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createProject, saveProjectToServer, type ProjectKind } from "../../../lib/project";
 import { GAME_TEMPLATES, getGameTemplate } from "../../../lib/game-templates";
-import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, isKindComingSoon, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
+import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, isKindGatedFor, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
 import "./new-project.css";
 
 type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string };
 
-export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean }) {
+export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: { ccssEntitled: boolean; viewerIsAdmin?: boolean }) {
   const router = useRouter();
   // Keep one creation request across React's development effect replay.
   const creation = useRef<Promise<string> | null>(null);
@@ -121,8 +121,10 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
 
   function chooseKind(next: ProjectKind) {
     // Coming Soon kinds cannot be chosen — the card is disabled, and this
-    // guard keeps every other caller out of the scratch screen too.
-    if (isKindComingSoon(next)) return;
+    // guard keeps every other caller out of the scratch screen too. The
+    // one exception is the site admin starting a multiplayer project
+    // for testing (Jessica, 2026-11-12); radio stays gated for everyone.
+    if (isKindGatedFor(next, viewerIsAdmin)) return;
     setKind(next);
     setPieces(defaultSetupPieces(next));
     if (next === "gameshow") {
@@ -140,7 +142,7 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
   }
 
   function startScratch() {
-    if (!kind || isKindComingSoon(kind)) return;
+    if (!kind || isKindGatedFor(kind, viewerIsAdmin)) return;
     setStart({ kind, pieces: [...pieces], theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined });
     setBegun(true);
   }
@@ -173,28 +175,39 @@ export default function NewProjectFlow({ ccssEntitled }: { ccssEntitled: boolean
             <div>
               <div className="np-ask">One question: <b>what are you making?</b></div>
               <div className="np-kinds">
-                {PROJECT_KINDS.map(info => info.comingSoon ? (
-                  <button key={info.id} type="button" className="np-kind soon" disabled aria-disabled="true" aria-label={`${info.title} — Coming Soon!`}>
-                    <img src={info.image} alt="" />
-                    <div className="np-shade" />
-                    <div className="np-txt">
-                      <div className="np-kick">{info.kicker}</div>
-                      <div className="np-t display">{info.title}</div>
-                      <div className="np-d">{info.description}</div>
-                    </div>
-                    <div className="np-soonband display" aria-hidden="true">Coming Soon!</div>
-                  </button>
-                ) : (
-                  <button key={info.id} type="button" className="np-kind" onClick={() => chooseKind(info.id)}>
-                    <img src={info.image} alt="" />
-                    <div className="np-shade" />
-                    <div className="np-txt">
-                      <div className="np-kick">{info.kicker}</div>
-                      <div className="np-t display">{info.title}</div>
-                      <div className="np-d">{info.description}</div>
-                    </div>
-                  </button>
-                ))}
+                {PROJECT_KINDS.map(info => {
+                  // The gate is per-viewer: a Coming Soon kind renders its
+                  // disabled banded card for everyone except the site
+                  // admin opening multiplayer for testing (Jessica,
+                  // 2026-11-12) — for her that one card is a normal
+                  // selectable card carrying a small "Admin testing" chip
+                  // instead of the band. Radio stays banded for everyone.
+                  const gated = isKindGatedFor(info.id, viewerIsAdmin);
+                  const adminTesting = !gated && !!info.comingSoon;
+                  return gated ? (
+                    <button key={info.id} type="button" className="np-kind soon" disabled aria-disabled="true" aria-label={`${info.title} — Coming Soon!`}>
+                      <img src={info.image} alt="" />
+                      <div className="np-shade" />
+                      <div className="np-txt">
+                        <div className="np-kick">{info.kicker}</div>
+                        <div className="np-t display">{info.title}</div>
+                        <div className="np-d">{info.description}</div>
+                      </div>
+                      <div className="np-soonband display" aria-hidden="true">Coming Soon!</div>
+                    </button>
+                  ) : (
+                    <button key={info.id} type="button" className="np-kind" onClick={() => chooseKind(info.id)}>
+                      <img src={info.image} alt="" />
+                      <div className="np-shade" />
+                      <div className="np-txt">
+                        <div className="np-kick">{info.kicker}</div>
+                        <div className="np-t display">{info.title}</div>
+                        <div className="np-d">{info.description}</div>
+                      </div>
+                      {adminTesting && <div className="np-adminchip display" aria-hidden="true">Admin testing</div>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
