@@ -3,6 +3,7 @@
 import { useState } from "react";
 import CityCrimeSceneEditor from "./CityCrimeSceneEditor";
 import { hydrateAsset } from "../lib/asset-store";
+import { UPLOAD_CAPTION } from "../lib/upload-caption";
 import type { CcssMediaContext } from "../lib/city-crime-scene-media";
 import type { GameTool, Project } from "../lib/project";
 import { titleFromToolSave } from "../lib/project";
@@ -17,10 +18,13 @@ type Deps = {
   toolDefaults: (type: GameToolType) => Record<string, unknown>;
   toolLibrary: { type: string; name: string }[];
   onAskJewel: () => void;
+  /** Opens the project's shared file input (hoisted to page level),
+   *  so uploads work inside this full-screen creation surface too. */
+  onUpload: () => void;
 };
 
 export function useCityCrimeSceneBuilder(deps: Deps) {
-  const { project, projectRef, persist, setAssetStatus, ccssEntitled, toolDefaults, toolLibrary, onAskJewel } = deps;
+  const { project, projectRef, persist, setAssetStatus, ccssEntitled, toolDefaults, toolLibrary, onAskJewel, onUpload } = deps;
   const [cityCrimeSceneId, setCityCrimeSceneId] = useState("");
 
   function openCityCrimeScene() {
@@ -49,6 +53,7 @@ export function useCityCrimeSceneBuilder(deps: Deps) {
           <div className="ccss-builder-topbar">
             <button type="button" className="outline-btn" onClick={() => setCityCrimeSceneId("")}>← Back to Imagine and Create</button>
             <button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={() => { setCityCrimeSceneId(""); onAskJewel(); }}>✦ Ask Jewel</button>
+            <span className="jewel-access-upload"><button type="button" className="build-btn" onClick={onUpload}>Upload</button><small className="upload-caption">{UPLOAD_CAPTION}</small></span>
           </div>
           <CityCrimeSceneEditor
             key={editingCcss.id}

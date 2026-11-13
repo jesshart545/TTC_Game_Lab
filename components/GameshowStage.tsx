@@ -233,6 +233,7 @@ export default function GameshowStage(props: StageProps) {
         </div>
         <div className="gsw-lwand" aria-hidden="true">🪄</div>
       </div>
+      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={() => props.doors.showSavedWork()}>Your library & uploads</button>
       <YourShow key={props.project.id} project={props.project} onSaveProject={props.onSaveProject} />
       <BareStageContext.Provider value={true}>
         {area === "plan" && <PlanArea {...props} />}

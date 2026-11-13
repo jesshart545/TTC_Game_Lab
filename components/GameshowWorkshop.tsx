@@ -10,6 +10,7 @@ import {
 import { GENERATORS } from "../lib/workshop-libraries";
 import { GAME_TEMPLATES } from "../lib/game-templates";
 import { assetCategory } from "../lib/asset-folders";
+import { UPLOAD_CAPTION } from "../lib/upload-caption";
 import AssetThumbnail from "./AssetThumbnail";
 import TriviaStep, { BoardStep, ScenesStep, ToolboxStep } from "./GameshowSteps";
 import ToolsStep from "./GameshowToolDemos";
@@ -410,11 +411,16 @@ export function MediaShelf({ project, doors }: { project: Project; doors: Gamesh
             </div>
           );
         })}
+        <button type="button" className="gsw-asset plain" onClick={doors.showSavedWork}>
+          <span className="gsw-big">🗂</span>
+          <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>See everything in your library</span>
+        </button>
         <button type="button" className="gsw-asset plain" onClick={doors.upload}>
           <span className="gsw-big">＋</span>
-          <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>Upload assets</span>
+          <span className="gsw-an" style={{ position: "static", fontWeight: 800, fontSize: 13.5 }}>Upload</span>
         </button>
       </div>
+      <p className="upload-caption">{UPLOAD_CAPTION}</p>
     </div>
   );
 }

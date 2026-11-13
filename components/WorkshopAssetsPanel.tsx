@@ -11,6 +11,7 @@ import type { Project, ProjectAsset, AssetPool, GameTool } from "../lib/project"
 import { titleFromToolSave } from "../lib/project";
 import Link from "next/link";
 import CollapsibleFolder from "./CollapsibleFolder";
+import { UPLOAD_CAPTION } from "../lib/upload-caption";
 import AssetFolders from "./AssetFolders";
 import TemplateBrowser from "./TemplateBrowser";
 import AssetPoolManager from "./AssetPoolManager";
@@ -147,9 +148,11 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     </div>
     <button type="button" className="assets-upload-btn" aria-label="Upload assets" hidden={workflowStep === 0 && workshopStep === 2} onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>＋ Upload</button>
   </div>
-{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={isTalk ? 4 : ccssEntitled ? 7 : 6} description="Grouped: upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} keepMounted><div className="workshop-tools" role="group" aria-label="Creation tools">
+  <p className="upload-caption" hidden={workflowStep === 0 && workshopStep === 2}>{UPLOAD_CAPTION}</p>
+{workflowStep === 0 && <div className="creation-tools-folder" hidden={workshopStep !== 1}><CollapsibleFolder title="Creation tools" count={isTalk ? 4 : ccssEntitled ? 7 : 6} description="Grouped: upload, build, and more" storageKey={`${project.id}:creation-tools-compact`} defaultOpen keepMounted><div className="workshop-tools" role="group" aria-label="Creation tools">
   <div className="creation-group"><strong>UPLOAD</strong><div>
-    <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload assets</button>
+    <button type="button" onClick={() => {chooseWorkflowStep(0,1);setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload</button>
+    <small className="upload-caption">{UPLOAD_CAPTION}</small>
   </div></div>
   <div className="creation-group"><strong>BUILD</strong><div>
     {!isTalk && <button type="button" onClick={() => {chooseWorkflowStep(0,1);setShowBoardGuide(true);}}>Create an interactive game board</button>}
@@ -179,14 +182,16 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     <p className="asset-library-help">Pick a ready-made game — its tools and dashboard buttons join this project.</p>
     <TemplateBrowser project={project} onChoose={onAddTemplate} ccssEntitled={ccssEntitled}/>
   </div>}
+  <h2 className="library-unity-heading" hidden={workflowStep === 0 && workshopStep !== 1}>Your library — everything in this project</h2>
   <div className="detail-block" id="workshop-assets" hidden={workflowStep === 0 && workshopStep !== 1}>
-    <h3>Media library</h3>
+    <div className="media-library-head"><h3>Media library</h3><Link href="/assets" className="assets-library-link">Open the full Asset Library</Link></div>
     <p className="asset-library-help">Open a media folder to find your assets. Select an item to edit, place it on the overlay, or add it to a game pool.</p>
     <button type="button" className="workshop-upload-box" onClick={() => {setBackgroundIntent(false);fileInputRef.current?.click();}}>
       <span aria-hidden="true">⬆</span>
       <strong>Upload from your device</strong>
       <small>Add images, video, or audio — or a .zip of songs, which becomes a playlist in your asset pools. A .txt file of your own trivia questions becomes a question list. After uploading, select a file to place it on the overlay or use it as the background.</small>
     </button>
+    <p className="upload-caption">{UPLOAD_CAPTION}</p>
     <CollapsibleFolder title="Asset pools" count={(project.assetPools || []).length} description="Named groups used by your game controls" storageKey={`${project.id}:pools`} keepMounted><AssetPoolManager pools={project.assetPools || []} assets={project.assets} onChange={saveAssetPools} saveStatus={saveStatus} /></CollapsibleFolder>
     <div className="workshop-assets-toolbar">
       <label className="workshop-assets-search">Find an asset<input type="search" value={assetSearch} onChange={event => setAssetSearch(event.target.value)} placeholder="Search by name" /></label>
