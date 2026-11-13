@@ -67,7 +67,9 @@ const baseTool={id:'tool-1',type:'blank-board',name:'Board',enabled:true,config:
  const next=createCardSystem(before,undefined,'question');
  assert.equal(JSON.stringify(before),snapshot,'createCardSystem does not mutate the stored project');
  assert.equal(next.gameTools.length,before.gameTools.length+1,'createCardSystem computes exactly one new tool');
- assert.equal(next.controls.length,before.controls.length+2,'createCardSystem computes its two controls alongside');
+ assert.equal(next.controls.length,before.controls.length+1,'createCardSystem computes its one cycle control alongside');
+ const addedControl=next.controls.find(c=>!before.controls.some(b=>b.id===c.id));
+ assert.equal(addedControl.action,'cards.toggle.'+next.gameTools[next.gameTools.length-1].id,'the one computed control is the Question Card cycle button');
  const list=createCardList();
  assert.equal(list.type,'card-list');
  assert.ok(!before.gameTools.some(t=>t.id===list.id),'createCardList result exists outside the project until saved');
@@ -247,11 +249,11 @@ function cardWorld(){
   w.cardOnSave(w.cardDraft.tool);
   const cards=w.project().gameTools.filter(t=>t.type==='question-card');
   assert.equal(cards.length,1,'card designer: explicit save creates exactly one card tool');
-  assert.equal(w.project().controls.length,3,'card designer: the save adds its two computed controls exactly once');
+  assert.equal(w.project().controls.length,2,'card designer: the save adds its one computed cycle control exactly once');
   assert.ok(w.statuses.some(s=>s==='Question and answer cards created. Choose their question pool and customize their appearance.'),'card designer: the created confirmation fires on save');
   w.cardOnSave(w.cardDraft.tool);
   assert.equal(w.project().gameTools.filter(t=>t.type==='question-card').length,1,'card designer: a second save updates, never duplicates');
-  assert.equal(w.project().controls.length,3,'card designer: a second save adds no duplicate controls');
+  assert.equal(w.project().controls.length,2,'card designer: a second save adds no duplicate controls');
   assert.equal(w.statuses.filter(s=>/created/i.test(s)).length,1,'card designer: the created confirmation fires once, at creation');
  }
  // Card designer: blank cards follow the same rule.

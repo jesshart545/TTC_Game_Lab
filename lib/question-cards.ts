@@ -80,9 +80,18 @@ export function cardTransition(project:Project,tool:GameTool,previous:CardState,
   throw new Error('That action is unavailable for this tool.');
  }
  if(action==='toggle'){
-  if(tool.type!=='random-picker')throw new Error('Choose an image or card picker.');
-  if(!state.cleared)return {...state,cleared:true};
-  action='draw';
+  if(tool.type==='question-card'){
+   // The one question-card button cycles by state — draw a random unused
+   // question, reveal its answer, clear the card, then draw the next —
+   // by reusing the show/reveal/clear paths below.
+   if(state.cleared||!state.question)action='show';
+   else if(cardPhase(project,tool,state,now)==='answer')action='clear';
+   else action='reveal';
+  }else{
+   if(tool.type!=='random-picker')throw new Error('Choose an image or card picker.');
+   if(!state.cleared)return {...state,cleared:true};
+   action='draw';
+  }
  }
  if(action==='clear')return {...state,cleared:true};
  if(action==='blank'){if(tool.type!=='blank-card')throw new Error('Choose a blank card.');if(!text.trim()||text.length>20000)throw new Error('Enter card text (up to 20,000 characters).');return {...state,blankText:text.trim(),question:null,shownAt:now,cleared:false,revealAt:null};}
@@ -128,7 +137,7 @@ export function createCardSystem(project:Project,backgroundKey?:string,kind:'que
  const id='card-'+crypto.randomUUID();
  const design={backgroundKey:backgroundKey||'',fontFamily:'Arial, sans-serif',fontSize:48,textColor:'#ffffff',backgroundColor:'#101827',accentColor:'#20e8ff',borderRadius:18,alignment:'center',vertical:'center',padding:28,width:65,height:25,x:17.5,y:30,marginTop:6,marginBottom:6,marginLeft:5,marginRight:5,entrance:'fade',exit:'fade',entranceSeconds:.5,exitSeconds:.5,delaySeconds:0,outline:0,glow:0};
  const tool:GameTool={id,type:kind==='blank'?'blank-card':'question-card',name:kind==='blank'?'Blank Card':'Question Cards',enabled:true,inToolbox:true,inOverlayBuild:true,config:{questionCard:{...design,...(kind==='answer'?{backgroundKey:''}:{})},answerCard:{...design,backgroundKey:kind==='answer'?backgroundKey||'':backgroundKey||''}}};
- const controls:ProjectEvent[]=kind==='blank'?[]:[{id:id+'-show',label:'Show Question',action:'cards.show.'+id,detail:'Random unused question',toolIds:[id]},{id:id+'-reveal',label:'Reveal Answer',action:'cards.reveal.'+id,detail:'Show the matching answer when ready',toolIds:[id]}];
+ const controls:ProjectEvent[]=kind==='blank'?[]:[{id:id+'-toggle',label:'Question Cards',action:'cards.toggle.'+id,detail:'Press to draw a random unused question, press again to reveal the answer, and press once more to clear the card.',toolIds:[id]}];
  if(kind!=='blank')tool.config={...tool.config,poolId:project.gameTools.find(t=>t.type==='trivia-list'&&t.enabled)?.id||''};
  return {...project,gameTools:[...project.gameTools,tool],controls:[...project.controls,...controls]};
 }

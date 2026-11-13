@@ -73,10 +73,12 @@ eq(byType.countdown.config, toolDefaults('countdown'));
 eq(byType.scoreboard.config, toolDefaults('scoreboard'));
 eq(byType.youtube.config, toolDefaults('youtube'));
 assert.equal(byType['question-card'].name, 'Question Cards');
-// Only the card system brings its own Show/Reveal controls (exactly what
-// the Workshop's card creator does); the minted tools add no dashboard
-// wiring of their own — connecting stays the user's Library choice.
-assert.equal(full.controls.length, 2);
+// Only the card system brings its own control — the single Question Card
+// cycle button (exactly what the Workshop's card creator does); the minted
+// tools add no dashboard wiring of their own — connecting stays the user's
+// Library choice.
+assert.equal(full.controls.length, 1);
+assert.equal(full.controls[0].action, 'cards.toggle.' + byType['question-card'].id);
 assert(full.controls.every(c => (c.toolIds || []).includes(byType['question-card'].id)));
 console.log('PASS: pieces mint real tools with default configs and no extra wiring.');
 

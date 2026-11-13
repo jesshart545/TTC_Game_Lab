@@ -18,7 +18,7 @@ export function buildReadiness(project: Project): BuildIssue[] {
   if(tool.type==='question-card'){
    if(!questionPool(project,tool).length)issues.push({id:'pool-'+tool.id,message:tool.name+': choose a question pool with questions and answers.',kind:'tool',targetId:tool.id,fix:'customize'});
    if(!tool.inOverlayBuild)issues.push({id:'overlay-'+tool.id,message:tool.name+': add the cards to the audience overlay.',kind:'tool',targetId:tool.id,fix:'connect'});
-   if(!['show','reveal'].every(action=>project.controls.some(c=>c.action===`cards.${action}.${tool.id}`)))issues.push({id:'buttons-'+tool.id,message:tool.name+': connect Show Question and Reveal Answer controls.',kind:'tool',targetId:tool.id,fix:'connect'});
+   if(!(project.controls.some(c=>c.action===`cards.toggle.${tool.id}`)||['show','reveal'].every(action=>project.controls.some(c=>c.action===`cards.${action}.${tool.id}`))))issues.push({id:'buttons-'+tool.id,message:tool.name+': connect the Question Card button (one button draws, reveals, then clears), or Show Question and Reveal Answer controls.',kind:'tool',targetId:tool.id,fix:'connect'});
   }
   if(tool.type==='blank-card'&&!tool.inOverlayBuild)issues.push({id:'overlay-'+tool.id,message:tool.name+': add the blank card to the audience overlay.',kind:'tool',targetId:tool.id,fix:'connect'});
   if(tool.type==='countdown'){
