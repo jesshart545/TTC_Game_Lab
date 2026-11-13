@@ -6,6 +6,7 @@ import type { Project } from "../lib/project";
 import { formatUpdatedAt } from "../lib/relative-time";
 import { projectKindInfo } from "../lib/project-kinds";
 import SignOutButton from "./sign-out-button";
+import SubmitFeedback from "../components/SubmitFeedback";
 import "./home.css";
 
 const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL || "https://buy.stripe.com/8x25kwaJhdu23J95UGawo00";
@@ -157,6 +158,7 @@ export default function WorkspaceHome() {
           <Link href="/help">Help</Link>
         </nav>
         <div className="rd-right">
+          <SubmitFeedback />
           <Link href="/project/new" className="rd-newbtn">＋ New project</Link>
           <div className="rd-who">
             <div className="rd-avatar" aria-hidden="true">{initial}</div>

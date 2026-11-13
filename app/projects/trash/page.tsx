@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { loadTrashedProjects, trashAction, TrashedProject } from "../../../lib/project";
 import ConfirmDialog from "../../../components/ConfirmDialog";
+import SubmitFeedback from "../../../components/SubmitFeedback";
 import { useEffect, useState } from "react";
 
 export default function TrashPage() {
@@ -54,7 +55,10 @@ export default function TrashPage() {
       <header className="projects-top">
         <Link href="/projects" className="back">← My Projects</Link>
         <div><small>PROJECT LIBRARY</small><h1>Trash</h1></div>
-        <Link href="/project/new" className="build-btn">＋ New Project</Link>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <SubmitFeedback />
+          <Link href="/project/new" className="build-btn">＋ New Project</Link>
+        </div>
       </header>
       <p>Projects you delete land here first. Restore one to bring it back to your library exactly as it was, or delete it forever to erase it and its stored assets for good.</p>
       {notice && <p role="alert" className="library-notice">{notice}</p>}
