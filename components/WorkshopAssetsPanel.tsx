@@ -7,7 +7,7 @@ import { assetCategory } from "../lib/asset-folders";
 import { assetPlaced } from "../lib/asset-filing";
 import { assetDownloadHref, assetFileName, downloadAssetToDevice } from "../lib/download-asset";
 import { savedListEntries } from "../lib/card-lists";
-import type { Project, ProjectAsset, AssetPool } from "../lib/project";
+import type { Project, ProjectAsset, AssetPool, GameTool } from "../lib/project";
 import { titleFromToolSave } from "../lib/project";
 import Link from "next/link";
 import CollapsibleFolder from "./CollapsibleFolder";
@@ -86,6 +86,7 @@ export type WorkshopAssetsPanelProps = {
   createWorkshopCard: (kind: "question" | "blank") => void;
   deleteComposition: (id: string) => void;
   handleDeleteAsset: (asset: ProjectAsset) => void;
+  onDeleteTool: (tool: GameTool) => void;
   pushWorkspaceCreation: (tool: any) => void;
   revealTriviaAnswer: (ci: number, qi: number) => void;
   toggleAssetInProject: (index: number) => void;
@@ -114,7 +115,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     setAssetKindFilter, setAssetSearch, setAssetStatus, setBoardDesignerId,
     setEditingAssetIndex, setGuideBoardId,
     setTriviaTopics, onDownloadTriviaPdf, addGameTool,
-    createWorkshopCard, deleteComposition, handleDeleteAsset, pushWorkspaceCreation,
+    createWorkshopCard, deleteComposition, handleDeleteAsset, onDeleteTool, pushWorkspaceCreation,
     revealTriviaAnswer, toggleAssetInProject, toggleComposition,
     triggerTriviaQuestion, updateWheelField, useImageAsBlankBoardBackground,
     addCompositionControl, TRIVIA_CONFIG, triviaConfig, selectedAssetIndex,
@@ -254,6 +255,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
             {tool.type==="card-list"?<><p>{savedListEntries(tool).length} pool entries · {Array.isArray(tool.config.cards)?tool.config.cards.length:0} cards</p><button type="button" onClick={()=>setListEditorId(tool.id)}>Open pool and card designer</button></>: (tool.type==="question-card"||tool.type==="blank-card")?<button type="button" onClick={()=>setNewCardEditorId(tool.id)}>Customize cards</button>:<GameToolEditor key={tool.id} tool={tool} project={project} assets={project.assets} ccssEntitled={ccssEntitled} onSave={next=>persist({...project,name:titleFromToolSave(project,next),gameTools:(project.gameTools||[]).map(x=>x.id===next.id?next:x),updatedAt:"just now"})} onRegisterAsset={asset=>persist({...project,assets:[...(project.assets||[]),asset],updatedAt:"just now"})}/>}
           </div>
           <small>{(tool.type==="trivia-board" || tool.type==="blank-board") ? (tool.inOverlayBuild ? "✓ In Overlay Build" : "Board customization workspace") : (tool.inToolbox ? "✓ In Dashboard Toolbox" : "Tool customization workspace")}</small>{(tool.type === "trivia-board" || tool.type === "blank-board") ? <button className="build-btn build-only" disabled={tool.inOverlayBuild} onClick={()=>pushWorkspaceCreation(tool)}>{tool.inOverlayBuild ? "Added to Overlay Build" : "Add to Overlay Build"}</button> : <small>{tool.type === "youtube" ? "Connected to dashboard and overlay · test in the preview before publishing" : "Saved in Toolbox · connect to a button in Set the Stage when needed"}</small>}
+          <button type="button" className="danger-btn" onClick={()=>onDeleteTool(tool)}>Delete tool</button>
         </div></CollapsibleFolder>
       ))}
     </div>
