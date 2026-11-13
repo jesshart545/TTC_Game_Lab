@@ -23,9 +23,16 @@ for (const gone of ['GENERATE ASSET', 'CREATE OVERLAY BACKGROUND', 'GENERATE TRI
 }
 // Jewel herself remains the panel's whole point: chat, progress strip, picks.
 for (const kept of ['jewel-progress', 'Next: {nextTask.label}', 'Apply my request', 'id="board-templates"',
-  'id="tool-templates"', 'type="file"', 'assetStatus']) {
+  'id="tool-templates"', 'assetStatus']) {
   assert.ok(aiPanel.includes(kept), `WorkshopAiPanel keeps ${kept}`);
 }
+// The app's one shared file input moved OUT of Jewel's composer to page
+// level (uploads/library accessibility audit, 2026-11-12): the composer
+// keeps no input of its own, and the page renders the input once so it
+// exists on every surface — including the full-screen creation editors
+// (Board Designer, City Crime Scene builder) that render no panel.
+assert.ok(page.includes('type="file"'), 'page keeps the hoisted shared upload input');
+assert.ok(!aiPanel.includes('type="file"'), 'WorkshopAiPanel no longer hides the upload input in the composer');
 // The page no longer carries the panel-only generator state.
 for (const gone of ['setGeneratorType(', 'setGeneratorPrompt(', 'setImageShape(', 'setVideoLength(',
   'setImageReferenceKey(', 'setGeneratorVoice(', 'setGeneratorStability(', 'setSfxSeconds(',

@@ -188,8 +188,9 @@ assert.match(handle,/Q: Your question\?/,'the zero-question message shows the ex
 assert.match(handle,/entries were"\} skipped in \$\{upload\.fileName\} — each question needs a question and an answer\./,'skips are reported with their reason');
 console.log('PASS: the upload flow routes .txt files to a new trivia list in the same save, with truthful status copy.');
 
-const panel=fs.readFileSync('components/WorkshopAiPanel.tsx','utf8');
-assert.match(panel,/accept="image\/\*,video\/\*,audio\/\*,\.zip,application\/zip,\.txt,text\/plain"/,'the shared upload input accepts .txt files');
+const captionLib=fs.readFileSync('lib/upload-caption.ts','utf8');
+assert.match(page,/accept=\{UPLOAD_ACCEPT\}/,'the shared upload input is rendered at page level');
+assert.match(captionLib,/image\/\*,video\/\*,audio\/\*,\.zip,application\/zip,\.txt,text\/plain/,'the shared upload input accepts .txt files');
 console.log('PASS: the shared upload input accepts .txt alongside media and zips.');
 
 for(const file of ['components/TalkshowStage.tsx','components/TalkshowSteps.tsx']){

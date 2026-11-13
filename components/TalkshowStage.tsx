@@ -12,6 +12,7 @@ import {
   DEMO_FONTS, EXAMPLE_QUIZ, SAMPLE_PROMPT, SAMPLE_RESEARCH, TALK_CREATIVITY_BANNER, TALK_TOOL_TYPES,
   demoBackdrop, demoTextSpec,
 } from "../lib/talkshow-path";
+import { UPLOAD_CAPTION } from "../lib/upload-caption";
 import AssetThumbnail from "./AssetThumbnail";
 import BackdropTextLayer from "./BackdropText";
 import JewelAvatar from "./JewelAvatar";
@@ -38,8 +39,10 @@ import "./talkshow-workshop.css";
  * (their real background with its title lettering, their prompt rendered
  * on it, their questions, their filed media, their deck), and the honest
  * examples only while nothing is made yet. The only controls are the
- * genuine manual doors for the current topic — the backdrops shelf on
- * background, upload on media, the card designer on quiz/follow-ups.
+ * genuine manual doors for the current topic — the backdrops shelf and
+ * the plain library upload on background, upload on media, the card
+ * designer on quiz/follow-ups — plus the one always-visible door at
+ * the top of the stage into the creator's library & uploads.
  * There is deliberately no upload-your-own-sign button here — no
  * sign-specific upload path exists anywhere: the sign and the
  * background always go together, uploads live in the media upload
@@ -133,6 +136,14 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
         <JewelWandScene onEnter={onEnterJewel} />
       </div>
       {jewelPanel}
+
+      <div style={{ marginTop: 14 }}>
+        <div className="gsw-chipsrow" style={{ marginTop: 0 }}>
+          <span>Already have a backdrop?</span>
+          <button type="button" className="gsw-demobtn gold" onClick={doors.uploadMedia}>Upload</button>
+        </div>
+        <p className="upload-caption">{UPLOAD_CAPTION}</p>
+      </div>
 
       {hero && (
         <>
@@ -377,7 +388,8 @@ function MediaStage({ project, doors, jewelPanel }: StageProps) {
         <p>Your own clips, images, and sounds file here — ready for your show.</p>
         <p>A .zip of songs becomes a playable playlist.</p>
         <p>A .txt file of your own trivia questions becomes a question list.</p>
-        <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.uploadMedia}>Upload media</button></div>
+        <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.uploadMedia}>Upload</button></div>
+        <p className="upload-caption">{UPLOAD_CAPTION}</p>
       </div>
     </div>
   );
@@ -443,6 +455,7 @@ export default function TalkshowStage({ project, workflow, doors, onSaveProject,
         </div>
         <div className="gsw-lwand" aria-hidden="true">🪄</div>
       </div>
+      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={doors.showSavedWork}>Your library & uploads</button>
       {topic === "background" && <BackgroundStage {...stageProps} />}
       {topic === "prompt" && <PromptStage {...stageProps} />}
       {topic === "research" && <ResearchStage {...stageProps} />}

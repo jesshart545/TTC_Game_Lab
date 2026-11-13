@@ -13,6 +13,7 @@ import {
   RESEARCH_CHANGES, SAMPLE_PROMPT, SAMPLE_RESEARCH, SIGN_CHANGES, SLIDES_CHANGES, TALK_STEPS, TALK_TOOL_TYPES,
   THEME_CHANGES, demoBackdrop, demoTextSpec,
 } from "../lib/talkshow-path";
+import { UPLOAD_CAPTION } from "../lib/upload-caption";
 import AssetThumbnail from "./AssetThumbnail";
 import BackdropTextLayer from "./BackdropText";
 import { ChangeList } from "./GameshowWorkshop";
@@ -522,7 +523,8 @@ export function MediaStep(props: ScreenProps) {
               <p>Your own clips, images, and sounds file here — ready for your show.</p>
               <p>A .zip of songs becomes a playable playlist.</p>
               <p>A .txt file of your own trivia questions becomes a question list.</p>
-              <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.uploadMedia}>Upload media</button></div>
+              <div className="gsw-chipsrow"><button type="button" className="gsw-demobtn gold" onClick={doors.uploadMedia}>Upload</button></div>
+              <p className="upload-caption">{UPLOAD_CAPTION}</p>
             </div>
             <div className="gsw-card">
               <h4>{youtube ? "✓ YouTube is on your dashboard" : "YouTube, on your dashboard"}</h4>

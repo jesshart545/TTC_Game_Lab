@@ -87,3 +87,13 @@
 .jewel-step-chip.current{border-color:rgba(32,232,255,.5);color:#baf8ff;background:rgba(32,232,255,.07)}
 .jewel-progress-next{display:flex;align-items:center;gap:8px;font-size:10px;color:#949ba9}
 .jewel-progress-next button{margin-left:auto;border:1px solid rgba(32,232,255,.35);background:rgba(32,232,255,.08);color:#baf8ff;border-radius:7px;font-size:9px;padding:5px 9px;cursor:pointer;flex-shrink:0}
+/* Uploads & library accessibility (2026-11-12): the one shared caption
+   under every Upload button, the full-screen bars' upload cluster, and
+   the assets panel's unified library heading + full-library link. */
+.upload-caption{display:block;font-size:12px;line-height:1.45;color:#9aa7bd;margin-top:6px}
+.jewel-access-upload{display:inline-flex;flex-direction:column;gap:2px}
+.jewel-access-upload .upload-caption{margin-top:2px;max-width:340px}
+.library-unity-heading{font-size:19px;margin:18px 0 8px}
+.media-library-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.assets-library-link{font-size:12.5px;color:#8fd8e8;text-decoration:none;white-space:nowrap}
+.assets-library-link:hover{text-decoration:underline}

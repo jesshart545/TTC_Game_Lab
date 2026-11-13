@@ -1,5 +1,6 @@
 "use client";
 import { VIDEO_DURATIONS } from "../../../lib/video-duration";
+import { UPLOAD_ACCEPT, UPLOAD_CAPTION } from "../../../lib/upload-caption";
 import { imageLayout } from "../../../lib/image-layout";
 
 import { useSupportBridge, requestResearchOpen, requestJewelOpen, type SupportTurn, type SupportTaskResult } from "../../../lib/support-client";
@@ -990,7 +991,10 @@ export default function ProjectWorkspace() {
       const zipFiles = files.filter(file => isZipFileName(file.name));
       const triviaFiles = files.filter(file => isTriviaTextFileName(file.name));
       const plainFiles = files.filter(file => !isZipFileName(file.name) && !isTriviaTextFileName(file.name));
-      const uploaded = await Promise.all(plainFiles.map(file => storeUploadedAsset(project.id, file)));
+      // Plain uploads are filed in the project the moment they land —
+      // in the project, never placed on the overlay — stamped exactly
+      // like the zip tracks below (filing consistency, 2026-11-12).
+      const uploaded = (await Promise.all(plainFiles.map(file => storeUploadedAsset(project.id, file)))).map(asset => ({ ...asset, inProject: true, inOverlayBuild: false }));
       // Zip playlists (owner request, 2026-11-08): a .zip is unpacked
       // in the browser and every song inside goes through the same
       // upload path as a single file, filed in the project like any
@@ -1963,7 +1967,7 @@ export default function ProjectWorkspace() {
       return false;
     },
   });
-  const ccssBuilder=useCityCrimeSceneBuilder({project,projectRef,persist,setAssetStatus,ccssEntitled,toolDefaults,toolLibrary:TOOL_LIBRARY,onAskJewel:openJewel});
+  const ccssBuilder=useCityCrimeSceneBuilder({project,projectRef,persist,setAssetStatus,ccssEntitled,toolDefaults,toolLibrary:TOOL_LIBRARY,onAskJewel:openJewel,onUpload:()=>{setBackgroundIntent(false);fileInputRef.current?.click();}});
   if (loadFailed) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Project not found</h1><p>This project does not exist or you do not have access to it.</p><p><a href="/projects">Return to your projects</a></p></main>;
   if (!project) return <main className="loading-page"><div className="ai-orb">✦</div><h1>Loading your project...</h1></main>;
   const firstActionTaken = entryStages[workflowStep] ?? hasExistingEntryAction(project, workflowStep);
@@ -2035,9 +2039,17 @@ export default function ProjectWorkspace() {
   const editingBoard=project.gameTools.find(t=>t.id===boardDesignerId)||(boardDraft&&boardDraft.id===boardDesignerId?boardDraft:undefined);
   const listEditorTool=listEditorId?project.gameTools.find(t=>t.id===listEditorId)||(listDraft&&listDraft.id===listEditorId?listDraft:undefined):undefined;
   const cardEditorTool=newCardEditorId?project.gameTools.find(t=>t.id===newCardEditorId)||(cardDraft&&cardDraft.tool.id===newCardEditorId?cardDraft.tool:undefined):undefined;
+  // The project's ONE file input lives at page level (uploads/library
+  // accessibility audit, 2026-11-12): rendered once here and carried
+  // into every return path below — the main workspace, the Board
+  // Designer and the City Crime Scene builder — so uploads work on
+  // every surface, including the full-screen creation editors, which
+  // render no Jewel panel to hide an input inside. Every upload
+  // button in the app just clicks this input via fileInputRef.
+  const fileInputElement=<input ref={fileInputRef} type="file" hidden multiple accept={UPLOAD_ACCEPT} onChange={handleFiles}/>;
   const ccssBuilderView=ccssBuilder.renderBuilder();
-  if(ccssBuilderView)return ccssBuilderView;
-  if(editingBoard)return <main className="workspace-page"><div className="jewel-access-bar"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={()=>{setBoardDesignerId("");setBoardDraft(null);openJewel();}}>✦ Ask Jewel</button></div><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} deferSave={!project.gameTools.some(t=>t.id===editingBoard.id)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist({...current,gameTools:exists?current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t):[...current.gameTools,next]});}} onClose={()=>{setBoardDesignerId("");setBoardDraft(null);}} onCreateArtwork={()=>{setBoardDesignerId("");setBoardDraft(null);setDraft("Create a seamless animated game board background. Keep game spaces readable.");openJewel();}}/></main>;
+  if(ccssBuilderView)return <>{fileInputElement}{ccssBuilderView}</>;
+  if(editingBoard)return <main className="workspace-page">{fileInputElement}<div className="jewel-access-bar"><button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={()=>{setBoardDesignerId("");setBoardDraft(null);openJewel();}}>✦ Ask Jewel</button><span className="jewel-access-upload"><button type="button" className="build-btn" onClick={()=>{setBackgroundIntent(false);fileInputRef.current?.click();}}>Upload</button><small className="upload-caption">{UPLOAD_CAPTION}</small></span></div><BoardDesigner key={editingBoard.id} project={project} tool={editingBoard} deferSave={!project.gameTools.some(t=>t.id===editingBoard.id)} onSave={next=>{const current=projectRef.current||project;const exists=current.gameTools.some(t=>t.id===next.id);persist({...current,gameTools:exists?current.gameTools.map(t=>t.id===next.id?{...next,config:{...next.config,...(t.type==='trivia-board'?{categories:t.config.categories}: {})}}:t):[...current.gameTools,next]});}} onClose={()=>{setBoardDesignerId("");setBoardDraft(null);}} onCreateArtwork={()=>{setBoardDesignerId("");setBoardDraft(null);setDraft("Create a seamless animated game board background. Keep game spaces readable.");openJewel();}}/></main>;
   // Talk Show Imagine and Create (Jessica, 2026-11-04): a bare top
   // (Rename · Save project · Delete), no generic workshop frame, and no
   // guided path on the page at all — Jewel's conversation carries the
@@ -2083,7 +2095,6 @@ export default function ProjectWorkspace() {
         sendMessage={sendMessage}
         promptRef={promptRef}
         fileInputRef={fileInputRef}
-        handleFiles={handleFiles}
         project={project}
         workflow={evaluateWorkflow(project)}
         onNavigateStep={goToWorkflowStep}
@@ -2106,6 +2117,7 @@ export default function ProjectWorkspace() {
       />
   );
   return <main className="workspace-page">
+    {fileInputElement}
     <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>}{!lightCreateFrame && <span>{project.status}</span>}{!lightCreateFrame && <label style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>Kind <select aria-label="Project kind" value={project.kind || ""} onChange={event => { const value = event.target.value; persist({ ...project, kind: value ? (value as Project["kind"]) : undefined, updatedAt: "just now" }); }} style={{ padding: "6px 8px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #2b3a55", fontSize: 12.5 }}><option value="">Not set</option>{PROJECT_KINDS.map(info => { const gated = isKindComingSoon(info.id) && project.kind !== info.id; return <option key={info.id} value={info.id} disabled={gated}>{gated ? `${info.title} — Coming Soon!` : info.title}</option>; })}</select></label>}{viewerIsAdmin && !lightCreateFrame && <span style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>{creatorEmail ? `Created by ${creatorEmail}` : "Creator unknown"}</span>}</div><div className="workspace-actions">{!lightCreateFrame && <button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={openJewel}>✦ Ask Jewel</button>}{workflowStep===1&&<div className="workspace-history-group" role="group" aria-label="Undo and redo"><button type="button" className="outline-btn" onClick={undoManualEdit} disabled={historyDepth.undo===0} title="Undo (Ctrl+Z)">&#8617; Undo</button><button type="button" className="outline-btn" onClick={redoManualEdit} disabled={historyDepth.redo===0} title="Redo (Ctrl+Y)">&#8618; Redo</button></div>}<div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : lightCreateFrame ? "Save project" : "Save progress"}</button>{!lightCreateFrame && <small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small>}</div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
     <section className={"workshop-flow"+(workflowStep===1?" compact-build-heading":"")} ref={workflowRef} aria-label="Project workflow">
       {!lightCreateFrame && !stageReviewView && <div className="workshop-flow-heading">
