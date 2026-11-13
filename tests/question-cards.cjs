@@ -48,5 +48,18 @@ assert.equal(freshSystem.controls[0].action,'cards.toggle.'+freshTool.id);
 assert.equal(Array.from(freshSystem.controls[0].toolIds).join(','),freshTool.id);
 assert.equal(cardControl(freshSystem.controls[0].action).action,'toggle');
 assert.equal(createCardSystem({gameTools:[],controls:[]},undefined,'blank').controls.length,0);
+// One Question Cards tool per project: with a question-card tool already
+// present (p has one), createCardSystem returns the project unchanged —
+// no second tool, no second cycle button. The 'answer' kind mints the
+// same question-card tool type, so it is guarded too. Blank cards are
+// exempt: b already holds one blank card and may gain another.
+const dupe=createCardSystem(p);
+assert.equal(dupe,p,'createCardSystem returns the project unchanged when a question-card tool already exists');
+assert.equal(dupe.gameTools.filter(t=>t.type==='question-card').length,1);
+assert.equal(dupe.controls.length,p.controls.length,'no second cycle button is minted');
+assert.equal(createCardSystem(p,undefined,'answer'),p,'the answer kind is guarded too — it creates the same tool type');
+const blankAgain=createCardSystem(b,undefined,'blank');
+assert.equal(blankAgain.gameTools.filter(t=>t.type==='blank-card').length,2,'blank cards are exempt — several may coexist');
+assert.equal(blankAgain.gameTools.filter(t=>t.type==='question-card').length,1);
 console.log('PASS: one-button question card cycle — draw, reveal, clear, next draw; no repeats; exhaustion refused; answer hidden before reveal; new systems mint the single cycle button.');
 console.log('PASS: paired answers, random unused draw, no repeats after reload, timer-free manual reveal, exhaustion, explicit game reset and blank cards.');

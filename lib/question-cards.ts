@@ -134,6 +134,16 @@ export function cardControl(action:string):{toolId:string;action:CardAction}|nul
  const m=action.match(/^cards\.(toggle|score|award|draw|show|reveal|clear|new-game|blank)\.(.+)$/);return m?{action:m[1] as CardAction,toolId:m[2]}:null;
 }
 export function createCardSystem(project:Project,backgroundKey?:string,kind:'question'|'answer'|'blank'='question'):Project{
+ // One Question Cards tool per project (owner ruling, 2026-11-12). Every
+ // creation path funnels through here — the Workshop's Create cards button,
+ // Jewel's build changes, the new-project starter, and the background
+ // destination flow — so this is the choke point that stops duplicate
+ // question-card tools (each minting its own dashboard button) from piling
+ // up. Both non-blank kinds create a question-card tool ('answer' is the
+ // same tool with the picture on its answer side), so both are guarded;
+ // blank cards are not — a project may legitimately hold several of those.
+ // Callers that need the tool read the existing one from project.gameTools.
+ if(kind!=='blank'&&project.gameTools.some(t=>t.type==='question-card'))return project;
  const id='card-'+crypto.randomUUID();
  const design={backgroundKey:backgroundKey||'',fontFamily:'Arial, sans-serif',fontSize:48,textColor:'#ffffff',backgroundColor:'#101827',accentColor:'#20e8ff',borderRadius:18,alignment:'center',vertical:'center',padding:28,width:65,height:25,x:17.5,y:30,marginTop:6,marginBottom:6,marginLeft:5,marginRight:5,entrance:'fade',exit:'fade',entranceSeconds:.5,exitSeconds:.5,delaySeconds:0,outline:0,glow:0};
  const tool:GameTool={id,type:kind==='blank'?'blank-card':'question-card',name:kind==='blank'?'Blank Card':'Question Cards',enabled:true,inToolbox:true,inOverlayBuild:true,config:{questionCard:{...design,...(kind==='answer'?{backgroundKey:''}:{})},answerCard:{...design,backgroundKey:kind==='answer'?backgroundKey||'':backgroundKey||''}}};
