@@ -958,21 +958,37 @@ export default function ProjectWorkspace() {
       // grouped into one pool named after the zip. Non-audio entries
       // are skipped and system junk (__MACOSX, dotfiles) ignored —
       // the planning rules live in lib/zip-playlist.
-      const playlists: { zipName: string; tracks: ProjectAsset[]; skipped: number }[] = [];
+      // Each song is uploaded on its own: one track failing (an
+      // oversized file, a hiccup) must not throw away the rest of
+      // the zip, and a zip that cannot be opened at all must not
+      // throw away the other files in the same upload. Failed songs
+      // are collected by name and reported in the completion note.
+      const playlists: { zipName: string; tracks: ProjectAsset[]; skipped: number; failed: string[]; openError?: string }[] = [];
       for (const zipFile of zipFiles) {
         setAssetStatus(`Unpacking ${zipFile.name}…`);
-        const entries = unzipSync(new Uint8Array(await zipFile.arrayBuffer()));
+        let entries: ReturnType<typeof unzipSync>;
+        try {
+          entries = unzipSync(new Uint8Array(await zipFile.arrayBuffer()));
+        } catch {
+          playlists.push({ zipName: zipFile.name, tracks: [], skipped: 0, failed: [], openError: `${zipFile.name} couldn't be opened — it may be damaged, so nothing was added from it.` });
+          continue;
+        }
         const plan = planZipPlaylist(Object.keys(entries));
         const tracks: ProjectAsset[] = [];
+        const failed: string[] = [];
         for (const entryPath of plan.tracks) {
           const baseName = zipEntryBaseName(entryPath);
-          const bytes = entries[entryPath];
-          const exactBytes = new Uint8Array(bytes.byteLength);
-          exactBytes.set(bytes);
-          const stored = await storeUploadedAsset(project.id, new File([exactBytes], baseName, { type: audioMimeTypeForName(baseName) }));
-          tracks.push({ ...stored, inProject: true, inOverlayBuild: false });
+          try {
+            const bytes = entries[entryPath];
+            const exactBytes = new Uint8Array(bytes.byteLength);
+            exactBytes.set(bytes);
+            const stored = await storeUploadedAsset(project.id, new File([exactBytes], baseName, { type: audioMimeTypeForName(baseName) }));
+            tracks.push({ ...stored, inProject: true, inOverlayBuild: false });
+          } catch {
+            failed.push(baseName);
+          }
         }
-        playlists.push({ zipName: zipFile.name, tracks, skipped: plan.skipped });
+        playlists.push({ zipName: zipFile.name, tracks, skipped: plan.skipped, failed });
       }
       // Plain-text trivia uploads (owner request, 2026-11-09): a .txt
       // of the creator's own questions is read as text — never stored
@@ -995,8 +1011,14 @@ export default function ProjectWorkspace() {
       const playlistNotes: string[] = [];
       const createdPlaylists: { poolName: string; tracks: ProjectAsset[] }[] = [];
       for (const playlist of playlists) {
+        if (playlist.openError) {
+          playlistNotes.push(playlist.openError);
+          continue;
+        }
         if (!playlist.tracks.length) {
-          playlistNotes.push(`${playlist.zipName} had no audio files in it, so nothing was added.`);
+          playlistNotes.push(playlist.failed.length
+            ? `None of the songs from ${playlist.zipName} could be added: ${playlist.failed.join(", ")}. No playlist was made from it — please try those songs again.`
+            : `${playlist.zipName} had no audio files in it, so nothing was added.`);
           continue;
         }
         const poolName = playlistPoolName(playlist.zipName, nextPools.map(pool => pool.name));
@@ -1006,6 +1028,7 @@ export default function ProjectWorkspace() {
         createdPlaylists.push({ poolName: created.pool.name, tracks: created.pool.assetKeys.map(poolKey => hydratedUploaded.find(asset => (asset.storageKey || asset.name) === poolKey)).filter((asset): asset is ProjectAsset => Boolean(asset)) });
         playlistNotes.push(`Added the “${poolName}” playlist — ${playlist.tracks.length} ${playlist.tracks.length === 1 ? "track" : "tracks"} from ${playlist.zipName}, saved in your asset pools.`);
         if (playlist.skipped) playlistNotes.push(`${playlist.skipped} ${playlist.skipped === 1 ? "file" : "files"} in ${playlist.zipName} ${playlist.skipped === 1 ? "wasn't" : "weren't"} audio and ${playlist.skipped === 1 ? "was" : "were"} skipped.`);
+        if (playlist.failed.length) playlistNotes.push(`${playlist.failed.length} ${playlist.failed.length === 1 ? "song" : "songs"} from ${playlist.zipName} couldn't be added: ${playlist.failed.join(", ")}. Everything else was added.`);
       }
       // Each parsed .txt becomes ONE new trivia-list tool named after
       // its file — the same tool shape a generated list is saved as,
