@@ -4,6 +4,7 @@ import Link from "next/link";
 import { deleteProjectFromServer, saveProjectToServer, Project } from "../../lib/project";
 import { formatUpdatedAt } from "../../lib/relative-time";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import SubmitFeedback from "../../components/SubmitFeedback";
 import { useEffect, useState } from "react";
 
 type LibraryAsset = Project["assets"][number];
@@ -113,7 +114,8 @@ export default function ProjectsPage() {
       <header className="projects-top">
         <Link href="/" className="back">← TTCGameLab</Link>
         <div><small>PROJECT LIBRARY</small><h1>My Projects</h1>{accountEmail && <p style={{ margin: "4px 0 0", color: "#9aa7ba", fontSize: 12 }}>Signed in as {accountEmail}</p>}</div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <SubmitFeedback />
           <Link href="/projects/trash" className="outline-btn">Trash</Link>
           <Link href="/project/new" className="build-btn">＋ New Project</Link>
         </div>

@@ -127,6 +127,20 @@ function moduleFrom(file, deps = {}, globals = {}) {
   const header = fs.readFileSync('components/SiteHeader.tsx', 'utf8');
   assert(header.includes('authClient.useSession()'), 'the header learns sign-in state from the auth client session');
   assert(header.includes('signedIn && <SubmitFeedback />'), 'the feedback button renders only for signed-in users');
+  // Signed-in users live under the workspace header (app/workspace-home.tsx),
+  // not the public SiteHeader — the button must render there too, with no
+  // session gate (the workspace only renders for signed-in users). The My
+  // Projects and Trash pages render their own signed-in headers, and each
+  // carries the button as well.
+  const workspace = fs.readFileSync('app/workspace-home.tsx', 'utf8');
+  assert(workspace.includes('import SubmitFeedback from "../components/SubmitFeedback"'), 'the workspace header imports the feedback button');
+  assert(workspace.includes('<SubmitFeedback />'), 'the workspace header renders the feedback button');
+  const projectsPage = fs.readFileSync('app/projects/page.tsx', 'utf8');
+  assert(projectsPage.includes('import SubmitFeedback from "../../components/SubmitFeedback"'), 'the My Projects header imports the feedback button');
+  assert(projectsPage.includes('<SubmitFeedback />'), 'the My Projects header renders the feedback button');
+  const trashPage = fs.readFileSync('app/projects/trash/page.tsx', 'utf8');
+  assert(trashPage.includes('import SubmitFeedback from "../../../components/SubmitFeedback"'), 'the Trash header imports the feedback button');
+  assert(trashPage.includes('<SubmitFeedback />'), 'the Trash header renders the feedback button');
   const dialog = fs.readFileSync('components/SubmitFeedback.tsx', 'utf8');
   for (const label of ['"Issue"', '"Comment"', '"Request"', '"Other"']) assert(dialog.includes(`label: ${label}`), `the dialog offers the ${label} kind`);
   assert(dialog.includes('"/api/help"') || dialog.includes("'/api/help'") || dialog.includes('"/api/help"'), 'the dialog posts to /api/help');
