@@ -3,11 +3,16 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 /**
- * Small "Submit feedback" button for the shared site header (rendered only
- * for signed-in users by SiteHeader). It opens a small in-page dialog —
- * following the ConfirmDialog pattern — where the user picks a kind and
- * writes a message. Submissions post to /api/help, which saves them to the
- * admin's support inbox and emails a copy to the site admin.
+ * The one "Submit feedback" affordance: a floating pill rendered on every
+ * page by FloatingFeedback (from the root layout), so a signed-in user can
+ * share something without leaving the page they're on. It opens a small
+ * in-page dialog — following the ConfirmDialog pattern — where the user
+ * picks a kind and writes a message. Submissions post to /api/help, which
+ * saves them to the admin's support inbox and emails a copy to the site
+ * admin. The pill's fixed positioning lives in the `.feedback-fab` rule in
+ * app/globals.css (bottom-left, clear of the bottom-right support/Jewel
+ * launchers), with a shift rule in the project shell CSS for the one
+ * surface whose docked chat panel occupies that corner.
  *
  * The dialog shows plain-language kinds; each maps to the topic the help
  * route stores ("Issue" is the route's long-standing "Site issue" topic).
@@ -19,10 +24,6 @@ const KINDS = [
   { label: "Other", topic: "Other" },
 ] as const;
 
-const triggerBtn: CSSProperties = {
-  border: "1px solid #2a3348", background: "transparent", color: "#9aa3b5",
-  padding: "6px 12px", borderRadius: 999, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap",
-};
 const fieldLabel: CSSProperties = { display: "block", margin: "14px 0 0", fontSize: 13.5, color: "#c6d2e4" };
 const field: CSSProperties = {
   display: "block", width: "100%", margin: "8px 0 0", padding: 10, background: "#0c1623",
@@ -85,7 +86,7 @@ export default function SubmitFeedback() {
 
   return (
     <>
-      <button type="button" style={triggerBtn} onClick={() => setOpen(true)}>Submit feedback</button>
+      <button type="button" className="feedback-fab" onClick={() => setOpen(true)}>Submit feedback</button>
       {open && (
         <dialog ref={dialog} className="confirm-dialog" aria-label="Submit feedback" onCancel={close}>
           <div className="confirm-dialog-panel">

@@ -8,6 +8,7 @@ import "./research.css";
 import "./support.css";
 import "./project/[id]/shell.css";
 import HelpLink from '../components/HelpLink';
+import FloatingFeedback from '../components/FloatingFeedback';
 
 export const metadata: Metadata = {
   title: "TTCGameLab — AI Livestream Creative Studio",
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}<HelpLink/></body>
+      <body>{children}<HelpLink/><FloatingFeedback/></body>
     </html>
   );
 }
