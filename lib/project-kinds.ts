@@ -79,6 +79,20 @@ export function isKindComingSoon(kind: ProjectKind | undefined): boolean {
   return !!kind && PROJECT_KINDS.some(info => info.id === kind && info.comingSoon);
 }
 
+/** The Coming Soon gate as it applies to a specific viewer: gated for
+ * everyone, EXCEPT the site admin starting a MULTIPLIER project for
+ * testing (Jessica, 2026-11-12 — her admin account may create
+ * Off-Stream Multiplayer Game Night projects while the gate stays up
+ * for everyone else; radio stays gated for everyone, admin included).
+ * `viewerIsAdmin` is the site's own admin notion — server-side that is
+ * lib/auth/server's isAdmin (role "admin" or an ADMIN_EMAILS address),
+ * surfaced to client surfaces as the viewerIsAdmin flag the project
+ * APIs already return. */
+export function isKindGatedFor(kind: ProjectKind | undefined, viewerIsAdmin: boolean): boolean {
+  if (!isKindComingSoon(kind)) return false;
+  return !(viewerIsAdmin && kind === "multiplayer");
+}
+
 /** The setup pieces a kind's from-scratch screen offers. A talk show's
  * screen offers only talk pieces — quiz cards and YouTube clips — never
  * pictured gameshow tools (Jessica, 2026-11-03: the Talk space holds only
