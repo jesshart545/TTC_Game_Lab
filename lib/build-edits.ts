@@ -25,13 +25,17 @@ export function applyBuildChanges(project:Project,input:unknown){
   const item=record(raw);if(!creatableTools.includes(item.type)){warnings.push('That tool type is unavailable.');continue;}
   if(item.type==='question-card'){
    // A question card is a system, not a bare tool: build it with the same
-   // factory the Workshop's own button uses (card tool + its Show and
-   // Reveal controls + a question pool), then apply the requested name,
-   // pool, and card designs. Its own controls come with it, so it is never
-   // queued for a generic connect control.
-   const withCards=createCardSystem(next,undefined,'question');
-   const cardTool=withCards.gameTools[withCards.gameTools.length-1];
+   // factory the Workshop's own button uses (card tool + its one cycle
+   // control + a question pool), then apply the requested name, pool, and
+   // card designs. Its own control comes with it, so it is never queued
+   // for a generic connect control. One Question Cards tool per project
+   // (owner ruling, 2026-11-12): when the project already has one, the
+   // request is satisfied against the EXISTING tool — the requested name,
+   // pool, and card designs land on it — and nothing new is created.
    const cfg=record(item.config);
+   const existing=next.gameTools.find(t=>t.type==='question-card');
+   const withCards=existing?next:createCardSystem(next,undefined,'question');
+   const cardTool=existing||withCards.gameTools[withCards.gameTools.length-1];
    const poolId=typeof cfg.poolId==='string'&&withCards.gameTools.some(t=>t.id===cfg.poolId&&t.type==='trivia-list'&&t.enabled)?cfg.poolId:undefined;
    next={...withCards,assetPools:next.assetPools,gameTools:withCards.gameTools.map(t=>t.id===cardTool.id?{...t,name:String(item.name||t.name).slice(0,80),config:{...t.config,...(poolId?{poolId}:{}),...(Object.keys(record(cfg.questionCard)).length?{questionCard:{...record(t.config.questionCard),...record(cfg.questionCard)}}:{}),...(Object.keys(record(cfg.answerCard)).length?{answerCard:{...record(t.config.answerCard),...record(cfg.answerCard)}}:{})}}:t)};
    extra++;continue;

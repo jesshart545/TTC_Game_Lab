@@ -64,7 +64,6 @@ import AssetPoolAssignment from "../../../components/AssetPoolAssignment";
 import AssetDetailsDialog from "../../../components/AssetDetailsDialog";
 import AssetThumbnail from "../../../components/AssetThumbnail";
 import { createAssetPool, removeAssetFromPools } from "../../../lib/asset-pools";
-import { removeGameTool } from "../../../lib/tool-removal";
 import { audioMimeTypeForName, isZipFileName, planZipPlaylist, playlistPoolName, zipEntryBaseName } from "../../../lib/zip-playlist";
 import { isTriviaTextFileName, parseTriviaText, triviaListBaseName, type TriviaUploadResult } from "../../../lib/trivia-upload";
 import { cleanTriviaQuestions } from "../../../lib/quiz";
@@ -434,6 +433,11 @@ export default function ProjectWorkspace() {
   useEffect(()=>{if(newCardEditorId&&newCardDialog.current&&!newCardDialog.current.open){newCardDialog.current.showModal();newCardDialog.current.querySelector<HTMLInputElement>('input')?.focus();}},[newCardEditorId]);
   function createWorkshopCard(kind:'question'|'blank'){
     const current=projectRef.current||project;if(!current)return;
+    // One Question Cards tool per project (owner ruling, 2026-11-12): when
+    // the project already has one, open the card editor on the EXISTING
+    // tool instead of minting a duplicate with its own dashboard button.
+    // Blank cards are exempt — a project may hold several of those.
+    if(kind==='question'){const existing=current.gameTools.find(t=>t.type==='question-card');if(existing){setCardDraft({tool:existing,controls:[]});setNewCardEditorId(existing.id);setAssetStatus('You already have Question Cards — here’s the editor. A project only needs one set.');return;}}
     try{const next=createCardSystem(current,undefined,kind);const card=next.gameTools[next.gameTools.length-1];setCardDraft({tool:card,controls:next.controls.filter(c=>!current.controls.some(x=>x.id===c.id))});setNewCardEditorId(card.id);setAssetStatus(kind==='blank'?'New blank card — customize it in the editor, then save to create it.':'New question and answer cards — choose their question pool and customize their appearance, then save to create them.');}
     catch(error){setAssetStatus(error instanceof Error?error.message:'Card creation failed. Please try again.');}
   }
@@ -938,34 +942,6 @@ export default function ProjectWorkspace() {
       setAssetStatus("Asset deleted.");
     } catch (error) {
       setAssetStatus(error instanceof Error ? error.message : "Asset deletion failed.");
-    }
-  }
-
-  const [toolPendingDelete, setToolPendingDelete] = useState<GameTool | null>(null);
-
-  function handleDeleteTool(tool: GameTool) {
-    if (!project) return;
-    setToolPendingDelete(tool);
-  }
-
-  async function doDeleteTool(tool: GameTool) {
-    if (!project) return;
-    // Same discipline as doDeleteAsset: derive from projectRef — the
-    // page's current lineage — never the render snapshot, and save
-    // through the guarded queue. The cascade itself (the tool's own
-    // dashboard buttons, its overlay placement, its card state — but
-    // never its question list or any asset) lives in lib/tool-removal.
-    const current = projectRef.current || project;
-    if (!(current.gameTools || []).some(item => item.id === tool.id)) return;
-    const next = { ...removeGameTool(current, tool.id), updatedAt: "just now" };
-    try {
-      projectRef.current = next;
-      setProject(next);
-      await enqueueSave(next);
-      setProject(await hydrateProjectAssets(next));
-      setAssetStatus(`Tool "${tool.name}" deleted.`);
-    } catch (error) {
-      setAssetStatus(error instanceof Error ? error.message : "Tool deletion failed.");
     }
   }
 
@@ -2267,7 +2243,6 @@ export default function ProjectWorkspace() {
         createWorkshopCard={createWorkshopCard}
         deleteComposition={deleteComposition}
         handleDeleteAsset={handleDeleteAsset}
-        onDeleteTool={handleDeleteTool}
         pushWorkspaceCreation={pushWorkspaceCreation}
         revealTriviaAnswer={revealTriviaAnswer}
         toggleAssetInProject={toggleAssetInProject}
@@ -2297,7 +2272,6 @@ export default function ProjectWorkspace() {
     {editingAssetIndex !== null && project.assets[editingAssetIndex] && <MediaEditor asset={project.assets[editingAssetIndex]} onClose={() => setEditingAssetIndex(null)} onSave={next => saveAssetEdits(editingAssetIndex, next)} onSaveAsNew={async next => { await saveAssetAsNew(next); }} />}
     {confirmingProjectDelete && <ConfirmDialog title="Move project to Trash?" message={`Move "${project.name}" to Trash? It disappears from your library and stops publishing, but nothing is erased — you can restore it from Trash in the project library, or delete it forever there.`} confirmLabel="Move to Trash" danger onConfirm={() => { setConfirmingProjectDelete(false); void doDeleteProject(); }} onCancel={() => setConfirmingProjectDelete(false)} />}
     {assetPendingDelete && <ConfirmDialog title="Delete this asset?" message={`Delete "${assetPendingDelete.name}" from this project?`} confirmLabel="Delete asset" danger onConfirm={() => { const asset = assetPendingDelete; setAssetPendingDelete(null); void doDeleteAsset(asset); }} onCancel={() => setAssetPendingDelete(null)} />}
-    {toolPendingDelete && <ConfirmDialog title="Delete this tool?" message={`Delete "${toolPendingDelete.name}" from this project? The tool is removed along with its dashboard buttons and anything it placed on the overlay.${toolPendingDelete.type === "question-card" ? " Its question list is a separate tool and is NOT deleted." : ""} Your media and assets are never deleted by this.`} confirmLabel="Delete tool" danger onConfirm={() => { const tool = toolPendingDelete; setToolPendingDelete(null); void doDeleteTool(tool); }} onCancel={() => setToolPendingDelete(null)} />}
     {confirmingClearChat && <ConfirmDialog title="Clear Jewel's conversation?" message="This removes every message in Jewel's chat for this project. The project itself — its assets, tools and settings — is not touched." confirmLabel="Clear chat" danger onConfirm={() => { setConfirmingClearChat(false); persist({ ...project, messages: [] }); }} onCancel={() => setConfirmingClearChat(false)} />}
     {messagePendingRemove !== null && project.messages[messagePendingRemove] && <ConfirmDialog title="Remove this message?" message="This removes just this one message from Jewel's chat for this project. Every other message stays exactly as it is, and the project itself — its assets, tools and settings — is not touched." confirmLabel="Remove message" danger onConfirm={() => { const index = messagePendingRemove; setMessagePendingRemove(null); persist({ ...project, messages: project.messages.filter((_, i) => i !== index) }); }} onCancel={() => setMessagePendingRemove(null)} />}
     {(showAssetComposer || editingAssetIndex !== null) && <div className="floating-ai"><button className="floating-ai-toggle" onClick={() => setChatDrawer(v => !v)} aria-expanded={chatDrawer}>✦ Ask AI about this edit</button>{chatDrawer && <section className="floating-ai-panel"><header><strong>AI Creative Director</strong><button onClick={() => setChatDrawer(false)} aria-label="Close chat">×</button></header><div className="floating-ai-messages">{project.messages.slice(-8).map((m,i)=><p key={i}><b>{m.role === "assistant" ? "AI" : "You"}</b><br/>{m.text}</p>)}{building&&<p>Working on your request…</p>}</div><form onSubmit={sendMessage}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Describe the change you want…"/><button type="submit" disabled={building}>Send</button></form></section>}</div>}
@@ -2311,6 +2285,6 @@ function BackgroundDestination({project,asset,onChange}:{project:Project;asset:P
  const [destination,setDestination]=useState(''),[target,setTarget]=useState(''),[saved,setSaved]=useState(false);
  const cards=project.gameTools.filter(t=>t.enabled&&(destination==='blank'?t.type==='blank-card':t.type==='question-card'));
  const key=asset.storageKey||asset.name;
- function apply(){if(destination==='overlay'){onChange({...project,assets:project.assets.map(a=>a===asset?{...a,inProject:true,inOverlayBuild:true,role:'background'}:a.role==='background'?{...a,inOverlayBuild:false}:a)});}else if(destination==='later'){onChange(project);}else if(target){const cardKey=destination==='answer'?'answerCard':'questionCard';onChange({...project,gameTools:project.gameTools.map(t=>t.id===target?{...t,config:{...t.config,[cardKey]:{...((t.config[cardKey]||{}) as Record<string,unknown>),backgroundKey:key}}}:t)});}else onChange(createCardSystem(project,key,destination as 'question'|'answer'|'blank'));setSaved(true);}
+ function apply(){if(destination==='overlay'){onChange({...project,assets:project.assets.map(a=>a===asset?{...a,inProject:true,inOverlayBuild:true,role:'background'}:a.role==='background'?{...a,inOverlayBuild:false}:a)});}else if(destination==='later'){onChange(project);}else if(target){const cardKey=destination==='answer'?'answerCard':'questionCard';onChange({...project,gameTools:project.gameTools.map(t=>t.id===target?{...t,config:{...t.config,[cardKey]:{...((t.config[cardKey]||{}) as Record<string,unknown>),backgroundKey:key}}}:t)});}else{const cardKey=destination==='answer'?'answerCard':'questionCard';const reuse=destination==='blank'?undefined:project.gameTools.find(t=>t.type==='question-card');if(reuse)onChange({...project,gameTools:project.gameTools.map(t=>t.id===reuse.id?{...t,config:{...t.config,[cardKey]:{...((t.config[cardKey]||{}) as Record<string,unknown>),backgroundKey:key}}}:t)});else onChange(createCardSystem(project,key,destination as 'question'|'answer'|'blank'));}setSaved(true);}
  return <div className="background-destination"><h3>Where would you like to use this background?</h3><label>Use background for<select value={destination} onChange={e=>{setDestination(e.target.value);setTarget('');setSaved(false);}}><option value="">Choose a destination</option>{isImage(asset)&&<><option value="question">Question card</option><option value="answer">Answer card</option><option value="blank">Blank card</option></>}<option value="overlay">Overlay background</option><option value="later">Save for later in asset library</option></select></label>{['question','answer','blank'].includes(destination)&&<label>Apply to card<select value={target} onChange={e=>setTarget(e.target.value)}><option value="">Create a new card</option>{cards.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}<button type="button" disabled={!destination} onClick={apply}>Use background</button>{saved&&<span role="status">Saved. Customize card text in its design controls below; this background can be reused.</span>}</div>;
 }
