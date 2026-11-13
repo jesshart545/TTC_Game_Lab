@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import { authClient } from "../lib/auth/client";
+import SubmitFeedback from "./SubmitFeedback";
 
 /**
  * The one public header, shared by the landing page, Who we are, and Help
@@ -27,6 +29,8 @@ const signupBtn: CSSProperties = {
 };
 
 export default function SiteHeader() {
+  const { data: session } = authClient.useSession();
+  const signedIn = Boolean(session?.user);
   return (
     <nav style={nav} aria-label="Site">
       <Link href="/" style={brand}>
@@ -39,6 +43,7 @@ export default function SiteHeader() {
         <Link href="/about" style={navLink}>Who we are</Link>
         <Link href="/help" style={navLink}>Help</Link>
         <a href={DONATE_URL} target="_blank" rel="noopener noreferrer" style={navLink}>Donate</a>
+        {signedIn && <SubmitFeedback />}
         <Link href="/auth/sign-in" style={loginBtn}>Log in</Link>
         <Link href="/auth/sign-up" style={signupBtn}>Create account</Link>
       </div>
