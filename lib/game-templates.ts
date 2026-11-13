@@ -813,12 +813,82 @@ export function getGameTemplate(id: string): GameTemplate | undefined {
 // (control toolIds, action strings, chain refIds, config poolId/listId)
 // is rewritten to the new ids. Returns undefined for unknown or
 // unauthorized (restricted) templates.
+//
+// One Question Cards tool per project (owner ruling, 2026-11-12): the card
+// factory refuses to mint a second question-card tool, and templates are
+// held to the same rule here. When the caller reports the target project
+// already has a question-card tool (opts.projectHasQuestionCardTool), the
+// template's own question-card tool is skipped — along with every control
+// that exists only to run it — while the rest of the template (its
+// question pool, boards, scoreboards, other tools and their controls)
+// applies exactly as usual. The skipped card tool's pool still lands, so
+// the project's existing Question Cards can be pointed at it.
 // ---------------------------------------------------------------------------
 const TEMPLATE_CONFIG_ID_KEYS = ["poolId", "listId"] as const;
 
+/** Does this control's action run one specific tool? Mirrors the action
+ *  shapes lib/tool-removal.ts treats as tool-aimed (tool.<id>,
+ *  cards.<verb>.<id>, timer.<op>.<id>, coin.cycle.<id>). */
+function actionTargetsAnyTool(action: string | undefined, toolIds: Set<string>): boolean {
+  if (!action || toolIds.size === 0) return false;
+  if (action.startsWith("tool.")) return toolIds.has(action.slice(5));
+  const match = /^(?:cards|timer)\.[a-z-]+\.(.+)$/.exec(action) || /^coin\.cycle\.(.+)$/.exec(action);
+  return !!match && toolIds.has(match[1]);
+}
+
+/** Drop the skipped question-card tool(s) from an instantiated template:
+ *  the tool itself, controls aimed at it or referencing only it, chain
+ *  steps that ran it (or a dropped control), and Hide controls minted for
+ *  dropped controls. Shared controls survive with the skipped id removed
+ *  from their toolIds. */
+function skipQuestionCardTools(
+  gameTools: GameTool[],
+  controls: ProjectEvent[]
+): { gameTools: GameTool[]; controls: ProjectEvent[] } {
+  const skippedIds = new Set(gameTools.filter(tool => tool.type === "question-card").map(tool => tool.id));
+  if (skippedIds.size === 0) return { gameTools, controls };
+  const keptTools = gameTools.filter(tool => !skippedIds.has(tool.id));
+  const droppedControlIds = new Set<string>();
+  let kept: ProjectEvent[] = [];
+  for (const control of controls) {
+    const ids = control.toolIds || [];
+    const soleToolControl = ids.length > 0 && ids.every(id => skippedIds.has(id));
+    if (soleToolControl || actionTargetsAnyTool(control.action, skippedIds)) {
+      droppedControlIds.add(control.id);
+      continue;
+    }
+    kept.push(ids.some(id => skippedIds.has(id)) ? { ...control, toolIds: ids.filter(id => !skippedIds.has(id)) } : control);
+  }
+  // Hide/Stop controls (action result.hide.<controlId>) exist only to
+  // dismiss one specific control's result; when that control is skipped,
+  // they are skipped too. Loop to a fixpoint, as in lib/tool-removal.ts.
+  for (;;) {
+    const before = kept.length;
+    kept = kept.filter(control => {
+      const hideTarget = /^result\.hide\.(.+)$/.exec(control.action || "")?.[1];
+      if (hideTarget && droppedControlIds.has(hideTarget)) {
+        droppedControlIds.add(control.id);
+        return false;
+      }
+      return true;
+    });
+    if (kept.length === before) break;
+  }
+  // Surviving sequence controls keep their other steps; steps that ran
+  // the skipped tool or a dropped control are dropped.
+  const finalControls = kept.map(control => {
+    if (!control.chain?.length) return control;
+    const chain = control.chain.filter(step =>
+      !(step.kind === "tool" && skippedIds.has(step.refId)) &&
+      !(step.kind === "control" && droppedControlIds.has(step.refId)));
+    return chain.length === control.chain.length ? control : { ...control, chain };
+  });
+  return { gameTools: keptTools, controls: finalControls };
+}
+
 export function instantiateTemplateTools(
   templateId: string,
-  opts?: { ccssEntitled?: boolean }
+  opts?: { ccssEntitled?: boolean; projectHasQuestionCardTool?: boolean }
 ): { gameTools: GameTool[]; controls: ProjectEvent[] } | undefined {
   const template = getGameTemplate(templateId);
   if (!template) return undefined;
@@ -858,5 +928,6 @@ export function instantiateTemplateTools(
       refId: step.kind === "tool" ? remapId(step.refId) : step.refId,
     })),
   }));
+  if (opts?.projectHasQuestionCardTool) return skipQuestionCardTools(gameTools, controls);
   return { gameTools, controls };
 }

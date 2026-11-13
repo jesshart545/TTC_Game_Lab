@@ -876,10 +876,16 @@ export default function ProjectWorkspace() {
   const { undo: undoManualEdit, redo: redoManualEdit, historyDepth, suppressHistory } = history;
 
   function applyTemplateToProject(templateId: string) {
-    const added = instantiateTemplateTools(templateId, { ccssEntitled });
-    if (!added || (!added.gameTools.length && !added.controls.length)) return;
     const current = projectRef.current || project;
     if (!current) return;
+    // One Question Cards tool per project (owner ruling, 2026-11-12): a
+    // project that already has one keeps it — the template's own card
+    // tool and its buttons are skipped, everything else still applies.
+    const added = instantiateTemplateTools(templateId, {
+      ccssEntitled,
+      projectHasQuestionCardTool: (current.gameTools || []).some(tool => tool.type === "question-card"),
+    });
+    if (!added || (!added.gameTools.length && !added.controls.length)) return;
     persist({ ...current, gameTools: [...current.gameTools, ...added.gameTools], controls: [...current.controls, ...added.controls], updatedAt: "just now" });
     setAssetStatus("Template added to your game. Find its tools and dashboard buttons in your project.");
   }
