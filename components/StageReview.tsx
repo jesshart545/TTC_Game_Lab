@@ -17,6 +17,7 @@ import { assetPlaced } from "../lib/asset-filing";
 import { mediaKind } from "../lib/board-design";
 import { normalizePlacement, movePlacement, resizePlacement, toolShapePlacement } from '../lib/overlay-placement';
 import { ControlAppearancePreview } from "./RuntimeActionLayers";
+import { standsOnOverlay } from "./StandingToolFace";
 import YouTubeHostPanel from "./YouTubeHostPanel";
 import { RemoteTopBar, controlGlyph } from "./DashboardRemote";
 import { reorderVisibleControls } from "../lib/stage-review";
@@ -343,7 +344,7 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
           <div className="stage" style={fittedStageWidth ? { width: fittedStageWidth } : undefined}>
             <BuildOverlayPreview>
               {overlay}
-              {tool && !control && !(infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && !['question-card', 'blank-card', 'card-list', 'youtube', 'random-picker'].includes(tool.type) && (
+              {tool && !control && !(infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && !['question-card', 'blank-card', 'card-list', 'youtube', 'random-picker'].includes(tool.type) && !standsOnOverlay(tool) && (
                 <ControlAppearancePreview state={cardStates[tool.id]} control={{ id: 'editing-' + tool.id, label: tool.name, detail: 'Editing preview', action: `tool.${tool.id}`, toolIds: [tool.id], overlayResult: { ...defaultOverlayResult, ...(tool.config.placement as Partial<typeof defaultOverlayResult> || {}) } }} project={project} />
               )}
               {control && hasVisualResult && !liveControlIds?.includes(control.id) && !(tool && infoTypes.includes(tool.type) && cardStates[tool.id] && !cardStates[tool.id].cleared) && (!cardControl(control.action) || (tool && infoTypes.includes(tool.type))) && (

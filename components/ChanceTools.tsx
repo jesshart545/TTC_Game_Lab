@@ -89,7 +89,7 @@ export function CliffhangerDisplay({outcome,elapsed=0,preview=false,textColor="#
       {o.fell&&<text x="200" y="22" textAnchor="middle" fill="#ff7070" fontSize="20" fontWeight="900">HE FALLS!</text>}
     </svg>
     {o.item&&o.phase!=='reset'&&<p style={{color:textColor}}><strong>{o.item.label}</strong></p>}
-    {o.phase==='guess'&&<p style={{color:textColor}}>Guessed <strong>${o.guess}</strong> · actual <strong>${o.price}</strong> · off by ${o.diff} → climbs {o.steps} {o.steps===1?'step':'steps'}</p>}
+    {o.phase==='guess'&&<p style={{color:textColor}}>Guessed <strong>{o.guess}</strong> · actual <strong>{o.price}</strong> · off by {o.diff} → climbs {o.steps} {o.steps===1?'step':'steps'}</p>}
     {o.phase==='reset'&&!preview&&<p style={{color:textColor}}>Climber reset. New game!</p>}
     {preview&&<p style={{color:textColor}}>Guess prices — don't let him fall!</p>}
   </div></div>;
@@ -99,10 +99,10 @@ export function CliffhangerDisplay({outcome,elapsed=0,preview=false,textColor="#
 export type PrizeWheelOutcome={phase?:'spin'|'nextplayer';winner?:number;values?:string[];total?:number;busted?:boolean};
 export function PrizeWheelDisplay({outcome,elapsed=0,duration=4000,preview=false,colors=["#b3123f","#0f6b4f"],textColor="#ffffff"}:{outcome?:PrizeWheelOutcome;elapsed?:number;duration?:number;preview?:boolean;colors?:string[];textColor?:string}){
   const values=outcome?.values||[];
-  const fmt=(c:number)=>`$${(c/100).toFixed(2)}`;
-  if(outcome?.phase==='nextplayer')return <div className="chance-tool"><strong role="status" style={{color:textColor}}>Next player — total reset to $0.00</strong></div>;
+  const fmt=(c:number)=>`${(c/100).toFixed(2)}`;
+  if(outcome?.phase==='nextplayer')return <div className="chance-tool"><strong role="status" style={{color:textColor}}>Next player — total reset to 0.00</strong></div>;
   const winner=Math.min(values.length-1,Math.max(0,outcome?.winner??0));
   const total=outcome?.total??0,busted=!!outcome?.busted;
   return <div className="chance-tool"><WheelDisplay entries={values} result={values[winner]||''} elapsed={elapsed} duration={duration} preview={preview} colors={colors} textColor={textColor}/>
-  <p role="status" style={{color:busted?'#ff7070':textColor,fontWeight:800}}>Total: {fmt(total)}{busted?' — BUSTED! Over $1.00':total===100?' — $1.00! PERFECT!':''}</p></div>;
+  <p role="status" style={{color:busted?'#ff7070':textColor,fontWeight:800}}>Total: {fmt(total)}{busted?' — BUSTED! Over 1.00':total===100?' — 1.00! PERFECT!':''}</p></div>;
 }
