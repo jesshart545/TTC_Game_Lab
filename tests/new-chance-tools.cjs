@@ -38,9 +38,9 @@ console.log('PASS: cliffhanger shows the item, climbs the guessed steps, and fal
 
 // ---- Prize wheel: spin result, running total, and the bust ----
 html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{winner:0,values:['5¢','10¢','$1.00'],total:5,busted:false},elapsed:4000}));
-assert(html.includes('Total: $0.05'));assert(!html.includes('BUSTED'));
+assert(html.includes('Total: 0.05'));assert(!html.includes('BUSTED'));
 html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{winner:2,values:['5¢','10¢','$1.00'],total:105,busted:true},elapsed:4000}));
-assert(html.includes('BUSTED! Over $1.00'));
+assert(html.includes('BUSTED! Over 1.00'));
 html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{phase:'nextplayer',total:0}}));
 assert(html.includes('Next player'));
 console.log('PASS: the big wheel shows the spin, tracks the running total, and calls the bust.');

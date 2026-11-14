@@ -4,7 +4,7 @@ import type {Project,GameToolType} from './project';
 import {applyDraftChanges,normalizeDraftChanges} from './draft-edit';
 import {mergeCityCrimeSceneMysteryPatch} from './city-crime-scene';
 import {addCreationControl} from './build-controls';
-import {toolDefaults} from './game-tools';
+import {toolDefaults,infoTypes,cleanInfoEntries} from './game-tools';
 import {cleanTriviaQuestions} from './quiz';
 import {createCardSystem} from './question-cards';
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
@@ -40,7 +40,7 @@ export function applyBuildChanges(project:Project,input:unknown){
    next={...withCards,assetPools:next.assetPools,gameTools:withCards.gameTools.map(t=>t.id===cardTool.id?{...t,name:String(item.name||t.name).slice(0,80),config:{...t.config,...(poolId?{poolId}:{}),...(Object.keys(record(cfg.questionCard)).length?{questionCard:{...record(t.config.questionCard),...record(cfg.questionCard)}}:{}),...(Object.keys(record(cfg.answerCard)).length?{answerCard:{...record(t.config.answerCard),...record(cfg.answerCard)}}:{})}}:t)};
    extra++;continue;
   }
-  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{})}});extra++;if(item.connect===true)created.push(id);
+  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{}),...(infoTypes.includes(item.type)?{entries:cleanInfoEntries(record(item.config).entries)}:{})}});extra++;if(item.connect===true)created.push(id);
  }
  for(const raw of Array.isArray(changes.assetPools)?changes.assetPools:[]){
   const item=record(raw),keys=Array.isArray(item.assetKeys)?item.assetKeys.filter((key:unknown)=>typeof key==='string'&&next.assets.some(a=>(a.storageKey||a.name)===key)):null;
