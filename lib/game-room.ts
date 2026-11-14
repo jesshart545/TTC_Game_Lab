@@ -23,6 +23,11 @@ import {
   bingoMarks, bingoAway, bingoHasLine, shuffle,
   type BingoConfig, type BingoPlayerState, type BingoRoomState,
 } from "./bingo";
+import {
+  quizConfigFromSnapshot, quizPlayerState, quizKey, quizTotalSquares, quizAnswerMatches,
+  QUIZ_REVEAL_MS,
+  type QuizConfig, type QuizPlayerState, type QuizRoomState,
+} from "./quiz-board";
 
 export type RoomStatus = "lobby" | "countdown" | "playing" | "finished";
 
@@ -202,11 +207,222 @@ function dealTo(room: Room, player: RoomPlayer, players: RoomPlayer[], rng: () =
 }
 
 // ---------------------------------------------------------------------------
+// Quiz Board module
+// ---------------------------------------------------------------------------
+
+function quizStateOf(room: Room): QuizRoomState {
+  return room.state as unknown as QuizRoomState;
+}
+
+function quizCurrentDef(config: QuizConfig, state: QuizRoomState): { categoryName: string; prompt: string; answer: string; value: number } | null {
+  const category = config.categories[state.currentCategory];
+  const question = category?.questions[state.currentQuestion];
+  if (!category || !question) return null;
+  return { categoryName: category.name, prompt: question.prompt, answer: question.answer, value: question.value };
+}
+
+/** Score the open question, publish the reveal, and mark the square used. */
+function closeQuizQuestion(room: Room, players: RoomPlayer[], now: number): void {
+  const config = room.config as unknown as QuizConfig;
+  const state = quizStateOf(room);
+  const current = quizCurrentDef(config, state);
+  if (!current) return;
+  const results = players.map(player => {
+    const mine = quizPlayerState(player.state);
+    const answered = mine.answerKey === state.currentKey && mine.answerText.trim().length > 0;
+    const correct = answered && quizAnswerMatches(mine.answerText, current.answer);
+    const delta = correct ? current.value : answered ? -current.value : 0;
+    if (delta !== 0) {
+      mine.score += delta;
+      player.state = mine as unknown as Record<string, unknown>;
+    }
+    return { playerId: player.id, answered, correct, delta };
+  });
+  if (!state.usedKeys.includes(state.currentKey)) state.usedKeys = [...state.usedKeys, state.currentKey];
+  state.lastReveal = {
+    key: state.currentKey,
+    categoryName: current.categoryName,
+    prompt: current.prompt,
+    answer: current.answer,
+    value: current.value,
+    results,
+  };
+  state.phase = "reveal";
+  state.revealUntil = now + QUIZ_REVEAL_MS;
+}
+
+const quizModule: GameModule = {
+  gameType: "quiz-board",
+
+  extractConfig(snapshot) {
+    const result = quizConfigFromSnapshot(snapshot);
+    if ("error" in result) return result;
+    return { config: result.config as unknown as Record<string, unknown> };
+  },
+
+  init() {
+    const state: QuizRoomState = {
+      startedAt: 0, phase: "pick", turnPlayerId: null,
+      currentKey: "", currentCategory: -1, currentQuestion: -1,
+      openedAt: 0, revealAt: 0, revealUntil: 0,
+      usedKeys: [], lastReveal: null,
+    };
+    return state as unknown as Record<string, unknown>;
+  },
+
+  onStart(room, players, now) {
+    const state = quizStateOf(room);
+    state.startedAt = now;
+    state.phase = "pick";
+    state.turnPlayerId = players[0]?.id ?? null;
+    state.currentKey = "";
+    state.currentCategory = -1;
+    state.currentQuestion = -1;
+    state.usedKeys = [];
+    state.lastReveal = null;
+    for (const player of players) {
+      const fresh: QuizPlayerState = { score: 0, answerKey: "", answerText: "" };
+      player.state = fresh as unknown as Record<string, unknown>;
+    }
+  },
+
+  playerInit(room, player) {
+    player.state = quizPlayerState(player.state) as unknown as Record<string, unknown>;
+  },
+
+  onAction(room, players, player, action, now) {
+    const config = room.config as unknown as QuizConfig;
+    const state = quizStateOf(room);
+
+    if (action.type === "pick") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase !== "pick") return "That question is still being played — hold on.";
+      if (player.id !== state.turnPlayerId) {
+        const turn = players.find(candidate => candidate.id === state.turnPlayerId);
+        return turn ? `It's ${turn.name}'s turn to pick a square.` : "It's not your turn to pick a square.";
+      }
+      const category = action.category;
+      const question = action.question;
+      if (!Number.isInteger(category) || !Number.isInteger(question)) return "That square isn't on the board.";
+      const cat = config.categories[category as number];
+      const def = cat?.questions[question as number];
+      if (!cat || !def) return "That square isn't on the board.";
+      const key = quizKey(category as number, question as number);
+      if (state.usedKeys.includes(key)) return "That square has already been played.";
+      state.currentCategory = category as number;
+      state.currentQuestion = question as number;
+      state.currentKey = key;
+      state.openedAt = now;
+      state.revealAt = now + config.answerMs;
+      state.phase = "answer";
+      return null;
+    }
+
+    if (action.type === "answer") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase !== "answer") return "There's no open question to answer right now.";
+      const mine = quizPlayerState(player.state);
+      if (mine.answerKey === state.currentKey) return null; // already in: a double-tap is fine
+      const text = String(action.text ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+      if (!text) return "Type your answer first.";
+      mine.answerKey = state.currentKey;
+      mine.answerText = text;
+      player.state = mine as unknown as Record<string, unknown>;
+      return null;
+    }
+
+    return "That move isn't part of this game.";
+  },
+
+  tick(room, players, now) {
+    const state = quizStateOf(room);
+    if (!state.startedAt) return;
+    if (state.phase === "answer") {
+      const everyoneIn = players.length > 0 && players.every(player => quizPlayerState(player.state).answerKey === state.currentKey);
+      if (now >= state.revealAt || everyoneIn) closeQuizQuestion(room, players, now);
+    }
+    if (state.phase === "reveal" && now >= state.revealUntil) {
+      // Hand the pick to the next player and reopen the board.
+      const index = players.findIndex(candidate => candidate.id === state.turnPlayerId);
+      state.turnPlayerId = players.length ? players[(index + 1) % players.length].id : null;
+      state.currentKey = "";
+      state.currentCategory = -1;
+      state.currentQuestion = -1;
+      state.phase = "pick";
+    }
+  },
+
+  checkFinish(room, players) {
+    const config = room.config as unknown as QuizConfig;
+    const state = quizStateOf(room);
+    if (!state.startedAt) return null;
+    if (state.phase === "reveal") return null; // the last reveal gets its moment
+    if (state.usedKeys.length < quizTotalSquares(config)) return null;
+    const rows = players.map(player => ({ player, score: quizPlayerState(player.state).score }));
+    const top = rows.reduce((best, row) => Math.max(best, row.score), Number.NEGATIVE_INFINITY);
+    rows.sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name));
+    return rows.map(row => ({
+      playerId: row.player.id,
+      name: row.player.name,
+      score: row.score,
+      detail: row.score === top ? `${row.score} points — quiz champion` : `${row.score} points`,
+      winner: row.score === top,
+    }));
+  },
+
+  publicState(room, players, now) {
+    const config = room.config as unknown as QuizConfig;
+    const state = quizStateOf(room);
+    const used = new Set(state.usedKeys);
+    const current = state.phase === "answer" || state.phase === "reveal" ? quizCurrentDef(config, state) : null;
+    const names = new Map(players.map(player => [player.id, player.name]));
+    return {
+      accent: config.accent,
+      theme: config.theme,
+      categories: config.categories.map((category, ci) => ({
+        name: category.name,
+        squares: category.questions.map((question, qi) => ({ value: question.value, used: used.has(quizKey(ci, qi)) })),
+      })),
+      phase: state.startedAt ? state.phase : "pick",
+      turnPlayerId: state.turnPlayerId,
+      turnName: state.turnPlayerId ? names.get(state.turnPlayerId) || null : null,
+      current: current ? {
+        key: state.currentKey,
+        categoryName: current.categoryName,
+        value: current.value,
+        prompt: current.prompt,
+        endsAt: state.phase === "answer" ? state.revealAt : null,
+        answeredCount: players.filter(player => quizPlayerState(player.state).answerKey === state.currentKey).length,
+        playerCount: players.length,
+      } : null,
+      // The answer exists in this payload ONLY at the reveal moment —
+      // during the answer window it is nowhere in what players receive.
+      reveal: state.phase === "reveal" && state.lastReveal ? {
+        answer: state.lastReveal.answer,
+        value: state.lastReveal.value,
+        results: state.lastReveal.results.map(result => ({
+          playerId: result.playerId,
+          name: names.get(result.playerId) || "",
+          answered: result.answered,
+          correct: result.correct,
+          delta: result.delta,
+          answerText: quizPlayerState(players.find(player => player.id === result.playerId)?.state).answerText,
+        })),
+      } : null,
+      scores: Object.fromEntries(players.map(player => [player.id, quizPlayerState(player.state).score])),
+      remaining: quizTotalSquares(config) - state.usedKeys.length,
+      totalSquares: quizTotalSquares(config),
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Module registry
 // ---------------------------------------------------------------------------
 
 export const GAME_MODULES: Record<string, GameModule> = {
   [bingoModule.gameType]: bingoModule,
+  [quizModule.gameType]: quizModule,
 };
 
 /** Pick the module a published snapshot can play, and extract its config. */
