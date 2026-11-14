@@ -214,6 +214,72 @@
 .gn-delta-good { color: #4ade80; }
 .gn-delta-bad { color: #f87171; }
 
+/* ---- survey showdown ---- */
+.gn-survey-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.gn-team-panel {
+  --gn-team: #a855f7;
+  border-radius: 18px; padding: 13px 14px;
+  background: rgba(20, 14, 36, .85);
+  border: 2px solid color-mix(in srgb, var(--gn-team) 45%, transparent);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .35);
+}
+.gn-team-mine { border-color: var(--gn-team); }
+.gn-team-control { box-shadow: 0 0 0 2px var(--gn-team), 0 0 26px color-mix(in srgb, var(--gn-team) 45%, transparent); }
+.gn-team-head { display: flex; align-items: center; gap: 8px; }
+.gn-team-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--gn-team); flex: 0 0 auto; box-shadow: 0 0 10px var(--gn-team); }
+.gn-team-name { font-weight: 900; font-size: 15px; letter-spacing: .02em; }
+.gn-team-score { margin-left: auto; font-size: 26px; font-weight: 900; color: var(--gn-team); line-height: 1; }
+.gn-team-members { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.gn-team-member { font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, .08); color: #ddd6f5; }
+.gn-team-member-me { background: color-mix(in srgb, var(--gn-team) 35%, transparent); color: #fff; }
+.gn-team-strikes { display: flex; gap: 6px; margin-top: 10px; }
+.gn-x {
+  width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 17px; font-weight: 900; color: rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .05); border: 2px solid rgba(255, 255, 255, .09);
+}
+.gn-x-on {
+  color: #fff; background: linear-gradient(150deg, #ef4444, #b91c1c); border-color: #f87171;
+  box-shadow: 0 0 16px rgba(239, 68, 68, .5); animation: gn-stamp .25s cubic-bezier(.2, 1.8, .4, 1) both;
+}
+
+.gn-survey-question { font-size: clamp(22px, 6vw, 34px); }
+.gn-survey-board {
+  display: flex; flex-direction: column; gap: 7px;
+  background: rgba(20, 14, 36, .85); border: 1px solid color-mix(in srgb, var(--gn-accent) 40%, transparent);
+  border-radius: 20px; padding: 10px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
+}
+.gn-slot {
+  display: flex; align-items: center; gap: 12px;
+  border-radius: 13px; padding: 10px 14px; min-height: 30px;
+  background: rgba(255, 255, 255, .045); border: 2px solid rgba(255, 255, 255, .1);
+}
+.gn-slot-rank {
+  width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 900; font-size: 15px;
+  background: rgba(255, 255, 255, .1); color: #cdc4e8;
+}
+.gn-slot-cover { color: rgba(255, 255, 255, .3); font-weight: 900; letter-spacing: .3em; }
+.gn-slot-open {
+  background: linear-gradient(150deg, color-mix(in srgb, var(--gn-accent) 60%, #1b1030), color-mix(in srgb, var(--gn-accent) 32%, #1b1030));
+  border-color: var(--gn-accent);
+  animation: gn-flip .45s cubic-bezier(.2, 1.4, .4, 1) both;
+}
+@keyframes gn-flip { 0% { transform: rotateX(88deg); opacity: .2; } 100% { transform: rotateX(0); opacity: 1; } }
+.gn-slot-open .gn-slot-rank { background: #fff; color: #1b1030; }
+.gn-slot-text { flex: 1; font-weight: 800; font-size: clamp(16px, 4.6vw, 21px); overflow-wrap: anywhere; }
+.gn-slot-points {
+  font-weight: 900; font-size: clamp(16px, 4.6vw, 21px); color: #ffe9a8;
+  background: rgba(0, 0, 0, .3); border-radius: 10px; padding: 3px 11px;
+}
+.gn-survey-action { margin-top: 4px; }
+
+@media (max-width: 420px) {
+  .gn-team-name { font-size: 13.5px; }
+  .gn-team-score { font-size: 22px; }
+}
+
 /* ---- finished ---- */
 .gn-finished { overflow: hidden; }
 .gn-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
