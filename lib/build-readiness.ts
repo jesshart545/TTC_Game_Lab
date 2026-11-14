@@ -1,13 +1,42 @@
 import {gameEntries,infoTypes} from './game-tools';
 import {pickerCards} from './card-lists';
+import {bingoConfigFromSnapshot} from './bingo';
 import {assetPlaced} from './asset-filing';
 import type { Project } from './project';
 import { controlConnectionError } from './control-connections';
 import { questionPool } from './question-cards';
 import { timerAction } from './timer-controls';
 export type BuildIssue = { id: string; message: string; kind: 'tool'|'control'|'asset'; targetId: string; fix?: 'connect'|'customize'|'background' };
+export type PublishReviewSummary = { titleOk: boolean; dashboardRow: boolean; checksOut: boolean };
+// The publish-review panel's summary state, kept pure so it is testable. A
+// game night has no host and no host-run dashboard, so its panel never shows
+// the dashboard-buttons row and dashboard controls never gate its "Everything
+// checks out" line: a multiplayer project checks out when its title is set
+// and buildReadiness is clean. Every other kind keeps the long-standing
+// summary exactly — dashboard row shown, and checking out also requires at
+// least one dashboard button.
+export function publishReviewSummary(project: Project, issues: BuildIssue[]): PublishReviewSummary {
+ const titleOk=!!project.name.trim()&&!["New Project","New LIVE Experience"].includes(project.name.trim())&&!["","YOUR LIVESTREAM","YOUR LIVE EXPERIENCE"].includes((project.overlay.title||"").trim().toUpperCase());
+ const dashboardRow=project.kind!=='multiplayer';
+ const dashboardOk=!dashboardRow||project.controls.length>0;
+ return {titleOk,dashboardRow,checksOut:titleOk&&dashboardOk&&issues.length===0};
+}
 export function buildReadiness(project: Project): BuildIssue[] {
  const issues:BuildIssue[]=[];
+ // Off-Stream Multiplayer Game Night has no host and no host-run dashboard —
+ // the game runs itself from the share link — so none of the dashboard-wiring
+ // checks below apply to it. A game night is ready when it holds a playable
+ // game: today that is bingo, judged by the very extraction the game-room
+ // share route runs (lib/bingo.ts on the published snapshot), so "ready to
+ // publish" and "ready to share" can never disagree. The asset checks at the
+ // bottom still run for every kind: they only fire for assets actually placed,
+ // so a game night with no assets is never blocked on asset grounds.
+ const multiplayer=project.kind==='multiplayer';
+ if(multiplayer&&'error' in bingoConfigFromSnapshot(project)){
+  const list=project.gameTools.find(t=>t.type==='card-list');
+  issues.push({id:'playable-game',message:'Your game night needs something to play: add a card list with at least 5 items — ask Jewel to build one for you.',kind:'tool',targetId:list?list.id:'',fix:'customize'});
+ }
+ if(!multiplayer){
  for(const control of project.controls){
   const error=controlConnectionError(project,control);
   if(error)issues.push({id:'control-'+control.id,message:control.label+': '+error,kind:'control',targetId:control.id,fix:'customize'});
@@ -37,6 +66,7 @@ export function buildReadiness(project: Project): BuildIssue[] {
    });
    if((tool.inToolbox||tool.inOverlayBuild)&&!linked)issues.push({id:'controls-'+tool.id,message:tool.name+': add at least one dashboard button so the host can show or run it.',kind:'tool',targetId:tool.id,fix:'connect'});
   }
+ }
  }
  for(const asset of project.assets.filter(a=>assetPlaced(a)||project.controls.some(c=>c.action==='asset.show.'+(a.storageKey||a.name))||project.gameTools.some(t=>t.inOverlayBuild&&t.config.backgroundAssetKey===(a.storageKey||a.name)))){
   if(!asset.url||asset.url.startsWith('blob:')||asset.url.startsWith('data:'))issues.push({id:'asset-'+(asset.storageKey||asset.name),message:asset.name+': upload a saved media file in Workshop before publishing.',kind:'asset',targetId:asset.storageKey||asset.name,fix:'background'});
