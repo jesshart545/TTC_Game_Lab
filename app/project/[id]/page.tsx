@@ -56,7 +56,7 @@ import {toolDefaults,infoTypes} from "../../../lib/game-tools";
 import {PROJECT_KINDS, isKindGatedFor} from "../../../lib/project-kinds";
 import {TALK_TOOL_TYPES} from "../../../lib/talkshow-path";
 import {GameInfoHostPanel} from "../../../components/GameInfoTools";
-import {buildReadiness, type BuildIssue} from "../../../lib/build-readiness";
+import {buildReadiness, publishReviewSummary, type BuildIssue} from "../../../lib/build-readiness";
 import {allCreateStepsComplete, evaluateWorkflow, newlyCompletedSteps, resolveNavigateTarget, workflowStepKey, type JewelNavigate} from "../../../lib/workflow-progress";
 import "./workflow.css";
 import CardListEditor from "../../../components/CardListEditor";
@@ -2205,15 +2205,16 @@ export default function ProjectWorkspace() {
         {project.publishedSnapshot && <p>Your experience is live. Publishing again updates it with your latest draft — and these checks run on that draft.</p>}
         {(() => {
           const issues = buildReadiness(project);
-          const titleOk = !!project.name.trim() && !["New Project", "New LIVE Experience"].includes(project.name.trim()) && !["", "YOUR LIVESTREAM", "YOUR LIVE EXPERIENCE"].includes((project.overlay.title || "").trim().toUpperCase());
+          const review = publishReviewSummary(project, issues);
+          const titleOk = review.titleOk;
           const buttonsOk = project.controls.length > 0;
           const hasBackground = project.assets.some(asset => asset.role === "background" && assetPlaced(asset));
           return <ul className="publish-checklist">
             <li><span aria-hidden="true">{titleOk ? "✓" : "!"}</span><span>{titleOk ? `Title is set: "${project.name}".` : "Your project still has a placeholder title — give it its real name so viewers and your library show it."}</span>{!titleOk && <button type="button" className="outline-btn" onClick={openGamePlanEntry}>Fix in Imagine and Create</button>}</li>
-            <li><span aria-hidden="true">{buttonsOk ? "✓" : "!"}</span><span>{buttonsOk ? `${project.controls.length} dashboard button${project.controls.length === 1 ? "" : "s"} ready for the host.` : "No dashboard buttons yet — the host will have nothing to press during the show."}</span>{!buttonsOk && <button type="button" className="outline-btn" onClick={() => requestBuildEntry("add", true)}>Fix in Set the Stage</button>}</li>
+            {review.dashboardRow && <li><span aria-hidden="true">{buttonsOk ? "✓" : "!"}</span><span>{buttonsOk ? `${project.controls.length} dashboard button${project.controls.length === 1 ? "" : "s"} ready for the host.` : "No dashboard buttons yet — the host will have nothing to press during the show."}</span>{!buttonsOk && <button type="button" className="outline-btn" onClick={() => requestBuildEntry("add", true)}>Fix in Set the Stage</button>}</li>}
             {issues.map(issue => <li key={issue.id}><span aria-hidden="true">!</span><span>{issue.message}</span><button type="button" className="outline-btn" onClick={() => fixChecklistIssue(issue)}>{issue.kind === "asset" ? "Fix in Imagine and Create" : "Fix in Set the Stage"}</button></li>)}
             {!hasBackground && <li><span aria-hidden="true">–</span><span>No background set — the overlay starts as a plain dark screen. Fine if that is the look you want.</span><button type="button" className="outline-btn" onClick={() => requestBuildEntry("background", true)}>Fix in Set the Stage</button></li>}
-            {titleOk && buttonsOk && issues.length === 0 && <li><span aria-hidden="true">✓</span><span>Everything checks out — you are ready to publish.</span></li>}
+            {review.checksOut && <li><span aria-hidden="true">✓</span><span>Everything checks out — you are ready to publish.</span></li>}
           </ul>;
         })()}
         <p>Rehearse a complete round in Build Space. Check the appearance of your overlay, your host buttons, media playback, and how each item is cleared or stopped.</p>
