@@ -3,7 +3,7 @@ import {cityCrimeSceneDefaults} from './city-crime-scene';
 import type {CardState} from './question-cards';
 export type GameEntry={id:string;name:string;imageKey?:string;meaning?:string;score?:number};
 export function strikeScoreboard(tool:GameTool){return tool.type==='scoreboard'&&tool.config.scoreMode==='strikes';}
-export const infoTypes=['scoreboard','prize-list','game-tool-list'];
+export const infoTypes=['scoreboard','game-tool-list'];
 export function gameEntries(tool:GameTool):GameEntry[]{
  const entries=Array.isArray(tool.config.entries)?tool.config.entries:[];
  return entries.filter((e):e is GameEntry=>!!e&&typeof e==='object'&&typeof e.id==='string'&&typeof e.name==='string');
@@ -25,7 +25,7 @@ export function toolDefaults(type:GameToolType):Record<string,unknown>{
   cliffhanger:{title:'Cliffhanger',items:[{label:'Coffee maker',price:49},{label:'Bluetooth speaker',price:79},{label:'Stand mixer',price:129}],stepsToFall:25,dollarsPerStep:1},
   'prize-wheel':{title:'Big Wheel',values:['5¢','10¢','15¢','20¢','25¢','30¢','35¢','40¢','45¢','50¢','55¢','60¢','65¢','70¢','75¢','80¢','85¢','90¢','95¢','1.00'],slotColor:'#b3123f',alternateSlotColor:'#0f6b4f'},
   'blank-board':{title:'Custom Board',areas:[]},'city-crime-scene':{title:'City Crime Scene',mystery:cityCrimeSceneDefaults(),placement:{x:8,y:8,width:84,height:84}},youtube:{placement:{x:15,y:15,width:70,height:70}},
-  scoreboard:{entries:[]},'prize-list':{entries:[]},'game-tool-list':{entries:[]},
+  scoreboard:{entries:[]},'game-tool-list':{entries:[]},
  };
  return {...defaults[type]};
 }

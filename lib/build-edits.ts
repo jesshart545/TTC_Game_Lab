@@ -16,7 +16,7 @@ const placementPatch=(raw:unknown):Partial<Record<'x'|'y'|'width'|'height',numbe
  for(const key of ['width','height'] as const){const n=p[key];if(typeof n==='number'&&Number.isFinite(n))out[key]=Math.min(100,Math.max(1,n));}
  return Object.keys(out).length?out as Partial<Record<'x'|'y'|'width'|'height',number>>:null;
 };
-export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','prize-wheel','blank-board','youtube','scoreboard','prize-list','game-tool-list','card-list','city-crime-scene','trivia-list','question-card'];
+export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','prize-wheel','blank-board','youtube','scoreboard','game-tool-list','card-list','city-crime-scene','trivia-list','question-card'];
 export function applyBuildChanges(project:Project,input:unknown){
  const changes=normalizeDraftChanges(input),warnings:string[]=[];let extra=0;
  let next={...project,gameTools:[...project.gameTools],assetPools:(project.assetPools||[]).map(p=>({...p,assetKeys:[...p.assetKeys]}))};
