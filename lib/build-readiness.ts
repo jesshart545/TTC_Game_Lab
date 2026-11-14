@@ -2,6 +2,7 @@ import {gameEntries,infoTypes} from './game-tools';
 import {pickerCards} from './card-lists';
 import {bingoConfigFromSnapshot} from './bingo';
 import {quizConfigFromSnapshot} from './quiz-board';
+import {surveyConfigFromSnapshot} from './survey-showdown';
 import {assetPlaced} from './asset-filing';
 import type { Project } from './project';
 import { controlConnectionError } from './control-connections';
@@ -27,17 +28,19 @@ export function buildReadiness(project: Project): BuildIssue[] {
  // Off-Stream Multiplayer Game Night has no host and no host-run dashboard —
  // the game runs itself from the share link — so none of the dashboard-wiring
  // checks below apply to it. A game night is ready when it holds a playable
- // game: bingo (a card list the bingo extraction can play) or Quiz Board (a
- // trivia board / categorized trivia list the quiz extraction can play),
- // judged by the very extractions the game-room share route runs
- // (lib/bingo.ts / lib/quiz-board.ts on the published snapshot), so "ready
- // to publish" and "ready to share" can never disagree. The asset checks at
- // the bottom still run for every kind: they only fire for assets actually
- // placed, so a game night with no assets is never blocked on asset grounds.
+ // game: bingo (a card list the bingo extraction can play), Quiz Board (a
+ // trivia board / categorized trivia list the quiz extraction can play) or
+ // Survey Showdown (a survey-shaped trivia board the survey extraction can
+ // play), judged by the very extractions the game-room share route runs
+ // (lib/bingo.ts / lib/quiz-board.ts / lib/survey-showdown.ts on the
+ // published snapshot), so "ready to publish" and "ready to share" can
+ // never disagree. The asset checks at the bottom still run for every
+ // kind: they only fire for assets actually placed, so a game night with
+ // no assets is never blocked on asset grounds.
  const multiplayer=project.kind==='multiplayer';
- if(multiplayer&&'error' in bingoConfigFromSnapshot(project)&&'error' in quizConfigFromSnapshot(project)){
+ if(multiplayer&&'error' in bingoConfigFromSnapshot(project)&&'error' in quizConfigFromSnapshot(project)&&'error' in surveyConfigFromSnapshot(project)){
   const target=project.gameTools.find(t=>t.type==='card-list')||project.gameTools.find(t=>t.type==='trivia-board')||project.gameTools.find(t=>t.type==='trivia-list');
-  issues.push({id:'playable-game',message:'Your game night needs something to play: add a card list with at least 5 items, or a quiz board with questions — ask Jewel to build one for you.',kind:'tool',targetId:target?target.id:'',fix:'customize'});
+  issues.push({id:'playable-game',message:'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, or a survey board with questions and answers — ask Jewel to build one for you.',kind:'tool',targetId:target?target.id:'',fix:'customize'});
  }
  if(!multiplayer){
  for(const control of project.controls){

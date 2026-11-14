@@ -28,6 +28,11 @@ import {
   QUIZ_REVEAL_MS,
   type QuizConfig, type QuizPlayerState, type QuizRoomState,
 } from "./quiz-board";
+import {
+  surveyConfigFromSnapshot, surveyPlayerState, surveyMatchAnswer, SURVEY_TEAMS,
+  SURVEY_FACEOFF_MS, SURVEY_GUESS_MS, SURVEY_REVEAL_MS,
+  type SurveyConfig, type SurveyPlayerState, type SurveyRoomState,
+} from "./survey-showdown";
 
 export type RoomStatus = "lobby" | "countdown" | "playing" | "finished";
 
@@ -417,12 +422,355 @@ const quizModule: GameModule = {
 };
 
 // ---------------------------------------------------------------------------
+// Survey Showdown module
+// ---------------------------------------------------------------------------
+
+function surveyStateOf(room: Room): SurveyRoomState {
+  return room.state as unknown as SurveyRoomState;
+}
+
+function surveyConfigOf(room: Room): SurveyConfig {
+  return room.config as unknown as SurveyConfig;
+}
+
+/** The next player in a team's rotation — and the rotation moves on. */
+function surveyNextPlayer(state: SurveyRoomState, team: number): string | null {
+  const members = state.teams[team];
+  if (!members.length) return null;
+  const id = members[state.cursors[team] % members.length];
+  state.cursors[team] = (state.cursors[team] + 1) % members.length;
+  return id;
+}
+
+function surveyOpenFaceoff(room: Room, now: number): void {
+  const state = surveyStateOf(room);
+  state.faceoff = [surveyNextPlayer(state, 0), surveyNextPlayer(state, 1)];
+  state.slot += 1;
+  state.slotEndsAt = now + SURVEY_FACEOFF_MS;
+  state.guesserId = null;
+}
+
+function surveyStartQuestion(room: Room, now: number, questionIndex: number): void {
+  const state = surveyStateOf(room);
+  state.questionIndex = questionIndex;
+  state.phase = "faceoff";
+  state.revealed = [];
+  state.pot = 0;
+  state.strikes = 0;
+  state.controlTeam = null;
+  state.faceoffAttempt = 0;
+  state.lastRound = null;
+  surveyOpenFaceoff(room, now);
+}
+
+/** Close the round: award the pot, open the whole board for a moment. */
+function surveyEndRound(room: Room, now: number, winnerTeam: number | null, stolen: boolean): void {
+  const config = surveyConfigOf(room);
+  const state = surveyStateOf(room);
+  const question = config.questions[state.questionIndex];
+  if (winnerTeam !== null) state.teamScores[winnerTeam] += state.pot;
+  state.lastRound = {
+    questionIndex: state.questionIndex,
+    question: question ? question.question : "",
+    winnerTeam,
+    potAwarded: winnerTeam !== null ? state.pot : 0,
+    stolen,
+  };
+  state.phase = "reveal";
+  state.revealUntil = now + SURVEY_REVEAL_MS;
+  state.guesserId = null;
+}
+
+/** Score the face-off once both answers are in (or the window ran out). */
+function surveyResolveFaceoff(room: Room, players: RoomPlayer[], now: number): void {
+  const config = surveyConfigOf(room);
+  const state = surveyStateOf(room);
+  const question = config.questions[state.questionIndex];
+  if (!question || state.controlTeam !== null) return;
+  const guesses = state.faceoff.map(id => {
+    const player = id ? players.find(candidate => candidate.id === id) : undefined;
+    const mine = player ? surveyPlayerState(player.state) : null;
+    if (!mine || mine.guessSlot !== state.slot || !mine.guessText) return { match: -1, at: 0 };
+    return { match: surveyMatchAnswer(mine.guessText, question, state.revealed), at: mine.guessAt };
+  });
+  const [first, second] = guesses;
+  if (first.match < 0 && second.match < 0) {
+    // Nobody found the board: the next pair steps up. Once every player
+    // has had a face-off try, the question is skipped with no points.
+    state.faceoffAttempt += 1;
+    const attempts = Math.max(state.teams[0].length, state.teams[1].length, 1);
+    if (state.faceoffAttempt >= attempts) { surveyEndRound(room, now, null, false); return; }
+    surveyOpenFaceoff(room, now);
+    return;
+  }
+  const matched = new Set<number>();
+  if (first.match >= 0) matched.add(first.match);
+  if (second.match >= 0) matched.add(second.match);
+  for (const index of matched) {
+    state.revealed = [...state.revealed, index];
+    state.pot += question.answers[index].points;
+  }
+  state.revealed.sort((a, b) => a - b);
+  let winner: number;
+  if (first.match >= 0 && second.match >= 0) {
+    // The higher answer on the board wins; the same answer goes to
+    // whoever said it first.
+    winner = first.match === second.match ? (first.at <= second.at ? 0 : 1) : (first.match < second.match ? 0 : 1);
+  } else {
+    winner = first.match >= 0 ? 0 : 1;
+  }
+  state.controlTeam = winner;
+  state.phase = "play";
+  state.guesserId = surveyNextPlayer(state, winner);
+  state.slot += 1;
+  state.slotEndsAt = now + SURVEY_GUESS_MS;
+  if (!state.guesserId) surveyEndRound(room, now, winner, false);
+}
+
+/** One controlling-team guess (an empty text is a timed-out guess). */
+function surveyResolvePlayGuess(room: Room, now: number, text: string): void {
+  const config = surveyConfigOf(room);
+  const state = surveyStateOf(room);
+  const question = config.questions[state.questionIndex];
+  if (!question || state.controlTeam === null) return;
+  const control = state.controlTeam;
+  const match = text ? surveyMatchAnswer(text, question, state.revealed) : -1;
+  if (match >= 0) {
+    state.revealed = [...state.revealed, match].sort((a, b) => a - b);
+    state.pot += question.answers[match].points;
+    if (state.revealed.length >= question.answers.length) { surveyEndRound(room, now, control, false); return; }
+  } else {
+    state.strikes += 1;
+    if (state.strikes >= 3) {
+      const other = control === 0 ? 1 : 0;
+      const stealer = surveyNextPlayer(state, other);
+      if (!stealer) { surveyEndRound(room, now, control, false); return; }
+      state.phase = "steal";
+      state.guesserId = stealer;
+      state.slot += 1;
+      state.slotEndsAt = now + SURVEY_GUESS_MS;
+      return;
+    }
+  }
+  state.guesserId = surveyNextPlayer(state, control);
+  state.slot += 1;
+  state.slotEndsAt = now + SURVEY_GUESS_MS;
+  if (!state.guesserId) surveyEndRound(room, now, control, false);
+}
+
+/** The steal: one guess from the other team for the whole pot. */
+function surveyResolveStealGuess(room: Room, now: number, text: string): void {
+  const config = surveyConfigOf(room);
+  const state = surveyStateOf(room);
+  const question = config.questions[state.questionIndex];
+  if (!question || state.controlTeam === null) return;
+  const control = state.controlTeam;
+  const other = control === 0 ? 1 : 0;
+  const match = text ? surveyMatchAnswer(text, question, state.revealed) : -1;
+  if (match >= 0) {
+    state.revealed = [...state.revealed, match].sort((a, b) => a - b);
+    state.pot += question.answers[match].points;
+    surveyEndRound(room, now, other, true);
+  } else {
+    surveyEndRound(room, now, control, false);
+  }
+}
+
+const surveyModule: GameModule = {
+  gameType: "survey-showdown",
+
+  extractConfig(snapshot) {
+    const result = surveyConfigFromSnapshot(snapshot);
+    if ("error" in result) return result;
+    return { config: result.config as unknown as Record<string, unknown> };
+  },
+
+  init() {
+    const state: SurveyRoomState = {
+      startedAt: 0, phase: "faceoff",
+      teams: [[], []], cursors: [0, 0],
+      questionIndex: 0, revealed: [], pot: 0, strikes: 0, controlTeam: null,
+      faceoff: [null, null], faceoffAttempt: 0, slot: 0, slotEndsAt: 0,
+      guesserId: null, teamScores: [0, 0], revealUntil: 0, lastRound: null,
+    };
+    return state as unknown as Record<string, unknown>;
+  },
+
+  onStart(room, players, now) {
+    const state = surveyStateOf(room);
+    state.startedAt = now;
+    state.teams = [[], []];
+    state.cursors = [0, 0];
+    state.teamScores = [0, 0];
+    players.forEach((player, index) => {
+      const team = index % 2;
+      state.teams[team].push(player.id);
+      const fresh: SurveyPlayerState = { team, guessSlot: -1, guessText: "", guessAt: 0 };
+      player.state = fresh as unknown as Record<string, unknown>;
+    });
+    surveyStartQuestion(room, now, 0);
+  },
+
+  playerInit(room, player) {
+    const state = surveyStateOf(room);
+    const mine = surveyPlayerState(player.state);
+    if (state.startedAt) {
+      // A late joiner is dealt into the smaller team, at the end of its
+      // rotation — the game never waits for a host to place them.
+      if (!state.teams[0].includes(player.id) && !state.teams[1].includes(player.id)) {
+        const team = state.teams[0].length <= state.teams[1].length ? 0 : 1;
+        state.teams[team] = [...state.teams[team], player.id];
+      }
+      mine.team = state.teams[1].includes(player.id) ? 1 : 0;
+    }
+    player.state = mine as unknown as Record<string, unknown>;
+  },
+
+  onAction(room, players, player, action, now) {
+    if (action.type !== "guess") return "That move isn't part of this game.";
+    if (room.status !== "playing") return "The game isn't running right now.";
+    const state = surveyStateOf(room);
+    const text = String(action.text ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+    if (!text) return "Type your answer first.";
+
+    if (state.phase === "faceoff") {
+      if (!state.faceoff.includes(player.id)) return "This face-off belongs to the two players up front — your turn comes around.";
+      const mine = surveyPlayerState(player.state);
+      if (mine.guessSlot === state.slot && mine.guessText) return null; // already in: a double-tap is fine
+      mine.guessSlot = state.slot;
+      mine.guessText = text;
+      mine.guessAt = now;
+      player.state = mine as unknown as Record<string, unknown>;
+      return null;
+    }
+
+    if (state.phase === "play" || state.phase === "steal") {
+      if (player.id !== state.guesserId) {
+        const turn = players.find(candidate => candidate.id === state.guesserId);
+        return turn ? `It's ${turn.name}'s guess — yours comes around.` : "It's not your guess right now.";
+      }
+      if (state.phase === "play") surveyResolvePlayGuess(room, now, text);
+      else surveyResolveStealGuess(room, now, text);
+      return null;
+    }
+
+    return "Hold on — there's no guess to make right now.";
+  },
+
+  tick(room, players, now) {
+    const config = surveyConfigOf(room);
+    const state = surveyStateOf(room);
+    if (!state.startedAt) return;
+    if (state.phase === "faceoff") {
+      const bothIn = state.faceoff.every(id => {
+        if (!id) return true;
+        const player = players.find(candidate => candidate.id === id);
+        const mine = player ? surveyPlayerState(player.state) : null;
+        return !!mine && mine.guessSlot === state.slot && mine.guessText.length > 0;
+      });
+      if (bothIn || now >= state.slotEndsAt) surveyResolveFaceoff(room, players, now);
+    } else if (state.phase === "play") {
+      if (now >= state.slotEndsAt) surveyResolvePlayGuess(room, now, "");
+    } else if (state.phase === "steal") {
+      if (now >= state.slotEndsAt) surveyResolveStealGuess(room, now, "");
+    } else if (state.phase === "reveal") {
+      if (now >= state.revealUntil) {
+        if (state.questionIndex + 1 < config.questions.length) surveyStartQuestion(room, now, state.questionIndex + 1);
+        else state.phase = "done";
+      }
+    }
+  },
+
+  checkFinish(room, players) {
+    const state = surveyStateOf(room);
+    if (!state.startedAt || state.phase !== "done") return null;
+    const [gold, teal] = state.teamScores;
+    const top = Math.max(gold, teal);
+    const rows = players.map(player => {
+      const team = state.teams[1].includes(player.id) ? 1 : 0;
+      return { player, team, score: state.teamScores[team], winner: state.teamScores[team] === top };
+    });
+    rows.sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name));
+    return rows.map(row => ({
+      playerId: row.player.id,
+      name: row.player.name,
+      score: row.score,
+      detail: row.winner
+        ? (gold === teal ? `${SURVEY_TEAMS[row.team].name} · ${row.score} points — a tied game!` : `${SURVEY_TEAMS[row.team].name} · ${row.score} points — champions!`)
+        : `${SURVEY_TEAMS[row.team].name} · ${row.score} points`,
+      winner: row.winner,
+    }));
+  },
+
+  publicState(room, players) {
+    const config = surveyConfigOf(room);
+    const state = surveyStateOf(room);
+    const names = new Map(players.map(player => [player.id, player.name]));
+    const question = config.questions[state.questionIndex] || null;
+    const roundOver = state.phase === "reveal" || state.phase === "done";
+    const revealed = new Set(state.revealed);
+    const submitted = (id: string | null) => {
+      if (!id) return false;
+      const player = players.find(candidate => candidate.id === id);
+      const mine = player ? surveyPlayerState(player.state) : null;
+      return !!mine && mine.guessSlot === state.slot && mine.guessText.length > 0;
+    };
+    return {
+      accent: config.accent,
+      theme: config.theme,
+      teams: SURVEY_TEAMS.map((team, index) => ({
+        name: team.name,
+        color: team.color,
+        score: state.teamScores[index],
+        members: (state.teams[index] || []).map(id => ({ id, name: names.get(id) || "" })),
+        control: state.controlTeam === index && (state.phase === "play" || state.phase === "steal"),
+      })),
+      stage: state.startedAt ? state.phase : "faceoff",
+      questionIndex: state.questionIndex,
+      questionCount: config.questions.length,
+      question: question ? question.question : null,
+      // A covered slot shows only its rank. Its answer and points exist
+      // in this payload ONLY once the slot has flipped open — or when
+      // the round ends and the whole board opens.
+      board: question ? question.answers.map((answer, index) => {
+        const open = roundOver || revealed.has(index);
+        return open
+          ? { rank: index + 1, open: true, text: answer.text, points: answer.points }
+          : { rank: index + 1, open: false };
+      }) : [],
+      pot: state.pot,
+      strikes: state.strikes,
+      controlTeam: state.controlTeam,
+      faceoff: state.phase === "faceoff" ? {
+        playerIds: state.faceoff,
+        names: state.faceoff.map(id => (id ? names.get(id) || null : null)),
+        endsAt: state.slotEndsAt,
+        submitted: state.faceoff.map(id => submitted(id)),
+      } : null,
+      guesser: (state.phase === "play" || state.phase === "steal") && state.guesserId ? {
+        playerId: state.guesserId,
+        name: names.get(state.guesserId) || null,
+        team: state.teams[1].includes(state.guesserId) ? 1 : 0,
+        endsAt: state.slotEndsAt,
+      } : null,
+      lastRound: state.phase === "reveal" && state.lastRound ? {
+        winnerTeam: state.lastRound.winnerTeam,
+        winnerName: state.lastRound.winnerTeam !== null ? SURVEY_TEAMS[state.lastRound.winnerTeam].name : null,
+        potAwarded: state.lastRound.potAwarded,
+        stolen: state.lastRound.stolen,
+      } : null,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Module registry
 // ---------------------------------------------------------------------------
 
 export const GAME_MODULES: Record<string, GameModule> = {
   [bingoModule.gameType]: bingoModule,
   [quizModule.gameType]: quizModule,
+  [surveyModule.gameType]: surveyModule,
 };
 
 /** Pick the module a published snapshot can play, and extract its config. */

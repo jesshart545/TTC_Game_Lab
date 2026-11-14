@@ -31,6 +31,20 @@ type QuizPublic = {
   remaining?: number;
   totalSquares?: number;
 };
+type SurveyPublic = {
+  teams?: { name: string; color: string; score: number; members: { id: string; name: string }[]; control: boolean }[];
+  stage?: "faceoff" | "play" | "steal" | "reveal" | "done";
+  questionIndex?: number;
+  questionCount?: number;
+  question?: string | null;
+  board?: { rank: number; open: boolean; text?: string; points?: number }[];
+  pot?: number;
+  strikes?: number;
+  controlTeam?: number | null;
+  faceoff?: { playerIds: (string | null)[]; names: (string | null)[]; endsAt: number; submitted: boolean[] } | null;
+  guesser?: { playerId: string; name: string | null; team: number; endsAt: number } | null;
+  lastRound?: { winnerTeam: number | null; winnerName: string | null; potAwarded: number; stolen: boolean } | null;
+};
 type RoomView = {
   title: string;
   gameType: string;
@@ -38,8 +52,8 @@ type RoomView = {
   round: number;
   countdownEndsAt: number | null;
   players: PlayerView[];
-  game: BingoPublic & QuizPublic;
-  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string } } | null;
+  game: BingoPublic & QuizPublic & SurveyPublic;
+  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string; team?: number; guessText?: string } } | null;
   standings: Standing[] | null;
 };
 
@@ -104,6 +118,12 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   // A fresh question means a fresh answer box (Quiz Board).
   const quizQuestionKey = view?.gameType === "quiz-board" ? view.game.current?.key : undefined;
   useEffect(() => { setAnswerDraft(""); }, [quizQuestionKey]);
+
+  // A fresh guess slot means a fresh guess box (Survey Showdown).
+  const surveySlotKey = view?.gameType === "survey-showdown"
+    ? [view.game.questionIndex, view.game.stage, view.game.guesser?.playerId || "", (view.game.faceoff?.playerIds || []).join(","), view.game.guesser?.endsAt || view.game.faceoff?.endsAt || ""].join(":")
+    : undefined;
+  useEffect(() => { setAnswerDraft(""); }, [surveySlotKey]);
 
   async function join() {
     const name = nameDraft.trim();
@@ -173,6 +193,11 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   const quiz = view.gameType === "quiz-board" ? view.game : null;
   const myTurn = !!quiz && !!me && quiz.phase === "pick" && quiz.turnPlayerId === me.id;
   const myAnswered = !!quiz && quiz.phase === "answer" && !!quiz.current && !!view.me && view.me.state.answerKey === quiz.current.key;
+  const survey = view.gameType === "survey-showdown" ? view.game : null;
+  const myFaceoffIndex = survey?.faceoff && me ? survey.faceoff.playerIds.findIndex(id => id === me.id) : -1;
+  const myFaceoffIn = myFaceoffIndex >= 0 && !!survey?.faceoff?.submitted[myFaceoffIndex];
+  const myGuessTurn = !!survey && !!me && (survey.stage === "play" || survey.stage === "steal") && survey.guesser?.playerId === me.id;
+  const myTeamIndex = survey?.teams && me ? survey.teams.findIndex(team => team.members.some(member => member.id === me.id)) : -1;
 
   return (
     <main className="gn-shell" style={{ "--gn-accent": accent } as React.CSSProperties}>
@@ -211,6 +236,9 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
           <p className="gn-kicker">🎲 Game Night · Lobby</p>
           <h1 className="gn-title">{view.title}</h1>
           <p className="gn-sub">Waiting for players — share the link with your friends!</p>
+          {view.gameType === "survey-showdown" && (
+            <p className="gn-hint">Two teams are dealt automatically when the game starts — you play for whichever team your seat gives you.</p>
+          )}
           <div className="gn-chips">
             {view.players.map(player => <PlayerChip key={player.id} player={player} />)}
           </div>
@@ -249,7 +277,129 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             <span className="gn-round">Round {view.round}</span>
           </header>
 
-          {quiz ? (
+          {survey ? (
+            <>
+              <div className="gn-survey-teams">
+                {(survey.teams || []).map((team, ti) => (
+                  <div key={ti} className={`gn-team-panel${team.control ? " gn-team-control" : ""}${myTeamIndex === ti ? " gn-team-mine" : ""}`} style={{ "--gn-team": team.color } as React.CSSProperties}>
+                    <div className="gn-team-head">
+                      <span className="gn-team-dot" aria-hidden="true" />
+                      <span className="gn-team-name">{team.name}</span>
+                      <span className="gn-team-score">{team.score}</span>
+                    </div>
+                    <div className="gn-team-members">
+                      {team.members.map(member => (
+                        <span key={member.id} className={`gn-team-member${me && member.id === me.id ? " gn-team-member-me" : ""}`}>
+                          {view.players.find(p => p.id === member.id)?.isCreator ? "⭐ " : ""}{member.name}{me && member.id === me.id ? " (you)" : ""}
+                        </span>
+                      ))}
+                    </div>
+                    {team.control && (survey.stage === "play" || survey.stage === "steal") && (
+                      <div className="gn-team-strikes" aria-label={`${survey.strikes ?? 0} of 3 strikes`}>
+                        {[0, 1, 2].map(i => <span key={i} className={i < (survey.strikes ?? 0) ? "gn-x gn-x-on" : "gn-x"} aria-hidden="true">✕</span>)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="gn-call-zone">
+                <div className="gn-call" key={`sq-${survey.questionIndex}`}>
+                  <span className="gn-call-label">Question {(survey.questionIndex ?? 0) + 1} of {survey.questionCount ?? 0} · Pot {survey.pot ?? 0}</span>
+                  <span className="gn-call-item gn-survey-question">{survey.question}</span>
+                  {(survey.stage === "faceoff" || survey.stage === "play" || survey.stage === "steal") && (
+                    <span className="gn-next-bar" key={`sbar-${surveySlotKey}`} style={{ animationDuration: `${Math.max(0, (survey.guesser?.endsAt || survey.faceoff?.endsAt || 0) - Date.now())}ms` }} />
+                  )}
+                </div>
+              </div>
+
+              <div className="gn-survey-board" aria-label="Survey board">
+                {(survey.board || []).map(slot => (
+                  <div key={slot.rank} className={`gn-slot${slot.open ? " gn-slot-open" : ""}`}>
+                    <span className="gn-slot-rank">{slot.rank}</span>
+                    {slot.open ? (
+                      <>
+                        <span className="gn-slot-text">{slot.text}</span>
+                        <span className="gn-slot-points">{slot.points}</span>
+                      </>
+                    ) : (
+                      <span className="gn-slot-cover" aria-hidden="true">· · ·</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {survey.stage === "faceoff" && survey.faceoff ? (
+                <div className="gn-survey-action">
+                  <p className="gn-progress-line" role="status">
+                    ⚔️ Face-off: {survey.faceoff.names.filter(Boolean).join(" vs ") || "…"}
+                  </p>
+                  {myFaceoffIndex >= 0 ? (
+                    myFaceoffIn ? (
+                      <p className="gn-progress-line" role="status">✓ Your answer is in — waiting on the other side…</p>
+                    ) : (
+                      <div className="gn-answer-row">
+                        <input
+                          className="gn-name-input gn-answer-input"
+                          value={answerDraft}
+                          onChange={event => setAnswerDraft(event.target.value)}
+                          onKeyDown={event => { if (event.key === "Enter" && answerDraft.trim()) act({ type: "guess", text: answerDraft }); }}
+                          placeholder="Name an answer…"
+                          maxLength={200}
+                          autoFocus
+                          aria-label="Your face-off answer"
+                        />
+                        <button type="button" className="gn-big-btn gn-answer-btn" onClick={() => act({ type: "guess", text: answerDraft })} disabled={busy || !answerDraft.trim()}>
+                          {busy ? "Locking in…" : "Lock it in"}
+                        </button>
+                      </div>
+                    )
+                  ) : (
+                    <p className="gn-hint">Whoever names the higher answer wins control for their team.</p>
+                  )}
+                </div>
+              ) : survey.stage === "play" || survey.stage === "steal" ? (
+                <div className="gn-survey-action">
+                  <p className="gn-progress-line" role="status">
+                    {survey.stage === "steal"
+                      ? `💥 Steal chance! ${survey.guesser?.name ?? "A player"} guesses for ${survey.teams?.[survey.guesser?.team ?? 0]?.name ?? "their team"} — one match takes the whole pot`
+                      : `${survey.guesser?.name ?? "A player"} is guessing for ${survey.teams?.[survey.controlTeam ?? 0]?.name ?? "their team"}`}
+                  </p>
+                  {myGuessTurn ? (
+                    <div className="gn-answer-row">
+                      <input
+                        className="gn-name-input gn-answer-input"
+                        value={answerDraft}
+                        onChange={event => setAnswerDraft(event.target.value)}
+                        onKeyDown={event => { if (event.key === "Enter" && answerDraft.trim()) act({ type: "guess", text: answerDraft }); }}
+                        placeholder="Name an answer…"
+                        maxLength={200}
+                        autoFocus
+                        aria-label="Your guess"
+                      />
+                      <button type="button" className="gn-big-btn gn-answer-btn" onClick={() => act({ type: "guess", text: answerDraft })} disabled={busy || !answerDraft.trim()}>
+                        {busy ? "Locking in…" : "Lock it in"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="gn-hint">{survey.stage === "steal" ? "If it matches, their team takes the pot." : "A match banks its points in the pot — three misses and the other team can steal."}</p>
+                  )}
+                </div>
+              ) : survey.stage === "reveal" ? (
+                <div className="gn-survey-action">
+                  <p className="gn-progress-line" role="status">
+                    {survey.lastRound
+                      ? survey.lastRound.winnerName
+                        ? survey.lastRound.stolen
+                          ? `💥 Stolen! ${survey.lastRound.winnerName} takes the pot — ${survey.lastRound.potAwarded} points!`
+                          : `🏆 ${survey.lastRound.winnerName} takes the pot — ${survey.lastRound.potAwarded} points!`
+                        : "Nobody found the board that time — no points."
+                      : "Round over!"}
+                  </p>
+                </div>
+              ) : null}
+            </>
+          ) : quiz ? (
             <>
               <div className="gn-standings-strip" aria-label="Scores">
                 {[...view.players].sort((a, b) => (quiz.scores?.[b.id] ?? 0) - (quiz.scores?.[a.id] ?? 0)).map(player => (
@@ -439,14 +589,15 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
               )}
               {view.standings[0] && (
                 <p className="gn-winner-line">
-                  {view.standings[0].playerId === me.id ? "🎉 You won! " : `🎉 ${view.standings[0].name} wins! `}
-                  {view.standings[0].detail}
+                  {view.gameType === "survey-showdown"
+                    ? `🎉 ${view.standings[0].detail}`
+                    : <>{view.standings[0].playerId === me.id ? "🎉 You won! " : `🎉 ${view.standings[0].name} wins! `}{view.standings[0].detail}</>}
                 </p>
               )}
             </>
           )}
           <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "play-again" })} disabled={busy}>
-            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : "↻ Play again — same game, fresh cards"}
+            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : "↻ Play again — same game, fresh cards"}
           </button>
           <p className="gn-hint">Anyone can press Play Again — the first press deals everyone back in.</p>
         </section>
