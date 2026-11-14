@@ -169,7 +169,7 @@ function ProductMockup() {
         <div style={overlayTitle}>NEON TRIVIA NIGHT</div>
         <div style={triviaGrid}>
           {cats.map(c => <div key={c} style={triviaCat}>{c}</div>)}
-          {values.flatMap(v => cats.map(c => <div key={c + v} style={triviaTile}>${v}</div>))}
+          {values.flatMap(v => cats.map(c => <div key={c + v} style={triviaTile}>{v}</div>))}
         </div>
         <div style={scoreStrip}>
           <div style={scoreChip}><span>🔴 Red Team</span><strong>1,200</strong></div>
