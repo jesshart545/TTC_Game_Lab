@@ -16,6 +16,7 @@ import { stageFitWidth } from "../lib/build-controls";
 import { assetPlaced } from "../lib/asset-filing";
 import { mediaKind } from "../lib/board-design";
 import { normalizePlacement, movePlacement, resizePlacement, toolShapePlacement } from '../lib/overlay-placement';
+import { standingPlacementTypes, standsPlaced } from '../lib/standing-placement';
 import { ControlAppearancePreview } from "./RuntimeActionLayers";
 import { standsOnOverlay } from "./StandingToolFace";
 import YouTubeHostPanel from "./YouTubeHostPanel";
@@ -326,6 +327,13 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
 
   const placedAssets = (project.assets || []).filter(a => assetPlaced(a) && a.url && a.role !== "background" && mediaKind(a) !== "audio");
   const placedBoards = (project.gameTools || []).filter(t => t.enabled && t.inOverlayBuild && (t.type === "blank-board" || t.type === "trivia-board"));
+  // Standing games get their own drag frames, always present like
+  // the boards' and assets' — before this they could only be
+  // dragged after selecting them through their dashboard button
+  // (which also fires the game), and the frame then sat at the
+  // generic default while the game itself stood centered, so the
+  // visible game could not be grabbed at all.
+  const standingDragTools = (project.gameTools || []).filter(t => standingPlacementTypes.includes(t.type) && standsPlaced(t));
   const toolPlacement = (t: GameTool): Placement => {
     const p = (t.config.placement || {}) as Partial<Placement>;
     return normalizePlacement({ x: p.x ?? 15, y: p.y ?? 15, width: p.width ?? 70, height: p.height ?? 60 });
@@ -366,7 +374,14 @@ export default function StageReview({ jewelPanel, onEnterJewel, sequenceRunning,
                   onSelect={() => setSelection({ kind: "tool", id: t.id })}
                   onCommit={placement => saveTool({ ...currentProject.current.gameTools.find(x => x.id === t.id)!, config: { ...currentProject.current.gameTools.find(x => x.id === t.id)!.config, placement } })} />
               ))}
-              {tool && tool.type !== 'youtube' && tool.type !== 'question-card' && tool.type !== 'blank-card' && tool.type !== 'random-picker' && tool.inOverlayBuild && !placedBoards.some(t => t.id === tool.id) && (
+              {standingDragTools.map(t => (
+                <StageDragBox key={'standing-' + t.id} label={t.name} canvasRef={stageFrameRef}
+                  placement={toolPlacement(t)}
+                  selected={selection?.kind === "tool" && selection.id === t.id}
+                  onSelect={() => setSelection({ kind: "tool", id: t.id })}
+                  onCommit={placement => saveTool({ ...currentProject.current.gameTools.find(x => x.id === t.id)!, config: { ...currentProject.current.gameTools.find(x => x.id === t.id)!.config, placement } })} />
+              ))}
+              {tool && tool.type !== 'youtube' && tool.type !== 'question-card' && tool.type !== 'blank-card' && tool.type !== 'random-picker' && tool.inOverlayBuild && !placedBoards.some(t => t.id === tool.id) && !standingDragTools.some(t => t.id === tool.id) && (
                 <StageDragBox key={'tool-' + tool.id} label={tool.name} canvasRef={stageFrameRef}
                   placement={toolPlacement(tool)}
                   selected

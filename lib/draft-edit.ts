@@ -4,6 +4,7 @@ import {assignControlAction,controlConnectionError} from "./control-connections"
 import {cleanBackdropText} from "./backdrop-text";
 import {cleanTriviaQuestions} from "./quiz";
 import {infoTypes,cleanInfoEntries} from "./game-tools";
+import {standingPlacementTypes} from "./standing-placement";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -132,6 +133,24 @@ export function applyDraftChanges(project: Project, input: unknown) {
       });
     }
     if (Object.keys(config).length) { tool.config = { ...tool.config, ...config, ...Object.fromEntries(["appearance","placement","questionCard","answerCard"].filter(k=>Object.keys(object(config[k])).length).map(k=>[k,{...object(tool.config[k]),...object(config[k])}])) }; applied++; }
+    // A tool's placement and its button's shown result are ONE
+    // placement in the product: the hand surfaces keep them in
+    // agreement on every save (StageReview.saveTool writes both),
+    // but this applier wrote only the tool — so a Jewel move landed
+    // on the standing game while its button kept firing the run at
+    // the old generic frame, and the two drifted apart. Mirror the
+    // hand behavior: a stated tool placement lands on the shown
+    // result of every control that is this tool alone.
+    if (Object.keys(object(config.placement)).length) {
+      const placed = object(tool.config.placement);
+      for (const control of next.controls) {
+        if (control.toolIds?.length === 1 && control.toolIds[0] === tool.id) {
+          const result: Record<string, unknown> = { ...(control.overlayResult || { x: 0, y: 0, width: 100, height: 100, entrance: "fade", exit: "fade", entranceSeconds: .3, exitSeconds: .3, layer: 10 }) };
+          for (const key of ["x", "y", "width", "height"] as const) if (typeof placed[key] === "number") result[key] = placed[key];
+          control.overlayResult = result as OverlayResult;
+        }
+      }
+    }
   }
   if (Array.isArray(changes.controls)) for (const raw of changes.controls) {
     const edit = object(raw), control = next.controls.find(c => c.id === edit.id); if (!control) continue;
@@ -145,6 +164,20 @@ export function applyDraftChanges(project: Project, input: unknown) {
     for (const key of ["x", "y", "width", "height", "entranceSeconds", "exitSeconds", "layer"] as const) { const value = number(result[key], key === "width" || key === "height" ? 1 : 0, key === "layer" ? 100 : 100); if (value !== undefined) { placement[key] = value; touched = true; applied++; } }
     for (const key of ["entrance", "exit"] as const) if (["none", "fade", "slide", "zoom"].includes(String(result[key]))) { placement[key] = result[key] as OverlayResult[typeof key]; touched = true; applied++; }
     if (touched) control.overlayResult = placement;
+    // The other direction of the same agreement, for a standing
+    // game: its button's shown result is where a move aimed at the
+    // button lands, but the standing face reads only the tool's own
+    // config.placement — without this write the game itself never
+    // moved. (StageReview's updateControl makes the same write for
+    // a hand drag of a button's result.)
+    if (touched && control.toolIds?.length === 1) {
+      const tool = next.gameTools.find(t => t.id === control.toolIds![0]);
+      if (tool && standingPlacementTypes.includes(tool.type)) {
+        const merged: Record<string, unknown> = { ...object(tool.config.placement) };
+        for (const key of ["x", "y", "width", "height"] as const) if (typeof placement[key] === "number") merged[key] = placement[key];
+        tool.config = { ...tool.config, placement: merged };
+      }
+    }
   }
   return { project: next, applied };
 }

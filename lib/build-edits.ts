@@ -5,6 +5,7 @@ import {applyDraftChanges,normalizeDraftChanges} from './draft-edit';
 import {mergeCityCrimeSceneMysteryPatch} from './city-crime-scene';
 import {addCreationControl} from './build-controls';
 import {toolDefaults,infoTypes,cleanInfoEntries} from './game-tools';
+import {assignStandingPlacements,standingPlacementTypes} from './standing-placement';
 import {cleanTriviaQuestions} from './quiz';
 import {createCardSystem} from './question-cards';
 const record=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
@@ -40,7 +41,14 @@ export function applyBuildChanges(project:Project,input:unknown){
    next={...withCards,assetPools:next.assetPools,gameTools:withCards.gameTools.map(t=>t.id===cardTool.id?{...t,name:String(item.name||t.name).slice(0,80),config:{...t.config,...(poolId?{poolId}:{}),...(Object.keys(record(cfg.questionCard)).length?{questionCard:{...record(t.config.questionCard),...record(cfg.questionCard)}}:{}),...(Object.keys(record(cfg.answerCard)).length?{answerCard:{...record(t.config.answerCard),...record(cfg.answerCard)}}:{})}}:t)};
    extra++;continue;
   }
-  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{}),...(infoTypes.includes(item.type)?{entries:cleanInfoEntries(record(item.config).entries)}:{})}});extra++;if(item.connect===true)created.push(id);
+  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{}),...(infoTypes.includes(item.type)?{entries:cleanInfoEntries(record(item.config).entries)}:{})}});
+  // A slotted standing type whose placement the model did not state
+  // must not inherit a stock default placement (the random picker's
+  // centered default would otherwise read as its chosen home and
+  // block every slot for the next game placed). The slot pass at the
+  // end of this function assigns the placement instead.
+  if(standingPlacementTypes.includes(item.type)&&!Object.keys(record(record(item.config).placement)).length){const createdTool=next.gameTools[next.gameTools.length-1];const{placement:_stock,...restConfig}=createdTool.config;createdTool.config=restConfig;}
+  extra++;if(item.connect===true)created.push(id);
  }
  for(const raw of Array.isArray(changes.assetPools)?changes.assetPools:[]){
   const item=record(raw),keys=Array.isArray(item.assetKeys)?item.assetKeys.filter((key:unknown)=>typeof key==='string'&&next.assets.some(a=>(a.storageKey||a.name)===key)):null;
@@ -171,6 +179,10 @@ export function applyBuildChanges(project:Project,input:unknown){
  }
  if(Array.isArray(effectiveChanges.controlOrder)){const order=effectiveChanges.controlOrder;next.controls=[...next.controls].sort((a,b)=>{const ai=order.indexOf(a.id),bi=order.indexOf(b.id);return (ai<0?order.length:ai)-(bi<0?order.length:bi);});extra++;}
  if(Array.isArray(effectiveChanges.removeControls)){const ids=new Set(effectiveChanges.removeControls);const count=next.controls.length;next.controls=next.controls.filter(c=>!ids.has(c.id));extra+=count-next.controls.length;}
- return {project:next,applied:result.applied+extra,warnings};
+ // Standing games placed by this edit (created, connected, or wired
+ // by a sequence step) leave with a real placement — the next free
+ // slot — instead of stacking on the canvas center. Stated and
+ // existing placements are never moved (lib/standing-placement).
+ return {project:assignStandingPlacements(next),applied:result.applied+extra,warnings};
 }
 

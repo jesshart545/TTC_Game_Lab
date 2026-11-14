@@ -31,8 +31,15 @@ export function validateExplicitSettings(request:string,response:unknown){
  for(const field of ['x','y','width','height']){
   const match=request.match(new RegExp('\\b'+field+'\\s*(?:to|of|at|=|:)??\\s*(\\d+(?:\\.\\d+)?)\\s*(%|pixels?|px)?','i'));
   if(!match)continue;
-  const expected=Number(match[1])*(match[2]&&match[2]!=='%'?100/(field==='x'||field==='width'?1920:1080):1);
-  if(!placements.some(p=>Number.isFinite(p[field])&&Math.abs(p[field]-expected)<.1))throw new Error('Include the requested '+field+' '+match[1]+(match[2]||'%')+' in the saved placement.');
+  // A stated size or position with no unit is in PERCENT — unless the
+  // number itself cannot be one: a placement field never exceeds
+  // 100, so a bare value above 100 can only be pixels on the
+  // 1920x1080 canvas, the same conversion the model is instructed to
+  // make. Treating "width 960" as 960% demanded a placement the
+  // model could never return, so the whole move was refused.
+  const asPixels=match[2]?match[2]!=='%':Number(match[1])>100;
+  const expected=Number(match[1])*(asPixels?100/(field==='x'||field==='width'?1920:1080):1);
+  if(!placements.some(p=>Number.isFinite(p[field])&&Math.abs(p[field]-expected)<.1))throw new Error('Include the requested '+field+' '+match[1]+(match[2]||(asPixels?'px':'%'))+' in the saved placement.');
  }
  const appearances=[...tools.map(t=>record(t.config).appearance),...controls.map(c=>c.appearance),...tools.flatMap(t=>[record(t.config).questionCard,record(t.config).answerCard])].map(record);
  if(/\b(?:transparent|no background|remove (?:the |its |my )?background)\b/i.test(request)&&!appearances.some(a=>a.transparentBackground===true||a.backgroundColor==='transparent'))throw new Error('Save the requested transparent background with appearance.transparentBackground true, preserving the tool content.');
