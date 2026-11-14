@@ -368,7 +368,7 @@ function PrizeWheelDemo(props: GameshowWorkshopProps) {
           }}>Spin for money</button>
           <button type="button" className="gsw-vchip" onClick={() => { setTotal(0); setRun(null); }}>New player (reset)</button>
         </div>
-        <p className="gsw-demostatus">{fromProject ? "Your prize wheel and your values — totals add up, and over $1.00 busts, exactly like the real game." : "Values run 5¢ to $1.00 — spin twice and watch the total climb; over $1.00 busts. Jewel builds yours with your values."}</p>
+        <p className="gsw-demostatus">{fromProject ? "Your prize wheel and your values — totals add up, and over 1.00 busts, exactly like the real game." : "Values run 5¢ to 1.00 — spin twice and watch the total climb; over 1.00 busts. Jewel builds yours with your values."}</p>
       </DemoFrame>
       <ChangeList title="What you can change — the Big Prize Wheel" items={TOOL_CHANGES["prize-wheel"]} onAsk={onAsk} />
     </>
@@ -454,7 +454,7 @@ function CliffhangerDemo(props: GameshowWorkshopProps) {
         <CliffhangerDisplay outcome={outcome} elapsed={elapsed} textColor={appearanceColor(tool)} />
         {outcome.phase !== "guess" && !outcome.fell && (
           <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
-            <span className="gsw-vchip">Price the {item.label}: $</span>
+            <span className="gsw-vchip">Price the {item.label}:</span>
             <input
               className="gsw-guess" type="number" min={0} value={guessText} placeholder="your guess"
               onChange={event => setGuessText(event.target.value)} aria-label={`Your guess for the ${item.label}`}
@@ -470,7 +470,7 @@ function CliffhangerDemo(props: GameshowWorkshopProps) {
           {outcome.fell
             ? "He fell! Off by too much — in the real game, that’s the round over."
             : outcome.phase === "guess"
-              ? `Off by $${outcome.diff} → ${outcome.steps} step${outcome.steps === 1 ? "" : "s"} up. ${stepsToFall - position} from the edge.`
+              ? `Off by ${outcome.diff} → ${outcome.steps} step${outcome.steps === 1 ? "" : "s"} up. ${stepsToFall - position} from the edge.`
               : fromProject
                 ? "Your items and prices — every dollar off moves him one step toward the edge."
                 : "The real game with its built-in items — every dollar off moves him toward the edge. Jewel stocks yours with your items."}
