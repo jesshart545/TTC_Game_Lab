@@ -20,6 +20,17 @@ type BingoPublic = {
   nextDrawInMs?: number | null;
   progress?: Record<string, { marks: number; away: number | null }>;
 };
+type QuizPublic = {
+  categories?: { name: string; squares: { value: number; used: boolean }[] }[];
+  phase?: "pick" | "answer" | "reveal";
+  turnPlayerId?: string | null;
+  turnName?: string | null;
+  current?: { key: string; categoryName: string; value: number; prompt: string; endsAt: number | null; answeredCount: number; playerCount: number } | null;
+  reveal?: { answer: string; value: number; results: { playerId: string; name: string; answered: boolean; correct: boolean; delta: number; answerText: string }[] } | null;
+  scores?: Record<string, number>;
+  remaining?: number;
+  totalSquares?: number;
+};
 type RoomView = {
   title: string;
   gameType: string;
@@ -27,8 +38,8 @@ type RoomView = {
   round: number;
   countdownEndsAt: number | null;
   players: PlayerView[];
-  game: BingoPublic;
-  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[] } } | null;
+  game: BingoPublic & QuizPublic;
+  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string } } | null;
   standings: Standing[] | null;
 };
 
@@ -40,6 +51,7 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   const [missing, setMissing] = useState(false);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
+  const [answerDraft, setAnswerDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -88,6 +100,10 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
     const timer = setTimeout(() => setFlash(""), 3200);
     return () => clearTimeout(timer);
   }, [flash]);
+
+  // A fresh question means a fresh answer box (Quiz Board).
+  const quizQuestionKey = view?.gameType === "quiz-board" ? view.game.current?.key : undefined;
+  useEffect(() => { setAnswerDraft(""); }, [quizQuestionKey]);
 
   async function join() {
     const name = nameDraft.trim();
@@ -154,6 +170,9 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   const myMarked = new Set(view.me?.state.markedCells || []);
   const drawn = new Set(view.game.drawnItems || []);
   const myProgress = me ? view.game.progress?.[me.id] : undefined;
+  const quiz = view.gameType === "quiz-board" ? view.game : null;
+  const myTurn = !!quiz && !!me && quiz.phase === "pick" && quiz.turnPlayerId === me.id;
+  const myAnswered = !!quiz && quiz.phase === "answer" && !!quiz.current && !!view.me && view.me.state.answerKey === quiz.current.key;
 
   return (
     <main className="gn-shell" style={{ "--gn-accent": accent } as React.CSSProperties}>
@@ -230,6 +249,97 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             <span className="gn-round">Round {view.round}</span>
           </header>
 
+          {quiz ? (
+            <>
+              <div className="gn-standings-strip" aria-label="Scores">
+                {[...view.players].sort((a, b) => (quiz.scores?.[b.id] ?? 0) - (quiz.scores?.[a.id] ?? 0)).map(player => (
+                  <span key={player.id} className={`gn-strip-chip${player.me ? " gn-strip-me" : ""}${quiz.phase === "pick" && quiz.turnPlayerId === player.id ? " gn-strip-turn" : ""}`}>
+                    {player.isCreator ? "⭐ " : ""}{player.name}: <strong>{quiz.scores?.[player.id] ?? 0}</strong>
+                    {quiz.phase === "pick" && quiz.turnPlayerId === player.id ? " · picking" : ""}
+                  </span>
+                ))}
+              </div>
+
+              {quiz.phase === "answer" && quiz.current ? (
+                <div className="gn-call-zone">
+                  <div className="gn-call" key={quiz.current.key}>
+                    <span className="gn-call-label">{quiz.current.categoryName} · {quiz.current.value} points</span>
+                    <span className="gn-call-item gn-quiz-prompt">{quiz.current.prompt}</span>
+                    {quiz.current.endsAt && (
+                      <span className="gn-next-bar" key={`bar-${quiz.current.key}`} style={{ animationDuration: `${Math.max(0, quiz.current.endsAt - Date.now())}ms` }} />
+                    )}
+                  </div>
+                  {myAnswered ? (
+                    <p className="gn-progress-line" role="status">
+                      ✓ Your answer is in{view.me?.state.answerText ? `: “${view.me.state.answerText}”` : ""} — {quiz.current.answeredCount} of {quiz.current.playerCount} answered
+                    </p>
+                  ) : (
+                    <div className="gn-answer-row">
+                      <input
+                        className="gn-name-input gn-answer-input"
+                        value={answerDraft}
+                        onChange={event => setAnswerDraft(event.target.value)}
+                        onKeyDown={event => { if (event.key === "Enter" && answerDraft.trim()) act({ type: "answer", text: answerDraft }); }}
+                        placeholder="Type your answer…"
+                        maxLength={200}
+                        autoFocus
+                        aria-label="Your answer"
+                      />
+                      <button type="button" className="gn-big-btn gn-answer-btn" onClick={() => act({ type: "answer", text: answerDraft })} disabled={busy || !answerDraft.trim()}>
+                        {busy ? "Locking in…" : "Lock it in"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : quiz.phase === "reveal" && quiz.reveal ? (
+                <div className="gn-call-zone">
+                  <div className="gn-call gn-reveal-card">
+                    <span className="gn-call-label">The answer</span>
+                    <span className="gn-call-item">{quiz.reveal.answer}</span>
+                  </div>
+                  <div className="gn-reveal-list">
+                    {quiz.reveal.results.map(result => (
+                      <div key={result.playerId} className={`gn-reveal-row${me && result.playerId === me.id ? " gn-reveal-me" : ""}`}>
+                        <span className="gn-reveal-name">{result.name}{me && result.playerId === me.id ? " (you)" : ""}</span>
+                        <span className="gn-reveal-answer">{result.answered ? result.answerText : "no answer"}</span>
+                        <span className={result.correct ? "gn-delta gn-delta-good" : result.answered ? "gn-delta gn-delta-bad" : "gn-delta"}>
+                          {result.correct ? `✓ +${result.delta}` : result.answered ? `✗ ${result.delta}` : "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="gn-progress-line" role="status">
+                    {myTurn ? "🎯 Your pick — choose a square!" : quiz.turnName ? `${quiz.turnName} is choosing a square…` : "Choosing the next square…"}
+                  </p>
+                  <div className="gn-quiz-board" role="grid" aria-label="Quiz board" style={{ gridTemplateColumns: `repeat(${Math.max(1, (quiz.categories || []).length)}, 1fr)` }}>
+                    {(quiz.categories || []).map((category, ci) => (
+                      <div key={ci} className="gn-quiz-col">
+                        <div className="gn-quiz-cat">{category.name}</div>
+                        {category.squares.map((square, qi) => (
+                          <button
+                            key={qi}
+                            type="button"
+                            role="gridcell"
+                            className={`gn-quiz-square${square.used ? " gn-quiz-used" : ""}${myTurn && !square.used ? " gn-quiz-live" : ""}`}
+                            onClick={() => act({ type: "pick", category: ci, question: qi })}
+                            disabled={!myTurn || square.used || busy}
+                            aria-label={square.used ? `${category.name} ${square.value} — already played` : `${category.name} for ${square.value} points`}
+                          >
+                            {square.used ? "✓" : square.value}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="gn-hint">{quiz.remaining ?? 0} squares left on the board</p>
+                </>
+              )}
+            </>
+          ) : (
+            <>
           <div className="gn-call-zone">
             {view.game.currentItem ? (
               <div className="gn-call" key={view.game.drawCount}>
@@ -297,6 +407,8 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
               );
             })}
           </div>
+            </>
+          )}
         </section>
       ) : (
         <section className="gn-card gn-finished">
@@ -334,7 +446,7 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             </>
           )}
           <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "play-again" })} disabled={busy}>
-            ↻ Play again — same game, fresh cards
+            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : "↻ Play again — same game, fresh cards"}
           </button>
           <p className="gn-hint">Anyone can press Play Again — the first press deals everyone back in.</p>
         </section>

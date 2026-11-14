@@ -81,7 +81,10 @@ export async function POST(request: Request) {
     : DRAFT_SYSTEM + `\nCity Crime Scene (tool type "city-crime-scene") is a restricted feature available only to select accounts. This user does not have access. Never create a city-crime-scene tool. If the user asks for it, explain briefly that it is not available for their account.`;
   const templateInfo = body.project?.templateId ? getGameTemplate(body.project.templateId) : undefined;
   const templateNote = templateInfo ? `\nThis project was started from the "${templateInfo.name}" game template. ${templateInfo.description} When the user asks to customize it, help them modify the template's questions, content, styling, rules, or structure. You can edit any part of the template.` : "";
-  const draftSystem = draftSystemBase + templateNote;
+  const gameNightNote = body.project?.kind === "multiplayer"
+    ? `\nGAME NIGHT PROJECTS — This project is an Off-Stream Multiplayer Game Night: there is no host and no host dashboard. Friends join by a shared link, the game runs itself, and the creator plays along as one of the players. Two games can be played from what you build here. BINGO plays from a card list: the call items live in a card-list tool, and it needs at least 5 items. QUIZ BOARD — a categories-and-points quiz — plays from this project's trivia: a trivia-board tool's categories and questions, or a trivia-list whose questions each carry a category; a playable quiz needs at least 6 questions across at least 2 categories, with plain-number point values (never a dollar sign on anything). When the creator asks for a quiz game, put the questions into a trivia board or a categorized trivia list; when they ask for bingo, put the items into a card list. Never wire dashboard buttons, controls or connections for a game night project — there is no dashboard to wire; after the creator publishes, they share the play link and the game runs itself.`
+    : "";
+  const draftSystem = draftSystemBase + templateNote + gameNightNote;
   const draftContext = draftEdit ? {
     request: body.request, recentConversation: Array.isArray(body.history) ? body.history.slice(-10) : [], project: body.project,
     selectedImageKey: body.selectedImageKey, selectedAssetKey:body.selectedAssetKey, workspaceStage: body.workspaceStage,
