@@ -8,6 +8,14 @@ export function gameEntries(tool:GameTool):GameEntry[]{
  const entries=Array.isArray(tool.config.entries)?tool.config.entries:[];
  return entries.filter((e):e is GameEntry=>!!e&&typeof e==='object'&&typeof e.id==='string'&&typeof e.name==='string');
 }
+/** Normalize entries being saved for an info tool: gameEntries only
+ *  accepts entries carrying a string id and a name, so an entry saved
+ *  without an id (a model-built gift guide, say) would silently never
+ *  appear. Keep provided ids; assign one when missing — the same
+ *  treatment the card-list path gives its entries. */
+export function cleanInfoEntries(raw:unknown):Record<string,unknown>[]{
+ return (Array.isArray(raw)?raw:[]).filter((e:any)=>!!e&&typeof e==='object'&&typeof e.name==='string'&&!!e.name.trim()).slice(0,500).map((e:any)=>({...e,id:typeof e.id==='string'&&e.id?e.id:crypto.randomUUID(),name:String(e.name).slice(0,200)}));
+}
 export function toolDefaults(type:GameToolType):Record<string,unknown>{
  const defaults:Partial<Record<GameToolType,Record<string,unknown>>>={
   wheel:{title:'Game Wheel',segments:['Prize','Challenge','Bonus','Mystery']},
@@ -15,7 +23,7 @@ export function toolDefaults(type:GameToolType):Record<string,unknown>{
   countdown:{seconds:10},poll:{question:'Choose what happens next',options:['Option A','Option B']},dice:{sides:6},'coin-toss':{placement:{x:35,y:20,width:30,height:55}},plinko:{title:'Plinko',slots:['10','50','100','500','1000','500','100','50','10'],rows:9,pegColor:'#8b9bb4',ballColor:'#ff5d5d',slotColor:'#154c69',alternateSlotColor:'#512b75'},
   'higher-lower':{title:'Higher or Lower',cards:[{label:'4',value:4},{label:'9',value:9},{label:'2',value:2},{label:'7',value:7},{label:'K',value:13},{label:'5',value:5},{label:'A',value:1},{label:'Q',value:12},{label:'6',value:6},{label:'J',value:11}]},
   cliffhanger:{title:'Cliffhanger',items:[{label:'Coffee maker',price:49},{label:'Bluetooth speaker',price:79},{label:'Stand mixer',price:129}],stepsToFall:25,dollarsPerStep:1},
-  'prize-wheel':{title:'Big Wheel',values:['5¢','10¢','15¢','20¢','25¢','30¢','35¢','40¢','45¢','50¢','55¢','60¢','65¢','70¢','75¢','80¢','85¢','90¢','95¢','$1.00'],slotColor:'#b3123f',alternateSlotColor:'#0f6b4f'},
+  'prize-wheel':{title:'Big Wheel',values:['5¢','10¢','15¢','20¢','25¢','30¢','35¢','40¢','45¢','50¢','55¢','60¢','65¢','70¢','75¢','80¢','85¢','90¢','95¢','1.00'],slotColor:'#b3123f',alternateSlotColor:'#0f6b4f'},
   'blank-board':{title:'Custom Board',areas:[]},'city-crime-scene':{title:'City Crime Scene',mystery:cityCrimeSceneDefaults(),placement:{x:8,y:8,width:84,height:84}},youtube:{placement:{x:15,y:15,width:70,height:70}},
   scoreboard:{entries:[]},'game-tool-list':{entries:[]},
  };

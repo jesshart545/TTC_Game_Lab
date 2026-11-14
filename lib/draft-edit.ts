@@ -3,6 +3,7 @@ import {assetPlaced} from "./asset-filing";
 import {assignControlAction,controlConnectionError} from "./control-connections";
 import {cleanBackdropText} from "./backdrop-text";
 import {cleanTriviaQuestions} from "./quiz";
+import {infoTypes,cleanInfoEntries} from "./game-tools";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -118,6 +119,7 @@ export function applyDraftChanges(project: Project, input: unknown) {
     const config = object(edit.config);
     if(tool.type==='trivia-list'&&Array.isArray(config.questions))config.questions=cleanTriviaQuestions(config.questions);
     if(tool.type==='card-list'&&Array.isArray(config.entries))config.entries=config.entries.filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).slice(0,500).map((e:any)=>({...e,id:e.id||crypto.randomUUID(),text:e.text.slice(0,20000)}));
+    if(infoTypes.includes(tool.type)&&Array.isArray(config.entries))config.entries=cleanInfoEntries(config.entries);
     if(tool.type==='card-list'&&config.makeCardsFromEntries===true){
       const entries=Array.isArray(config.entries)?config.entries:Array.isArray(tool.config.entries)?tool.config.entries:[];
       config.cards=entries.map((e:any)=>({...e,id:crypto.randomUUID(),design:{}}));delete config.makeCardsFromEntries;
