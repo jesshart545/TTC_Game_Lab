@@ -91,6 +91,8 @@ export function detailedChangeLines(before: Project, after: Project): string[] {
     const old = beforeTools.get(tool.id);
     if (!old) { lines.push(`Added "${tool.name}"`); continue; }
     if (old.name !== tool.name) lines.push(`Renamed "${old.name}" to "${tool.name}"`);
+    const newPlacement = tool.config?.placement as { x?: unknown; y?: unknown; width?: unknown; height?: unknown } | undefined;
+    if (newPlacement && JSON.stringify(old.config?.placement || null) !== JSON.stringify(newPlacement)) lines.push(`"${tool.name}": size ${px(newPlacement.width, CANVAS_W)} × ${px(newPlacement.height, CANVAS_H)}, placed at ${px(newPlacement.x, CANVAS_W)}, ${px(newPlacement.y, CANVAS_H)}`);
     if (tool.config?.seconds !== undefined && old.config?.seconds !== tool.config?.seconds) lines.push(`"${tool.name}": length set to ${tool.config.seconds} seconds`);
     const oldEntries = Array.isArray(old.config?.entries) ? old.config.entries.length : undefined;
     const newEntries = Array.isArray(tool.config?.entries) ? tool.config.entries.length : undefined;

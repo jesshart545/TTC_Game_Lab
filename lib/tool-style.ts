@@ -8,5 +8,10 @@ export function overlayToolPlacement(tool:GameTool):CSSProperties {
  const p=tool.config.placement as Record<string,unknown>|undefined;if(!p)return {};
  const bound=(v:unknown,d:number,min:number,max:number)=>Number.isFinite(Number(v))?Math.max(min,Math.min(max,Number(v))):d;
  const x=bound(p.x,15,0,99),y=bound(p.y,15,0,99),width=bound(p.width,70,1,100-x),height=bound(p.height,60,1,100-y);
- return {position:"absolute",left:x+"%",top:y+"%",width:width+"%",height:height+"%",right:"auto",bottom:"auto",maxWidth:"none",maxHeight:"none"};
+ // transform:"none" is load-bearing: the .runtime-game-tool class
+ // centers unplaced tools with translate(-50%,-50%), and an inline
+ // left/top does not clear it — a placed tool would render offset
+ // by half its own size from the placement every other surface
+ // (the Set the Stage drag frame, the saved values) says it has.
+ return {position:"absolute",left:x+"%",top:y+"%",width:width+"%",height:height+"%",right:"auto",bottom:"auto",maxWidth:"none",maxHeight:"none",transform:"none"};
 }

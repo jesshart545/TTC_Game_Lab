@@ -163,3 +163,100 @@ assert(!layer.includes('chance-plinko')&&!layer.includes('runtime-tool-plinko'),
 // already followed this rule; the chance games now do too).
 assert(overlay.includes('if(activeTool.config?.triggerOnly&&(activeTool.type==="plinko"||activeTool.type==="higher-lower"||activeTool.type==="cliffhanger"||activeTool.type==="prize-wheel"))return null'),'published overlay renders nothing — no empty frame — for an unfired trigger-only chance game');
 console.log('PASS: wiring a chance game\'s play button places it standing (not trigger-only) with its button intact; explicit triggerOnly stays button-only and renders no frame anywhere.');
+
+/* ---------- (e) Placed standing games get real, separate placements ----------
+   Regression for the 2026-11-14 live recheck: Jewel placed Plinko,
+   Higher or Lower, Cliffhanger and the Big Prize Wheel in "Standing
+   Games Recheck" and all four rendered stacked at the same central
+   position. Their creation defaults carry no placement, no creation
+   path assigned one, overlayToolPlacement returned {} and the
+   .runtime-game-tool CSS class centered every one of them. Jewel's
+   move edits then failed outright or landed on the wrong copy of
+   the placement. The pins below cover the whole chain. */
+const {assignStandingPlacements,standingSlots}=loadModule('lib/standing-placement.ts');
+const {overlayToolPlacement}=loadModule('lib/tool-style.ts');
+const {validateExplicitSettings}=loadModule('lib/ai-edit-validation.ts');
+const rectOverlap=(a,b)=>{const w=Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x);const h=Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y);return w>0&&h>0?w*h:0;};
+
+// Creation through the Jewel path, one edit per game (the recheck's
+// shape): every placed game leaves with a placement, and no two
+// placements substantially overlap.
+let built=project([]);
+for(const [type,config] of [['plinko',{slots:['10','50','100'],rows:8}],['higher-lower',{cards:[{label:'7',value:7}]}],['cliffhanger',{items:[{label:'Lamp',price:20}]}],['prize-wheel',{values:['5¢','1.00']}]]){
+  built=applyBuildChanges(built,{newTools:[{type,name:type,config,connect:true}]}).project;
+}
+const placedTools=built.gameTools.filter(t=>standingSlots&&t.config.placement);
+assert.equal(placedTools.length,4,'every Jewel-placed chance game leaves creation with a placement');
+assert.deepEqual(built.gameTools.find(t=>t.type==='plinko').config.placement,standingSlots[0],'the first standing game takes the center slot');
+for(let i=0;i<placedTools.length;i++)for(let j=i+1;j<placedTools.length;j++){
+  const a=placedTools[i].config.placement,b=placedTools[j].config.placement;
+  assert(rectOverlap(a,b)<=0.2*Math.min(a.width*a.height,b.width*b.height),`placements of ${placedTools[i].type} and ${placedTools[j].type} do not stack`);
+}
+// The same four in ONE creation edit slot in order too.
+const batch=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{},connect:true},{type:'higher-lower',name:'H',config:{},connect:true},{type:'cliffhanger',name:'C',config:{},connect:true},{type:'prize-wheel',name:'W',config:{},connect:true}]}).project;
+assert.equal(JSON.stringify(batch.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,4)),'four games created in one edit take center + three quadrants in order');
+// A lone standing game is unchanged in spirit: the center slot.
+const lone=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{},connect:true}]}).project.gameTools[0];
+assert.deepEqual(lone.config.placement,standingSlots[0],'a single standing game takes the center slot');
+// An unplaced (not connected) tool is not slotted — it does not stand.
+const shelved=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{}}]}).project.gameTools[0];
+assert(!shelved.config.placement,'a tool that is not placed on the overlay build gets no slot');
+// A placement stated at creation is respected, never overwritten.
+const stated=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{placement:{x:60,y:60,width:30,height:30}},connect:true}]}).project.gameTools[0];
+assert.equal(JSON.stringify(stated.config.placement),JSON.stringify({x:60,y:60,width:30,height:30}),'a placement stated at creation is kept exactly');
+// A partial statement is completed from a slot, not replaced.
+const partial=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{placement:{x:0,y:0}},connect:true}]}).project.gameTools[0];
+assert.equal(partial.config.placement.x,0);assert.equal(partial.config.placement.y,0);
+assert.equal(typeof partial.config.placement.width,'number','a partial placement is completed with a slot size');
+// Existing saved placements are never moved by a later edit.
+const kept=applyBuildChanges(batch,{gameTools:[{id:batch.gameTools[0].id,config:{slots:['1','2']}}]}).project;
+assert.equal(JSON.stringify(kept.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,4)),'an unrelated later edit never re-slots placed games');
+// The slot pass itself: deterministic, and a no-op (same object) when
+// nothing needs a placement.
+assert.equal(assignStandingPlacements(batch),batch,'assignStandingPlacements returns the project untouched when every standing game is placed');
+const healed=assignStandingPlacements(project([tool('plinko',{}),tool('prize-wheel',{})]));
+assert.equal(JSON.stringify(healed.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,2)),'the slot pass heals saved unplaced standing games in saved order');
+console.log('PASS: placed standing games leave every creation path with the next free slot — center, then quadrants — stated placements respected, existing ones never moved.');
+
+/* ---------- (f) Jewel move edits land on the placement the overlay reads ---------- */
+// The exact request that failed live: pixel sizes with no unit word.
+// The validator must read a bare value over 100 as pixels (a percent
+// placement can never exceed 100) and accept the model's converted
+// percentages, instead of demanding an impossible "width 960%".
+const moveProject=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'Plinko',config:{slots:['10','50','100']},connect:true}]}).project;
+const moveId=moveProject.gameTools[0].id;
+const moveChanges={gameTools:[{id:moveId,config:{placement:{x:0,y:0,width:50,height:50}}}]};
+validateExplicitSettings('Move Plinko to x=0, y=0, width 960, height 540',{reply:'Done',changes:moveChanges});
+validateExplicitSettings('Move Plinko to x=0, y=0, 960x540',{reply:'Done',changes:moveChanges});
+validateExplicitSettings('Move Plinko to x=0%, y=0%, width 50%, height 50%',{reply:'Done',changes:moveChanges});
+// A genuinely wrong saved placement is still refused.
+assert.throws(()=>validateExplicitSettings('Move Plinko to x=0, y=0, width 960, height 540',{reply:'Done',changes:{gameTools:[{id:moveId,config:{placement:{x:0,y:0,width:25,height:50}}}]}}),'a saved placement that is not the requested size is still refused');
+// Applying the move: the tool's placement changes, the overlay reads
+// exactly it (no centering offset), and the game's button result —
+// the second copy of the placement — moves with it.
+const moved=applyBuildChanges(moveProject,moveChanges).project;
+const movedTool=moved.gameTools.find(t=>t.id===moveId);
+assert.equal(JSON.stringify(movedTool.config.placement),JSON.stringify({x:0,y:0,width:50,height:50}),'a Jewel move edit updates the tool placement');
+const movedStyle=overlayToolPlacement(movedTool);
+assert.equal(movedStyle.left,'0%');assert.equal(movedStyle.top,'0%');assert.equal(movedStyle.width,'50%');assert.equal(movedStyle.height,'50%');
+assert.equal(movedStyle.transform,'none','a placed tool renders exactly at its placement — the class centering transform is cleared');
+const dropButton=moved.controls.find(c=>c.action===`tool.${moveId}`);
+assert(dropButton&&dropButton.overlayResult.x===0&&dropButton.overlayResult.y===0&&dropButton.overlayResult.width===50&&dropButton.overlayResult.height===50,'the button shown result moves with the tool placement');
+// The reverse aim also lands: a move stated on the button's shown
+// result (the documented path for triggered items) moves the
+// standing game itself.
+const movedViaButton=applyBuildChanges(moveProject,{controls:[{id:dropButton.id,overlayResult:{x:51,y:2,width:48,height:46}}]}).project;
+assert.equal(JSON.stringify(movedViaButton.gameTools.find(t=>t.id===moveId).config.placement),JSON.stringify({x:51,y:2,width:48,height:46}),'a move stated on the button result lands on the standing game');
+// Jewel's receipt reports the move with real canvas numbers.
+const {detailedChangeLines}=loadModule('lib/jewel-change-summary.ts');
+const receipt=detailedChangeLines(moveProject,moved);
+assert(receipt.some(line=>line.includes('Plinko')&&line.includes('960')&&line.includes('540')),'the change receipt names the tool move in canvas pixels');
+console.log('PASS: the exact move that failed live now validates and lands — tool placement, overlay style and button result agree, and the receipt reports it.');
+
+/* ---------- (g) Set the Stage: standing games are directly draggable ---------- */
+const stageReview=read('components/StageReview.tsx');
+assert(stageReview.includes('standingDragTools'),'Set the Stage computes the standing games drag set');
+assert(stageReview.includes("standingPlacementTypes.includes(t.type)"),'the drag set is the standing placement types');
+assert(stageReview.includes("key={'standing-' + t.id}"),'every standing game renders its own always-present drag frame in Set the Stage');
+assert(stageReview.includes('!standingDragTools.some(t => t.id === tool.id)'),'the selected-tool frame does not duplicate a standing game frame');
+console.log('PASS: standing games have their own drag frames in Set the Stage, the same way boards and assets do.');
