@@ -20,7 +20,7 @@ export function StrikeTally({count}:{count:number}){
 export function GameInfoOverlay({tool,project,state}:{tool:GameTool;project:Project;state:CardState}){
  return <section aria-label={tool.name} style={{position:'absolute',left:'15%',top:'15%',width:'70%',height:'60%',zIndex:40,overflow:'auto',...toolStyle(tool),...overlayToolPlacement(tool)}}>{toolShowsTitle(tool)&&<h3>{toolTitle(tool)}</h3>}{gameEntries(tool).map(entry=>{
   const image=project.assets.find(a=>(a.storageKey||a.name)===entry.imageKey);
-  return <div key={entry.id} className="game-info-row">{image?.url&&<img src={image.url} alt="" style={{width:64,height:64,objectFit:'contain'}}/>}<strong>{entry.name}</strong>{tool.type==='scoreboard'?(strikeScoreboard(tool)?<StrikeTally count={state.scores?.[entry.id]??entry.score??0}/>:<span>{state.scores?.[entry.id]??entry.score??0}</span>):tool.type==='prize-list'?<span>{state.awarded?.[entry.id]?`Awarded to ${state.awarded[entry.id]}`:'Available'}</span>:<span>{entry.meaning}</span>}</div>;
+  return <div key={entry.id} className="game-info-row">{image?.url&&<img src={image.url} alt="" style={{width:64,height:64,objectFit:'contain'}}/>}<strong>{entry.name}</strong>{tool.type==='scoreboard'?(strikeScoreboard(tool)?<StrikeTally count={state.scores?.[entry.id]??entry.score??0}/>:<span>{state.scores?.[entry.id]??entry.score??0}</span>):<span>{entry.meaning}</span>}</div>;
  })}</section>;
 }
 

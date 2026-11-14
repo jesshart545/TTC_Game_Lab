@@ -21,9 +21,9 @@ scores=cardTransition(project,score,scores,'toggle');assert.equal(scores.cleared
 scores=cardTransition(project,score,scores,'clear');assert.equal(scores.scores.one,8);
 scores=cardTransition(project,score,scores,'new-game');assert.equal(scores.scores,undefined);
 assert.throws(()=>cardTransition(project,score,scores,'score',1,()=>0,'{"id":"missing","delta":1}'),/Choose an entry/);
-const prizes={id:'prizes',name:'Prizes',type:'prize-list',config:{entries:[{id:'p',name:'Prize'}]}};
-let awards=cardTransition(project,prizes,freshCardState(),'award',1,()=>0,'{"id":"p","recipient":"Alex"}');assert.equal(awards.awarded.p,'Alex');
-assert.throws(()=>cardTransition(project,prizes,awards,'award',2,()=>0,'{"id":"p","recipient":"Another"}'),/already been awarded/);
+const gifts={id:'gifts',name:'Gifts',type:'game-tool-list',config:{entries:[{id:'g',name:'Rose',meaning:'Skip one question'}]}};
+let giftState=cardTransition(project,gifts,freshCardState(),'toggle');assert.equal(giftState.cleared,false);
+assert.throws(()=>cardTransition(project,gifts,giftState,'award',2,()=>0,'{"id":"g","recipient":"Alex"}'),/unavailable for this tool/);
 const changed=applyBuildChanges(project,{connections:[{kind:'tool',id:'picker'}],assets:[{storageKey:'a',edits:{placement:{x:100,y:100,width:40,height:40}}}],newTools:[{type:'scoreboard',name:'Scores',config:score.config,connect:true}]});
 assert.equal(changed.warnings.length,0);assert.equal(changed.project.controls.filter(c=>c.action==='cards.toggle.picker').length,1);
 assert.equal(controlLabel(changed.project,changed.project.controls.find(c=>c.action==='cards.toggle.picker'),{picker:{cleared:false}}),'Remove image');
@@ -31,4 +31,4 @@ assert(changed.project.assets[0].edits.placement.width>0);assert(changed.project
 assert.equal(changed.project.publishedSnapshot,project.publishedSnapshot);assert.equal(project.controls.length,0);assert.equal(project.assets[0].edits,undefined);
 const again=applyBuildChanges(changed.project,{connections:[{kind:'tool',id:'picker'}]});assert.equal(again.project.controls.length,changed.project.controls.length);
 assert.equal(applyBuildChanges(project,{connections:[{kind:'asset',id:'missing'}]}).warnings.length,1);
-console.log('PASS: single random image draw/remove, image-only pool, no repeats after reload, explicit reset, scores and prizes persist until reset, AI connections are idempotent, placements stay visible, live snapshot stays unchanged.');
+console.log('PASS: single random image draw/remove, image-only pool, no repeats after reload, explicit reset, scores persist until reset, award action is unavailable, AI connections are idempotent, placements stay visible, live snapshot stays unchanged.');

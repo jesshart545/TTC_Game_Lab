@@ -19,7 +19,6 @@ export const additionTypes = [
   { id: 'countdown', label: 'Timers', help: 'Choose a standalone timer, set its duration and look, then connect its host controls.' },
   { id: 'poll', label: 'Polls', help: 'Choose a poll, review its options and placement, then connect Show and Hide buttons.' },
   {id:'scoreboard',label:'Scoreboard',help:'Add players or teams, choose a look, then test showing the scores and changing points.'},
-  {id:'prize-list',label:'Prize list',help:'Add prizes, choose a look, then test showing the list and marking prizes awarded.'},
   {id:'game-tool-list',label:'TikTok gift guide',help:'Add gift names or pictures and explain each game action. This guide displays the rules; the host performs the action.'},
   { id: 'youtube', label: 'YouTube search', help: 'Add a private YouTube search panel to your host dashboard. Search for videos during the game, choose a clip, then send it to the overlay when you are ready. Only the chosen video appears on the overlay; search stays private.' },
   { id: 'composition', label: 'Composed scenes', help: 'Choose a scene made in Asset Composer, set its placement, then connect Play and Stop buttons.' },

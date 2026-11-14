@@ -118,7 +118,6 @@ function propsFor(testProject, changes) {
     'Create timers',
     'Create polls',
     'Create scoreboard',
-    'Create prize list',
     'Create tiktok gift guide',
     'Add YouTube search to dashboard',
   ]);

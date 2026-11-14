@@ -33,7 +33,6 @@ export const TOOL_LIBRARY: LibraryItem[] = [
   { type:"wheel", name:"Game Wheel", description:"Spin configurable segments on the live overlay." },
   { type:"random-picker", name:"Random Picker", description:"Randomly draw an unused image or card. The same button removes it." },
   { type:"scoreboard",name:"Scoreboard",description:"Show players or teams and adjust their scores during the game." },
-  { type:"prize-list",name:"Prize List",description:"List prizes and mark who wins each one." },
   { type:"game-tool-list",name:"TikTok Gift Guide",description:"Show which gifts activate steals, skips, or other host-defined actions." },
   { type:"countdown", name:"Countdown", description:"Show a host-triggered countdown timer." },
   { type:"poll", name:"Live Poll", description:"Show choices and a live audience poll." },

@@ -314,7 +314,7 @@ export async function POST(request: Request, context: Context) {
   }
 
   if(body.resetGame){
-    const cardTypes=['question-card','blank-card','random-picker','scoreboard','prize-list','game-tool-list'];
+    const cardTypes=['question-card','blank-card','random-picker','scoreboard','game-tool-list'];
     for(const tool of live.project.gameTools){
       if(tool.enabled&&tool.inOverlayBuild&&cardTypes.includes(tool.type)){
         try{ await changeCard(live.db,live.project,tool.id,'new-game'); }catch{}
