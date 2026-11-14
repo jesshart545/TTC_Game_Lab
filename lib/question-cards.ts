@@ -72,11 +72,6 @@ export function cardTransition(project:Project,tool:GameTool,previous:CardState,
    if(!Number.isSafeInteger(value))throw new Error('That score is too large.');
    return {...state,scores:{...state.scores,[entry.id]:value}};
   }
-  if(action==='award'&&tool.type==='prize-list'){
-   if(state.awarded?.[entry.id])throw new Error('This prize has already been awarded in this game.');
-   const recipient=String(data.recipient||'').trim();if(!recipient||recipient.length>120)throw new Error('Enter the winner’s name.');
-   return {...state,awarded:{...state.awarded,[entry.id]:recipient}};
-  }
   throw new Error('That action is unavailable for this tool.');
  }
  if(action==='toggle'){

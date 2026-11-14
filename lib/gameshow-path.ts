@@ -216,11 +216,6 @@ export const TOOL_CHANGES: Record<string, ChangeItem[]> = {
     LOOK_ROW,
     OVERLAY_LOOK,
   ],
-  "prize-list": [
-    { label: "What it shows — the prizes", sub: "One per line", say: "Add a prize: backstage pass for two" },
-    LOOK_ROW,
-    { label: "Its name in your tool list · overlay shape, title, border, text size" },
-  ],
   countdown: [
     { label: "Duration — the seconds it counts", sub: "Also retimable live from the dashboard, that night only", say: "Set my countdown to 45 seconds" },
     { label: "Timer style", sub: "Numbers · Progress bar · Circle · Numbers and bar · Numbers and circle — try the Style button above", say: "Make my timer a circle style" },
@@ -288,7 +283,7 @@ export const JEWEL_ONLY_TILES: ToolTile[] = [
 ];
 
 export const TOOL_ICONS: Record<string, string> = {
-  wheel: "◉", "random-picker": "⤨", scoreboard: "▦", "prize-list": "🏆", countdown: "⏱",
+  wheel: "◉", "random-picker": "⤨", scoreboard: "▦", countdown: "⏱",
   poll: "📊", "coin-toss": "🪙", dice: "⚄", "game-tool-list": "🎁", youtube: "▶", "city-crime-scene": "🔎",
   "trivia-board": "▦", "blank-board": "▭", "trivia-list": "?", "card-list": "♫", "question-card": "✦", "blank-card": "▭",
 };

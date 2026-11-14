@@ -34,7 +34,7 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
   return {project:{...project,controls,gameTools:project.gameTools.map(t=>t.id===id?{...t,inToolbox:true,inOverlayBuild:true}:t)},controlId:controls.find(c=>c.action===`timer.show.${id}`)!.id};
  }
  if(tool?.type==='coin-toss'){const cycle=project.controls.find(control=>control.action===`coin.cycle.${id}`);if(cycle)return {project:{...project,gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true}:item)},controlId:cycle.id};}
- if(tool&&(tool.type==='random-picker'||['scoreboard','prize-list','game-tool-list'].includes(tool.type))){
+ if(tool&&(tool.type==='random-picker'||['scoreboard','game-tool-list'].includes(tool.type))){
   const action=`cards.toggle.${id}`,noun=tool.type==='random-picker'?(tool.config.source==='images'?'image':'card'):tool.name;
   let controls=project.controls.filter(c=>!(tool.type==='random-picker'&&c.action===`cards.clear.${id}`)).map(c=>c.action===`cards.draw.${id}`||c.action===`tool.${id}`?{...c,action,toolIds:[id],label:tool.type==='random-picker'?`Draw random ${noun}: ${tool.name}`:`Show ${tool.name}`,detail:'Press once to show; press the same button again to remove'}:c);
   if(!controls.some(c=>c.action===action))controls.push({id:crypto.randomUUID(),label:tool.type==='random-picker'?`Draw random ${noun}: ${tool.name}`:`Show ${tool.name}`,action,detail:tool.type==='random-picker'?'Draw an unused item randomly; press again to remove. No repeats this game.':'Show or remove '+tool.name,toolIds:[id]});
@@ -60,7 +60,7 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
  return {project:next,controlId:control.id};
 }
 export type ButtonFacts={does:string;clicks:string;effect:boolean};
-const factInfoTypes=['scoreboard','prize-list','game-tool-list'];
+const factInfoTypes=['scoreboard','game-tool-list'];
 function factObject(label:string):string{return label.replace(/^(show|hide|stop|play|roll|spin|flip|drop|open|start|clear|draw|reveal)\s+/i,'');}
 export function buttonFacts(control:ProjectEvent,project:Project):ButtonFacts{
  const action=control.action||'';

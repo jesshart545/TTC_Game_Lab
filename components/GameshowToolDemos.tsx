@@ -110,7 +110,7 @@ function RandomPickerDemo(props: GameshowWorkshopProps) {
   );
 }
 
-/* ---------------- Scoreboard / prize list / gifts (real GameInfoOverlay) ---------------- */
+/* ---------------- Scoreboard / gifts (real GameInfoOverlay) ---------------- */
 
 function ScoreboardDemo(props: GameshowWorkshopProps) {
   const { project, onAskJewel: onAsk } = props;
@@ -139,35 +139,6 @@ function ScoreboardDemo(props: GameshowWorkshopProps) {
         )}
       </DemoFrame>
       <ChangeList title="What you can change — the scoreboard" items={TOOL_CHANGES.scoreboard} onAsk={onAsk} />
-    </>
-  );
-}
-
-function PrizeListDemo(props: GameshowWorkshopProps) {
-  const { project, onAskJewel: onAsk } = props;
-  const { tool } = demoTool(project, "prize-list");
-  const entries = gameEntries(tool);
-  const [awarded, setAwarded] = useState<Record<string, string>>({});
-  const state: CardState = { ...freshCardState(), awarded };
-  return (
-    <>
-      <DemoFrame tag="Live demonstration — the prize list itself">
-        {entries.length ? (
-          <>
-            <div className="gsw-gistage"><GameInfoOverlay tool={tool} project={project} state={state} /></div>
-            <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
-              {entries.filter(entry => !awarded[entry.id]).map(entry => (
-                <button key={entry.id} type="button" className="gsw-vchip" onClick={() => setAwarded(current => ({ ...current, [entry.id]: "Demo winner" }))}>Award “{entry.name}”</button>
-              ))}
-              {Object.keys(awarded).length > 0 && <button type="button" className="gsw-vchip" onClick={() => setAwarded({})}>Reset</button>}
-            </div>
-            <p className="gsw-demostatus">Awarding flips the real list to “Awarded” — try it. (Demonstration only; nothing is saved.)</p>
-          </>
-        ) : (
-          <p className="gsw-demostatus">No prizes yet — add them in the prize list’s editor, or ask Jewel to stock it.</p>
-        )}
-      </DemoFrame>
-      <ChangeList title="What you can change — the prize list" items={TOOL_CHANGES["prize-list"]} onAsk={onAsk} />
     </>
   );
 }
@@ -512,10 +483,10 @@ function CityCrimeSceneDemo(props: GameshowWorkshopProps) {
 
 /* ---------------- The step ---------------- */
 
-const TYPE_ORDER = ["wheel", "random-picker", "scoreboard", "prize-list", "countdown", "poll", "coin-toss", "dice", "game-tool-list", "youtube"];
+const TYPE_ORDER = ["wheel", "random-picker", "scoreboard", "countdown", "poll", "coin-toss", "dice", "game-tool-list", "youtube"];
 const TYPE_BLURBS: Record<string, string> = {
   wheel: "Spin for a segment", "random-picker": "Draw from your list", scoreboard: "Names & scores on screen",
-  "prize-list": "Prizes waiting to be won", countdown: "Seconds on the clock", poll: "Let the audience vote",
+  countdown: "Seconds on the clock", poll: "Let the audience vote",
   "coin-toss": "Heads or tails", dice: "Roll the dice", "game-tool-list": "Gifts viewers send, actions they cause",
   youtube: "Play a video in your show",
 };
@@ -524,7 +495,6 @@ const DEMOS: Record<string, (props: GameshowWorkshopProps) => ReactNode> = {
   wheel: p => <WheelDemo {...p} />,
   "random-picker": p => <RandomPickerDemo {...p} />,
   scoreboard: p => <ScoreboardDemo {...p} />,
-  "prize-list": p => <PrizeListDemo {...p} />,
   countdown: p => <CountdownDemo {...p} />,
   poll: p => <PollDemo {...p} />,
   "coin-toss": p => <CoinDemo {...p} />,
