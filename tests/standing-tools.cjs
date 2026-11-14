@@ -129,3 +129,37 @@ for(const route of ['app/api/jewel/route.ts','app/api/ai/route.ts']){
   assert(src.includes('stepsToFall and dollarsPerStep'),route+' documents the chance-game config keys');
 }
 console.log('PASS: Jewel build-edits create and edit plinko slots/rows, higher-lower cards, cliffhanger items/prices/steps, prize-wheel values, gift guide entries, picker source/list and countdown seconds; both assistant prompts document them.');
+
+/* ---------- (d) A connected chance game stands; button-only is explicit ----------
+   Regression for the 2026-11-14 live check: Jewel built a Plinko with
+   its Drop/Hide buttons, and wiring the buttons forced triggerOnly on
+   the tool — so the standing face was suppressed everywhere and the
+   published overlay showed an empty cyan-outlined frame on every
+   fresh load. Wiring a chance game's play button must place it on
+   the overlay build WITHOUT making it trigger-only. */
+const connected=(type,config)=>applyBuildChanges(project([]),{newTools:[{type,name:type,config,connect:true}]});
+for(const [type,config] of [['plinko',{slots:['10','50','100'],rows:8}],['higher-lower',{cards:[{label:'7',value:7},{label:'K',value:13}]}],['cliffhanger',{items:[{label:'Lamp',price:20}],stepsToFall:15}],['prize-wheel',{values:['5¢','25¢','1.00']}]]){
+  const r=connected(type,config),t=r.project.gameTools.find(x=>x.type===type);
+  assert(t,`Jewel can create a connected ${type}`);
+  assert.equal(t.inOverlayBuild,true,`a connected ${type} is placed on the overlay build`);
+  assert(!t.config.triggerOnly,`a connected ${type} is NOT made trigger-only by its play button, so it stands`);
+  assert(standsOnOverlay(t),`a connected ${type} stands on the overlay`);
+  assert(r.project.controls.some(c=>(c.toolIds||[]).includes(t.id)),`a connected ${type} still gets its dashboard button`);
+}
+// The standing layer renders the placed board from config alone —
+// no run state, no dashboard action first.
+layer=renderToStaticMarkup(React.createElement(StandingTools,{project:project([tool('plinko',{slots:['10','50','100'],rows:8})]),states:{}}));
+assert(layer.includes('chance-plinko')&&layer.includes('50')&&layer.includes('Ready to drop'),'the standing layer renders the placed plinko board (pegs and slots) from its saved config alone');
+// A chance game the creator explicitly wants button-only still can
+// be: triggerOnly in its own creation config survives the connect,
+// and it then contributes NO markup to the standing layer.
+const hidden=connected('plinko',{slots:['10','50'],rows:8,triggerOnly:true}).project.gameTools.find(x=>x.type==='plinko');
+assert.equal(hidden.config.triggerOnly,true,'an explicit triggerOnly in the creation config is preserved when the play button is wired');
+assert(!standsOnOverlay(hidden),'an explicitly button-only plinko does not stand');
+layer=renderToStaticMarkup(React.createElement(StandingTools,{project:project([hidden]),states:{}}));
+assert(!layer.includes('chance-plinko')&&!layer.includes('runtime-tool-plinko'),'a trigger-only plinko contributes no markup to the standing layer — no empty frame');
+// And on the published overlay the persistent map returns nothing at
+// all for an unfired trigger-only chance game (the gift guide branch
+// already followed this rule; the chance games now do too).
+assert(overlay.includes('if(activeTool.config?.triggerOnly&&(activeTool.type==="plinko"||activeTool.type==="higher-lower"||activeTool.type==="cliffhanger"||activeTool.type==="prize-wheel"))return null'),'published overlay renders nothing — no empty frame — for an unfired trigger-only chance game');
+console.log('PASS: wiring a chance game\'s play button places it standing (not trigger-only) with its button intact; explicit triggerOnly stays button-only and renders no frame anywhere.');

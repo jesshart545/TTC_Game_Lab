@@ -1,6 +1,17 @@
-import type { Project, ProjectEvent, OverlayResult } from './project';
+import type { Project, ProjectEvent, OverlayResult, GameToolType } from './project';
 import { mediaKind } from './board-design';
 import { connectQuestionCard } from './control-connections';
+/** The four chance games stand on the overlay as placed games
+ *  (Jessica, 2026-11-14: placed games stand as the real game, not
+ *  empty spaces). Wiring one's play button must not reclassify it as
+ *  button-only: forcing triggerOnly on them here was the defect the
+ *  same day's live check caught — a Jewel-built Plinko carried
+ *  triggerOnly from its Drop button, so its standing face was
+ *  suppressed on every surface and the published overlay showed an
+ *  empty styled frame until the button was pressed, and again after
+ *  every reload. An explicit triggerOnly already in the tool's own
+ *  config (the creator asked for button-only) is preserved. */
+const standingChanceTypes: GameToolType[] = ['plinko','higher-lower','cliffhanger','prize-wheel'];
 export const initialResult:OverlayResult={x:15,y:20,width:70,height:60,entrance:'none',exit:'none',entranceSeconds:0,exitSeconds:0,layer:20};
 export function clarifyYoutubeSearch(project:Project):Project {
  const youtubeIds=new Set(project.gameTools.filter(t=>t.type==='youtube').map(t=>t.id));
@@ -54,7 +65,7 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
  // Wiring an asset to its button takes it OFF the standing overlay
  // (the button shows it now) — placement only. Its filing is not
  // touched: the asset stays saved in the project (lib/asset-filing).
- next={...project,assets:project.assets.map(a=>a===asset?{...a,inOverlayBuild:false,edits:{...a.edits,loop:a.edits?.loop??false,sound:a.edits?.sound??['audio','video'].includes(mediaKind(a)),volume:a.edits?.volume??80}}:a),gameTools:project.gameTools.map(t=>t===tool?{...t,inToolbox:true,inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t),compositions:project.compositions?.map(c=>c===composition?{...c,inProject:true}:c),controls:project.controls.some(c=>c.id===control!.id)?project.controls:[...project.controls,control]};
+ next={...project,assets:project.assets.map(a=>a===asset?{...a,inOverlayBuild:false,edits:{...a.edits,loop:a.edits?.loop??false,sound:a.edits?.sound??['audio','video'].includes(mediaKind(a)),volume:a.edits?.volume??80}}:a),gameTools:project.gameTools.map(t=>t===tool?{...t,inToolbox:true,inOverlayBuild:true,config:standingChanceTypes.includes(t.type)?{...t.config}:{...t.config,triggerOnly:true}}:t),compositions:project.compositions?.map(c=>c===composition?{...c,inProject:true}:c),controls:project.controls.some(c=>c.id===control!.id)?project.controls:[...project.controls,control]};
  const hideAction=tool?.type==='blank-card'?`cards.clear.${id}`:`result.hide.${control.id}`;
  if(!next.controls.some(c=>c.action===hideAction))next={...next,controls:[...next.controls,{id:crypto.randomUUID(),label:(playsMedia?'Stop ':'Hide ')+name,action:hideAction,detail:playsMedia?'Stop playing '+name:'Remove '+name+' from the overlay',...(tool?.type==='blank-card'?{toolIds:[id]}:{})}]};
  return {project:next,controlId:control.id};
