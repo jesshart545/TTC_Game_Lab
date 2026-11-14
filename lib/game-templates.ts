@@ -141,23 +141,23 @@ const triviaNight: GameTemplate = {
 const millionQuiz: GameTemplate = {
   id: "million-quiz",
   name: "Million Quiz",
-  tagline: "Climb the money ladder to $1,000,000",
+  tagline: "Climb the money ladder to 1,000,000",
   description:
-    "Who-Wants-to-Be-a-Millionaire style. Ten escalating questions from $100 to $1,000,000, a winnings tracker, and lifelines. One wrong answer ends the run — the drama is built in.",
+    "Who-Wants-to-Be-a-Millionaire style. Ten escalating questions from 100 to 1,000,000, a winnings tracker, and lifelines. One wrong answer ends the run — the drama is built in.",
   icon: "💰",
   category: "Trivia & Knowledge",
   buildDraft: () => {
     const rungs: { value: string; question: string; answer: string }[] = [
-      { value: "$100", question: "What color do you get when you mix blue and yellow?", answer: "Green" },
-      { value: "$200", question: "How many days are there in a leap year?", answer: "366" },
-      { value: "$500", question: "What is the capital of France?", answer: "Paris" },
-      { value: "$1,000", question: "Which planet is known as the Red Planet?", answer: "Mars" },
-      { value: "$5,000", question: "Who wrote “Romeo and Juliet”?", answer: "William Shakespeare" },
-      { value: "$10,000", question: "What is the chemical symbol for gold?", answer: "Au" },
-      { value: "$50,000", question: "In what year did humans first land on the Moon?", answer: "1969" },
-      { value: "$100,000", question: "What is the largest ocean on Earth?", answer: "The Pacific Ocean" },
-      { value: "$500,000", question: "Who painted the Mona Lisa?", answer: "Leonardo da Vinci" },
-      { value: "$1,000,000", question: "What is the only metal that is liquid at room temperature?", answer: "Mercury" },
+      { value: "100", question: "What color do you get when you mix blue and yellow?", answer: "Green" },
+      { value: "200", question: "How many days are there in a leap year?", answer: "366" },
+      { value: "500", question: "What is the capital of France?", answer: "Paris" },
+      { value: "1,000", question: "Which planet is known as the Red Planet?", answer: "Mars" },
+      { value: "5,000", question: "Who wrote “Romeo and Juliet”?", answer: "William Shakespeare" },
+      { value: "10,000", question: "What is the chemical symbol for gold?", answer: "Au" },
+      { value: "50,000", question: "In what year did humans first land on the Moon?", answer: "1969" },
+      { value: "100,000", question: "What is the largest ocean on Earth?", answer: "The Pacific Ocean" },
+      { value: "500,000", question: "Who painted the Mona Lisa?", answer: "Leonardo da Vinci" },
+      { value: "1,000,000", question: "What is the only metal that is liquid at room temperature?", answer: "Mercury" },
     ];
     const controls: ProjectEvent[] = [
       { id: "mq-show", label: "Show Question", action: "cards.show.mq-card", detail: "Draw the next ladder question", toolIds: ["mq-card"] },
@@ -170,8 +170,8 @@ const millionQuiz: GameTemplate = {
     ];
     return {
       name: "Million Quiz",
-      description: "Money-ladder quiz from $100 to $1,000,000 with lifelines and a winnings tracker.",
-      overlay: { title: "MILLION QUIZ", subtitle: "ONE QUESTION AWAY FROM $1,000,000", showChat: true, showAlerts: true, showCharacter: false },
+      description: "Money-ladder quiz from 100 to 1,000,000 with lifelines and a winnings tracker.",
+      overlay: { title: "MILLION QUIZ", subtitle: "ONE QUESTION AWAY FROM 1,000,000", showChat: true, showAlerts: true, showCharacter: false },
       gameTools: [
         {
           id: "mq-board", type: "trivia-board", name: "Money Ladder", enabled: true, inToolbox: true, inOverlayBuild: true,
@@ -529,7 +529,7 @@ const prizeDrawWheel: GameTemplate = {
         config: { placement: {x:25,y:15,width:50,height:65},
           title: "Prize Wheel",
           segments: [
-            "$25 Gift Card",
+            "25 Gift Card",
             "Free Subscription",
             "Mystery Box",
             "Channel Shoutout",
