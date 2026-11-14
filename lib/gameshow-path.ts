@@ -246,7 +246,7 @@ export const TOOL_CHANGES: Record<string, ChangeItem[]> = {
     LOOK_ROW,
   ],
   "prize-wheel": [
-    { label: "Wheel values", sub: "From 5¢ up to $1.00", say: "Change my big wheel values to 5, 10, 15, 20, 25 cents and a dollar" },
+    { label: "Wheel values", sub: "From 5¢ up to 1.00", say: "Change my big wheel values to 5, 10, 15, 20, 25 cents and a dollar" },
     { label: "First & second wheel colors", say: "Make my big wheel red and green" },
     { label: "Look — presets, colors, lettering font, picture · overlay shape, title, border" },
   ],
@@ -257,7 +257,7 @@ export const TOOL_CHANGES: Record<string, ChangeItem[]> = {
   cliffhanger: [
     { label: "Items and their real prices", say: "Add an item to price: air fryer, 89 dollars" },
     { label: "Steps before he falls", sub: "5 to 100", say: "Give the climber 40 steps before he falls" },
-    { label: "Dollars off per step", sub: "Classic rules: $1 off = 1 step", say: "Make each step cost 2 dollars off" },
+    { label: "Dollars off per step", sub: "Classic rules: 1 off = 1 step", say: "Make each step cost 2 dollars off" },
     LOOK_ROW,
   ],
   youtube: [
@@ -277,7 +277,7 @@ export type ToolTile = { type: string; name: string; description: string; icon: 
 /** The tools-step tiles: the product's TOOL_LIBRARY plus the four tools that exist only through Jewel. */
 export const JEWEL_ONLY_TILES: ToolTile[] = [
   { type: "plinko", name: "Plinko", description: "Drop the ball, win the slot", icon: "🔴", jewelMade: true },
-  { type: "prize-wheel", name: "Big Prize Wheel", description: "Spin money values to $1.00", icon: "💵", jewelMade: true },
+  { type: "prize-wheel", name: "Big Prize Wheel", description: "Spin money values to 1.00", icon: "💵", jewelMade: true },
   { type: "higher-lower", name: "Higher or Lower", description: "Guess the next card", icon: "🃏", jewelMade: true },
   { type: "cliffhanger", name: "Cliffhanger", description: "Price it right or he climbs", icon: "🧗", jewelMade: true },
 ];

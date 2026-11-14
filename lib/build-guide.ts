@@ -15,7 +15,7 @@ export const additionTypes = [
   { id: 'plinko', label: 'Plinko', help: 'Choose a Plinko board, set the prize slots and peg rows, then connect Drop and Hide buttons. Each drop lands in a random slot.' },
   { id: 'higher-lower', label: 'Higher or Lower', help: 'Draw cards and guess whether the next card is higher or lower. Connect Draw, Higher, Lower and Hide buttons.' },
   { id: 'cliffhanger', label: 'Cliffhanger', help: 'Price-is-Right style mountain climber. Guess item prices; each dollar off moves the climber closer to the cliff. 25 steps and he falls!' },
-  { id: 'prize-wheel', label: 'Big Wheel', help: 'Price-is-Right style big wheel from 5¢ to $1.00. Spin for the closest to $1.00 without going over.' },
+  { id: 'prize-wheel', label: 'Big Wheel', help: 'Price-is-Right style big wheel from 5¢ to 1.00. Spin for the closest to 1.00 without going over.' },
   { id: 'countdown', label: 'Timers', help: 'Choose a standalone timer, set its duration and look, then connect its host controls.' },
   { id: 'poll', label: 'Polls', help: 'Choose a poll, review its options and placement, then connect Show and Hide buttons.' },
   {id:'scoreboard',label:'Scoreboard',help:'Add players or teams, choose a look, then test showing the scores and changing points.'},
