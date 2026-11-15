@@ -30,9 +30,10 @@ import "./talkshow-workshop.css";
  * topic she is on: in the background area the flat/animated examples
  * come first, and Jewel's conversation panel stands open directly
  * after them — the eye flows examples → step into Jewel → the
- * backdrops shelf where the work is stored. The same placement holds
- * in every later topic: her panel renders inside the current topic's
- * section, after that topic's examples. What stands around the panel
+ * backdrops shelf where the work is stored. (Placement updated
+ * 2026-11-15: Jewel's panel now stands FIRST in the stage, above
+ * the banner — she is never down the page — and the topics carry
+ * their demonstrations and shelves only.) What stands around the panel
  * is storage and demonstration for the ONE topic Jewel is working on
  * (the workflow model's current talk step): the creator's own saved
  * work for that topic when it exists
@@ -135,7 +136,6 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
       <div style={{ marginTop: 20, marginBottom: 12 }}>
         <JewelWandScene onEnter={onEnterJewel} />
       </div>
-      {jewelPanel}
 
       <div style={{ marginTop: 14 }}>
         <div className="gsw-chipsrow" style={{ marginTop: 0 }}>
@@ -214,7 +214,6 @@ function PromptStage({ project, jewelPanel }: StageProps) {
           </div>
         </div>
         <p className="gsw-hint" style={{ marginTop: 10 }}>Stored on your background as its own layer — Jewel can reword it, re-letter it, or move it between bubble, frame, and plain whenever you ask her.</p>
-        {jewelPanel}
       </div>
     );
   }
@@ -245,7 +244,6 @@ function PromptStage({ project, jewelPanel }: StageProps) {
         </div>
       </div>
       <p className="gsw-hint" style={{ marginTop: 10 }}>Examples for now — the prompt you settle on with Jewel is stored here, lettered on your own background.</p>
-      {jewelPanel}
     </div>
   );
 }
@@ -277,7 +275,6 @@ function ResearchStage({ project, jewelPanel }: StageProps) {
         ))}
       </div>
       <p className="gsw-demostatus" style={{ marginTop: 10 }}>{SAMPLE_RESEARCH.note}</p>
-      {jewelPanel}
     </div>
   );
 }
@@ -318,7 +315,6 @@ function QuizStage({ project, doors, jewelPanel }: StageProps) {
           </div>
         </>
       )}
-      {jewelPanel}
       <div className="gsw-card" style={{ marginTop: 14 }}>
         <h4>Follow-ups, on cards you design</h4>
         <p>No right-or-wrong answers — questions that keep the conversation going after your prompt. The cards are your design: your own background, text color, font and all. Design them yourself here; the questions themselves you settle with Jewel.</p>
@@ -382,7 +378,6 @@ function MediaStage({ project, doors, jewelPanel }: StageProps) {
         </>
       )}
       {youtube && media.length > 0 && <p className="gsw-demostatus" style={{ marginTop: 10 }}>✓ YouTube is on your dashboard — during the show you search privately and send the video to your backdrop.</p>}
-      {jewelPanel}
       <div className="gsw-card" style={{ marginTop: 14 }}>
         <h4>Upload your media</h4>
         <p>Your own clips, images, and sounds file here — ready for your show.</p>
@@ -408,7 +403,6 @@ function MissedStage({ project, onSaveProject, jewelPanel }: StageProps) {
     <div>
       <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>Anything we missed?</div>
       <p className="gsw-hint" style={{ marginBottom: 14 }}>Any other idea for your show — tell Jewel in your conversation, and she’ll try to handle it. What you’ve made together is stored here.</p>
-      {jewelPanel}
       <div className="gsw-seclabel">Your tools</div>
       {tools.length ? (
         <div className="gsw-shelf">
@@ -447,6 +441,13 @@ export default function TalkshowStage({ project, workflow, doors, onSaveProject,
   const stageProps: StageProps = { project, doors, onSaveProject, jewelPanel, onEnterJewel };
   return (
     <section className="gsw" aria-label="Imagine and Create — your show, as Jewel builds it with you">
+      {/* Jewel stands FIRST in the working area (Jessica, 2026-11-15):
+          her panel heads the stage, and everything else — the banner,
+          the library door, the current topic's demonstrations and
+          shelves — keeps its content and its relative order after
+          her. The topics below no longer carry their own copy of her
+          panel. */}
+      {jewelPanel}
       {/* The liberty banner never stands on a Game Night page (Jessica,
           2026-11-15): there, creative freedom is shown, never written.
           The page mounts this frame only for talk projects; this gate
