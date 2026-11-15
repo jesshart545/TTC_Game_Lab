@@ -9,14 +9,21 @@ const load = require('./load.cjs');
 
 // Game Night builder + Set the Stage (Jessica, 2026-11-15): a
 // multiplayer project no longer opens the old shared workshop in
-// either area. Stage 0 (Imagine & Create) is the light frame — the
-// game shown as itself, the gold library door, Jewel as the doorway,
-// the library below — with NO game-plan form, NO progress machinery,
-// NO Gameshow gallery or Creation Tools, and NO dashboard/overlay
-// language. Stage 1 (Set the Stage) is see it, test it, publish it,
-// share it — the game first, a real test door, publish + the share
-// panel in one place, Jewel below — with NONE of the livestream
-// staging. Other kinds keep the old surfaces untouched.
+// either area. Each area does its ONE job. Stage 0 (Imagine &
+// Create) is CUSTOMIZING, only: Jewel's doorway FIRST (she is the
+// first thing on the page), then the game's pieces as a workbench —
+// each family led by its own editor door — then the gold library
+// door and the library. Stage 1 (Set the Stage) is see it, test it,
+// publish it, share it: Jewel's panel FIRST, then the game pictured
+// (the exhibit framing), a real test door, publish + the share
+// panel in one place — with NONE of the livestream staging. And NO
+// liberty text banner stands in either area: creative freedom is
+// SHOWN (Jewel present, able to change anything; pictured examples;
+// pieces that open into editing), never written — the statement in
+// words was never authorized. NO game-plan form, NO progress
+// machinery, NO Gameshow gallery or Creation Tools, and NO
+// dashboard/overlay language anywhere. Other kinds keep the old
+// surfaces untouched.
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://example.test' });
 global.window = dom.window;
@@ -85,10 +92,25 @@ assert(panel.includes('["Publish my game","Publish my game and give me its play 
 console.log('PASS: Jewel\'s panel speaks game night in the Game Night views.');
 
 // ---------------------------------------------------------------------------
+// 2b. No liberty text banner in either Game Night view: the
+//     statement in words was never authorized — creative freedom
+//     is shown (Jewel present, pictured examples, pieces that open
+//     into editing), never written.
+// ---------------------------------------------------------------------------
+for (const viewFile of ['components/GameNightStage.tsx', 'components/GameNightSetStage.tsx']) {
+  const viewSource = fs.readFileSync(viewFile, 'utf8');
+  assert(!viewSource.includes('CREATIVE_LIBERTY_TEXT'), `${viewFile} never renders the liberty text banner`);
+  assert(!viewSource.includes('Your creative liberty'), `${viewFile} carries no liberty banner heading`);
+}
+console.log('PASS: neither Game Night view carries the liberty text banner.');
+
+// ---------------------------------------------------------------------------
 // 3. Rendered stage 0 — a template project (Perfect Match, the
-//    owner's own walkthrough project shape) shows the game as
-//    itself: cards with their text, the library, Jewel's doorway —
-//    and none of the old wall.
+//    owner's own walkthrough project shape). The area's one job is
+//    customizing: Jewel's doorway first, the game's pieces as a
+//    workbench (cards with their text, each family led by its
+//    editor door), the library below — and none of the old wall,
+//    no exhibit pitch, no liberty text.
 // ---------------------------------------------------------------------------
 const { createProject } = load('lib/project.ts');
 const { GAME_NIGHT_TEMPLATES, getGameNightTemplate, applyGameNightTemplate } = load('lib/game-night-templates.ts');
@@ -145,15 +167,20 @@ async function render(element) {
   assert(text0.includes(`Open “${promptTool.name}” in the card editor`), 'the prompt pieces open into their own card editor');
   assert(text0.includes('Your library & uploads'), 'stage 0 carries the gold library door');
   assert(text0.includes('Your library — everything in this project'), 'the library stands under its heading');
-  assert(text0.includes('this site exists to accommodate your creativity'), 'the creative-liberty statement stands once in the area');
   assert(text0.includes('WAND-SCENE') && text0.includes('JEWEL-PANEL'), 'Jewel is the doorway: wand scene plus her conversation');
-  for (const banned of ['Dashboard', 'dashboard', 'overlay', 'Overlay', 'Your progress', 'Go there', 'Your game plan', 'template gallery', 'Creation Tools']) {
+  assert(text0.indexOf('WAND-SCENE') < text0.indexOf('Perfect Match'), 'Jewel\'s doorway stands before the game pieces — she is the first thing on the page');
+  assert(text0.indexOf('JEWEL-PANEL') < text0.indexOf('Perfect Match'), 'Jewel\'s conversation stands before the workbench');
+  assert(text0.indexOf(`Open “${promptTool.name}” in the card editor`) < text0.indexOf(firstPrompt), 'the workbench framing: the prompt family\'s editor door LEADS its pieces, prominent above them');
+  assert(text0.indexOf(`Open “${answerTool.name}” in the card editor`) < text0.indexOf(firstAnswer), 'the workbench framing: the answer family\'s editor door LEADS its pieces too');
+  assert(!text0.includes(pmTemplate.description), 'no exhibit pitch in stage 0 — the game\'s description is Set the Stage material, not the workbench\'s');
+  assert(!text0.includes('this site exists to accommodate your creativity'), 'no liberty statement in words anywhere in stage 0 — creative freedom is shown, not written');
+  for (const banned of ['Dashboard', 'dashboard', 'overlay', 'Overlay', 'Your progress', 'Go there', 'Your game plan', 'template gallery', 'Creation Tools', 'Your creative liberty', 'Preview', 'preview', 'Exhibit', 'exhibit']) {
     assert(!text0.includes(banned), `stage 0 never says "${banned}"`);
   }
   assert(!stage0.querySelector('form'), 'stage 0 has no form');
   assert(!stage0.querySelector('textarea') && !stage0.querySelector('input'), 'stage 0 has no form fields');
   assert(!stage0.querySelector('.jewel-progress'), 'no progress machinery stands on the page');
-  console.log('PASS: stage 0 renders the game as itself — cards with text, library, Jewel — and none of the old wall.');
+  console.log('PASS: stage 0 renders its one job — Jewel\'s doorway first, the workbench pieces led by their editor doors, the library — no exhibit pitch, no liberty text, none of the old wall.');
 
   // A from-scratch project: the pictured shelf of the seven games.
   const empty = createProject('');
@@ -166,29 +193,37 @@ async function render(element) {
   for (const template of GAME_NIGHT_TEMPLATES) assert(shelfText.includes(template.name), `the shelf shows ${template.name}`);
   assert(!shelf.querySelector('form') && !shelf.querySelector('textarea') && !shelf.querySelector('input'), 'the shelf is examples and a direction to Jewel — not a form');
   assert(shelfText.includes('Your library — everything in this project'), 'the library stands even before a game exists');
-  console.log('PASS: stage 0 with no game yet shows the seven-game pictured shelf, not a form.');
+  assert(shelfText.indexOf('WAND-SCENE') < shelfText.indexOf('Games you can build'), 'Jewel\'s doorway stands before the shelf — she is first even before a game exists');
+  assert(shelfText.indexOf('JEWEL-PANEL') < shelfText.indexOf('Games you can build'), 'Jewel\'s conversation stands before the shelf');
+  assert(!shelfText.includes('this site exists to accommodate your creativity'), 'no liberty statement in words on the shelf either');
+  console.log('PASS: stage 0 with no game yet shows Jewel first, then the seven-game pictured shelf, not a form.');
 
   // -------------------------------------------------------------------------
-  // 4. Rendered Set the Stage — game first, honest test door,
-  //    publish + share in one place, no livestream staging.
+  // 4. Rendered Set the Stage — Jewel first, then the game pictured
+  //    (exhibit framing), honest test door, publish + share in one
+  //    place, no livestream staging, no liberty text.
   // -------------------------------------------------------------------------
   const setUnpublished = await render(React.createElement(GameNightSetStage, {
     project: pm, jewelPanel: panelStub, doors, onPublish: () => {}, publishing: false, publishOutcome: null
   }));
   const setText = setUnpublished.textContent;
-  assert(setText.includes('Perfect Match'), 'Set the Stage shows the game itself first');
-  assert(setText.includes(firstPrompt), 'Set the Stage shows the game\'s pieces, same presentation as stage 0');
+  assert(setText.includes('Perfect Match'), 'Set the Stage shows the game itself');
+  assert(setText.includes(firstPrompt), 'Set the Stage shows the game\'s pieces, in the exhibit framing');
+  assert(setText.includes(pmTemplate.description), 'the exhibit framing carries the game\'s description — seeing the game is this area\'s job');
+  assert(setText.indexOf(firstPrompt) < setText.indexOf(`Open “${promptTool.name}” in the card editor`), 'the exhibit framing: the editor door trails quietly below the pieces here');
   assert(setText.includes('Test your game'), 'Set the Stage carries the test door');
   assert(setText.includes('Testing opens once your game is published'), 'an unpublished game gets the honest line — publishing first, no fake test');
   assert(setText.includes('Everything checks out'), 'readiness speaks in plain words');
   assert(setText.includes('Publish your game'), 'the real Publish action stands in the open');
   assert(!setText.includes('GAME-NIGHT-SHARE'), 'no share panel before publishing');
-  for (const banned of ['Dashboard', 'dashboard', 'overlay', 'Overlay', 'Rehearse', 'background picker', 'Choose your starting background']) {
+  for (const banned of ['Dashboard', 'dashboard', 'overlay', 'Overlay', 'Rehearse', 'background picker', 'Choose your starting background', 'Your creative liberty']) {
     assert(!setText.includes(banned), `Set the Stage never says "${banned}"`);
   }
+  assert(!setText.includes('this site exists to accommodate your creativity'), 'no liberty statement in words in Set the Stage either');
+  assert(setText.indexOf('JEWEL-PANEL') < setText.indexOf('Perfect Match'), 'Jewel stands FIRST in Set the Stage — before the game, not hidden below it');
   assert(setText.indexOf('Perfect Match') < setText.indexOf('Test your game'), 'the game stands before the test door');
-  assert(setText.indexOf('Test your game') < setText.indexOf('JEWEL-PANEL'), 'Jewel stands below the game, test and share spots');
-  console.log('PASS: Set the Stage (unpublished) — game, honest test line, publish, Jewel below; no staging.');
+  assert(setText.indexOf('Test your game') < setText.indexOf('Publish & share'), 'the test door stands before publish & share');
+  console.log('PASS: Set the Stage (unpublished) — Jewel first, then game, honest test line, publish; no staging, no liberty text.');
 
   const pmPublished = { ...pm, publishedSnapshot: { ...pm } };
   const setPublished = await render(React.createElement(GameNightSetStage, {
@@ -199,6 +234,7 @@ async function render(element) {
   assert(testButton, 'a published game gets the real Test door button');
   assert(pubText.includes('GAME-NIGHT-SHARE'), 'once published, the share panel (play link + QR) stands front and center');
   assert(pubText.includes('Publish latest changes'), 're-publishing stays the same single action');
+  assert(pubText.indexOf('JEWEL-PANEL') < pubText.indexOf('GAME-NIGHT-SHARE'), 'Jewel stands before the share panel here too — she is never at the bottom');
   console.log('PASS: Set the Stage (published) — real test door and the share panel in the open.');
 
   console.log('ALL GAME NIGHT BUILDER CHECKS PASSED');

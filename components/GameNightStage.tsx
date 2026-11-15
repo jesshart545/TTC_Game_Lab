@@ -2,11 +2,9 @@
 
 import type { ReactNode } from "react";
 import type { Project } from "../lib/project";
-import { CREATIVE_LIBERTY_TEXT } from "../lib/gameshow-path";
 import { pickGame } from "../lib/game-room";
 import { isAudio, isImage, isVideo } from "../lib/workshop-libraries";
 import GameNightGameView, { GameNightShelf, gameInfoFor, type GameNightDoors } from "./GameNightGameView";
-import JewelAvatar from "./JewelAvatar";
 import JewelWandScene from "./JewelWandScene";
 import "./gameshow-workshop.css";
 import "./game-night-stage.css";
@@ -21,17 +19,28 @@ import "./game-night-stage.css";
  * shown as word-list rows stamped "In Dashboard Toolbox" — a wall
  * of words with zero pictures, for a kind that has no host, no
  * dashboard and no stream. Her ruling: the Gameshow rebuild is the
- * guide. This stage is that light composition, holding ONLY
- * game-night pieces:
+ * guide — and this stage does ONE job (her sharpening, 2026-11-15):
+ * CUSTOMIZING the game. Every element in it exists only for that.
+ * Creative freedom is SHOWN here, never written: no statement about
+ * it stands anywhere in the view (the liberty text banner the first
+ * cut carried was never authorized — words go on the site only
+ * where she says so). In order:
  *
- *   the creative-liberty banner (once, her exact wording),
- *   the gold "Your library & uploads" door,
- *   the game itself, shown as itself (GameNightGameView) — or, when
- *   the project holds no game yet, the pictured shelf of the seven
- *   games as examples,
- *   Jewel as the doorway — her wand scene, a few pictured example
- *   asks, and her conversation,
- *   and the library under its heading, with the upload door.
+ *   Jewel as the doorway FIRST — her wand scene, a few pictured
+ *   customization asks, and her conversation. She is the first
+ *   thing on the page: the creator changes the game by asking her,
+ *   and she can change anything in it.
+ *   The game's pieces as a WORKBENCH (GameNightGameView in its
+ *   workbench framing): the same pieces the engine resolves, each
+ *   family led by its own prominent door into the real hand editor.
+ *   Showing the game off is Set the Stage's job, not this area's —
+ *   here the pieces stand to be changed. Or, when the project holds
+ *   no game yet, the pictured shelf of the seven games — picking
+ *   one puts its build ask in Jewel's conversation and starts
+ *   customizing.
+ *   The gold "Your library & uploads" door and the library under
+ *   its heading — the creator's materials, there to be used in the
+ *   game and changed as the game changes.
  *
  * NO form: after the title + theme creation already asked for,
  * everything happens with Jewel. NO progress machinery on the page:
@@ -57,16 +66,16 @@ function scrollToLibrary() {
 
 const EXAMPLE_ASKS: { label: string; say: (gameName: string) => string }[] = [
   {
-    label: "Add more pieces",
-    say: gameName => `Add more pieces to my ${gameName} game — new ones in the same style as the pieces it already has.`,
+    label: "Change my cards",
+    say: gameName => `I want to change the cards in my ${gameName} game — ask me which ones and what they should say instead.`,
   },
   {
-    label: "Change a piece",
-    say: gameName => `I want to change one of the pieces in my ${gameName} game — ask me which one and what it should say instead.`,
+    label: "Make it my topic",
+    say: gameName => `Make my ${gameName} game about a topic I choose — ask me for the topic, then redo its questions, cards and words to fit it.`,
   },
   {
-    label: "A fresh look",
-    say: gameName => `Give my ${gameName} game a fresh look — ask me what style I want, then restyle it.`,
+    label: "Swap my words",
+    say: gameName => `I want to swap my own words into my ${gameName} game — ask me what to swap in and what each one replaces.`,
   },
 ];
 
@@ -77,22 +86,6 @@ export default function GameNightStage({ project, jewelPanel, onEnterJewel, onAs
   const assets = project.assets || [];
   return (
     <section className="gsw gsw-stage gn-stage" aria-label="Imagine and Create — your game night, built with Jewel">
-      <div className="gsw-liberty">
-        <JewelAvatar size={58} />
-        <div>
-          <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
-          <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
-        </div>
-        <div className="gsw-lwand" aria-hidden="true">🪄</div>
-      </div>
-      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={scrollToLibrary}>Your library &amp; uploads</button>
-
-      {resolved ? (
-        <GameNightGameView project={project} doors={doors} />
-      ) : (
-        <GameNightShelf onAskJewel={onAskJewel} />
-      )}
-
       <div style={{ marginTop: 20, marginBottom: 12 }}>
         <JewelWandScene onEnter={onEnterJewel} />
       </div>
@@ -111,6 +104,14 @@ export default function GameNightStage({ project, jewelPanel, onEnterJewel, onAs
       )}
 
       {jewelPanel}
+
+      {resolved ? (
+        <GameNightGameView project={project} doors={doors} framing="workbench" />
+      ) : (
+        <GameNightShelf onAskJewel={onAskJewel} />
+      )}
+
+      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={scrollToLibrary}>Your library &amp; uploads</button>
 
       <div className="gn-library" id="game-night-library">
         <div className="gn-library-head">

@@ -25,12 +25,22 @@ import type { PropertyTycoonConfig } from "../lib/property-tycoon";
  * a game night has no host, no dashboard and no overlay.
  *
  * The presentation is not an editor wall. Pieces are visible at a
- * glance, and each family of pieces carries ONE quiet door into the
+ * glance, and each family of pieces carries ONE door into the
  * existing hand editor that owns it (the list and card creator for
  * card lists, the board designer for a trivia board) — the door
  * opens the very tool whose cards are on show, found by matching
  * the resolved config's own texts back to the project's tools, so
  * the door can never point at a different list than the one playing.
+ *
+ * The same pieces render in two framings, one per area's one job
+ * (Jessica, 2026-11-15). SET THE STAGE's job is seeing the game, so
+ * there the framing is the EXHIBIT: the game's description stands
+ * in the header and each family's editor door trails quietly below
+ * its pieces. IMAGINE & CREATE's ONLY job is customizing, so there
+ * the framing is the WORKBENCH: no description pitch (that is the
+ * exhibit's material), and each family's editor door LEADS its
+ * family — prominent, above the pieces — because the pieces stand
+ * there to be changed, not to be shown off.
  */
 
 export type GameNightDoors = {
@@ -116,12 +126,12 @@ function sourceBoardFor(project: Project, categoryNames: string[]): GameTool | u
   });
 }
 
-function EditorDoor({ doors, tool, board }: { doors: GameNightDoors; tool: GameTool; board?: boolean }) {
+function EditorDoor({ doors, tool, board, lead }: { doors: GameNightDoors; tool: GameTool; board?: boolean; lead?: boolean }) {
   return (
-    <div className="gn-door-row">
+    <div className={lead ? "gn-door-row gn-door-row-lead" : "gn-door-row"}>
       <button
         type="button"
-        className="gn-door"
+        className={lead ? "gn-door gn-door-lead" : "gn-door"}
         onClick={() => (board ? doors.openBoardDesigner(tool.id) : doors.openListEditor(tool.id))}
       >
         {board ? `Open “${tool.name}” in the board designer` : `Open “${tool.name}” in the card editor`}
@@ -138,7 +148,8 @@ function MoreNote({ hidden }: { hidden: number }) {
 const TILE_CAP = 60;
 const QUESTION_CAP = 30;
 
-function Pieces({ project, doors, gameType, config }: { project: Project; doors: GameNightDoors; gameType: string; config: Record<string, unknown> }) {
+function Pieces({ project, doors, gameType, config, framing }: { project: Project; doors: GameNightDoors; gameType: string; config: Record<string, unknown>; framing: "exhibit" | "workbench" }) {
+  const workbench = framing === "workbench";
   if (gameType === "bingo") {
     const cfg = config as unknown as BingoConfig;
     const items = cfg.items || [];
@@ -147,9 +158,10 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
     return (
       <div className="gn-pieces">
         <div className="gn-pieces-head">The call items — one is called out every few seconds, players mark their cards</div>
+        {workbench && source && <EditorDoor doors={doors} tool={source} lead />}
         <div className="gn-tiles">{shown.map((item, i) => <span className="gn-tile" key={i}>{item}</span>)}</div>
         <MoreNote hidden={items.length - shown.length} />
-        {source && <EditorDoor doors={doors} tool={source} />}
+        {!workbench && source && <EditorDoor doors={doors} tool={source} />}
       </div>
     );
   }
@@ -163,6 +175,8 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
     return (
       <div className="gn-pieces">
         <div className="gn-pieces-head">Your board — pick a square, answer the question, win its points</div>
+        {workbench && board && <EditorDoor doors={doors} tool={board} board lead />}
+        {workbench && list && <EditorDoor doors={doors} tool={list} lead />}
         <div className="gn-board" role="img" aria-label={`Quiz board with categories ${categories.map(c => c.name).join(", ")}`}>
           {categories.map((category, ci) => (
             <div className="gn-board-col" key={ci}>
@@ -185,8 +199,8 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
           }))}
         </div>
         <MoreNote hidden={allPrompts.length - shownQuestions} />
-        {board && <EditorDoor doors={doors} tool={board} board />}
-        {list && <EditorDoor doors={doors} tool={list} />}
+        {!workbench && board && <EditorDoor doors={doors} tool={board} board />}
+        {!workbench && list && <EditorDoor doors={doors} tool={list} />}
       </div>
     );
   }
@@ -198,6 +212,8 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
     return (
       <div className="gn-pieces">
         <div className="gn-pieces-head">Your survey questions — teams guess the answers on the board</div>
+        {workbench && board && <EditorDoor doors={doors} tool={board} board lead />}
+        {workbench && list && <EditorDoor doors={doors} tool={list} lead />}
         <div className="gn-cards">
           {questions.map((q, qi) => (
             <div className="gn-card gn-card-survey" key={qi}>
@@ -208,8 +224,8 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
             </div>
           ))}
         </div>
-        {board && <EditorDoor doors={doors} tool={board} board />}
-        {list && <EditorDoor doors={doors} tool={list} />}
+        {!workbench && board && <EditorDoor doors={doors} tool={board} board />}
+        {!workbench && list && <EditorDoor doors={doors} tool={list} />}
       </div>
     );
   }
@@ -224,13 +240,15 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
     return (
       <div className="gn-pieces">
         <div className="gn-pieces-head">Prompt cards — one is drawn each round, and everyone plays an answer card to match it</div>
+        {workbench && promptList && <EditorDoor doors={doors} tool={promptList} lead />}
         <div className="gn-cards">{shownPrompts.map((text, i) => <div className="gn-card gn-card-prompt" key={i}>{text}</div>)}</div>
         <MoreNote hidden={prompts.length - shownPrompts.length} />
-        {promptList && <EditorDoor doors={doors} tool={promptList} />}
+        {!workbench && promptList && <EditorDoor doors={doors} tool={promptList} />}
         <div className="gn-pieces-head">Answer cards — the hand every player plays from</div>
+        {workbench && answerList && <EditorDoor doors={doors} tool={answerList} lead />}
         <div className="gn-cards">{shownAnswers.map((text, i) => <div className="gn-card gn-card-answer" key={i}>{text}</div>)}</div>
         <MoreNote hidden={answers.length - shownAnswers.length} />
-        {answerList && <EditorDoor doors={doors} tool={answerList} />}
+        {!workbench && answerList && <EditorDoor doors={doors} tool={answerList} />}
       </div>
     );
   }
@@ -242,9 +260,10 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
     return (
       <div className="gn-pieces">
         <div className="gn-pieces-head">Starter words — a round opens with one, and the chain grows word by word</div>
+        {workbench && source && <EditorDoor doors={doors} tool={source} lead />}
         <div className="gn-tiles">{shown.map((word, i) => <span className="gn-tile gn-tile-word" key={i}>{word}</span>)}</div>
         <MoreNote hidden={starters.length - shown.length} />
-        {source && <EditorDoor doors={doors} tool={source} />}
+        {!workbench && source && <EditorDoor doors={doors} tool={source} />}
       </div>
     );
   }
@@ -256,9 +275,10 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
     return (
       <div className="gn-pieces">
         <div className="gn-pieces-head">Words to draw — one player draws in secret, everyone else guesses</div>
+        {workbench && source && <EditorDoor doors={doors} tool={source} lead />}
         <div className="gn-tiles">{shown.map((word, i) => <span className="gn-tile gn-tile-word" key={i}>{word}</span>)}</div>
         <MoreNote hidden={words.length - shown.length} />
-        {source && <EditorDoor doors={doors} tool={source} />}
+        {!workbench && source && <EditorDoor doors={doors} tool={source} />}
       </div>
     );
   }
@@ -270,6 +290,7 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
     return (
       <div className="gn-pieces">
         <div className="gn-pieces-head">Your board — players travel it, buy these properties and charge each other rent</div>
+        {workbench && source && <EditorDoor doors={doors} tool={source} lead />}
         <div className="gn-spaces">
           {properties.map((property, i) => {
             const loose = property as unknown as Record<string, unknown>;
@@ -289,7 +310,7 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
             <div className="gn-cards">{chance.map((card, i) => <div className="gn-card gn-card-chance" key={i}>{card.text}</div>)}</div>
           </>
         )}
-        {source && <EditorDoor doors={doors} tool={source} />}
+        {!workbench && source && <EditorDoor doors={doors} tool={source} />}
       </div>
     );
   }
@@ -300,7 +321,7 @@ function Pieces({ project, doors, gameType, config }: { project: Project; doors:
  * The resolved game presentation, or null when the project holds no
  * playable game yet (the caller shows the pictured shelf instead).
  */
-export default function GameNightGameView({ project, doors }: { project: Project; doors: GameNightDoors }) {
+export default function GameNightGameView({ project, doors, framing = "exhibit" }: { project: Project; doors: GameNightDoors; framing?: "exhibit" | "workbench" }) {
   const picked = pickGame(project);
   if ("error" in picked) return null;
   const info = gameInfoFor(picked.gameType);
@@ -312,10 +333,10 @@ export default function GameNightGameView({ project, doors }: { project: Project
         <div className="gn-game-title">
           <small>YOUR GAME</small>
           <h2>{info.icon} {info.name}</h2>
-          {info.description && <p>{info.description}</p>}
+          {framing === "exhibit" && info.description && <p>{info.description}</p>}
         </div>
       </div>
-      <Pieces project={project} doors={doors} gameType={picked.gameType} config={picked.config} />
+      <Pieces project={project} doors={doors} gameType={picked.gameType} config={picked.config} framing={framing} />
     </div>
   );
 }
