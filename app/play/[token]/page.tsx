@@ -45,6 +45,22 @@ type SurveyPublic = {
   guesser?: { playerId: string; name: string | null; team: number; endsAt: number } | null;
   lastRound?: { winnerTeam: number | null; winnerName: string | null; potAwarded: number; stolen: boolean } | null;
 };
+type PerfectMatchPublic = {
+  matchStage?: "submit" | "judge" | "reveal" | "done";
+  prompt?: string | null;
+  promptNumber?: number;
+  promptCount?: number;
+  judgeId?: string | null;
+  judgeName?: string | null;
+  endsAt?: number | null;
+  winPoints?: number;
+  handCounts?: Record<string, number>;
+  scores?: Record<string, number>;
+  submittedIds?: string[];
+  waitingOn?: number;
+  revealedCards?: { text: string; ownerId?: string; ownerName?: string; winner?: boolean }[];
+  lastRound?: { prompt: string; winnerId: string | null; winnerName: string | null; winningCard: string | null; judgeName: string | null } | null;
+};
 type RoomView = {
   title: string;
   gameType: string;
@@ -52,8 +68,8 @@ type RoomView = {
   round: number;
   countdownEndsAt: number | null;
   players: PlayerView[];
-  game: BingoPublic & QuizPublic & SurveyPublic;
-  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string; team?: number; guessText?: string } } | null;
+  game: BingoPublic & QuizPublic & SurveyPublic & PerfectMatchPublic;
+  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string; team?: number; guessText?: string; hand?: string[]; submittedCard?: string; submittedRound?: number } } | null;
   standings: Standing[] | null;
 };
 
@@ -198,6 +214,10 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   const myFaceoffIn = myFaceoffIndex >= 0 && !!survey?.faceoff?.submitted[myFaceoffIndex];
   const myGuessTurn = !!survey && !!me && (survey.stage === "play" || survey.stage === "steal") && survey.guesser?.playerId === me.id;
   const myTeamIndex = survey?.teams && me ? survey.teams.findIndex(team => team.members.some(member => member.id === me.id)) : -1;
+  const match = view.gameType === "perfect-match" ? view.game : null;
+  const myHand = view.me?.state.hand || [];
+  const isJudge = !!match && !!me && match.judgeId === me.id;
+  const mySubmitted = !!match && !!me && (match.submittedIds || []).includes(me.id);
 
   return (
     <main className="gn-shell" style={{ "--gn-accent": accent } as React.CSSProperties}>
@@ -239,6 +259,9 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
           {view.gameType === "survey-showdown" && (
             <p className="gn-hint">Two teams are dealt automatically when the game starts — you play for whichever team your seat gives you.</p>
           )}
+          {view.gameType === "perfect-match" && (
+            <p className="gn-hint">Everyone is dealt a hand of cards when the game starts. Each round one player judges — everyone else plays the card from their hand that best matches the prompt.</p>
+          )}
           <div className="gn-chips">
             {view.players.map(player => <PlayerChip key={player.id} player={player} />)}
           </div>
@@ -277,7 +300,107 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             <span className="gn-round">Round {view.round}</span>
           </header>
 
-          {survey ? (
+          {match ? (
+            <>
+              <div className="gn-standings-strip" aria-label="Scores">
+                {[...view.players].sort((a, b) => (match.scores?.[b.id] ?? 0) - (match.scores?.[a.id] ?? 0)).map(player => (
+                  <span key={player.id} className={`gn-strip-chip${player.me ? " gn-strip-me" : ""}${match.judgeId === player.id ? " gn-strip-turn" : ""}`}>
+                    {player.isCreator ? "⭐ " : ""}{player.name}: <strong>{match.scores?.[player.id] ?? 0}</strong>
+                    {match.judgeId === player.id ? " · judging" : ""}
+                  </span>
+                ))}
+              </div>
+
+              <div className="gn-call-zone">
+                <div className="gn-call" key={`mp-${match.promptNumber}`}>
+                  <span className="gn-call-label">Prompt {match.promptNumber ?? 1} of {match.promptCount ?? 0} · {match.judgeName ?? "A player"} is judging · first to {match.winPoints ?? 5}</span>
+                  <span className="gn-call-item gn-match-prompt">{match.prompt}</span>
+                  {match.matchStage === "submit" && match.endsAt && (
+                    <span className="gn-next-bar" key={`mpbar-${match.promptNumber}`} style={{ animationDuration: `${Math.max(0, match.endsAt - Date.now())}ms` }} />
+                  )}
+                </div>
+              </div>
+
+              {match.matchStage === "submit" ? (
+                <>
+                  <div className="gn-match-backs" aria-label="Cards played so far">
+                    {(match.submittedIds || []).map(id => (
+                      <span key={id} className={`gn-match-back${me && id === me.id ? " gn-match-back-mine" : ""}`} aria-hidden="true" />
+                    ))}
+                    {(match.submittedIds || []).length === 0 && <span className="gn-hint gn-match-backs-empty">No cards in yet…</span>}
+                  </div>
+                  {isJudge ? (
+                    <p className="gn-progress-line" role="status">
+                      🧑‍⚖️ You&apos;re the judge this round — {(match.submittedIds || []).length} card{(match.submittedIds || []).length === 1 ? "" : "s"} in, waiting on {match.waitingOn ?? 0} more
+                    </p>
+                  ) : mySubmitted ? (
+                    <>
+                      <p className="gn-progress-line" role="status">✓ Your card is in — face-down with the rest</p>
+                      {view.me?.state.submittedCard && <p className="gn-hint">You played “{view.me.state.submittedCard}” — only you can see that until the pick.</p>}
+                    </>
+                  ) : (
+                    <>
+                      <p className="gn-progress-line" role="status">Play the card from your hand that fits the prompt best:</p>
+                      <div className="gn-hand" aria-label="Your hand">
+                        {myHand.map((card, index) => (
+                          <button
+                            key={`${card}-${index}`}
+                            type="button"
+                            className="gn-hand-card"
+                            onClick={() => act({ type: "submit", card })}
+                            disabled={busy}
+                            aria-label={`Play ${card}`}
+                          >
+                            {card}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="gn-hint">Tap a card to play it face-down — nobody sees whose is whose.</p>
+                    </>
+                  )}
+                </>
+              ) : match.matchStage === "judge" ? (
+                <>
+                  <p className="gn-progress-line" role="status">
+                    {isJudge ? "👀 The cards are in — tap the best match!" : `${match.judgeName ?? "The judge"} is picking the best match…`}
+                  </p>
+                  <div className="gn-match-reveal" aria-label="Played cards">
+                    {(match.revealedCards || []).map((card, index) => isJudge ? (
+                      <button
+                        key={index}
+                        type="button"
+                        className="gn-match-card gn-match-card-pick"
+                        onClick={() => act({ type: "pick", index })}
+                        disabled={busy}
+                        aria-label={`Pick ${card.text}`}
+                      >
+                        {card.text}
+                      </button>
+                    ) : (
+                      <div key={index} className="gn-match-card">{card.text}</div>
+                    ))}
+                  </div>
+                  <p className="gn-hint">The cards were shuffled — nobody knows whose is whose, not even the judge.</p>
+                </>
+              ) : match.matchStage === "reveal" ? (
+                <>
+                  <p className="gn-progress-line" role="status">
+                    {match.lastRound?.winnerName
+                      ? `🏆 ${match.lastRound.winnerName} takes the round with “${match.lastRound.winningCard}”!`
+                      : "No cards were played that round — no point for anyone."}
+                  </p>
+                  <div className="gn-match-reveal" aria-label="Played cards and their players">
+                    {(match.revealedCards || []).map((card, index) => (
+                      <div key={index} className={`gn-match-card${card.winner ? " gn-match-winner" : ""}`}>
+                        <span className="gn-match-card-text">{card.text}</span>
+                        <span className="gn-match-owner">{card.winner ? "🏆 " : ""}{card.ownerName}{me && card.ownerId === me.id ? " (you)" : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : survey ? (
             <>
               <div className="gn-survey-teams">
                 {(survey.teams || []).map((team, ti) => (
@@ -597,7 +720,7 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             </>
           )}
           <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "play-again" })} disabled={busy}>
-            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : "↻ Play again — same game, fresh cards"}
+            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : view.gameType === "perfect-match" ? "↻ Play again — fresh hands, new prompts" : "↻ Play again — same game, fresh cards"}
           </button>
           <p className="gn-hint">Anyone can press Play Again — the first press deals everyone back in.</p>
         </section>
