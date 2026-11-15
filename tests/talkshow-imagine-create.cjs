@@ -122,22 +122,18 @@ const quizTool = (overrides = {}) => ({
   assert(stage.includes('doors.uploadMedia'), 'media keeps the upload door');
   assert(stage.includes('doors.openCardEditor') && stage.includes('doors.createQuizCards'), 'quiz/follow-ups keep the card designer door');
   assert(!stage.includes('doors.addYoutube'), 'YouTube is added by Jewel in conversation — no duplicate door on the stage');
-  // The movement into Jewel lives inside the topic (Jessica, 2026-11-04):
-  // in the background area the flat/animated examples come first, and
-  // Jewel's conversation panel stands open directly after them — the
-  // eye flows examples → step into Jewel → the backdrops shelf where
-  // the work is stored. The panel is NOT parked under the banner or
-  // below all the content, and no "Open Jewel" button was added: the
-  // panel itself, open and in place after the examples, is the movement.
-  const bgAt = stage.indexOf('First let’s decide on a background');
-  const bgPanelAt = stage.indexOf('{jewelPanel}', bgAt);
-  assert(bgAt > -1 && bgPanelAt > bgAt, 'the conversation panel renders inside the background topic');
-  assert(stage.indexOf('AnimatedExampleMedia', bgAt) < bgPanelAt, 'background: the flat/animated examples come before the conversation');
-  assert(bgPanelAt < stage.indexOf('Your backdrops', bgAt), 'background: examples → conversation → the backdrops shelf');
-  const bannerAt = stage.indexOf('{TALK_CREATIVITY_BANNER}');
-  assert(!stage.slice(bannerAt, stage.indexOf('topic === "background"')).includes('{jewelPanel}'),
-    'the conversation is not parked between the banner and the topics — it lives inside the current topic');
-  assert((stage.match(/\{jewelPanel\}/g) || []).length >= 6, 'her panel stands inside every topic section, after that topic\'s examples');
+  // Jewel stands FIRST in the working area (Jessica, 2026-11-15,
+  // superseding the 2026-11-04 in-topic placement): her conversation
+  // panel heads the stage — above the banner, the library door and
+  // every topic — rendered exactly once, and no topic section carries
+  // a copy of it. She is never buried down the page again. The topics
+  // keep their demonstrations, shelves and doors after her.
+  assert((stage.match(/\{jewelPanel\}/g) || []).length === 1, 'her panel renders exactly once in the talk stage');
+  const render = stage.slice(stage.indexOf('return (\n    <section'));
+  assert(render.indexOf('{jewelPanel}') > -1 && render.indexOf('{jewelPanel}') < render.indexOf('gsw-liberty'), 'her panel stands at the head of the stage, before the banner');
+  assert(render.indexOf('{jewelPanel}') < render.indexOf('topic === "background"'), 'her panel stands before every topic');
+  const bgStage = stage.slice(stage.indexOf('function BackgroundStage'), stage.indexOf('/* ---------------- Opening prompt'));
+  assert(!bgStage.includes('{jewelPanel}'), 'the background topic carries no second copy of her panel');
   assert(page.includes('jewelPanel={jewelPanelElement}'), 'the page hands its one Jewel panel to the talk stage');
   assert(page.includes('talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement'), 'in the talk create view (and the gameshow create and stage-review views) the grid does not render the panel a second time');
   assert.equal((page.match(/<WorkshopAiPanel/g) || []).length, 1, 'the panel element is built exactly once and placed, never duplicated');
@@ -163,9 +159,10 @@ const quizTool = (overrides = {}) => ({
   // instead (a plain 104px bubble with a 46px wand, then the
   // landing bubble alone at 112px with a tiny wand badge) — the
   // opposite composition: Jewel dominant, the wand a speck.
+  const bgAt = stage.indexOf('First let’s decide on a background');
   const sceneAt = stage.indexOf('<JewelWandScene', bgAt);
-  assert(sceneAt > bgAt && sceneAt < bgPanelAt, 'the landing wand scene stands in the background area, immediately before the conversation');
-  assert(stage.indexOf('AnimatedExampleMedia', bgAt) < sceneAt, 'background: the examples come before the wand scene, the scene before the conversation');
+  assert(bgAt > -1 && sceneAt > bgAt, 'the landing wand scene stands in the background area, as the doorway into her conversation');
+  assert(stage.indexOf('AnimatedExampleMedia', bgAt) < sceneAt, 'background: the flat/animated examples come before the wand-scene doorway');
   const bgSection = stage.slice(bgAt, stage.indexOf('Your backdrops', bgAt));
   assert(!bgSection.includes('<JewelAvatar'), 'no lone avatar bubble stands at the entry — the pictured scene replaced it');
   assert(!stage.includes('size={112}') && !stage.includes('size={104}') && !stage.includes('wandSize={46}'), 'the oversized entry treatments are gone: no 112px or 104px entry bubble, no 46px wand');
