@@ -97,7 +97,7 @@ const aStroke = () => ({ color: '#e11d48', width: 10, points: [[100, 100], [200,
 
 // --- config extraction, deck identification & precedence --------------------
 {
-  same(Object.keys(engine.GAME_MODULES), ['bingo', 'quiz-board', 'survey-showdown', 'perfect-match', 'word-chain', 'draw-guess'], 'registry order: bingo, quiz, survey, perfect match, word chain, draw & guess');
+  same(Object.keys(engine.GAME_MODULES), ['bingo', 'quiz-board', 'survey-showdown', 'perfect-match', 'word-chain', 'draw-guess', 'property-tycoon'], 'registry order: bingo, quiz, survey, perfect match, word chain, draw & guess');
 
   const picked = engine.pickGame(drawSnapshot());
   assert.equal(picked.gameType, 'draw-guess', 'a snapshot whose only content is a draw deck is a drawing game');
@@ -395,7 +395,7 @@ const aStroke = () => ({ color: '#e11d48', width: 10, points: [[100, 100], [200,
 
 // --- publish readiness ---------------------------------------------------------
 {
-  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, a prompt card list and an answer card list for a matching game, a word list with at least 10 starter words for a word chain game, or a draw list with at least 12 words to draw for a drawing game — ask Jewel to build one for you.';
+  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, a prompt card list and an answer card list for a matching game, a word list with at least 10 starter words for a word chain game, a draw list with at least 12 words to draw for a drawing game, or a property list with at least 12 properties to trade for a property trading game — ask Jewel to build one for you.';
   const tool = (id, name, texts) => ({ id, type: 'card-list', name, enabled: true, inToolbox: true, config: { cards: texts.map((text, i) => ({ id: `${id}-c${i + 1}`, text })) } });
 
   const ready = { kind: 'multiplayer', name: 'Draw Night', theme: 'cyan', assets: [], controls: [], gameTools: [tool('draw-1', 'Draw Words', WORDS)] };
