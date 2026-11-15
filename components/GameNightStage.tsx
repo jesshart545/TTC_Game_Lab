@@ -24,14 +24,19 @@ import "./game-night-stage.css";
  * guide. This stage is that light composition, holding ONLY
  * game-night pieces:
  *
- *   the creative-liberty banner (once, her exact wording),
- *   the gold "Your library & uploads" door,
+ *   the creative-liberty banner FIRST (once, her exact wording) —
+ *   the creator's freedom is the first thing the page takes into
+ *   account,
+ *   Jewel as the doorway SECOND — her wand scene, a few pictured
+ *   example asks, and her conversation, reachable without scrolling
+ *   past the game or the library (her 2026-11-15 correction: in the
+ *   first cut of this frame Jewel sat below the game, "hidden way
+ *   down at the bottom again"),
  *   the game itself, shown as itself (GameNightGameView) — or, when
  *   the project holds no game yet, the pictured shelf of the seven
  *   games as examples,
- *   Jewel as the doorway — her wand scene, a few pictured example
- *   asks, and her conversation,
- *   and the library under its heading, with the upload door.
+ *   and the gold "Your library & uploads" door with the library
+ *   under its heading, with the upload door.
  *
  * NO form: after the title + theme creation already asked for,
  * everything happens with Jewel. NO progress machinery on the page:
@@ -85,14 +90,6 @@ export default function GameNightStage({ project, jewelPanel, onEnterJewel, onAs
         </div>
         <div className="gsw-lwand" aria-hidden="true">🪄</div>
       </div>
-      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={scrollToLibrary}>Your library &amp; uploads</button>
-
-      {resolved ? (
-        <GameNightGameView project={project} doors={doors} />
-      ) : (
-        <GameNightShelf onAskJewel={onAskJewel} />
-      )}
-
       <div style={{ marginTop: 20, marginBottom: 12 }}>
         <JewelWandScene onEnter={onEnterJewel} />
       </div>
@@ -111,6 +108,14 @@ export default function GameNightStage({ project, jewelPanel, onEnterJewel, onAs
       )}
 
       {jewelPanel}
+
+      {resolved ? (
+        <GameNightGameView project={project} doors={doors} />
+      ) : (
+        <GameNightShelf onAskJewel={onAskJewel} />
+      )}
+
+      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={scrollToLibrary}>Your library &amp; uploads</button>
 
       <div className="gn-library" id="game-night-library">
         <div className="gn-library-head">

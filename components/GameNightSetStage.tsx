@@ -17,8 +17,15 @@ import "./game-night-stage.css";
  * no host dashboard. What its stage holds instead — her locked
  * design — is SEE it, TEST it, PUBLISH it, SHARE it:
  *
- *   FIRST and most prominent, the game itself, pictured — the same
- *   presentation as Imagine & Create (GameNightGameView).
+ *   The creative-liberty banner FIRST (once, her exact wording) —
+ *   the creator's freedom leads this area too.
+ *   Jewel's doorway SECOND — her conversation up top, reachable
+ *   without scrolling past the game, the test door and the publish
+ *   block (her 2026-11-15 correction: in the first cut of this frame
+ *   she sat at the very bottom, "hidden way down at the bottom
+ *   again"), her progress strip withheld as in every light view.
+ *   Then the game itself, pictured — the same presentation as
+ *   Imagine & Create (GameNightGameView).
  *   A TEST door: a game night is tested by playing the real thing.
  *   The creator share route builds the play room from the PUBLISHED
  *   snapshot, so once the game is published, "Test your game" opens
@@ -33,8 +40,6 @@ import "./game-night-stage.css";
  *   own publish — the same action Jewel runs when asked in chat),
  *   and once published, the GameNightShare panel (play link + QR
  *   code) front and center.
- *   Jewel's conversation below, her progress strip withheld as in
- *   every light view.
  *
  * NONE of the livestream staging renders here for this kind — no
  * background picker, no overlay or dashboard preview, no addition
@@ -89,6 +94,8 @@ export default function GameNightSetStage({ project, jewelPanel, doors, onPublis
         <div className="gsw-lwand" aria-hidden="true">🪄</div>
       </div>
 
+      {jewelPanel}
+
       <GameNightGameView project={project} doors={doors} />
 
       <div className="gn-test">
@@ -117,8 +124,6 @@ export default function GameNightSetStage({ project, jewelPanel, doors, onPublis
         </button>
         {published && <GameNightShare projectId={project.id} published={published} />}
       </div>
-
-      {jewelPanel}
     </section>
   );
 }
