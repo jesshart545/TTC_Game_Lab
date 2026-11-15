@@ -488,14 +488,18 @@ export default function GameshowWorkshop(props: GameshowWorkshopProps) {
         in your project — you never tick a step off yourself. Each step opens with a working demonstration: try the thing itself, watch
         how it can change, then tell Jewel to make yours.
       </p>
-      <div className="gsw-liberty">
-        <div className="gsw-lmedal" aria-hidden="true">✦</div>
-        <div>
-          <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
-          <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
+      {/* The liberty banner never stands on a Game Night page (Jessica,
+          2026-11-15): there, creative freedom is shown, never written. */}
+      {project.kind !== "multiplayer" && (
+        <div className="gsw-liberty">
+          <div className="gsw-lmedal" aria-hidden="true">✦</div>
+          <div>
+            <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
+            <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
+          </div>
+          <div className="gsw-lwand" aria-hidden="true">🪄</div>
         </div>
-        <div className="gsw-lwand" aria-hidden="true">🪄</div>
-      </div>
+      )}
 
       {active.id === "plan" && <PlanStep {...screenProps} />}
       {active.id === "media" && <MediaStep {...screenProps} />}
