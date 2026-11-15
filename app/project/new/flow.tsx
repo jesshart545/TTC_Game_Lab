@@ -81,8 +81,10 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
       } else if (gnTemplate) {
         // Game Night template: the project starts as a multiplayer game
         // night holding the template's starter content, ready to
-        // customize with Jewel (Jessica's design, 2026-11-15).
-        applyGameNightTemplate(project, gnTemplate, name);
+        // customize with Jewel (Jessica's design, 2026-11-15). The
+        // creator's own title and theme — asked on the template's open
+        // view, the universal two-input start — go in with it.
+        applyGameNightTemplate(project, gnTemplate, name, theme);
       } else {
         project.prompt = idea;
         project.workflow = { stage: 0, workshopStep: 0, promptDraft: idea };
@@ -104,6 +106,13 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
           // creator gave on the setup screen seed the project before
           // anything else exists.
           if ((start.kind === "talk" || start.kind === "gameshow") && start.theme) {
+            project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
+          }
+          // A game night seeds its theme the same way (Jessica,
+          // 2026-11-15): the two-input ask is universal, so the theme
+          // the creator gave on the setup screen is in gamePlan.theme
+          // before anything else exists.
+          if (start.kind === "multiplayer" && start.theme) {
             project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
           }
           project = applySetupPieces(project, start.pieces);
@@ -151,7 +160,12 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
 
   function startScratch() {
     if (!kind || isKindGatedFor(kind, viewerIsAdmin)) return;
-    setStart({ kind, pieces: [...pieces], theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined });
+    const scratch: ScratchStart = { kind, pieces: [...pieces], theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined };
+    // A game night starts with the same two-input ask (Jessica,
+    // 2026-11-15): the creator's theme rides along exactly like a
+    // show's, so creation can seed it the same way.
+    if (kind === "multiplayer") scratch.theme = theme.trim() || undefined;
+    setStart(scratch);
     setBegun(true);
   }
 
@@ -232,6 +246,12 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                   <div className="np-ask">First things first — two things only you can give: <b>the title of your show</b>, and <b>its theme, vibe, or subject</b>. Then tap the pieces your show needs.</div>
                   <input className="np-nameinput" aria-label="Show title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
                   <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder={kind === "talk" ? "Its theme, vibe, or subject — e.g. cozy faith-and-life chat" : "Its theme, vibe, or subject — e.g. neon 90s music trivia"} value={theme} onChange={event => setTheme(event.target.value)} />
+                </>
+              ) : kind === "multiplayer" ? (
+                <>
+                  <div className="np-ask">First things first — two things only you can give: <b>the title of your game</b>, and <b>its theme, vibe, or subject</b>. Then tap the pieces your game needs.</div>
+                  <input className="np-nameinput" aria-label="Game title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+                  <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder="Its theme, vibe, or subject — e.g. spooky Halloween sleepover" value={theme} onChange={event => setTheme(event.target.value)} />
                 </>
               ) : (
                 <>
@@ -342,6 +362,9 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                   </div>
                 </div>
                 <p className="np-ask" style={{ marginTop: "18px" }}>{template.description}</p>
+                <div className="np-ask" style={{ marginTop: "18px" }}>First things first — two things only you can give: <b>the title of your game</b>, and <b>its theme, vibe, or subject</b>.</div>
+                <input className="np-nameinput" aria-label="Game title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+                <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder="Its theme, vibe, or subject — e.g. spooky Halloween sleepover" value={theme} onChange={event => setTheme(event.target.value)} />
                 <div className="np-nextrow">
                   <button type="button" className="np-nextbtn" onClick={() => chooseTemplate(template.id)}>Continue with this template →</button>
                   <button type="button" className="np-back" onClick={() => setScreen("gn-templates")}>← Go back</button>
