@@ -589,16 +589,17 @@ const quizTool = (overrides = {}) => ({
   assert(nav.includes('"Imagine and Create", "Set the Stage", "Showtime!"'), 'stage nav labels are the locked stage names');
   assert(!nav.includes('"Workshop", "Build Space", "Publish"'), 'the old stage labels are gone from the nav');
 
-  // Fix 4 at the data level: a from-scratch talk project is seeded with
-  // talk pieces only, and the theme given at project start lands in
-  // gamePlan.theme.
+  // Fix 4 at the data level: a from-scratch talk project is offered
+  // talk pieces only and pre-places none of them (Jessica, 2026-11-14:
+  // tools are simply an option until the creator adds them), and the
+  // theme given at project start lands in gamePlan.theme.
   const { createProject } = load('lib/project.ts');
   const { applySetupPieces, defaultSetupPieces, setupPiecesForKind } = load('lib/project-kinds.ts');
   eq(setupPiecesForKind('talk').map(p => p.id), ['question-cards', 'video-clips'], 'the talk setup screen offers only talk pieces');
   assert.equal(setupPiecesForKind('gameshow').length, 6, 'gameshow keeps the full setup list');
-  eq(defaultSetupPieces('talk'), ['question-cards', 'video-clips'], 'talk defaults are its own two pieces');
+  eq(defaultSetupPieces('talk'), [], 'no pieces are pre-tapped for talk — tools are options the creator picks (Jessica, 2026-11-14)');
   const fresh = applySetupPieces({ ...createProject(''), kind: 'talk', name: 'My Talk Show', gamePlan: { theme: 'cozy faith-and-life chat' } }, defaultSetupPieces('talk'));
-  assert(fresh.gameTools.length > 0, 'the from-scratch talk project is seeded with pieces');
+  assert.equal(fresh.gameTools.length, 0, 'the from-scratch talk project starts with no tools until the creator adds them');
   assert(fresh.gameTools.every(t => TALK_TOOL_TYPES.includes(t.type)), `a from-scratch talk project carries talk tools only (got ${[...new Set(fresh.gameTools.map(t => t.type))]})`);
   assert.equal(fresh.gamePlan.theme, 'cozy faith-and-life chat', 'the theme given at project start seeds gamePlan.theme');
 
@@ -621,7 +622,7 @@ const quizTool = (overrides = {}) => ({
   assert(flow.includes('the title of your show') && flow.includes('its theme, vibe, or subject'), 'a new talk project starts with the title + theme ask');
   assert(flow.includes('setupPiecesForKind(kindInfo.id)'), 'the setup screen renders the kind’s own pieces');
   assert(flow.includes('project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme }'), 'the theme answer seeds gamePlan.theme at creation');
-  console.log('PASS: fix build — locked stage names; from-scratch talk projects seed, picture, and list talk pieces only; the ask comes first.');
+  console.log('PASS: fix build — locked stage names; from-scratch talk projects offer, picture, and list talk pieces only; the ask comes first.');
 }
 
 // --- Jessica's layout (2026-11-04): bare top, "Save project", the gate ------

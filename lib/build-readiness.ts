@@ -51,6 +51,21 @@ export function buildReadiness(project: Project): BuildIssue[] {
   if(error)issues.push({id:'control-'+control.id,message:control.label+': '+error,kind:'control',targetId:control.id,fix:'customize'});
  }
  for(const tool of project.gameTools.filter(t=>t.enabled&&(t.inToolbox||t.inOverlayBuild))){
+  // Is this tool connected to the dashboard at all? A tool with no
+  // dashboard connection is simply not a feature of the game yet
+  // (Jessica, 2026-11-14: tools "are simply an option" until the
+  // creator adds them as a feature), so it never blocks publishing on
+  // wiring grounds — there is no generic "add a dashboard button"
+  // demand. The one check that consults this is the countdown's: its
+  // specific-button rule applies only once the timer is connected.
+  const linked=project.controls.some(c=>{
+   if(c.toolIds?.includes(tool.id))return true;
+   if(c.action===`tool.${tool.id}`||c.action===`coin.cycle.${tool.id}`)return true;
+   const timer=timerAction(c.action||'');if(timer&&timer.toolId===tool.id)return true;
+   if(c.action?.startsWith('cards.')&&c.action.endsWith('.'+tool.id))return true;
+   if(c.action==='sequence'&&c.chain?.some(s=>s.kind==='control'&&project.controls.some(x=>x.id===s.refId&&x.toolIds?.includes(tool.id))))return true;
+   return false;
+  });
   if(infoTypes.includes(tool.type)&&(!gameEntries(tool).length||gameEntries(tool).some(e=>!e.name.trim()||(tool.type==='game-tool-list'&&!e.meaning?.trim()))))issues.push({id:'entries-'+tool.id,message:tool.name+': add named entries'+(tool.type==='game-tool-list'?' with their game actions':'')+'.',kind:'tool',targetId:tool.id,fix:'customize'});
   if(tool.type==='random-picker'&&!pickerCards(project,tool).length)issues.push({id:'list-'+tool.id,message:tool.name+': choose an image pool or card list containing saved items.',kind:'tool',targetId:tool.id,fix:'customize'});
   if(tool.type==='question-card'){
@@ -59,21 +74,10 @@ export function buildReadiness(project: Project): BuildIssue[] {
    if(!(project.controls.some(c=>c.action===`cards.toggle.${tool.id}`)||['show','reveal'].every(action=>project.controls.some(c=>c.action===`cards.${action}.${tool.id}`))))issues.push({id:'buttons-'+tool.id,message:tool.name+': connect the Question Card button (one button draws, reveals, then clears), or Show Question and Reveal Answer controls.',kind:'tool',targetId:tool.id,fix:'connect'});
   }
   if(tool.type==='blank-card'&&!tool.inOverlayBuild)issues.push({id:'overlay-'+tool.id,message:tool.name+': add the blank card to the audience overlay.',kind:'tool',targetId:tool.id,fix:'connect'});
-  if(tool.type==='countdown'){
+  if(tool.type==='countdown'&&linked){
    const ops=['show','toggle','hide'];
    const missing=ops.filter(op=>!project.controls.some(c=>{const t=timerAction(c.action||'');return t&&t.toolId===tool.id&&t.operation===op;}));
    if(missing.length)issues.push({id:'timer-controls-'+tool.id,message:tool.name+': connect Show, Start/pause, and Hide dashboard buttons so the timer can run live.',kind:'tool',targetId:tool.id,fix:'connect'});
-  }
-  if(!['blank-board','trivia-board','card-list','trivia-list'].includes(tool.type)){
-   const linked=project.controls.some(c=>{
-    if(c.toolIds?.includes(tool.id))return true;
-    if(c.action===`tool.${tool.id}`||c.action===`coin.cycle.${tool.id}`)return true;
-    const timer=timerAction(c.action||'');if(timer&&timer.toolId===tool.id)return true;
-    if(c.action?.startsWith('cards.')&&c.action.endsWith('.'+tool.id))return true;
-    if(c.action==='sequence'&&c.chain?.some(s=>s.kind==='control'&&project.controls.some(x=>x.id===s.refId&&x.toolIds?.includes(tool.id))))return true;
-    return false;
-   });
-   if((tool.inToolbox||tool.inOverlayBuild)&&!linked)issues.push({id:'controls-'+tool.id,message:tool.name+': add at least one dashboard button so the host can show or run it.',kind:'tool',targetId:tool.id,fix:'connect'});
   }
  }
  }

@@ -102,11 +102,15 @@ export function setupPiecesForKind(kind: ProjectKind): SetupPiece[] {
   return SETUP_PIECES;
 }
 
-/** The pieces pre-tapped for a kind: the talk defaults are its own two
- * pieces; every other kind keeps the shared defaults. */
+/** The pieces pre-tapped for a kind: NONE, for every kind (Jessica,
+ * 2026-11-14: game tools "are simply an option" — they are not placed
+ * in a new project, and not on the dashboard, unless the creator picks
+ * them, customizes them, and adds them as a feature of their game).
+ * The setup screen still offers every piece as a tile; only the
+ * automatic pre-tap is gone, so what lands in a fresh project is
+ * exactly what the creator tapped. */
 export function defaultSetupPieces(kind: ProjectKind): string[] {
-  if (kind === "talk") return ["question-cards", "video-clips"];
-  return SETUP_PIECES.filter(piece => piece.defaultOn).map(piece => piece.id);
+  return [];
 }
 
 export function projectKindInfo(kind: ProjectKind | undefined): ProjectKindInfo | undefined {
@@ -118,7 +122,9 @@ export function projectKindInfo(kind: ProjectKind | undefined): ProjectKindInfo 
 // factories the Workshop / Build Space use. The demo also showed
 // "Music & sounds" and "Effects" tiles; neither exists as a standalone
 // tool (music/SFX are generated assets, effects live inside compositions),
-// so they are deliberately NOT offered rather than faked.
+// so they are deliberately NOT offered rather than faked. No piece is
+// defaultOn: the tiles are options, never pre-tapped (Jessica,
+// 2026-11-14 — see defaultSetupPieces).
 export type SetupPiece = {
   id: string;
   label: string;
@@ -130,11 +136,11 @@ export type SetupPiece = {
 };
 
 export const SETUP_PIECES: SetupPiece[] = [
-  { id: "question-cards", label: "Question cards", defaultOn: true, image: "/redesign/kind-talkshow.webp" },
-  { id: "prize-wheel", label: "Prize wheel", defaultOn: true, glyph: "◐", toolType: "wheel", toolName: "Game Wheel" },
+  { id: "question-cards", label: "Question cards", defaultOn: false, image: "/redesign/kind-talkshow.webp" },
+  { id: "prize-wheel", label: "Prize wheel", defaultOn: false, glyph: "◐", toolType: "wheel", toolName: "Game Wheel" },
   { id: "dice", label: "Dice", defaultOn: false, glyph: "⚄", toolType: "dice", toolName: "Dice Roll" },
-  { id: "timer", label: "Timer", defaultOn: true, glyph: "1:00", toolType: "countdown", toolName: "Countdown" },
-  { id: "scoreboard", label: "Scoreboard", defaultOn: true, image: "/redesign/kind-gameshow.webp", toolType: "scoreboard", toolName: "Scoreboard" },
+  { id: "timer", label: "Timer", defaultOn: false, glyph: "1:00", toolType: "countdown", toolName: "Countdown" },
+  { id: "scoreboard", label: "Scoreboard", defaultOn: false, image: "/redesign/kind-gameshow.webp", toolType: "scoreboard", toolName: "Scoreboard" },
   { id: "video-clips", label: "Video clips", defaultOn: false, glyph: "▶", toolType: "youtube", toolName: "YouTube search" },
 ];
 
