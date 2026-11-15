@@ -47,12 +47,17 @@ console.log('PASS: the big wheel shows the spin, tracks the running total, and c
 
 // ---- Rich faces: marquee cabinet, real cards, mountain scene, glossy wheel ----
 const {WheelDisplay,cardSuit}=exportsObject;
-// Plinko stands as a lit cabinet (gradient board, marquee bulbs, glossy
-// pegs and ball) and the landed slot flashes.
+// Plinko's face is the approved neon-cabinet artwork with the live
+// elements layered over it: the artwork image itself, the configured
+// slot values in the slot band, and the glowing puck resting at the
+// drop slot; the landed slot flashes, and no dollar sign ever renders.
 html=renderToStaticMarkup(React.createElement(PlinkoDisplay,{slots:['10','500','1000'],winner:1,preview:true}));
-assert(html.includes('plinko-bg')&&html.includes('chance-bulb')&&html.includes('chance-plinko-halo'),'plinko preview is a lit cabinet with marquee bulbs and a glowing ball');
+assert(html.includes('/game-art/plinko-board.webp')&&html.includes('chance-plinko-halo'),'plinko preview is the artwork board with a glowing puck');
+assert(html.includes('>10<')&&html.includes('>500<')&&html.includes('>1000<'),'plinko preview layers the configured slot values over the artwork slot band');
+assert(!html.includes('$'),'plinko never renders a dollar sign');
 html=renderToStaticMarkup(React.createElement(PlinkoDisplay,{slots:['10','500','1000'],winner:2,elapsed:3000}));
 assert(html.includes('chance-plinko-slot-win'),'the landed plinko slot carries the win-flash hook');
+assert(!html.includes('$'),'landed plinko never renders a dollar sign');
 // Higher or Lower deals real card faces: rank + a deterministic suit,
 // a face-down next card, and a flip-in on the reveal.
 assert.equal(cardSuit('K',13).g,cardSuit('K',13).g,'a card always shows the same suit');
@@ -77,4 +82,4 @@ html=renderToStaticMarkup(React.createElement(WheelDisplay,{entries:['A','B','C'
 assert(html.includes('is-spinning'),'the spinning wheel carries the spin state for the flapper animation');
 html=renderToStaticMarkup(React.createElement(WheelDisplay,{entries:['A','B','C'],result:'C',elapsed:4000}));
 assert(html.includes('chance-wheel-win'),'the winning wheel segment carries the flash hook');
-console.log('PASS: the four chance games wear rich faces — lit plinko cabinet, real suited cards, a mountain scene with a climber, and a glossy bulbed wheel.');
+console.log('PASS: the four chance games wear rich faces — artwork plinko cabinet, real suited cards, a mountain scene with a climber, and a glossy bulbed wheel.');
