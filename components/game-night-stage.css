@@ -18,6 +18,10 @@
 .gn-door-row { margin-top:10px; }
 .gn-door { background:#1c1729; color:#e9c979; border:1px solid #574a85; font-weight:700; font-size:13.5px; padding:8px 14px; border-radius:11px; cursor:pointer; }
 .gn-door:hover { border-color:#e9c979; }
+/* The workbench framing (Imagine & Create): the editor door LEADS its
+   family — full-width, gold-edged, above the pieces it edits. */
+.gn-door-row-lead { margin:0 0 12px; }
+.gn-door-lead { display:block; width:100%; text-align:center; padding:12px 16px; font-size:14.5px; background:#2a2140; border-color:#e9c979; box-shadow:0 4px 16px rgba(233,201,121,.22); }
 
 /* item / word tiles (bingo calls, word starters, draw words) */
 .gn-tiles { display:flex; flex-wrap:wrap; gap:8px; }

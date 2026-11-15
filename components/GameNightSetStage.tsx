@@ -2,11 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import type { Project } from "../lib/project";
-import { CREATIVE_LIBERTY_TEXT } from "../lib/gameshow-path";
 import { buildReadiness, publishReviewSummary } from "../lib/build-readiness";
 import GameNightGameView, { type GameNightDoors } from "./GameNightGameView";
 import GameNightShare from "./GameNightShare";
-import JewelAvatar from "./JewelAvatar";
 import "./gameshow-workshop.css";
 import "./game-night-stage.css";
 
@@ -17,8 +15,15 @@ import "./game-night-stage.css";
  * no host dashboard. What its stage holds instead — her locked
  * design — is SEE it, TEST it, PUBLISH it, SHARE it:
  *
- *   FIRST and most prominent, the game itself, pictured — the same
- *   presentation as Imagine & Create (GameNightGameView).
+ *   Jewel FIRST — her conversation at the top of the area, before
+ *   the game (her 2026-11-15 correction: in the first cut she sat
+ *   at the very bottom, "hidden way down at the bottom again"), her
+ *   progress strip withheld as in every light view. No liberty text
+ *   banner stands here either: creative freedom is shown, never
+ *   written — that statement was never authorized in words.
+ *   Then the game itself, pictured — GameNightGameView in its
+ *   EXHIBIT framing, because seeing the game is this area's job
+ *   (Imagine & Create holds the workbench framing instead).
  *   A TEST door: a game night is tested by playing the real thing.
  *   The creator share route builds the play room from the PUBLISHED
  *   snapshot, so once the game is published, "Test your game" opens
@@ -33,8 +38,6 @@ import "./game-night-stage.css";
  *   own publish — the same action Jewel runs when asked in chat),
  *   and once published, the GameNightShare panel (play link + QR
  *   code) front and center.
- *   Jewel's conversation below, her progress strip withheld as in
- *   every light view.
  *
  * NONE of the livestream staging renders here for this kind — no
  * background picker, no overlay or dashboard preview, no addition
@@ -80,14 +83,7 @@ export default function GameNightSetStage({ project, jewelPanel, doors, onPublis
 
   return (
     <section className="gsw gsw-stage gn-stage" aria-label="Set the Stage — see your game, test it, publish it, share it">
-      <div className="gsw-liberty">
-        <JewelAvatar size={58} />
-        <div>
-          <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
-          <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
-        </div>
-        <div className="gsw-lwand" aria-hidden="true">🪄</div>
-      </div>
+      {jewelPanel}
 
       <GameNightGameView project={project} doors={doors} />
 
@@ -117,8 +113,6 @@ export default function GameNightSetStage({ project, jewelPanel, doors, onPublis
         </button>
         {published && <GameNightShare projectId={project.id} published={published} />}
       </div>
-
-      {jewelPanel}
     </section>
   );
 }
