@@ -61,6 +61,20 @@ type PerfectMatchPublic = {
   revealedCards?: { text: string; ownerId?: string; ownerName?: string; winner?: boolean }[];
   lastRound?: { prompt: string; winnerId: string | null; winnerName: string | null; winningCard: string | null; judgeName: string | null } | null;
 };
+type WordChainPublic = {
+  chainStage?: "play" | "done";
+  chain?: string[];
+  currentWord?: string | null;
+  chainLength?: number;
+  chainTarget?: number;
+  turnPlayerId?: string | null;
+  turnName?: string | null;
+  turnEndsAt?: number | null;
+  turnNumber?: number;
+  maxStrikes?: number;
+  wordPlayers?: Record<string, { strikes: number; out: boolean; added: number }>;
+  lastPlay?: { playerId: string; name: string; word: string; result: "in" | "repeat" | "invalid" | "timeout" } | null;
+};
 type RoomView = {
   title: string;
   gameType: string;
@@ -68,7 +82,7 @@ type RoomView = {
   round: number;
   countdownEndsAt: number | null;
   players: PlayerView[];
-  game: BingoPublic & QuizPublic & SurveyPublic & PerfectMatchPublic;
+  game: BingoPublic & QuizPublic & SurveyPublic & PerfectMatchPublic & WordChainPublic;
   me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string; team?: number; guessText?: string; hand?: string[]; submittedCard?: string; submittedRound?: number } } | null;
   standings: Standing[] | null;
 };
@@ -140,6 +154,12 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
     ? [view.game.questionIndex, view.game.stage, view.game.guesser?.playerId || "", (view.game.faceoff?.playerIds || []).join(","), view.game.guesser?.endsAt || view.game.faceoff?.endsAt || ""].join(":")
     : undefined;
   useEffect(() => { setAnswerDraft(""); }, [surveySlotKey]);
+
+  // A fresh turn means a fresh word box (Word Chain).
+  const chainTurnKey = view?.gameType === "word-chain"
+    ? [view.game.turnNumber, view.game.turnPlayerId || ""].join(":")
+    : undefined;
+  useEffect(() => { setAnswerDraft(""); }, [chainTurnKey]);
 
   async function join() {
     const name = nameDraft.trim();
@@ -218,6 +238,10 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   const myHand = view.me?.state.hand || [];
   const isJudge = !!match && !!me && match.judgeId === me.id;
   const mySubmitted = !!match && !!me && (match.submittedIds || []).includes(me.id);
+  const chain = view.gameType === "word-chain" ? view.game : null;
+  const myChainState = chain && me ? chain.wordPlayers?.[me.id] : undefined;
+  const myChainTurn = !!chain && !!me && chain.turnPlayerId === me.id && !myChainState?.out;
+  const chainWords = chain?.chain || [];
 
   return (
     <main className="gn-shell" style={{ "--gn-accent": accent } as React.CSSProperties}>
@@ -261,6 +285,9 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
           )}
           {view.gameType === "perfect-match" && (
             <p className="gn-hint">Everyone is dealt a hand of cards when the game starts. Each round one player judges — everyone else plays the card from their hand that best matches the prompt.</p>
+          )}
+          {view.gameType === "word-chain" && (
+            <p className="gn-hint">A starter word goes up BIG — then everyone takes turns adding one word that goes with the word before it. You have 10 seconds a turn; a repeat or a missed turn is a strike, and two strikes and you&apos;re out. Last one standing wins — or finish a 30-word chain together!</p>
           )}
           <div className="gn-chips">
             {view.players.map(player => <PlayerChip key={player.id} player={player} />)}
@@ -611,6 +638,84 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
                 </>
               )}
             </>
+          ) : chain ? (
+            <>
+              <div className="gn-standings-strip" aria-label="Players and strikes">
+                {view.players.map(player => {
+                  const state = chain.wordPlayers?.[player.id];
+                  const isTurn = chain.turnPlayerId === player.id && !state?.out;
+                  return (
+                    <span key={player.id} className={`gn-strip-chip${player.me ? " gn-strip-me" : ""}${isTurn ? " gn-strip-turn" : ""}${state?.out ? " gn-strip-out" : ""}`}>
+                      {player.isCreator ? "⭐ " : ""}{player.name}
+                      {state?.out ? " · out" : (
+                        <> · {state?.added ?? 0} added{" "}
+                          <span className="gn-strip-strikes" aria-label={`${state?.strikes ?? 0} of ${chain.maxStrikes ?? 2} strikes`}>
+                            {[0, 1].map(i => <span key={i} className={i < (state?.strikes ?? 0) ? "gn-x gn-x-on" : "gn-x"} aria-hidden="true">✕</span>)}
+                          </span>
+                        </>
+                      )}
+                      {isTurn ? " · thinking…" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+
+              <div className="gn-call-zone">
+                <div className="gn-call" key={`wc-${chain.chainLength}`}>
+                  <span className="gn-call-label">
+                    {chain.chainLength === 1 ? "The starter word" : `Word ${chain.chainLength} of ${chain.chainTarget ?? 30}`} · {chain.turnName ? `${chain.turnName} is up` : "Next word"}
+                  </span>
+                  <span className="gn-call-item gn-chain-current">{chain.currentWord}</span>
+                  {chain.turnEndsAt && (
+                    <span className="gn-next-bar" key={`wcbar-${chain.turnNumber}`} style={{ animationDuration: `${Math.max(0, chain.turnEndsAt - Date.now())}ms` }} />
+                  )}
+                </div>
+              </div>
+
+              {chain.lastPlay && (
+                <p className="gn-progress-line" role="status">
+                  {chain.lastPlay.result === "in"
+                    ? `🔗 ${chain.lastPlay.name} linked “${chain.lastPlay.word}”`
+                    : chain.lastPlay.result === "repeat"
+                      ? `✕ “${chain.lastPlay.word}” is already in the chain — strike for ${chain.lastPlay.name}`
+                      : chain.lastPlay.result === "invalid"
+                        ? `✕ “${chain.lastPlay.word}” isn't one word of letters — strike for ${chain.lastPlay.name}`
+                        : `⏰ Time ran out — strike for ${chain.lastPlay.name}`}
+                </p>
+              )}
+
+              {myChainState?.out ? (
+                <p className="gn-progress-line" role="status">You&apos;re out of this chain — two strikes. Watch it finish!</p>
+              ) : myChainTurn ? (
+                <div className="gn-answer-row">
+                  <input
+                    className="gn-name-input gn-answer-input"
+                    value={answerDraft}
+                    onChange={event => setAnswerDraft(event.target.value)}
+                    onKeyDown={event => { if (event.key === "Enter" && answerDraft.trim()) act({ type: "play", text: answerDraft }); }}
+                    placeholder={`A word that goes with ${chain.currentWord ?? "it"}…`}
+                    maxLength={60}
+                    autoFocus
+                    aria-label="Your word"
+                  />
+                  <button type="button" className="gn-big-btn gn-answer-btn" onClick={() => act({ type: "play", text: answerDraft })} disabled={busy || !answerDraft.trim()}>
+                    {busy ? "Linking…" : "Link it 🔗"}
+                  </button>
+                </div>
+              ) : (
+                <p className="gn-progress-line" role="status">{chain.turnName ? `${chain.turnName} is thinking of a word…` : "The chain is moving…"}</p>
+              )}
+              <p className="gn-hint">One word, letters only, and no repeats — the group decides if it truly goes together.</p>
+
+              <div className="gn-chain-trail" aria-label="The chain so far">
+                {chainWords.map((word, index) => (
+                  <span key={`${word}-${index}`} className="gn-chain-step">
+                    {index > 0 && <span className="gn-chain-link" aria-hidden="true">🔗</span>}
+                    <span className={`gn-chain-word${index === chainWords.length - 1 ? " gn-chain-word-now" : ""}${index === 0 ? " gn-chain-word-start" : ""}`}>{word}</span>
+                  </span>
+                ))}
+              </div>
+            </>
           ) : (
             <>
           <div className="gn-call-zone">
@@ -712,7 +817,7 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
               )}
               {view.standings[0] && (
                 <p className="gn-winner-line">
-                  {view.gameType === "survey-showdown"
+                  {view.gameType === "survey-showdown" || view.gameType === "word-chain"
                     ? `🎉 ${view.standings[0].detail}`
                     : <>{view.standings[0].playerId === me.id ? "🎉 You won! " : `🎉 ${view.standings[0].name} wins! `}{view.standings[0].detail}</>}
                 </p>
@@ -720,7 +825,7 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             </>
           )}
           <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "play-again" })} disabled={busy}>
-            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : view.gameType === "perfect-match" ? "↻ Play again — fresh hands, new prompts" : "↻ Play again — same game, fresh cards"}
+            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : view.gameType === "perfect-match" ? "↻ Play again — fresh hands, new prompts" : view.gameType === "word-chain" ? "↻ Play again — new starter word, everyone back in" : "↻ Play again — same game, fresh cards"}
           </button>
           <p className="gn-hint">Anyone can press Play Again — the first press deals everyone back in.</p>
         </section>
