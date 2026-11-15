@@ -22,7 +22,14 @@ export const GENERATORS = [
 
 export type GeneratorType = (typeof GENERATORS)[number]["type"];
 
-export type LibraryItem = { type: GameToolType; name: string; description: string; restricted?: boolean };
+/** How a shelf tile creates its tool. "add" is the plain template add
+ *  (addGameTool, on Jewel's own construction — toolDefaults). The
+ *  routed kinds hand the tap to the creation machinery those tools
+ *  already have (the card creators, the list door, the trivia
+ *  generation entry) instead of minting a bare tool. */
+export type ShelfRoute = "add" | "question-card" | "blank-card" | "card-list" | "trivia-list";
+
+export type LibraryItem = { type: GameToolType; name: string; description: string; restricted?: boolean; route?: ShelfRoute };
 
 export const BOARD_LIBRARY: LibraryItem[] = [
   { type:"trivia-board", name:"5×5 Trivia Board", description:"Start with a functional 5×5 board, then customize its content, visuals and interactive areas with chat." },
@@ -38,8 +45,28 @@ export const TOOL_LIBRARY: LibraryItem[] = [
   { type:"poll", name:"Live Poll", description:"Show choices and a live audience poll." },
   { type:"coin-toss", name:"Coin Toss", description:"Flip an animated coin for a random Heads or Tails result. Customize its look and connect it in Build Space." },
   { type:"dice", name:"Dice Roll", description:"Roll animated dice for a quick game." },
+  { type:"plinko", name:"Plinko", description:"Drop the ball through the pegs and land in a prize slot." },
+  { type:"prize-wheel", name:"Big Prize Wheel", description:"Spin money values up to 1.00 — go over and bust." },
+  { type:"higher-lower", name:"Higher or Lower", description:"Guess whether the next card is higher or lower." },
+  { type:"cliffhanger", name:"Cliffhanger", description:"Guess the price — every amount off moves the climber one step toward the edge." },
+  { type:"youtube", name:"YouTube", description:"Play a YouTube video on your overlay, sent from your dashboard." },
   { type:"city-crime-scene" as GameToolType, name:"City Crime Scene", description:"Improv whodunnit mystery game — Law & Order style. Restricted to entitled accounts.", restricted:true },
+  { type:"question-card", name:"Question Cards", description:"Question and answer cards you design — one set per project.", route:"question-card" },
+  { type:"blank-card", name:"Blank Card", description:"A blank card in your own design, ready for anything.", route:"blank-card" },
+  { type:"card-list", name:"Card List", description:"A pool of cards or entries your other tools draw from.", route:"card-list" },
+  { type:"trivia-list", name:"Trivia Question List", description:"A generated list of sourced trivia questions for your show.", route:"trivia-list" },
 ];
+
+/** The full Imagine and Create tool shelf: every GameToolType, boards
+ *  first, exactly once. Jessica's rule (stated repeatedly, re-stated
+ *  2026-11-15): in any non-talkshow project the creator can access
+ *  ALL of the site's game tools from Imagine and Create — a tool
+ *  moves to Set the Stage only when the creator chooses it. */
+export const SHELF_LIBRARY: LibraryItem[] = [...BOARD_LIBRARY, ...TOOL_LIBRARY];
+
+export function shelfRoute(item: LibraryItem): ShelfRoute {
+  return item.route ?? "add";
+}
 
 export function isVideo(asset: ProjectAsset | null | undefined) {
   return Boolean(asset?.url && mediaKind(asset)==="video");

@@ -4,6 +4,7 @@ import { type FormEvent, type RefObject } from "react";
 import CompactConversation from "./CompactConversation";
 import PlaylistPlayer from "./PlaylistPlayer";
 import { BOARD_LIBRARY, TOOL_LIBRARY } from "../lib/workshop-libraries";
+import { ShelfCards } from "./ToolShelf";
 import { TALK_TOOL_TYPES } from "../lib/talkshow-path";
 import type { GameToolType, Project, ProjectAsset } from "../lib/project";
 import type { WorkflowEvaluation } from "../lib/workflow-progress";
@@ -27,6 +28,14 @@ export type WorkshopAiPanelProps = {
   showToolTemplates: boolean;
   triviaBusy: boolean;
   addGameTool: (type: GameToolType) => void;
+  /** The tool shelf's routed tiles (Jessica, 2026-11-15): the card,
+   *  list and trivia tiles on the shelf hand their tap to the same
+   *  creators those tools already have — the card-system creator,
+   *  the list door, the trivia generation entry — never a second,
+   *  divergent creation path. */
+  onCreateCard?: (kind: "question" | "blank") => void;
+  onNewList?: () => void;
+  onGenerateTriviaList?: () => void;
   jewelProgress: string;
   assetStatus: string | null;
   /** The playlist a just-finished zip upload created: its player is
@@ -72,7 +81,7 @@ export default function WorkshopAiPanel(props: WorkshopAiPanelProps) {
     workflowStep, workshopStep, buildAiOpen, setBuildAiOpen, building, draft, setDraft,
     sendMessage, promptRef, fileInputRef, project, workflow, onNavigateStep, aiUndo,
     showBoardTemplates, showToolTemplates,
-    triviaBusy, addGameTool,
+    triviaBusy, addGameTool, onCreateCard, onNewList, onGenerateTriviaList,
     jewelProgress,
     assetStatus, addedPlaylist = null, persist, setAiUndo, ccssEntitled, onAddTemplate, stageReview = false, gameNight = false,
     viewerIsAdmin = false, onClearChat, onRemoveMessage,
@@ -103,6 +112,6 @@ export default function WorkshopAiPanel(props: WorkshopAiPanelProps) {
  ["Connect an image pool","Connect my image pool to one random draw/remove button. Ask me which pool if needed."],
  ["Add a scoreboard","Add and connect a scoreboard. Ask me which players or teams to include."],
  ["Adjust an item","Help me position and size the selected item on the overlay."]
- ]):[["Help me get started","Help me plan my game. Ask me what you need to know."],["Create media","Help me create the media my game needs."],["Customize a card","Help me customize a card for my game."]]).map(([label,prompt])=><button type="button" key={label} onClick={()=>setDraft(prompt)}>{label} <b>→</b></button>)}</div></details><form className="composer" onSubmit={sendMessage}><label className="workshop-prompt-label" htmlFor="workshop-prompt">What would you like to create or change?</label><textarea id="workshop-prompt" ref={promptRef} value={draft} onChange={e=>setDraft(e.target.value)} placeholder={gameNight&&workflowStep===1?"Example: Add five more questions to my game.":workflowStep===1?"Example: Connect my Prize Images pool to a random draw button and show images in the center.":"Example: Help me create a music quiz with easy host controls."}/><div className="composer-bottom"><button className="send" type="submit" disabled={building||!draft.trim()}>{building ? "Working…" : "Apply my request"}</button></div>{showBoardTemplates&&!stageReview&&project.kind!=="talk"&&<div id="board-templates" hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card"><span>BOARD TEMPLATES</span>{BOARD_LIBRARY.map(item=><button key={item.type} type="button" disabled={triviaBusy} onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{showToolTemplates&&!stageReview&&project.kind!=="talk"&&<div id="tool-templates" hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card"><span>TOOL TEMPLATES</span>{TOOL_LIBRARY.filter(t=>!t.restricted||ccssEntitled).map(item=><button key={item.type} type="button" onClick={()=>void addGameTool(item.type)}>{item.name} <b>→</b></button>)}</div>}{assetStatus&&<div className="asset-empty">{assetStatus}</div>}{addedPlaylist&&addedPlaylist.tracks.length>0&&<PlaylistPlayer poolName={addedPlaylist.poolName} tracks={addedPlaylist.tracks}/>}</form></section>
+ ]):[["Help me get started","Help me plan my game. Ask me what you need to know."],["Create media","Help me create the media my game needs."],["Customize a card","Help me customize a card for my game."]]).map(([label,prompt])=><button type="button" key={label} onClick={()=>setDraft(prompt)}>{label} <b>→</b></button>)}</div></details><form className="composer" onSubmit={sendMessage}><label className="workshop-prompt-label" htmlFor="workshop-prompt">What would you like to create or change?</label><textarea id="workshop-prompt" ref={promptRef} value={draft} onChange={e=>setDraft(e.target.value)} placeholder={gameNight&&workflowStep===1?"Example: Add five more questions to my game.":workflowStep===1?"Example: Connect my Prize Images pool to a random draw button and show images in the center.":"Example: Help me create a music quiz with easy host controls."}/><div className="composer-bottom"><button className="send" type="submit" disabled={building||!draft.trim()}>{building ? "Working…" : "Apply my request"}</button></div>{showBoardTemplates&&!stageReview&&project.kind!=="talk"&&<div id="board-templates" hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card"><span>BOARD TEMPLATES</span><ShelfCards items={BOARD_LIBRARY} project={project} ccssEntitled={ccssEntitled} triviaBusy={triviaBusy} handlers={{addGameTool, onCreateCard, onNewList, onGenerateTriviaList}}/></div>}{showToolTemplates&&!stageReview&&project.kind!=="talk"&&<div id="tool-templates" hidden={workflowStep === 0 && workshopStep !== 1} className="idea-card"><span>TOOL TEMPLATES</span><ShelfCards items={TOOL_LIBRARY} project={project} ccssEntitled={ccssEntitled} handlers={{addGameTool, onCreateCard, onNewList, onGenerateTriviaList}}/></div>}{assetStatus&&<div className="asset-empty">{assetStatus}</div>}{addedPlaylist&&addedPlaylist.tracks.length>0&&<PlaylistPlayer poolName={addedPlaylist.poolName} tracks={addedPlaylist.tracks}/>}</form></section>
   );
 }
