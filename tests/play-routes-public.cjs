@@ -43,6 +43,13 @@ function request(pathname, host = 'www.ttcgamelab.com') {
   assert.equal((await proxy(request('/published/my-show/overlay'))).type, 'next', 'published overlay stays public');
   assert.equal((await proxy(request('/api/live/my-show'))).type, 'next', 'live API stays public');
 
+  // --- game-face artwork is public -------------------------------------------
+  // The published overlay paints the Plinko board from /game-art/; the image
+  // URL resolves against the overlay's own origin, so the artwork must pass
+  // signed-out on the www host AND on the published-overlay subdomains.
+  assert.equal((await proxy(request('/game-art/plinko-board.webp'))).type, 'next', 'game-art loads signed-out on www');
+  assert.equal((await proxy(request('/game-art/plinko-board.webp', 'my-show.ttcgamelab.com'))).type, 'next', 'game-art loads on published-overlay subdomains');
+
   // --- everything else stays behind sign-in ----------------------------------
   for (const path of ['/projects', '/project/project-123', '/api/projects', '/api/projects/project-123/game-room', '/assets']) {
     const result = await proxy(request(path));
