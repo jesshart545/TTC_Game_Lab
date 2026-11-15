@@ -53,31 +53,40 @@ export function plinkoPath(winner:number,slots:number,rows:number){
   const span=raw[rows]-raw[0]||1;
   return raw.map((v,i)=>({x:Math.min(390,Math.max(10,startX+(v-raw[0])*(targetX-startX)/span)),y:34+i*(336/Math.max(1,rows))}));
 }
+// The board IS the approved neon-cabinet artwork (public/game-art/
+// plinko-board.webp, in its own 2080x1136 space); the live elements —
+// the marquee title, the configured slot values, the puck and its
+// light trail — are layered over it here. plinkoPath above still
+// decides everything; the mapping below only re-plots the same points
+// into the artwork's perspective (the cabinet narrows toward the
+// top), and it is exact at the bottom: the last path point lands
+// precisely on the winning slot's centre. The artwork carries the
+// pegs now, so pegColor is kept only for prop compatibility.
+const PLINKO_SLOT_X0=315,PLINKO_SLOT_X1=1775,PLINKO_SLOT_Y=1008;
+function plinkoArtPoint(p:{x:number;y:number}){
+  const t=(p.y-34)/336;
+  const cx=1075-30*t,half=415+278.5*t;
+  return {x:cx+((p.x-200)/190)*half,y:252+633*t};
+}
 export function PlinkoDisplay({slots,winner=0,rows=9,elapsed=0,duration=3000,preview=false,pegColor="#8b9bb4",ballColor="#ff5d5d",colors=["#154c69","#512b75"],textColor="#ffffff",title="Plinko"}:{slots:string[];winner?:number;rows?:number;elapsed?:number;duration?:number;preview?:boolean;pegColor?:string;ballColor?:string;colors?:string[];textColor?:string;title?:string}){
   const S=Math.max(2,slots.length),R=Math.min(14,Math.max(4,rows||9));
-  const w=400/S,win=Math.min(S-1,Math.max(0,winner));
+  const win=Math.min(S-1,Math.max(0,winner));
   const progress=preview?0:Math.min(1,Math.max(0,elapsed/duration));
   const path=plinkoPath(win,S,R);
   const segs=path.length-1,ft=progress*segs,fi=Math.min(segs-1,Math.floor(ft)),fr=ft-fi;
   const ball={x:path[fi].x+(path[fi+1].x-path[fi].x)*fr,y:path[fi].y+(path[fi+1].y-path[fi].y)*fr};
   const landed=progress>=1;
-  const pegs:React.ReactNode[]=[];
-  for(let r=0;r<R;r++){const y=58+r*(322/Math.max(1,R));const n=S-(r%2?1:0);for(let i=0;i<n;i++){const x=(i+(r%2?1:0.5))*(400/Math.max(1,S));if(x>6&&x<394)pegs.push(<g key={`${r}-${i}`}><circle cx={x+1} cy={y+1.6} r={4.4} fill="rgba(0,0,0,.4)"/><circle cx={x} cy={y} r={4.4} fill={pegColor}/><circle cx={x-1.3} cy={y-1.3} r={1.5} fill="#ffffff" opacity=".65"/></g>);}}
-  const ballPos=preview?{x:200,y:58}:landed?{x:(win+0.5)*w,y:431}:{x:ball.x,y:58+(ball.y-34)*(322/336)};
-  const bulbs=Array.from({length:9},(_,i)=>({x:64+i*34,alt:i%2===0}));
-  return <div className="chance-tool"><div className="chance-plinko"><svg viewBox="0 0 400 470" role="img" aria-label={preview?'Plinko board design':landed?`Plinko landed on ${slots[win]}`:'Plinko ball dropping'}>
-    <defs>
-     <linearGradient id="plinko-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b1d63"/><stop offset="55%" stopColor="#1d1440"/><stop offset="100%" stopColor="#120b2c"/></linearGradient>
-     <linearGradient id="plinko-slotshine" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ffffff" stopOpacity=".38"/><stop offset="100%" stopColor="#ffffff" stopOpacity="0"/></linearGradient>
-    </defs>
-    <rect x="3" y="3" width="394" height="464" rx="20" fill="url(#plinko-bg)" stroke="#e8a93d" strokeWidth="2.5"/>
-    <rect x="10.5" y="10.5" width="379" height="449" rx="15" fill="none" stroke="rgba(255,255,255,.14)"/>
-    <text className="chance-plinko-title" x="200" y="32" textAnchor="middle" fill={textColor} fontSize="17" fontWeight="900" letterSpacing="2">{title}</text>
-    {bulbs.map((b,i)=><circle key={i} className={b.alt?"chance-bulb a":"chance-bulb b"} cx={b.x} cy={44} r="3" fill={b.alt?"#ffd166":"#fff6da"} stroke="#8a5f0e" strokeWidth=".5"/>)}
-    {pegs}
-    {slots.map((s,i)=><g key={i} className={landed&&i===win?"chance-plinko-slot-win":undefined}><rect x={i*w+2} y={404} width={w-4} height={56} rx={6} fill={colors[i%colors.length]} stroke={landed&&i===win?"#ffd166":"rgba(255,255,255,.25)"} strokeWidth={landed&&i===win?3:1}/><rect x={i*w+2} y={404} width={w-4} height={20} rx={6} fill="url(#plinko-slotshine)" pointerEvents="none"/><text x={i*w+w/2} y={438} textAnchor="middle" fill={textColor} fontSize={Math.min(16,w/4)} fontWeight="700">{s.length>8?s.slice(0,7)+'…':s}</text></g>)}
-    {Array.from({length:Math.max(0,S-1)},(_,i)=><rect key={i} x={(i+1)*w-2} y={399} width={4} height={65} rx={2} fill="#e8a93d" opacity=".85"/>)}
-    <g><circle className="chance-plinko-halo" cx={ballPos.x} cy={ballPos.y} r={13.5} fill={ballColor}/><circle cx={ballPos.x} cy={ballPos.y} r={9} fill={ballColor} stroke="#fff" strokeWidth={2}/><circle cx={ballPos.x-3} cy={ballPos.y-3} r={2.8} fill="#ffffff" opacity=".85"/></g>
+  const slotW=(PLINKO_SLOT_X1-PLINKO_SLOT_X0)/S,slotCx=(i:number)=>PLINKO_SLOT_X0+(i+0.5)*slotW;
+  const labelSize=Math.min(83,slotW/4);
+  const titleSize=Math.min(84,Math.max(30,Math.round(675/Math.max(1,title.length))));
+  const ballPos=preview?plinkoArtPoint(path[0]):landed?{x:slotCx(win),y:PLINKO_SLOT_Y}:plinkoArtPoint(ball);
+  const trail=!preview&&progress>0&&!landed?[...path.slice(Math.max(0,fi-2),fi+1).map(plinkoArtPoint),ballPos]:[];
+  return <div className="chance-tool"><div className="chance-plinko"><svg viewBox="0 0 2080 1136" role="img" aria-label={preview?'Plinko board design':landed?`Plinko landed on ${slots[win]}`:'Plinko ball dropping'}>
+    <image href="/game-art/plinko-board.webp" x={0} y={0} width={2080} height={1136}/>
+    <text className="chance-plinko-title" x={1072} y={124} textAnchor="middle" fill={textColor} fontSize={titleSize} fontWeight={900} letterSpacing={Math.round(titleSize*0.1)} stroke="rgba(8,4,26,.9)" strokeWidth={3} paintOrder="stroke">{title}</text>
+    {slots.map((s,i)=><g key={i} className={landed&&i===win?"chance-plinko-slot-win":undefined}>{landed&&i===win&&<rect x={PLINKO_SLOT_X0+i*slotW+5} y={948} width={slotW-10} height={118} rx={20} fill={colors[i%colors.length]} opacity={.45} stroke="#ffd166" strokeWidth={6}/>}<text x={slotCx(i)} y={PLINKO_SLOT_Y+labelSize*0.36} textAnchor="middle" fill={textColor} fontSize={labelSize} fontWeight={800} stroke="rgba(8,4,26,.92)" strokeWidth={Math.max(3,labelSize/10)} paintOrder="stroke">{s.length>8?s.slice(0,7)+'…':s}</text></g>)}
+    {trail.length>1&&<polyline className="chance-plinko-trail" points={trail.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ballColor} strokeWidth={24} strokeLinecap="round" strokeLinejoin="round"/>}
+    <g><circle className="chance-plinko-halo" cx={ballPos.x} cy={ballPos.y} r={70} fill={ballColor}/><circle cx={ballPos.x} cy={ballPos.y} r={46} fill={ballColor} stroke="#fff" strokeWidth={5}/><circle cx={ballPos.x-14} cy={ballPos.y-14} r={13} fill="#ffffff" opacity=".85"/></g>
   </svg></div><strong role="status" className="chance-status">{preview?'Ready to drop':landed?`Landed on ${slots[win]}!`:'Dropping…'}</strong></div>;
 }
 
