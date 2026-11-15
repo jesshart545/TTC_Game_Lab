@@ -34,7 +34,7 @@ import {
   type SurveyConfig, type SurveyPlayerState, type SurveyRoomState,
 } from "./survey-showdown";
 import {
-  perfectMatchConfigFromSnapshot, perfectMatchPlayerState, perfectMatchRevealOrder, seededRng,
+  perfectMatchConfigFromSnapshot, perfectMatchPlayerState, perfectMatchRevealOrder, perfectMatchStartRefusal, seededRng,
   PERFECT_MATCH_HAND_SIZE, PERFECT_MATCH_WIN_POINTS, PERFECT_MATCH_REVEAL_MS,
   type PerfectMatchConfig, type PerfectMatchPlayerState, type PerfectMatchRoomState,
 } from "./perfect-match";
@@ -100,6 +100,10 @@ export interface GameModule {
   init(config: Record<string, unknown>): Record<string, unknown>;
   /** The game starts (countdown reached zero): set up draws, decks, turns. */
   onStart(room: Room, players: RoomPlayer[], now: number, rng: () => number): void;
+  /** Optional plain-words refusal when this game cannot start for the
+   * players at the table — the start and play-again actions surface
+   * it to the player who tapped, in the same words as any refusal. */
+  startError?(room: Room, players: RoomPlayer[]): string | null;
   /** Give a player their module state when they join (immediately if the game is already running). */
   playerInit(room: Room, player: RoomPlayer, players: RoomPlayer[], rng: () => number): void;
   /** One module action from one player. Return an error string to refuse it. */
@@ -912,9 +916,15 @@ const perfectMatchModule: GameModule = {
     state.lastRound = null;
     state.revealSeed = Math.floor(rng() * 1_000_000_000);
     // Hands of 7 while the deck covers them; a smaller deck deals
-    // smaller hands evenly rather than leaving late seats empty.
+    // smaller hands evenly rather than leaving late seats empty. The
+    // start gate (startError) has already refused any table the deck
+    // cannot seat with a full personal hand at the floor, so this
+    // division covers the floor on the normal path; the max(1, …)
+    // only guards a table that grew during the countdown seconds —
+    // and even then the deal is even and without replacement, never
+    // a duplicated card.
     state.handSize = players.length
-      ? Math.max(3, Math.min(PERFECT_MATCH_HAND_SIZE, Math.floor(config.answers.length / players.length)))
+      ? Math.max(1, Math.min(PERFECT_MATCH_HAND_SIZE, Math.floor(config.answers.length / players.length)))
       : PERFECT_MATCH_HAND_SIZE;
     for (const player of players) {
       const fresh: PerfectMatchPlayerState = { score: 0, hand: [], submittedRound: 0, submittedCard: "" };
@@ -932,15 +942,28 @@ const perfectMatchModule: GameModule = {
     state.roundEndsAt = now + config.submitMs;
   },
 
+  startError(room, players) {
+    // Every player is dealt their own hand from the one deck, without
+    // replacement — a table the deck cannot seat at the floor hand is
+    // refused in plain words rather than dealt short or shared hands.
+    return perfectMatchStartRefusal(matchConfigOf(room).answers.length, players.length);
+  },
+
   playerInit(room, player) {
     const state = matchStateOf(room);
     const mine = perfectMatchPlayerState(player.state);
     if (state.startedAt && !state.rotation.includes(player.id)) {
       // A late joiner takes the next seat in the judge rotation and is
       // dealt a hand from what's left — the game never waits on a host.
-      state.rotation = [...state.rotation, player.id];
-      if (!state.judgeId) state.judgeId = player.id;
+      // If the deck is momentarily dry (every card is in a hand or on
+      // the table) the deal gives them nothing: they watch this game
+      // out without holding the table up, and the next game deals
+      // them in fresh — never a borrowed or duplicated card.
       matchDealHand(state, mine);
+      if (mine.hand.length) {
+        state.rotation = [...state.rotation, player.id];
+        if (!state.judgeId) state.judgeId = player.id;
+      }
     }
     player.state = mine as unknown as Record<string, unknown>;
   },
@@ -1000,7 +1023,11 @@ const perfectMatchModule: GameModule = {
     const state = matchStateOf(room);
     if (!state.startedAt) return;
     if (state.phase === "submit") {
-      const waiting = players.filter(player => player.id !== state.judgeId)
+      // Only seated players hold the round open — a late joiner still
+      // waiting for the deck to deal them in never stalls the table
+      // (publicState's waitingOn already counts the same seats).
+      const inRotation = new Set(state.rotation);
+      const waiting = players.filter(player => player.id !== state.judgeId && inRotation.has(player.id))
         .every(player => perfectMatchPlayerState(player.state).submittedRound === state.roundNumber);
       if (waiting || now >= state.roundEndsAt) matchCloseSubmissions(room, now);
     } else if (state.phase === "reveal") {
@@ -2047,6 +2074,8 @@ export function applyAction(
     if (!player.isCreator) return "Only the game's creator can start it — everyone else, tap Ready.";
     if (room.status !== "lobby") return "The game has already started.";
     if (!players.length) return "Nobody is in the lobby yet.";
+    const refusal = GAME_MODULES[room.gameType].startError?.(room, players);
+    if (refusal) return refusal;
     room.status = "countdown";
     room.countdownEndsAt = now + COUNTDOWN_MS;
     return null;
@@ -2054,6 +2083,8 @@ export function applyAction(
 
   if (type === "play-again") {
     if (room.status !== "finished") return "The game is still going.";
+    const refusal = GAME_MODULES[room.gameType].startError?.(room, players);
+    if (refusal) return refusal;
     room.round += 1;
     room.state = GAME_MODULES[room.gameType].init(room.config);
     for (const each of players) {

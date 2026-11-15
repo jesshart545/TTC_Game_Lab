@@ -28,7 +28,10 @@
 //
 // Hands and secrecy: a player's hand lives ONLY in their own player
 // state, which the room view hands back to that player alone (the same
-// discipline as a bingo card). publicState carries hand COUNTS for the
+// discipline as a bingo card). Every hand is dealt from the ONE answer
+// deck without replacement, so a card is never in two hands at once;
+// played cards come back only through the discard pile once their
+// round is over. publicState carries hand COUNTS for the
 // other players, never their cards. Submissions are collected without
 // any owner attached to what players see: the revealed cards carry only
 // their text until the judge has picked, and only then is the winner
@@ -87,6 +90,27 @@ export type PerfectMatchPlayerState = {
 export const PERFECT_MATCH_MIN_PROMPTS = 10;
 export const PERFECT_MATCH_MIN_ANSWERS = 30;
 export const PERFECT_MATCH_HAND_SIZE = 7;
+/** The smallest hand the game will deal. Every player at the table is
+ * dealt their OWN hand of at least this many cards, drawn without
+ * replacement from the one answer deck — a card is never duplicated
+ * to fill a hand, and never sits in two hands at once. */
+export const PERFECT_MATCH_MIN_HAND_SIZE = 3;
+
+/** The most players a deck of this size can seat: one personal hand
+ * of at least PERFECT_MATCH_MIN_HAND_SIZE cards per player, dealt
+ * from the deck without replacement. */
+export function perfectMatchMaxPlayers(answerCount: number): number {
+  return Math.floor(answerCount / PERFECT_MATCH_MIN_HAND_SIZE);
+}
+
+/** Plain words when a table is too big for the deck to deal everyone
+ * their own hand — the game says so at start instead of dealing a
+ * short or shared hand. Null when the table fits the deck. */
+export function perfectMatchStartRefusal(answerCount: number, playerCount: number): string | null {
+  const seats = perfectMatchMaxPlayers(answerCount);
+  if (playerCount <= seats) return null;
+  return `This deck can seat ${seats} players: Perfect Match deals every player their own hand of at least ${PERFECT_MATCH_MIN_HAND_SIZE} cards from its ${answerCount} answer cards, and ${playerCount} players are at the table. A bigger answer deck seats a bigger table.`;
+}
 export const PERFECT_MATCH_WIN_POINTS = 5;
 export const PERFECT_MATCH_DEFAULT_SUBMIT_MS = 90000;
 export const PERFECT_MATCH_REVEAL_MS = 6000;

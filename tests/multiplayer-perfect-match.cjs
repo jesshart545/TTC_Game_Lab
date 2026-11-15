@@ -417,6 +417,184 @@ function submitFirst(room, players, player, now) {
   console.log('PASS: prompts exhausted — the game ends on points with the leader as champion.');
 }
 
+// --- personal hands: one deck, no card ever in two hands ----------------------
+// The owner's rule (2026-11-15): every player gets their own personal
+// hand, dealt from the one answer deck without replacement. These
+// games run on the standard template deck — the exact 36 answers and
+// 12 prompts lib/game-night-templates.ts deals a new game night.
+const ANSWERS36 = [
+  'A haunted house', "Grandma's chili", 'A marching band', 'Bubble wrap', 'A thunderstorm',
+  'Fresh-baked bread', 'A karaoke machine', 'Hot sauce', 'A sleepy cat', 'Roller skates',
+  'A treasure map', 'Glitter', 'A fog machine', 'Pickles', 'A disco ball',
+  'Thunder', 'A warm blanket', 'Espresso', 'A trumpet', 'Confetti',
+  'A lighthouse', 'Popcorn', 'A robot vacuum', 'Fireworks', 'A hammock',
+  'Chili peppers', 'A drum kit', 'Moonlight', 'A waffle iron', 'Sparklers',
+  'A wool sweater', 'A siren', 'Honey', 'A trampoline', 'Stage lights',
+  'A campfire',
+];
+function templateSnapshot() {
+  return {
+    name: 'Template Night', theme: 'purple',
+    gameTools: [
+      cardList('prompts-1', 'Prompt Cards', PROMPTS),
+      cardList('answers-1', 'Answer Cards', ANSWERS36),
+    ],
+  };
+}
+
+/** The invariant, checked whole: no card in two hands, and every card
+ * of the deck accounted for exactly once across hands, draw pile,
+ * discard pile and the cards on the table. */
+function assertPersonalHands(room, players, label) {
+  const state = room.state;
+  const hands = players.map(p => perfect.perfectMatchPlayerState(p.state).hand);
+  const union = hands.flat();
+  assert.equal(new Set(union).size, union.length, `${label}: no answer card sits in two hands at once`);
+  const everywhere = [...union, ...state.drawPile, ...state.discard, ...state.submissions.map(s => s.card)];
+  assert.equal(everywhere.length, room.config.answers.length, `${label}: every deck card is accounted for`);
+  assert.equal(new Set(everywhere).size, everywhere.length, `${label}: no deck card exists twice anywhere`);
+  return hands;
+}
+
+{
+  // Full games at 2, 5 and 8 players on the 36-answer template deck.
+  for (const count of [2, 5, 8]) {
+    const label = `${count} players / 36 answers`;
+    const room = makeRoom(templateSnapshot());
+    const players = [];
+    const creator = join(room, players, 'Host', true);
+    for (let i = 2; i <= count; i++) join(room, players, `Guest ${i}`);
+    let now = startGame(room, players, creator, 10000);
+
+    const expectedSize = Math.min(perfect.PERFECT_MATCH_HAND_SIZE, Math.floor(36 / count));
+    assert.equal(room.state.handSize, expectedSize, `${label}: the deal rule sizes hands at ${expectedSize}`);
+    const dealt = assertPersonalHands(room, players, `${label} after the deal`);
+    for (const hand of dealt) assert.equal(hand.length, expectedSize, `${label}: every player is dealt a full personal hand`);
+
+    let guard = 0;
+    while (room.status !== 'finished' && guard++ < 60) {
+      const stage = view(room, players, players[0], now).game.matchStage;
+      if (stage === 'submit') {
+        const judgeId = view(room, players, players[0], now).game.judgeId;
+        for (const player of players) {
+          if (player.id === judgeId) continue;
+          submitFirst(room, players, player, now + 10);
+        }
+        assertPersonalHands(room, players, `${label} after the round's cards are played`);
+        tick(room, players, now + 20);
+        now += 20;
+      } else if (stage === 'judge') {
+        const judgeId = view(room, players, players[0], now).game.judgeId;
+        const judge = players.find(p => p.id === judgeId);
+        assert.equal(engine.applyAction(room, players, judge.id, { type: 'pick', index: 0 }, now + 10, mulberry32(5)), null);
+        now += 20;
+      } else {
+        tick(room, players, now + perfect.PERFECT_MATCH_REVEAL_MS);
+        now += perfect.PERFECT_MATCH_REVEAL_MS;
+        assertPersonalHands(room, players, `${label} after the round turns over`);
+        if (room.status === 'playing') {
+          for (const player of players) {
+            assert.equal(view(room, players, player, now).me.state.hand.length, room.state.handSize, `${label}: hands refill to the dealt size, still personal`);
+          }
+        }
+      }
+    }
+    assert.equal(room.status, 'finished', `${label}: the game plays out to a finish`);
+  }
+  console.log('PASS: personal hands — full games at 2, 5 and 8 players on the 36-card template deck never put a card in two hands.');
+}
+
+// --- a table the deck cannot seat is refused in plain words -------------------
+{
+  assert.equal(perfect.perfectMatchMaxPlayers(36), 12, 'a 36-card deck seats 12 players at the floor hand of 3');
+  assert.equal(perfect.perfectMatchStartRefusal(36, 12), null, 'a table that fits is not refused');
+  const refusal = perfect.perfectMatchStartRefusal(36, 13);
+  assert(refusal && refusal.includes('seat 12 players'), 'the refusal names the table the deck can seat');
+  assert(!refusal.includes('$'), 'the refusal carries no dollar sign');
+
+  // Thirteen in the lobby: Start itself answers in plain words and
+  // the game does not begin — nobody is dealt a short or shared hand.
+  const room = makeRoom(templateSnapshot());
+  const players = [];
+  const creator = join(room, players, 'Host', true);
+  for (let i = 2; i <= 13; i++) join(room, players, `Guest ${i}`);
+  const answer = engine.applyAction(room, players, creator.id, { type: 'start' }, 5000, mulberry32(9));
+  assert.equal(answer, refusal, 'starting an undealable game is refused in plain words');
+  assert.equal(room.status, 'lobby', 'the refused game stays in the lobby');
+
+  // Twelve exactly fit: the game starts and deals full floor hands.
+  const room12 = makeRoom(templateSnapshot());
+  const players12 = [];
+  const creator12 = join(room12, players12, 'Host', true);
+  for (let i = 2; i <= 12; i++) join(room12, players12, `Guest ${i}`);
+  startGame(room12, players12, creator12, 10000);
+  assert.equal(room12.state.handSize, perfect.PERFECT_MATCH_MIN_HAND_SIZE, 'a full table deals the floor hand');
+  const dealt12 = assertPersonalHands(room12, players12, '12 players after the deal');
+  for (const hand of dealt12) assert.equal(hand.length, 3, 'every one of the 12 players holds their own 3 cards');
+
+  // The table can also outgrow the deck mid-game: a thirteenth player
+  // joins a running 12-player game (the dry deck deals them nothing),
+  // and Play Again then refuses in the same plain words.
+  const walkIn = join(room12, players12, 'Walk-In', false, 20000);
+  assert.equal(view(room12, players12, walkIn, 20000).me.state.hand.length, 0, 'a dry deck deals a late joiner nothing rather than a shared card');
+  let now = 20000;
+  let guard = 0;
+  while (room12.status !== 'finished' && guard++ < 40) {
+    if (room12.state.phase === 'submit') {
+      now = room12.state.roundEndsAt;
+      tick(room12, players12, now);
+    } else if (room12.state.phase === 'reveal') {
+      now = room12.state.revealUntil;
+      tick(room12, players12, now);
+    } else {
+      now += 1000;
+      tick(room12, players12, now);
+    }
+  }
+  assert.equal(room12.status, 'finished', 'the game still plays out on timed-out rounds');
+  const again = engine.applyAction(room12, players12, creator12.id, { type: 'play-again' }, now + 1000, mulberry32(5));
+  assert.equal(again, refusal, 'play again with an undealable table is refused in plain words');
+  assert.equal(room12.status, 'finished', 'the refused play-again leaves the finished game standing');
+  console.log('PASS: undealable tables — start and play again refuse in plain words instead of dealing short or shared hands.');
+}
+
+// --- a cardless late joiner never holds the table up ---------------------------
+{
+  const room = makeRoom(templateSnapshot());
+  const players = [];
+  const creator = join(room, players, 'Host', true);
+  for (let i = 2; i <= 8; i++) join(room, players, `Guest ${i}`);
+  let now = startGame(room, players, creator, 10000);
+  assert.equal(room.state.handSize, 4, 'eight players on 36 cards deal hands of 4');
+  assert.equal(room.state.drawPile.length, 4, 'four cards stay in the deck');
+
+  const judgeId = view(room, players, creator, now).game.judgeId;
+  for (const player of players) {
+    if (player.id === judgeId) continue;
+    submitFirst(room, players, player, now + 10);
+  }
+  // One more player arrives and takes the last of the deck…
+  const late1 = join(room, players, 'Late One', false, now + 20);
+  assert.equal(view(room, players, late1, now + 20).me.state.hand.length, 4, 'the ninth player is dealt the last cards of the deck');
+  submitFirst(room, players, late1, now + 30);
+  // …and the next arrives to a dry deck: no card, no seat at the
+  // table — and the round must still close on the seated players.
+  const late2 = join(room, players, 'Late Two', false, now + 40);
+  assert.equal(view(room, players, late2, now + 40).me.state.hand.length, 0, 'a dry deck deals the tenth player nothing');
+  assert(!room.state.rotation.includes(late2.id), 'a player with no hand takes no seat in the rotation');
+  assertPersonalHands(room, players, 'the dry-deck round');
+  tick(room, players, now + 50);
+  assert.equal(view(room, players, creator, now + 50).game.matchStage, 'judge', 'the round closes on the seated players — the cardless joiner does not stall it');
+  const judge = players.find(p => p.id === judgeId);
+  assert.equal(engine.applyAction(room, players, judge.id, { type: 'pick', index: 0 }, now + 60, mulberry32(5)), null);
+  tick(room, players, now + 60 + perfect.PERFECT_MATCH_REVEAL_MS);
+  assertPersonalHands(room, players, 'after the dry-deck round turns over');
+  for (const player of players.slice(0, 9)) {
+    assert.equal(view(room, players, player, now + 60).me.state.hand.length, 4, 'the seated players refill to 4');
+  }
+  console.log('PASS: a late joiner on a dry deck gets no borrowed card and never stalls the round.');
+}
+
 // --- publish readiness ---------------------------------------------------------
 {
   const unwired = [
