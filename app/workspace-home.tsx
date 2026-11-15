@@ -57,7 +57,7 @@ const TIPS = [
   },
 ];
 
-function TipsCard() {
+export function TipsCard() {
   const [index, setIndex] = useState(0);
   const [cycle, setCycle] = useState(0);
   useEffect(() => {

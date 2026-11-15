@@ -1,6 +1,6 @@
 import { requireCreator } from "../lib/auth/server";
 import LandingPage from "./landing";
-import WorkspaceHome from "./workspace-home";
+import HomePage from "./home-page";
 
 export const dynamic = "force-dynamic";
 
@@ -11,5 +11,5 @@ export default async function RootPage() {
   } catch {
     signedIn = false;
   }
-  return signedIn ? <WorkspaceHome /> : <LandingPage />;
+  return signedIn ? <HomePage /> : <LandingPage />;
 }
