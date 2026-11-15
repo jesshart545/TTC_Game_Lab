@@ -36,7 +36,7 @@ import { youtubePlacement, youtubePosition, safeYoutubePlacement } from "../../.
 import type { YouTubeState } from "../../../lib/youtube";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, cloneElement, useEffect, useMemo, useRef, useState } from "react";
 import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, ProjectAssetGeneration, saveProjectToServer, loadProjectFromServer, titleFromProjectTools, GameTool, GameToolType } from "../../../lib/project";
 
 type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number]; forCaseItem?: boolean };
@@ -80,6 +80,8 @@ import StandingTools from "../../../components/StandingToolFace";
 import WorkshopAiPanel from "../../../components/WorkshopAiPanel";
 import GameshowStage from "../../../components/GameshowStage";
 import TalkshowStage from "../../../components/TalkshowStage";
+import GameNightStage from "../../../components/GameNightStage";
+import GameNightSetStage from "../../../components/GameNightSetStage";
 import BackdropTextLayer from "../../../components/BackdropText";
 import { assetBackdropText, assetPromptText } from "../../../lib/backdrop-text";
 import ConfirmDialog from "../../../components/ConfirmDialog";
@@ -2083,6 +2085,22 @@ export default function ProjectWorkspace() {
   // is hers, held in her conversation, never piled onto the page.
   const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0;
   const lightCreateFrame = talkBareFrame || gameshowCreateView;
+  // Game Night (Off-Stream Multiplayer) — Imagine & Create and Set
+  // the Stage (Jessica, 2026-11-15): the same light treatment as
+  // Gameshow/Talk, for the kind that has no host, no stream and no
+  // dashboard. Stage 0 shows the game itself as pictured pieces with
+  // Jewel as the doorway and the library below (GameNightStage);
+  // stage 1 is see it, test it, publish it, share it
+  // (GameNightSetStage). The old shared workshop — the game-plan
+  // form, the progress machinery, the livestream preview, the Build
+  // Space staging — never renders for this kind: the flow section
+  // and the workspace grid below stand down wholesale in these two
+  // views, and Jewel's panel in them is the cloned instance under
+  // jewelPanelElement (progress strip withheld, game-night words).
+  // Every other kind and stage renders exactly as before.
+  const gameNightCreateView = project.kind === "multiplayer" && workflowStep === 0;
+  const gameNightSetView = project.kind === "multiplayer" && workflowStep === 1;
+  const gameNightViews = gameNightCreateView || gameNightSetView;
   const talkCreateComplete = project.kind === "talk" && allCreateStepsComplete(evaluateWorkflow(project));
   const draftOverlay = <>{(() => { const selected = project.assets.filter(a => assetPlaced(a) && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}{bg && assetBackdropText(bg) && <BackdropTextLayer spec={assetBackdropText(bg)!}/>}{bg && assetPromptText(bg) && <BackdropTextLayer spec={assetPromptText(bg)!} placement="lower"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">{q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}<StandingTools project={project} states={runtime.cardStates}/><RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
   const jewelPanelElement = (
@@ -2118,10 +2136,19 @@ export default function ProjectWorkspace() {
         onRemoveMessage={(index) => setMessagePendingRemove(index)}
       />
   );
+  // Jewel's panel for the two Game Night views: the same panel, the
+  // same conversation and handlers — cloned with the review flag so
+  // her progress strip, her Back button and her template piles stand
+  // down (Jewel owns the check-offs invisibly), and with the
+  // game-night flag so her stage-1 words speak game night instead of
+  // livestream wiring. Only the Game Night stages render this clone;
+  // the shared element above is untouched for every other view.
+  const gameNightJewelPanel = cloneElement(jewelPanelElement, { stageReview: true, gameNight: true });
   return <main className="workspace-page">
     {fileInputElement}
     <header className="workspace-topbar"><Link href="/" className="back">← TTCGameLab</Link><div className="workspace-title">{renamingProject ? <form onSubmit={saveProjectTitle} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><input autoFocus aria-label="Project title" maxLength={100} value={projectTitleDraft} onChange={event => { setProjectTitleDraft(event.target.value); }} onKeyDown={event => { if (event.key === "Escape") setRenamingProject(false); }} style={{ minWidth: 180, maxWidth: "35vw", padding: "8px 10px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #3ddde6" }}/><button type="submit">Save</button><button type="button" onClick={() => setRenamingProject(false)}>Cancel</button></form> : <>{project.name} <button type="button" aria-label="Rename project" title="Rename project" onClick={() => { setProjectTitleDraft(project.name); setRenamingProject(true); }} style={{ marginLeft: 8, cursor: "pointer" }}>✎ Rename</button></>}{!lightCreateFrame && <span>{project.status}</span>}{!lightCreateFrame && <label style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>Kind <select aria-label="Project kind" value={project.kind || ""} onChange={event => { const value = event.target.value; persist({ ...project, kind: value ? (value as Project["kind"]) : undefined, updatedAt: "just now" }); }} style={{ padding: "6px 8px", borderRadius: 8, color: "#fff", background: "#172032", border: "1px solid #2b3a55", fontSize: 12.5 }}><option value="">Not set</option>{PROJECT_KINDS.map(info => { const gated = isKindGatedFor(info.id, viewerIsAdmin) && project.kind !== info.id; return <option key={info.id} value={info.id} disabled={gated}>{gated ? `${info.title} — Coming Soon!` : info.title}</option>; })}</select></label>}{viewerIsAdmin && !lightCreateFrame && <span style={{ marginLeft: 10, fontSize: 12.5, color: "#8a96a8" }}>{creatorEmail ? `Created by ${creatorEmail}` : "Creator unknown"}</span>}</div><div className="workspace-actions">{!lightCreateFrame && <button type="button" className="build-btn ask-jewel-btn" aria-label="Ask Jewel" onClick={openJewel}>✦ Ask Jewel</button>}{workflowStep===1&&<div className="workspace-history-group" role="group" aria-label="Undo and redo"><button type="button" className="outline-btn" onClick={undoManualEdit} disabled={historyDepth.undo===0} title="Undo (Ctrl+Z)">&#8617; Undo</button><button type="button" className="outline-btn" onClick={redoManualEdit} disabled={historyDepth.redo===0} title="Redo (Ctrl+Y)">&#8618; Redo</button></div>}<div className="workspace-save-group"><button type="button" className="build-btn" onClick={saveProgress} disabled={saveBusy || assetBusy || building}>{saveBusy ? "Saving…" : lightCreateFrame ? "Save project" : "Save progress"}</button>{!lightCreateFrame && <small role="status" aria-live="polite">{saveStatus || "Draft changes save automatically."}</small>}</div><button type="button" onClick={handleDeleteProject} className="danger-btn">Delete Project</button></div></header>
     <section className={"workshop-flow"+(workflowStep===1?" compact-build-heading":"")} ref={workflowRef} aria-label="Project workflow">
+      {!gameNightViews && <>
       {!lightCreateFrame && !stageReviewView && <div className="workshop-flow-heading">
         <div><small>{workflowStep === 0 ? workshopTask.stage : ["Imagine and Create", "Set the Stage", "Showtime!"][workflowStep]}</small><h1>{["Brainstorm & create", "Build & implement", "Review & publish"][workflowStep]}</h1></div>
         <Link href="/guide" target="_blank" rel="noreferrer" className="outline-btn">How to use TTCGameLab</Link>
@@ -2233,9 +2260,44 @@ export default function ProjectWorkspace() {
         <p>Images and videos play inside the web overlay. A successful editor preview is not a guarantee that every uploaded file or audio track will play in your streaming setup.</p>
         <a className="outline-btn" href="https://www.tiktok.com/live/studio/help/article/Get-started-with-your-first-LIVE/Whats-a-source?lang=en" target="_blank" rel="noreferrer">TikTok’s source setup guide</a>
       </section>}
+      </>}
+      {gameNightViews && <>
+        <ProjectWorkflowNav stage={workflowStep} workshopSection={workshopStep} onStageChange={chooseWorkflowStep} bare />
+        {gameNightCreateView && (
+          <GameNightStage
+            project={project}
+            jewelPanel={gameNightJewelPanel}
+            onEnterJewel={enterJewelFromScene}
+            onAskJewel={askJewel}
+            doors={{
+              openListEditor: id => setListEditorId(id),
+              openBoardDesigner: id => setBoardDesignerId(id),
+              openMediaEditor: index => setEditingAssetIndex(index),
+              upload: () => { setBackgroundIntent(false); fileInputRef.current?.click(); },
+              deleteAsset: handleDeleteAsset,
+            }}
+          />
+        )}
+        {gameNightSetView && (
+          <GameNightSetStage
+            project={project}
+            jewelPanel={gameNightJewelPanel}
+            onPublish={publish}
+            publishing={publishing}
+            publishOutcome={publishOutcome}
+            doors={{
+              openListEditor: id => setListEditorId(id),
+              openBoardDesigner: id => setBoardDesignerId(id),
+              openMediaEditor: index => setEditingAssetIndex(index),
+              upload: () => { setBackgroundIntent(false); fileInputRef.current?.click(); },
+              deleteAsset: handleDeleteAsset,
+            }}
+          />
+        )}
+      </>}
 
     </section>
-    <div data-workshop-section={workflowStep === 0 ? workshopStep : undefined} className={"workspace-grid workflow-layout workflow-stage-" + workflowStep + (workflowStep!==0 ? " general-build-space" : "")}>
+    {!gameNightViews && <div data-workshop-section={workflowStep === 0 ? workshopStep : undefined} className={"workspace-grid workflow-layout workflow-stage-" + workflowStep + (workflowStep!==0 ? " general-build-space" : "")}>
       {!stageReviewView && Boolean(project.pendingVideos?.length) && <section aria-label="Pending video generation" className="idea-card"><strong>Video requests awaiting a result</strong><p>Check a saved request without generating another copy.</p>{project.pendingVideos?.map(job => <div key={job.videoId}><p>{job.prompt}</p>{assetBusy ? <p role="status">Already checking — the finished video will appear in your assets automatically.</p> : <button type="button" className="outline-btn" disabled={building} onClick={() => void generateAsset("video", job.prompt, { pendingVideo: job }).catch(() => undefined)}>Check video result</button>}</div>)}</section>}
       {talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement}
       {!stageReviewView && backgroundDestinationKey&&(()=>{const asset=project.assets.find(a=>(a.storageKey||a.name)===backgroundDestinationKey);return asset?<section><BackgroundDestination project={project} asset={asset} onChange={persist}/><button type="button" onClick={()=>setBackgroundDestinationKey("")}>Done choosing background destination</button></section>:null;})()}
@@ -2311,8 +2373,8 @@ export default function ProjectWorkspace() {
         onAddTemplate={applyTemplateToProject}
         openCityCrimeScene={ccssBuilder.openCityCrimeScene}
       />}
-    </div>
-      {workflowStep !== 2 && !stageReviewView && <details className="workshop-help"><summary>Guide: backgrounds, layers, tools, scenes and buttons</summary><div className="workshop-help-grid">
+    </div>}
+      {!gameNightViews && workflowStep !== 2 && !stageReviewView && <details className="workshop-help"><summary>Guide: backgrounds, layers, tools, scenes and buttons</summary><div className="workshop-help-grid">
         <article><h3>Create a background</h3><p>In Workshop, generate or upload your background image. Use Edit / Crop to crop it and change its size, position or appearance. Ask AI about the edit for requested changes. Save it before assembly.</p></article>
         <article><h3>Add backgrounds and image layers</h3><p>In Build Space, choose Use as Background on a finished image. Choose Add as Image Layer for images over that background. Edit / Crop adjusts their position and zoom. Replacing a background keeps the old image saved.</p></article>
         <article><h3>Store customized tools</h3><p>Create and customize tools in Workshop. They are stored in the toolbox automatically. In Build Space, choose which tools to connect to dashboard buttons. Unused tools stay in the toolbox.</p></article>
