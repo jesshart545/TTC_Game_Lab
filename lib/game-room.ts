@@ -43,6 +43,17 @@ import {
   WORD_CHAIN_CHAIN_TARGET, WORD_CHAIN_MAX_STRIKES,
   type WordChainConfig, type WordChainPlayerState, type WordChainRoomState,
 } from "./word-chain";
+import {
+  drawGuessConfigFromSnapshot, drawGuessPlayerState, drawGuessBlanks, drawGuessCleanStroke,
+  DRAW_GUESS_DRAWS_EACH, DRAW_GUESS_GUESSER_POINTS, DRAW_GUESS_DRAWER_POINTS,
+  DRAW_GUESS_MAX_STROKES, DRAW_GUESS_FEED_LIMIT, DRAW_GUESS_REVEAL_MS,
+  type DrawGuessConfig, type DrawGuessPlayerState, type DrawGuessRoomState,
+} from "./draw-guess";
+import {
+  propertyTycoonConfigFromSnapshot, propertyTycoonPlayerState, tycoonDice, tycoonRent, tycoonOwnsSet, tycoonNetWorth,
+  TYCOON_START_BALANCE, TYCOON_SALARY, TYCOON_TAX, TYCOON_TURNS_EACH,
+  type PropertyTycoonConfig, type PropertyTycoonPlayerState, type PropertyTycoonRoomState,
+} from "./property-tycoon";
 
 export type RoomStatus = "lobby" | "countdown" | "playing" | "finished";
 
@@ -1274,6 +1285,638 @@ const wordChainModule: GameModule = {
 };
 
 // ---------------------------------------------------------------------------
+// Draw & Guess module
+// ---------------------------------------------------------------------------
+
+function drawStateOf(room: Room): DrawGuessRoomState {
+  return room.state as unknown as DrawGuessRoomState;
+}
+
+function drawConfigOf(room: Room): DrawGuessConfig {
+  return room.config as unknown as DrawGuessConfig;
+}
+
+function drawPlayer(player: RoomPlayer): DrawGuessPlayerState {
+  return drawGuessPlayerState(player.state);
+}
+
+function saveDrawPlayer(player: RoomPlayer, mine: DrawGuessPlayerState): void {
+  player.state = mine as unknown as Record<string, unknown>;
+}
+
+/** Open a round: seat the drawer, hand them their word through their
+ * own player state ONLY, and start with a blank canvas. */
+function drawBeginRound(room: Room, players: RoomPlayer[], now: number): void {
+  const config = drawConfigOf(room);
+  const state = drawStateOf(room);
+  state.drawerId = state.rotation[state.drawerIndex] ?? null;
+  const wordIndex = state.wordOrder[state.wordIndex];
+  state.currentWord = wordIndex === undefined ? "" : config.words[wordIndex] ?? "";
+  state.strokes = [];
+  state.guesses = [];
+  state.roundEndsAt = now + config.roundMs;
+  state.phase = "draw";
+  if (state.drawerId) state.drawsTaken[state.drawerId] = (state.drawsTaken[state.drawerId] || 0) + 1;
+  for (const player of players) {
+    const mine = drawPlayer(player);
+    mine.drawWord = player.id === state.drawerId ? state.currentWord : "";
+    saveDrawPlayer(player, mine);
+  }
+}
+
+/** Close the running round: the word becomes everyone's to see, and
+ * the private copy leaves the drawer's state. */
+function drawEndRound(room: Room, players: RoomPlayer[], now: number, guesserId: string | null): void {
+  const state = drawStateOf(room);
+  state.lastRound = { word: state.currentWord, drawerId: state.drawerId, guesserId };
+  state.phase = "reveal";
+  state.revealUntil = now + DRAW_GUESS_REVEAL_MS;
+  for (const player of players) {
+    const mine = drawPlayer(player);
+    if (mine.drawWord) {
+      mine.drawWord = "";
+      saveDrawPlayer(player, mine);
+    }
+  }
+}
+
+/** The reveal moment ends: either the game is over (the words ran
+ * out, or every player has had their two turns at the easel) or the
+ * next drawer in the rotation takes the next word. */
+function drawAdvanceRound(room: Room, players: RoomPlayer[], now: number): void {
+  const state = drawStateOf(room);
+  state.wordIndex += 1;
+  let next = -1;
+  for (let step = 1; step <= state.rotation.length; step++) {
+    const index = (state.drawerIndex + step) % state.rotation.length;
+    const id = state.rotation[index];
+    if (id && (state.drawsTaken[id] || 0) < DRAW_GUESS_DRAWS_EACH) { next = index; break; }
+  }
+  if (next < 0 || state.wordIndex >= state.wordOrder.length) {
+    state.phase = "done";
+    state.drawerId = null;
+    return;
+  }
+  state.drawerIndex = next;
+  drawBeginRound(room, players, now);
+}
+
+const drawGuessModule: GameModule = {
+  gameType: "draw-guess",
+
+  extractConfig(snapshot) {
+    const result = drawGuessConfigFromSnapshot(snapshot);
+    if ("error" in result) return result;
+    return { config: result.config as unknown as Record<string, unknown> };
+  },
+
+  init() {
+    const state: DrawGuessRoomState = {
+      startedAt: 0, phase: "draw",
+      wordOrder: [], wordIndex: 0,
+      rotation: [], drawerIndex: 0, drawerId: null,
+      drawsTaken: {}, currentWord: "",
+      strokes: [], guesses: [],
+      roundEndsAt: 0, revealUntil: 0, lastRound: null,
+    };
+    return state as unknown as Record<string, unknown>;
+  },
+
+  onStart(room, players, now, rng) {
+    const config = drawConfigOf(room);
+    const state = drawStateOf(room);
+    state.startedAt = now;
+    state.wordOrder = shuffle(config.words.map((_, index) => index), rng);
+    state.wordIndex = 0;
+    state.rotation = players.map(player => player.id);
+    state.drawerIndex = 0;
+    state.drawsTaken = {};
+    state.lastRound = null;
+    for (const player of players) saveDrawPlayer(player, { score: 0, drawWord: "" });
+    if (players.length) drawBeginRound(room, players, now);
+  },
+
+  playerInit(room, player) {
+    const state = drawStateOf(room);
+    if (state.startedAt && !state.rotation.includes(player.id)) {
+      // A late joiner takes the next seat in the drawing rotation —
+      // the game never waits for a host to place them.
+      state.rotation = [...state.rotation, player.id];
+    }
+    // A fresh seat never holds the word: only the seated drawer's own
+    // state carries it, and only while their round runs.
+    const mine = drawPlayer(player);
+    mine.drawWord = "";
+    saveDrawPlayer(player, mine);
+  },
+
+  onAction(room, players, player, action, now) {
+    const state = drawStateOf(room);
+
+    if (action.type === "stroke") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase !== "draw") return "That round is over — the next drawing is coming up.";
+      if (player.id !== state.drawerId) return "Only the player drawing can add to the canvas.";
+      const stroke = drawGuessCleanStroke(action.stroke);
+      if (!stroke) return "That stroke didn't come through — try again.";
+      if (state.strokes.length >= DRAW_GUESS_MAX_STROKES) return "The canvas is full — clear it to keep drawing.";
+      state.strokes = [...state.strokes, stroke];
+      return null;
+    }
+
+    if (action.type === "clear") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase !== "draw") return "That round is over — the next drawing is coming up.";
+      if (player.id !== state.drawerId) return "Only the player drawing can clear the canvas.";
+      state.strokes = [];
+      return null;
+    }
+
+    if (action.type === "guess") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase === "reveal") return "That round is over — the next word is coming up.";
+      if (state.phase !== "draw") return "Hold on — there's nothing to guess right now.";
+      if (player.id === state.drawerId) return "You're drawing this one — everyone else does the guessing.";
+      const text = String(action.text ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+      if (!text) return "Type your guess first.";
+      if (quizAnswerMatches(text, state.currentWord)) {
+        // The first right guess ends the round on the spot: the
+        // guesser takes 3 points, the drawer takes 1, and the word is
+        // revealed to everyone.
+        const mine = drawPlayer(player);
+        mine.score += DRAW_GUESS_GUESSER_POINTS;
+        saveDrawPlayer(player, mine);
+        const drawer = players.find(candidate => candidate.id === state.drawerId);
+        if (drawer) {
+          const drawerState = drawPlayer(drawer);
+          drawerState.score += DRAW_GUESS_DRAWER_POINTS;
+          saveDrawPlayer(drawer, drawerState);
+        }
+        drawEndRound(room, players, now, player.id);
+        return null;
+      }
+      state.guesses = [...state.guesses, { playerId: player.id, text, at: now }].slice(-DRAW_GUESS_FEED_LIMIT);
+      return null;
+    }
+
+    return "That move isn't part of this game.";
+  },
+
+  tick(room, players, now) {
+    const state = drawStateOf(room);
+    if (!state.startedAt) return;
+    if (state.phase === "draw" && now >= state.roundEndsAt) {
+      // The clock ran out: the word is revealed, nobody scores.
+      drawEndRound(room, players, now, null);
+    } else if (state.phase === "reveal" && now >= state.revealUntil) {
+      drawAdvanceRound(room, players, now);
+    }
+  },
+
+  checkFinish(room, players) {
+    const state = drawStateOf(room);
+    if (!state.startedAt || state.phase !== "done") return null;
+    const rows = players.map(player => ({ player, score: drawPlayer(player).score }));
+    const top = rows.reduce((best, row) => Math.max(best, row.score), Number.NEGATIVE_INFINITY);
+    rows.sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name));
+    return rows.map(row => ({
+      playerId: row.player.id,
+      name: row.player.name,
+      score: row.score,
+      detail: row.score === top ? `${row.score} points — Draw & Guess champion` : `${row.score} points`,
+      winner: row.score === top,
+    }));
+  },
+
+  publicState(room, players) {
+    const config = drawConfigOf(room);
+    const state = drawStateOf(room);
+    const names = new Map(players.map(player => [player.id, player.name]));
+    return {
+      accent: config.accent,
+      theme: config.theme,
+      drawStage: state.startedAt ? state.phase : "draw",
+      drawerId: state.startedAt ? state.drawerId : null,
+      drawerName: state.drawerId ? names.get(state.drawerId) || null : null,
+      // Letter blanks only while the round runs: the word's length is
+      // all a guesser gets. The word itself appears in this payload
+      // ONLY inside the reveal, once the round is over.
+      blanks: state.startedAt && state.phase === "draw" ? drawGuessBlanks(state.currentWord) : null,
+      strokes: state.startedAt ? state.strokes : [],
+      guesses: state.startedAt ? state.guesses.map(guess => ({
+        playerId: guess.playerId,
+        name: names.get(guess.playerId) || "",
+        text: guess.text,
+      })) : [],
+      endsAt: state.startedAt && state.phase === "draw" ? state.roundEndsAt : null,
+      wordNumber: state.wordIndex + 1,
+      wordCount: config.words.length,
+      scores: Object.fromEntries(players.map(player => [player.id, drawPlayer(player).score])),
+      drawReveal: state.phase === "reveal" && state.lastRound ? {
+        word: state.lastRound.word,
+        drawerId: state.lastRound.drawerId,
+        drawerName: state.lastRound.drawerId ? names.get(state.lastRound.drawerId) || null : null,
+        guesserId: state.lastRound.guesserId,
+        guesserName: state.lastRound.guesserId ? names.get(state.lastRound.guesserId) || null : null,
+      } : null,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Property Tycoon module
+// ---------------------------------------------------------------------------
+
+function tycoonStateOf(room: Room): PropertyTycoonRoomState {
+  return room.state as unknown as PropertyTycoonRoomState;
+}
+
+function tycoonConfigOf(room: Room): PropertyTycoonConfig {
+  return room.config as unknown as PropertyTycoonConfig;
+}
+
+function tycoonPlayer(player: RoomPlayer): PropertyTycoonPlayerState {
+  return propertyTycoonPlayerState(player.state);
+}
+
+function saveTycoonPlayer(player: RoomPlayer, mine: PropertyTycoonPlayerState): void {
+  player.state = mine as unknown as Record<string, unknown>;
+}
+
+/** The event fragment for a charge that broke a player. */
+function tycoonBankruptFragment(player: RoomPlayer): string {
+  return ` — more than ${player.name} had: ${player.name} is bankrupt and out, and their properties are back on the market`;
+}
+
+/** Charge a player for rent, tax or a chance loss. They pay what they
+ * have (crediting the payee, when there is one); when the charge is
+ * more than that, they are bankrupt — out of the game, with every
+ * property they owned back on the market. Returns true when the
+ * charge bankrupted them. */
+function tycoonCharge(room: Room, player: RoomPlayer, amount: number, payee?: RoomPlayer): boolean {
+  const state = tycoonStateOf(room);
+  const mine = tycoonPlayer(player);
+  const short = amount > mine.balance;
+  const paid = short ? mine.balance : amount;
+  mine.balance -= paid;
+  saveTycoonPlayer(player, mine);
+  if (payee && paid > 0) {
+    const theirs = tycoonPlayer(payee);
+    theirs.balance += paid;
+    saveTycoonPlayer(payee, theirs);
+  }
+  if (!short) return false;
+  const broken = tycoonPlayer(player);
+  broken.out = true;
+  saveTycoonPlayer(player, broken);
+  state.owners = state.owners.map(owner => (owner === player.id ? null : owner));
+  if (!state.outOrder.includes(player.id)) state.outOrder = [...state.outOrder, player.id];
+  return true;
+}
+
+/** Move a player's token, paying the Start salary when the move wraps
+ * past it (landing exactly on Start counts — the token passed it). */
+function tycoonMove(room: Room, player: RoomPlayer, steps: number, events: string[]): void {
+  const config = tycoonConfigOf(room);
+  const mine = tycoonPlayer(player);
+  const from = mine.position;
+  mine.position = (from + steps) % config.spaces.length;
+  if (from + steps >= config.spaces.length) {
+    mine.balance += TYCOON_SALARY;
+    events.push(`${player.name} passes Start and collects ${TYCOON_SALARY}`);
+  }
+  saveTycoonPlayer(player, mine);
+}
+
+/** Resolve the space a token just landed on, appending the story to
+ * `events`. Returns false when the turn must pause — an unowned
+ * property the player can afford is on offer to them, and the turn
+ * cannot move on until they buy or pass. `fromChance` is true when a
+ * chance card's move brought the token here: a second Chance space
+ * never draws a second card. */
+function tycoonResolveLanding(room: Room, players: RoomPlayer[], player: RoomPlayer, events: string[], fromChance: boolean): boolean {
+  const config = tycoonConfigOf(room);
+  const state = tycoonStateOf(room);
+  const mine = tycoonPlayer(player);
+  const space = config.spaces[mine.position];
+  if (!space) return true;
+
+  switch (space.kind) {
+    case "start":
+      events.push(`${player.name} lands on Start`);
+      return true;
+
+    case "rest":
+      events.push(`${player.name} rests at the Rest Stop — nothing happens`);
+      return true;
+
+    case "tax": {
+      const broke = tycoonCharge(room, player, TYCOON_TAX);
+      events.push(`${player.name} lands on Tax and pays ${TYCOON_TAX}${broke ? tycoonBankruptFragment(player) : ""}`);
+      return true;
+    }
+
+    case "timeout": {
+      const fresh = tycoonPlayer(player);
+      fresh.position = config.timeoutSpace;
+      fresh.skipNext = true;
+      saveTycoonPlayer(player, fresh);
+      events.push(`${player.name} is sent to Time-Out at the Rest Stop corner — and misses their next turn`);
+      return true;
+    }
+
+    case "chance": {
+      if (fromChance) {
+        events.push(`${player.name} lands on Chance again — one card a turn`);
+        return true;
+      }
+      const card = config.chanceCards[state.chanceIndex % config.chanceCards.length];
+      state.chanceIndex += 1;
+      const text = card.text.replace(/\.\s*$/, "");
+      const effect = card.effect;
+      if (effect.kind === "money" && effect.amount > 0) {
+        const fresh = tycoonPlayer(player);
+        fresh.balance += effect.amount;
+        saveTycoonPlayer(player, fresh);
+        events.push(`${player.name} draws Chance: ${text} — collects ${effect.amount}`);
+        return true;
+      }
+      if (effect.kind === "money") {
+        const broke = tycoonCharge(room, player, -effect.amount);
+        events.push(`${player.name} draws Chance: ${text} — pays ${-effect.amount}${broke ? tycoonBankruptFragment(player) : ""}`);
+        return true;
+      }
+      if (effect.kind === "skip") {
+        const fresh = tycoonPlayer(player);
+        fresh.skipNext = true;
+        saveTycoonPlayer(player, fresh);
+        events.push(`${player.name} draws Chance: ${text} — and misses their next turn`);
+        return true;
+      }
+      // A move card: the token moves (Start salary still pays on the
+      // way past), and the new space resolves like any landing —
+      // except it can never draw another chance card.
+      events.push(`${player.name} draws Chance: ${text}`);
+      tycoonMove(room, player, effect.steps, events);
+      return tycoonResolveLanding(room, players, player, events, true);
+    }
+
+    case "property": {
+      const property = config.properties[space.property];
+      const ownerId = state.owners[space.property];
+      if (ownerId === null || ownerId === undefined) {
+        if (mine.balance >= property.price) {
+          state.stage = "decide";
+          state.offerSpace = mine.position;
+          events.push(`${player.name} lands on ${property.name} — ${property.price} to buy it`);
+          return false;
+        }
+        events.push(`${player.name} lands on ${property.name}, but ${property.price} is more than they have — it stays on the market`);
+        return true;
+      }
+      if (ownerId === player.id) {
+        events.push(`${player.name} lands on their own ${property.name} — no rent to pay`);
+        return true;
+      }
+      const owner = players.find(candidate => candidate.id === ownerId);
+      const rent = tycoonRent(config, state.owners, space.property);
+      const fullSet = tycoonOwnsSet(config, state.owners, space.property);
+      const broke = tycoonCharge(room, player, rent, owner);
+      events.push(`${player.name} lands on ${owner?.name ?? "another player"}'s ${property.name} — rent ${rent} to ${owner?.name ?? "its owner"}${fullSet ? " (full set — rent doubled)" : ""}${broke ? tycoonBankruptFragment(player) : ""}`);
+      return true;
+    }
+  }
+  return true;
+}
+
+/** Hand the turn to the next player who can take it: bankrupt players
+ * are passed over, and a player serving a Time-Out skip has it
+ * consumed as the turn reaches them (the miss is part of the story).
+ * If nobody else can take it, the first solvent player keeps the turn
+ * so the game is never stuck — the finish check ends it if it is over. */
+function tycoonAdvanceTurn(room: Room, players: RoomPlayer[], events: string[]): void {
+  const state = tycoonStateOf(room);
+  state.stage = "roll";
+  state.offerSpace = null;
+  if (!players.length) { state.turnPlayerId = null; return; }
+  const startIndex = players.findIndex(candidate => candidate.id === state.turnPlayerId);
+  let fallback: RoomPlayer | null = null;
+  for (let step = 1; step <= players.length; step++) {
+    const candidate = players[(startIndex + step) % players.length];
+    const theirs = tycoonPlayer(candidate);
+    if (theirs.out) continue;
+    if (!fallback) fallback = candidate;
+    if (theirs.skipNext) {
+      theirs.skipNext = false;
+      saveTycoonPlayer(candidate, theirs);
+      events.push(`${candidate.name} misses a turn in Time-Out`);
+      continue;
+    }
+    state.turnPlayerId = candidate.id;
+    return;
+  }
+  state.turnPlayerId = fallback ? fallback.id : null;
+}
+
+const propertyTycoonModule: GameModule = {
+  gameType: "property-tycoon",
+
+  extractConfig(snapshot) {
+    const result = propertyTycoonConfigFromSnapshot(snapshot);
+    if ("error" in result) return result;
+    return { config: result.config as unknown as Record<string, unknown> };
+  },
+
+  init(config) {
+    const properties = (config as unknown as PropertyTycoonConfig).properties || [];
+    const state: PropertyTycoonRoomState = {
+      startedAt: 0, diceSeed: 0, rollsMade: 0,
+      turnPlayerId: null, stage: "roll", offerSpace: null,
+      lastDice: null,
+      owners: properties.map(() => null),
+      chanceIndex: 0, turnsTaken: {}, outOrder: [], lastEvent: null,
+    };
+    return state as unknown as Record<string, unknown>;
+  },
+
+  onStart(room, players, now, rng) {
+    const config = tycoonConfigOf(room);
+    const state = tycoonStateOf(room);
+    state.startedAt = now;
+    state.diceSeed = Math.floor(rng() * 1_000_000_000);
+    state.rollsMade = 0;
+    state.turnPlayerId = players[0]?.id ?? null;
+    state.stage = "roll";
+    state.offerSpace = null;
+    state.lastDice = null;
+    state.owners = config.properties.map(() => null);
+    state.chanceIndex = 0;
+    state.turnsTaken = {};
+    state.outOrder = [];
+    state.lastEvent = null;
+    for (const player of players) {
+      saveTycoonPlayer(player, { balance: TYCOON_START_BALANCE, position: 0, out: false, skipNext: false });
+    }
+  },
+
+  playerInit(room, player) {
+    // A fresh seat starts with a full stake on the Start square. A
+    // late joiner takes the next seat in the turn order the same way —
+    // the game never waits for a host to place them.
+    saveTycoonPlayer(player, tycoonPlayer(player));
+  },
+
+  onAction(room, players, player, action) {
+    const config = tycoonConfigOf(room);
+    const state = tycoonStateOf(room);
+
+    if (action.type === "roll") {
+      if (room.status !== "playing" || !state.startedAt) return "The game isn't running right now.";
+      if (state.stage !== "roll") return "Settle the property offer first — buy it or pass.";
+      if (player.id !== state.turnPlayerId) {
+        const turn = players.find(candidate => candidate.id === state.turnPlayerId);
+        return turn ? `It's ${turn.name}'s turn — yours comes around.` : "It's not your turn right now.";
+      }
+      if (tycoonPlayer(player).out) return "You're out of this game — you can watch it finish!";
+      const dice = tycoonDice(state.diceSeed, state.rollsMade);
+      state.rollsMade += 1;
+      state.lastDice = dice;
+      state.turnsTaken[player.id] = (state.turnsTaken[player.id] || 0) + 1;
+      const events = [`${player.name} rolled ${dice[0]} and ${dice[1]}`];
+      tycoonMove(room, player, dice[0] + dice[1], events);
+      const turnEnds = tycoonResolveLanding(room, players, player, events, false);
+      if (turnEnds) tycoonAdvanceTurn(room, players, events);
+      state.lastEvent = `${events.join(". ")}.`;
+      return null;
+    }
+
+    if (action.type === "decide") {
+      if (room.status !== "playing" || !state.startedAt) return "The game isn't running right now.";
+      if (state.stage !== "decide" || state.offerSpace === null) return "There's no property on offer right now.";
+      if (player.id !== state.turnPlayerId) return "That offer is on the table for the player whose turn it is.";
+      const space = config.spaces[state.offerSpace];
+      if (!space || space.kind !== "property") return "That offer has closed.";
+      const property = config.properties[space.property];
+      const events: string[] = [];
+      if (action.buy === true) {
+        const mine = tycoonPlayer(player);
+        if (mine.balance < property.price) return `${property.name} costs ${property.price} — more than you have. Pass, and play on.`;
+        mine.balance -= property.price;
+        saveTycoonPlayer(player, mine);
+        state.owners[space.property] = player.id;
+        events.push(`${player.name} buys ${property.name} for ${property.price}`);
+      } else {
+        events.push(`${player.name} passes on ${property.name}`);
+      }
+      tycoonAdvanceTurn(room, players, events);
+      state.lastEvent = `${events.join(". ")}.`;
+      return null;
+    }
+
+    return "That move isn't part of this game.";
+  },
+
+  tick() {
+    // Property Tycoon turns wait for their players — there are no
+    // timers in this game, so time passing changes nothing.
+  },
+
+  checkFinish(room, players) {
+    const config = tycoonConfigOf(room);
+    const state = tycoonStateOf(room);
+    if (!state.startedAt) return null;
+    if (state.stage === "decide") return null; // an open offer settles first
+    const solvent = players.filter(candidate => !tycoonPlayer(candidate).out);
+    const lastOneStanding = state.outOrder.length > 0 && solvent.length <= 1;
+    const turnsDone = solvent.length > 0 && solvent.every(candidate => (state.turnsTaken[candidate.id] || 0) >= TYCOON_TURNS_EACH);
+    if (!lastOneStanding && !turnsDone) return null;
+    const rows = players.map(player => {
+      const mine = tycoonPlayer(player);
+      return {
+        player,
+        mine,
+        worth: mine.out ? 0 : tycoonNetWorth(config, state.owners, player.id, mine.balance),
+        outAt: state.outOrder.indexOf(player.id),
+      };
+    });
+    rows.sort((a, b) => {
+      // Solvent before bankrupt; among the solvent, the richest
+      // first; among the bankrupt, whoever fell latest first.
+      if (a.mine.out !== b.mine.out) return a.mine.out ? 1 : -1;
+      if (!a.mine.out && a.worth !== b.worth) return b.worth - a.worth;
+      if (a.mine.out && b.mine.out && a.outAt !== b.outAt) return b.outAt - a.outAt;
+      return a.player.name.localeCompare(b.player.name);
+    });
+    const topWorth = rows.filter(row => !row.mine.out).reduce((best, row) => Math.max(best, row.worth), Number.NEGATIVE_INFINITY);
+    return rows.map((row, index) => {
+      const winner = !row.mine.out ? row.worth === topWorth : solvent.length === 0 && index === 0;
+      return {
+        playerId: row.player.id,
+        name: row.player.name,
+        score: row.mine.out ? 0 : row.worth,
+        detail: row.mine.out
+          ? (winner ? "Last to fall — bankrupt, but outlasted everyone" : "Bankrupt — out of the game")
+          : (winner ? `${row.worth} net worth — Property Tycoon champion` : `${row.worth} net worth`),
+        winner,
+      };
+    });
+  },
+
+  publicState(room, players) {
+    const config = tycoonConfigOf(room);
+    const state = tycoonStateOf(room);
+    const names = new Map(players.map(player => [player.id, player.name]));
+    const offerSpace = state.offerSpace !== null ? config.spaces[state.offerSpace] : null;
+    return {
+      accent: config.accent,
+      theme: config.theme,
+      tycoonStage: state.startedAt ? state.stage : "roll",
+      spaces: config.spaces.map((space, index) => {
+        if (space.kind === "property") {
+          const property = config.properties[space.property];
+          const ownerId = state.owners[space.property] ?? null;
+          return {
+            index, kind: space.kind,
+            name: property.name,
+            price: property.price,
+            color: property.color,
+            ownerId,
+            ownerName: ownerId ? names.get(ownerId) || null : null,
+          };
+        }
+        return {
+          index, kind: space.kind,
+          name: space.kind === "start" ? "Start" : space.kind === "chance" ? "Chance" : space.kind === "rest" ? "Rest Stop" : space.kind === "tax" ? "Tax" : "Go to Time-Out",
+          price: space.kind === "tax" ? TYCOON_TAX : space.kind === "start" ? TYCOON_SALARY : null,
+        };
+      }),
+      turnPlayerId: state.startedAt ? state.turnPlayerId : null,
+      turnName: state.turnPlayerId ? names.get(state.turnPlayerId) || null : null,
+      offer: state.stage === "decide" && offerSpace && offerSpace.kind === "property" ? {
+        space: state.offerSpace,
+        name: config.properties[offerSpace.property].name,
+        price: config.properties[offerSpace.property].price,
+      } : null,
+      lastDice: state.startedAt ? state.lastDice : null,
+      lastEvent: state.startedAt ? state.lastEvent : null,
+      turnsEach: TYCOON_TURNS_EACH,
+      tycoonPlayers: Object.fromEntries(players.map(player => {
+        const mine = tycoonPlayer(player);
+        return [player.id, {
+          balance: mine.balance,
+          position: mine.position,
+          out: mine.out,
+          skipNext: mine.skipNext,
+          properties: config.properties.filter((_, index) => state.owners[index] === player.id).length,
+          netWorth: tycoonNetWorth(config, state.owners, player.id, mine.balance),
+          turnsTaken: state.turnsTaken[player.id] || 0,
+        }];
+      })),
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Module registry
 // ---------------------------------------------------------------------------
 
@@ -1283,6 +1926,8 @@ export const GAME_MODULES: Record<string, GameModule> = {
   [surveyModule.gameType]: surveyModule,
   [perfectMatchModule.gameType]: perfectMatchModule,
   [wordChainModule.gameType]: wordChainModule,
+  [drawGuessModule.gameType]: drawGuessModule,
+  [propertyTycoonModule.gameType]: propertyTycoonModule,
 };
 
 /** Pick the module a published snapshot can play, and extract its config. */

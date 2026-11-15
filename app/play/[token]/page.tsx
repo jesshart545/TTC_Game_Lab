@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import "./play.css";
+import { DRAW_GUESS_CANVAS, DRAW_GUESS_COLORS, DRAW_GUESS_WIDTHS } from "../../../lib/draw-guess";
 
 // The Game Night player page (Off-Stream Multiplayer Game Night).
 // Everyone who opens the link lands here: type your name, you're in the
@@ -75,6 +76,30 @@ type WordChainPublic = {
   wordPlayers?: Record<string, { strikes: number; out: boolean; added: number }>;
   lastPlay?: { playerId: string; name: string; word: string; result: "in" | "repeat" | "invalid" | "timeout" } | null;
 };
+type DrawGuessPublic = {
+  drawStage?: "draw" | "reveal" | "done";
+  drawerId?: string | null;
+  drawerName?: string | null;
+  blanks?: string | null;
+  strokes?: { color: string; width: number; points: [number, number][] }[];
+  guesses?: { playerId: string; name: string; text: string }[];
+  endsAt?: number | null;
+  wordNumber?: number;
+  wordCount?: number;
+  scores?: Record<string, number>;
+  drawReveal?: { word: string; drawerId: string | null; drawerName: string | null; guesserId: string | null; guesserName: string | null } | null;
+};
+type TycoonPublic = {
+  tycoonStage?: "roll" | "decide";
+  spaces?: { index: number; kind: string; name: string; price?: number | null; color?: string; ownerId?: string | null; ownerName?: string | null }[];
+  turnPlayerId?: string | null;
+  turnName?: string | null;
+  offer?: { space: number; name: string; price: number } | null;
+  lastDice?: [number, number] | null;
+  lastEvent?: string | null;
+  turnsEach?: number;
+  tycoonPlayers?: Record<string, { balance: number; position: number; out: boolean; skipNext: boolean; properties: number; netWorth: number; turnsTaken: number }>;
+};
 type RoomView = {
   title: string;
   gameType: string;
@@ -82,8 +107,8 @@ type RoomView = {
   round: number;
   countdownEndsAt: number | null;
   players: PlayerView[];
-  game: BingoPublic & QuizPublic & SurveyPublic & PerfectMatchPublic & WordChainPublic;
-  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string; team?: number; guessText?: string; hand?: string[]; submittedCard?: string; submittedRound?: number } } | null;
+  game: BingoPublic & QuizPublic & SurveyPublic & PerfectMatchPublic & WordChainPublic & DrawGuessPublic & TycoonPublic;
+  me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string; team?: number; guessText?: string; hand?: string[]; submittedCard?: string; submittedRound?: number; drawWord?: string } } | null;
   standings: Standing[] | null;
 };
 
@@ -160,6 +185,45 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
     ? [view.game.turnNumber, view.game.turnPlayerId || ""].join(":")
     : undefined;
   useEffect(() => { setAnswerDraft(""); }, [chainTurnKey]);
+
+  // The drawer's pen (Draw & Guess): the in-progress stroke lives
+  // locally so the drawer sees it the instant they move; finished
+  // strokes are sent to the room and come back in the public state.
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [penColor, setPenColor] = useState<string>(DRAW_GUESS_COLORS[0]);
+  const [penWidth, setPenWidth] = useState<number>(DRAW_GUESS_WIDTHS[1]);
+  const [penPoints, setPenPoints] = useState<[number, number][]>([]);
+
+  // A fresh drawing round means a fresh guess box (Draw & Guess).
+  const drawRoundKey = view?.gameType === "draw-guess"
+    ? [view.game.wordNumber, view.game.drawerId || "", view.game.drawStage || ""].join(":")
+    : undefined;
+  useEffect(() => { setAnswerDraft(""); setPenPoints([]); }, [drawRoundKey]);
+
+  function canvasPoint(event: React.PointerEvent): [number, number] | null {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return [
+      Math.round(((event.clientX - rect.left) / rect.width) * DRAW_GUESS_CANVAS.width),
+      Math.round(((event.clientY - rect.top) / rect.height) * DRAW_GUESS_CANVAS.height),
+    ];
+  }
+
+  async function sendStroke(stroke: { color: string; width: number; points: [number, number][] }) {
+    if (!playerIdRef.current) return;
+    try {
+      const response = await fetch(`/api/play/${token}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: playerIdRef.current, action: { type: "stroke", stroke } }),
+      });
+      const data = await response.json();
+      if (!response.ok) { setFlash(data.error || "That stroke didn't go through — try again."); return; }
+      if (data.view) setView(data.view as RoomView);
+    } catch { /* a missed stroke is visible at once; the next poll shows the room's truth */ }
+  }
 
   async function join() {
     const name = nameDraft.trim();
@@ -242,6 +306,13 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   const myChainState = chain && me ? chain.wordPlayers?.[me.id] : undefined;
   const myChainTurn = !!chain && !!me && chain.turnPlayerId === me.id && !myChainState?.out;
   const chainWords = chain?.chain || [];
+  const drawGame = view.gameType === "draw-guess" ? view.game : null;
+  const iAmDrawer = !!drawGame && !!me && drawGame.drawerId === me.id;
+  const myDrawWord = view.me?.state.drawWord || "";
+  const tycoon = view.gameType === "property-tycoon" ? view.game : null;
+  const myTycoon = tycoon && me ? tycoon.tycoonPlayers?.[me.id] : undefined;
+  const myTycoonTurn = !!tycoon && !!me && tycoon.turnPlayerId === me.id && !myTycoon?.out;
+  const myOffer = tycoon && me && tycoon.tycoonStage === "decide" && tycoon.turnPlayerId === me.id ? tycoon.offer : null;
 
   return (
     <main className="gn-shell" style={{ "--gn-accent": accent } as React.CSSProperties}>
@@ -288,6 +359,12 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
           )}
           {view.gameType === "word-chain" && (
             <p className="gn-hint">A starter word goes up BIG — then everyone takes turns adding one word that goes with the word before it. You have 10 seconds a turn; a repeat or a missed turn is a strike, and two strikes and you&apos;re out. Last one standing wins — or finish a 30-word chain together!</p>
+          )}
+          {view.gameType === "draw-guess" && (
+            <p className="gn-hint">Everyone takes a turn at the easel: when you draw, only you see your word — sketch it on the big canvas while everyone else races to guess it. First right guess scores 3 points, and the drawer scores 1. Everyone draws twice!</p>
+          )}
+          {view.gameType === "property-tycoon" && (
+            <p className="gn-hint">Everyone starts with 1500 on the Start square. On your turn, roll the dice, buy the properties you land on, and collect rent when rivals land on yours — owning a full color set doubles its rent. Richest net worth when the turns run out wins — unless everyone else goes bankrupt first!</p>
           )}
           <div className="gn-chips">
             {view.players.map(player => <PlayerChip key={player.id} player={player} />)}
@@ -716,6 +793,231 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
                 ))}
               </div>
             </>
+          ) : drawGame ? (
+            <>
+              <div className="gn-standings-strip" aria-label="Scores">
+                {[...view.players].sort((a, b) => (drawGame.scores?.[b.id] ?? 0) - (drawGame.scores?.[a.id] ?? 0)).map(player => (
+                  <span key={player.id} className={`gn-strip-chip${player.me ? " gn-strip-me" : ""}${drawGame.drawerId === player.id ? " gn-strip-turn" : ""}`}>
+                    {player.isCreator ? "⭐ " : ""}{player.name}: <strong>{drawGame.scores?.[player.id] ?? 0}</strong>
+                    {drawGame.drawerId === player.id ? " · ✏️ drawing" : ""}
+                  </span>
+                ))}
+              </div>
+
+              <div className="gn-call-zone">
+                <div className="gn-call" key={`dg-${drawGame.wordNumber}-${drawGame.drawerId || ""}`}>
+                  <span className="gn-call-label">
+                    {drawGame.drawStage === "reveal"
+                      ? "The word was"
+                      : iAmDrawer
+                        ? `✏️ Your word to draw · word ${drawGame.wordNumber ?? 1} of ${drawGame.wordCount ?? 0}`
+                        : `${drawGame.drawerName ?? "A player"} is drawing · word ${drawGame.wordNumber ?? 1} of ${drawGame.wordCount ?? 0}`}
+                  </span>
+                  {drawGame.drawStage === "reveal" && drawGame.drawReveal ? (
+                    <span className="gn-call-item gn-draw-word">{drawGame.drawReveal.word}</span>
+                  ) : iAmDrawer ? (
+                    <span className="gn-call-item gn-draw-word">{myDrawWord}</span>
+                  ) : (
+                    <span className="gn-call-item gn-draw-blanks" aria-label="The word as letter blanks">{(drawGame.blanks || "").split("").map(char => char === "_" ? "▁" : char).join(" ")}</span>
+                  )}
+                  {drawGame.drawStage === "draw" && drawGame.endsAt && (
+                    <span className="gn-next-bar" key={`dgbar-${drawGame.wordNumber}-${drawGame.drawerId || ""}`} style={{ animationDuration: `${Math.max(0, drawGame.endsAt - Date.now())}ms` }} />
+                  )}
+                </div>
+              </div>
+
+              {drawGame.drawStage === "reveal" && drawGame.drawReveal && (
+                <p className="gn-progress-line" role="status">
+                  {drawGame.drawReveal.guesserName
+                    ? `🎉 ${drawGame.drawReveal.guesserName} guessed it — +3 points, and +1 for ${drawGame.drawReveal.drawerName ?? "the drawer"}!`
+                    : `⏰ Time! Nobody guessed “${drawGame.drawReveal.word}”.`}
+                </p>
+              )}
+
+              <div className="gn-draw-board">
+                <svg
+                  ref={svgRef}
+                  className={`gn-draw-canvas${iAmDrawer && drawGame.drawStage === "draw" ? " gn-draw-live" : ""}`}
+                  viewBox={`0 0 ${DRAW_GUESS_CANVAS.width} ${DRAW_GUESS_CANVAS.height}`}
+                  role="img"
+                  aria-label={iAmDrawer ? "Your drawing canvas" : "The drawing"}
+                  onPointerDown={event => {
+                    if (!iAmDrawer || drawGame.drawStage !== "draw") return;
+                    const point = canvasPoint(event);
+                    if (!point) return;
+                    svgRef.current?.setPointerCapture?.(event.pointerId);
+                    setPenPoints([point]);
+                  }}
+                  onPointerMove={event => {
+                    if (!penPoints.length) return;
+                    const point = canvasPoint(event);
+                    if (!point) return;
+                    const last = penPoints[penPoints.length - 1];
+                    if (Math.abs(point[0] - last[0]) + Math.abs(point[1] - last[1]) < 6) return;
+                    setPenPoints([...penPoints, point]);
+                  }}
+                  onPointerUp={() => {
+                    if (penPoints.length) sendStroke({ color: penColor, width: penWidth, points: penPoints });
+                    setPenPoints([]);
+                  }}
+                  onPointerCancel={() => setPenPoints([])}
+                >
+                  {(drawGame.strokes || []).map((stroke, index) => stroke.points.length === 1 ? (
+                    <circle key={index} cx={stroke.points[0][0]} cy={stroke.points[0][1]} r={stroke.width / 2} fill={stroke.color} />
+                  ) : (
+                    <polyline key={index} points={stroke.points.map(point => point.join(",")).join(" ")} fill="none" stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" strokeLinejoin="round" />
+                  ))}
+                  {penPoints.length === 1 ? (
+                    <circle cx={penPoints[0][0]} cy={penPoints[0][1]} r={penWidth / 2} fill={penColor} />
+                  ) : penPoints.length > 1 ? (
+                    <polyline points={penPoints.map(point => point.join(",")).join(" ")} fill="none" stroke={penColor} strokeWidth={penWidth} strokeLinecap="round" strokeLinejoin="round" />
+                  ) : null}
+                </svg>
+              </div>
+
+              {iAmDrawer && drawGame.drawStage === "draw" ? (
+                <div className="gn-draw-tools">
+                  <div className="gn-draw-colors" role="group" aria-label="Pen colors">
+                    {DRAW_GUESS_COLORS.map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`gn-draw-color${penColor === color ? " gn-draw-color-on" : ""}`}
+                        style={{ background: color }}
+                        onClick={() => setPenColor(color)}
+                        aria-label={`Pen color ${color}`}
+                        aria-pressed={penColor === color}
+                      />
+                    ))}
+                  </div>
+                  <div className="gn-draw-widths" role="group" aria-label="Pen sizes">
+                    {DRAW_GUESS_WIDTHS.map(width => (
+                      <button
+                        key={width}
+                        type="button"
+                        className={`gn-draw-width${penWidth === width ? " gn-draw-width-on" : ""}`}
+                        onClick={() => setPenWidth(width)}
+                        aria-label={`Pen size ${width}`}
+                        aria-pressed={penWidth === width}
+                      >
+                        <span style={{ width: Math.max(4, width), height: Math.max(4, width) }} />
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="gn-big-btn gn-draw-clear" onClick={() => act({ type: "clear" })} disabled={busy}>
+                    🧹 Clear the canvas
+                  </button>
+                </div>
+              ) : drawGame.drawStage === "draw" ? (
+                <div className="gn-answer-row">
+                  <input
+                    className="gn-name-input gn-answer-input"
+                    value={answerDraft}
+                    onChange={event => setAnswerDraft(event.target.value)}
+                    onKeyDown={event => { if (event.key === "Enter" && answerDraft.trim()) act({ type: "guess", text: answerDraft }); }}
+                    placeholder="What are they drawing?"
+                    maxLength={60}
+                    autoFocus
+                    aria-label="Your guess"
+                  />
+                  <button type="button" className="gn-big-btn gn-answer-btn" onClick={() => act({ type: "guess", text: answerDraft })} disabled={busy || !answerDraft.trim()}>
+                    {busy ? "Guessing…" : "Guess it!"}
+                  </button>
+                </div>
+              ) : null}
+
+              {(drawGame.guesses || []).length > 0 && (
+                <div className="gn-draw-feed" aria-label="Guesses so far">
+                  {[...(drawGame.guesses || [])].reverse().map((guess, index) => (
+                    <span key={`${guess.playerId}-${index}`} className="gn-history-chip">✗ {guess.name}: {guess.text}</span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : tycoon ? (
+            <>
+              <div className="gn-standings-strip" aria-label="Balances and net worth">
+                {[...view.players].sort((a, b) => (tycoon.tycoonPlayers?.[b.id]?.netWorth ?? 0) - (tycoon.tycoonPlayers?.[a.id]?.netWorth ?? 0)).map(player => {
+                  const theirs = tycoon.tycoonPlayers?.[player.id];
+                  return (
+                    <span key={player.id} className={`gn-strip-chip${player.me ? " gn-strip-me" : ""}${tycoon.turnPlayerId === player.id ? " gn-strip-turn" : ""}${theirs?.out ? " gn-strip-out" : ""}`}>
+                      {player.isCreator ? "⭐ " : ""}{player.name}: <strong>{theirs?.balance ?? 0}</strong>
+                      {theirs?.out ? " · bankrupt" : ` · worth ${theirs?.netWorth ?? 0}`}
+                      {tycoon.turnPlayerId === player.id ? " · rolling" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+
+              <div className="gn-tycoon-board" aria-label="The board">
+                {(tycoon.spaces || []).map(space => {
+                  const total = (tycoon.spaces || []).length || 1;
+                  const angle = (space.index / total) * Math.PI * 2 - Math.PI / 2;
+                  const left = 50 + 44 * Math.cos(angle);
+                  const top = 50 + 42 * Math.sin(angle);
+                  const standing = view.players.filter(player => tycoon.tycoonPlayers?.[player.id]?.position === space.index && !tycoon.tycoonPlayers?.[player.id]?.out);
+                  return (
+                    <div
+                      key={space.index}
+                      className={`gn-tycoon-tile gn-tycoon-${space.kind}${tycoon.offer && tycoon.offer.space === space.index ? " gn-tycoon-offered" : ""}`}
+                      style={{ left: `${left}%`, top: `${top}%` }}
+                    >
+                      {space.kind === "property" && <span className="gn-tycoon-band" style={{ background: space.color }} aria-hidden="true" />}
+                      <span className="gn-tycoon-name">{space.name}</span>
+                      {space.kind === "property" && <span className="gn-tycoon-price">{space.price}</span>}
+                      {space.kind === "tax" && <span className="gn-tycoon-price">pay {space.price}</span>}
+                      {space.kind === "start" && <span className="gn-tycoon-price">+{space.price} passing</span>}
+                      {space.ownerName && <span className="gn-tycoon-owner" title={`Owned by ${space.ownerName}`}>{space.ownerName.trim().split(/\s+/).map(part => part[0]).slice(0, 2).join("").toUpperCase()}</span>}
+                      {standing.length > 0 && (
+                        <span className="gn-tycoon-tokens" aria-label="Players here">
+                          {standing.map(player => (
+                            <span key={player.id} className={`gn-tycoon-token${player.me ? " gn-tycoon-token-me" : ""}`} title={player.name}>
+                              {player.name.trim().split(/\s+/).map(part => part[0]).slice(0, 2).join("").toUpperCase()}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div className="gn-tycoon-center">
+                  <p className="gn-progress-line" role="status">
+                    {myTycoon?.out
+                      ? "You're bankrupt — watch the board finish!"
+                      : tycoon.tycoonStage === "decide"
+                        ? tycoon.turnPlayerId === me?.id
+                          ? `🏠 ${tycoon.offer?.name} is yours for ${tycoon.offer?.price} — buy it?`
+                          : `${tycoon.turnName ?? "A player"} is deciding on ${tycoon.offer?.name}…`
+                        : myTycoonTurn
+                          ? "🎲 Your roll — tap the dice!"
+                          : `${tycoon.turnName ?? "A player"} is rolling…`}
+                  </p>
+                  {tycoon.lastDice && (
+                    <div className="gn-tycoon-dice" aria-label={`Last roll: ${tycoon.lastDice[0]} and ${tycoon.lastDice[1]}`}>
+                      <span>{["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][tycoon.lastDice[0] - 1]}</span>
+                      <span>{["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][tycoon.lastDice[1] - 1]}</span>
+                    </div>
+                  )}
+                  {tycoon.lastEvent && <p className="gn-tycoon-event">{tycoon.lastEvent}</p>}
+                  {myOffer ? (
+                    <div className="gn-tycoon-actions">
+                      <button type="button" className="gn-big-btn" onClick={() => act({ type: "decide", buy: true })} disabled={busy || (myTycoon?.balance ?? 0) < (myOffer.price ?? 0)}>
+                        {busy ? "Buying…" : `Buy for ${myOffer.price}`}
+                      </button>
+                      <button type="button" className="gn-big-btn gn-ready-off" onClick={() => act({ type: "decide", buy: false })} disabled={busy}>
+                        Pass
+                      </button>
+                    </div>
+                  ) : myTycoonTurn && tycoon.tycoonStage === "roll" ? (
+                    <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "roll" })} disabled={busy}>
+                      {busy ? "Rolling…" : "🎲 Roll the dice"}
+                    </button>
+                  ) : null}
+                  <p className="gn-hint">Your turn {Math.min((myTycoon?.turnsTaken ?? 0) + 1, tycoon.turnsEach ?? 12)} of {tycoon.turnsEach ?? 12} · passing Start pays a salary</p>
+                </div>
+              </div>
+            </>
           ) : (
             <>
           <div className="gn-call-zone">
@@ -825,7 +1127,7 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             </>
           )}
           <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "play-again" })} disabled={busy}>
-            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : view.gameType === "perfect-match" ? "↻ Play again — fresh hands, new prompts" : view.gameType === "word-chain" ? "↻ Play again — new starter word, everyone back in" : "↻ Play again — same game, fresh cards"}
+            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : view.gameType === "perfect-match" ? "↻ Play again — fresh hands, new prompts" : view.gameType === "word-chain" ? "↻ Play again — new starter word, everyone back in" : view.gameType === "draw-guess" ? "↻ Play again — fresh words, everyone draws again" : view.gameType === "property-tycoon" ? "↻ Play again — fresh board, full pockets" : "↻ Play again — same game, fresh cards"}
           </button>
           <p className="gn-hint">Anyone can press Play Again — the first press deals everyone back in.</p>
         </section>

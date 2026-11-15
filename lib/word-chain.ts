@@ -96,10 +96,13 @@ type AnyTool = {
 
 /** Whether a card list signals the Word Chain deck, from its name —
  * the same signal bingo's extraction uses to leave a lone qualifying
- * word deck to the chain game. */
+ * word deck to the chain game. A name that also signals Draw & Guess
+ * ("draw", as in "Draw Words") is a drawing deck, not a starter deck:
+ * the draw signal wins, the same kind of tiebreak Perfect Match set
+ * for names carrying both of its deck words. */
 export function cardListIsWordDeck(name: unknown): boolean {
   const text = typeof name === "string" ? name.toLowerCase() : "";
-  return text.includes("word");
+  return text.includes("word") && !text.includes("draw");
 }
 
 function cardTexts(tool: AnyTool): string[] {
@@ -138,8 +141,9 @@ export function wordChainConfigFromSnapshot(snapshot: unknown): { config: WordCh
   const deck = lists.slice().sort((a, b) => cardTexts(b).length - cardTexts(a).length)[0];
   const starters = deck ? dedupe(cardTexts(deck)).slice(0, MAX_STARTERS) : [];
   if (starters.length < WORD_CHAIN_MIN_STARTERS) {
-    // pickGame surfaces the LAST module's error, so this one speaks for
-    // the whole game night: all five games, in plain words.
+    // This resolver's own refusal, in plain words (pickGame surfaces
+    // the LAST registered module's error — Draw & Guess's, which
+    // speaks for all six games).
     return { error: `This game night needs something to play before it can be shared — add a card list with at least 5 items for Bingo, a quiz board with at least 6 questions across at least 2 categories for Quiz Board, a survey board with at least 3 questions of at least 3 answers each for Survey Showdown, two card lists for Perfect Match — one with "prompt" in its name holding at least 10 prompts and one with "answer" in its name holding at least 30 answers — or a card list with "word" in its name holding at least ${WORD_CHAIN_MIN_STARTERS} starter words for Word Chain (ask Jewel to build one), publish, then share.` };
   }
   const theme = typeof snap.theme === "string" ? snap.theme : "purple";
