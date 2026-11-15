@@ -97,6 +97,21 @@ function qualifiesAsDrawDeck(tool: AnyTool): boolean {
   return isDrawDeck(tool.name) && dedupe(cardTexts(tool)).length >= DRAW_DECK_MIN_WORDS;
 }
 
+/** The Property Tycoon board signal (lib/property-tycoon.ts reads the
+ * same one): a card-list name containing "propert". PROPERTY_LIST_MIN
+ * mirrors TYCOON_MIN_PROPERTIES there — a list only counts as a board
+ * when it holds at least that many different properties. */
+const PROPERTY_LIST_MIN = 12;
+
+function isPropertyList(name: unknown): boolean {
+  const text = typeof name === "string" ? name.toLowerCase() : "";
+  return text.includes("propert");
+}
+
+function qualifiesAsPropertyList(tool: AnyTool): boolean {
+  return isPropertyList(tool.name) && dedupe(cardTexts(tool)).length >= PROPERTY_LIST_MIN;
+}
+
 function cardTexts(tool: AnyTool): string[] {
   const config = (tool.config || {}) as Record<string, unknown>;
   const fromCards: string[] = [];
@@ -152,15 +167,24 @@ export function bingoConfigFromSnapshot(snapshot: unknown): { config: BingoConfi
   // small to play (under the minimum) is an ordinary pool list,
   // exactly like a short word list.
   const drawExcluded = poolLists.filter(tool => !qualifiesAsDrawDeck(tool));
+  // Property Tycoon's board: a property-named list that qualifies as
+  // a board is a trading game waiting to be played, not a bingo call
+  // pool, so it is left out whenever it is present — the same
+  // treatment the draw deck gets above. (That is also what leaves a
+  // word deck standing as the pool's sole candidate in a
+  // property-list-plus-word-deck project, below.) A property-named
+  // list too small to trade on (under the minimum) is an ordinary
+  // pool list, exactly like a short draw list.
+  const propertyExcluded = drawExcluded.filter(tool => !qualifiesAsPropertyList(tool));
   // Word Chain's deck: a word-named list that qualifies as a word deck
   // is left out of the call pool ONLY when it is the snapshot's sole
   // bingo candidate — a project whose only content is a starter deck is
   // a chain game, and the room falls through the registry to Word
   // Chain. With any other candidate present, bingo plays exactly as it
   // always has, word list included.
-  const wordDeckAlone = drawExcluded.length === 1 && isWordDeck(drawExcluded[0].name)
-    && dedupe(cardTexts(drawExcluded[0])).length >= WORD_DECK_MIN_STARTERS;
-  const candidates = wordDeckAlone ? [] : drawExcluded;
+  const wordDeckAlone = propertyExcluded.length === 1 && isWordDeck(propertyExcluded[0].name)
+    && dedupe(cardTexts(propertyExcluded[0])).length >= WORD_DECK_MIN_STARTERS;
+  const candidates = wordDeckAlone ? [] : propertyExcluded;
   const picker = tools.find(tool => tool.type === "random-picker" && tool.config?.source === "cards" && typeof tool.config?.listId === "string");
   let pool = picker ? candidates.find(tool => tool.id === picker.config?.listId) : undefined;
   if (!pool) {

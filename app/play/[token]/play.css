@@ -399,6 +399,57 @@
 .gn-draw-clear { font-size: 15px; padding: 10px 16px; }
 .gn-draw-feed { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
 
+/* ---- property tycoon ---- */
+.gn-tycoon-board {
+  position: relative; margin-top: 10px; width: 100%; aspect-ratio: 4 / 3.4;
+  background: rgba(20, 14, 36, .85); border: 1px solid color-mix(in srgb, var(--gn-accent) 40%, transparent);
+  border-radius: 20px; box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
+}
+.gn-tycoon-tile {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 15.5%; min-height: 52px; padding: 3px 4px 4px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px;
+  background: rgba(255, 255, 255, .07); border: 1.5px solid rgba(255, 255, 255, .16);
+  border-radius: 10px; text-align: center; overflow: hidden;
+}
+.gn-tycoon-band { display: block; width: calc(100% + 8px); height: 8px; margin: -3px -4px 2px; flex: none; }
+.gn-tycoon-name { font-size: 10.5px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.gn-tycoon-price { font-size: 10px; color: #ffe9a8; font-weight: 700; }
+.gn-tycoon-start { border-color: #22c55e; background: color-mix(in srgb, #22c55e 18%, transparent); }
+.gn-tycoon-chance { border-color: #f59e0b; background: color-mix(in srgb, #f59e0b 14%, transparent); }
+.gn-tycoon-tax { border-color: #e11d48; background: color-mix(in srgb, #e11d48 13%, transparent); }
+.gn-tycoon-timeout { border-color: #a855f7; background: color-mix(in srgb, #a855f7 16%, transparent); }
+.gn-tycoon-offered { box-shadow: 0 0 0 3px var(--gn-accent), 0 0 18px color-mix(in srgb, var(--gn-accent) 65%, transparent); }
+.gn-tycoon-owner {
+  position: absolute; top: 2px; right: 2px; min-width: 17px; height: 17px; padding: 0 3px;
+  border-radius: 999px; background: var(--gn-accent); color: #fff;
+  font-size: 9.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center;
+}
+.gn-tycoon-tokens { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: 1px; }
+.gn-tycoon-token {
+  min-width: 17px; height: 17px; padding: 0 3px; border-radius: 999px;
+  background: #efeaff; color: #241b3a; font-size: 9.5px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid rgba(11, 7, 20, .55);
+}
+.gn-tycoon-token-me { background: #ffe9a8; box-shadow: 0 0 8px rgba(255, 233, 168, .8); }
+.gn-tycoon-center {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 52%; max-height: 76%; overflow-y: auto; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center;
+  background: rgba(11, 7, 20, .72); border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 16px; padding: 12px 12px 10px;
+}
+.gn-tycoon-dice { font-size: 44px; line-height: 1; display: flex; gap: 8px; color: #fff; }
+.gn-tycoon-event { font-size: 13.5px; color: #e7e0ff; margin: 0; overflow-wrap: anywhere; }
+.gn-tycoon-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+@media (max-width: 420px) {
+  .gn-tycoon-tile { width: 17%; min-height: 46px; }
+  .gn-tycoon-name { font-size: 9.5px; }
+  .gn-tycoon-center { width: 56%; padding: 9px 8px 8px; }
+  .gn-tycoon-dice { font-size: 36px; }
+}
+
 /* ---- finished ---- */
 .gn-finished { overflow: hidden; }
 .gn-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }

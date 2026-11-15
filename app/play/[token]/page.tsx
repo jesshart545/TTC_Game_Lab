@@ -89,6 +89,17 @@ type DrawGuessPublic = {
   scores?: Record<string, number>;
   drawReveal?: { word: string; drawerId: string | null; drawerName: string | null; guesserId: string | null; guesserName: string | null } | null;
 };
+type TycoonPublic = {
+  tycoonStage?: "roll" | "decide";
+  spaces?: { index: number; kind: string; name: string; price?: number | null; color?: string; ownerId?: string | null; ownerName?: string | null }[];
+  turnPlayerId?: string | null;
+  turnName?: string | null;
+  offer?: { space: number; name: string; price: number } | null;
+  lastDice?: [number, number] | null;
+  lastEvent?: string | null;
+  turnsEach?: number;
+  tycoonPlayers?: Record<string, { balance: number; position: number; out: boolean; skipNext: boolean; properties: number; netWorth: number; turnsTaken: number }>;
+};
 type RoomView = {
   title: string;
   gameType: string;
@@ -96,7 +107,7 @@ type RoomView = {
   round: number;
   countdownEndsAt: number | null;
   players: PlayerView[];
-  game: BingoPublic & QuizPublic & SurveyPublic & PerfectMatchPublic & WordChainPublic & DrawGuessPublic;
+  game: BingoPublic & QuizPublic & SurveyPublic & PerfectMatchPublic & WordChainPublic & DrawGuessPublic & TycoonPublic;
   me: { id: string; isCreator: boolean; state: { card?: string[]; markedCells?: number[]; score?: number; answerKey?: string; answerText?: string; team?: number; guessText?: string; hand?: string[]; submittedCard?: string; submittedRound?: number; drawWord?: string } } | null;
   standings: Standing[] | null;
 };
@@ -298,6 +309,10 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
   const drawGame = view.gameType === "draw-guess" ? view.game : null;
   const iAmDrawer = !!drawGame && !!me && drawGame.drawerId === me.id;
   const myDrawWord = view.me?.state.drawWord || "";
+  const tycoon = view.gameType === "property-tycoon" ? view.game : null;
+  const myTycoon = tycoon && me ? tycoon.tycoonPlayers?.[me.id] : undefined;
+  const myTycoonTurn = !!tycoon && !!me && tycoon.turnPlayerId === me.id && !myTycoon?.out;
+  const myOffer = tycoon && me && tycoon.tycoonStage === "decide" && tycoon.turnPlayerId === me.id ? tycoon.offer : null;
 
   return (
     <main className="gn-shell" style={{ "--gn-accent": accent } as React.CSSProperties}>
@@ -347,6 +362,9 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
           )}
           {view.gameType === "draw-guess" && (
             <p className="gn-hint">Everyone takes a turn at the easel: when you draw, only you see your word — sketch it on the big canvas while everyone else races to guess it. First right guess scores 3 points, and the drawer scores 1. Everyone draws twice!</p>
+          )}
+          {view.gameType === "property-tycoon" && (
+            <p className="gn-hint">Everyone starts with 1500 on the Start square. On your turn, roll the dice, buy the properties you land on, and collect rent when rivals land on yours — owning a full color set doubles its rent. Richest net worth when the turns run out wins — unless everyone else goes bankrupt first!</p>
           )}
           <div className="gn-chips">
             {view.players.map(player => <PlayerChip key={player.id} player={player} />)}
@@ -916,6 +934,90 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
                 </div>
               )}
             </>
+          ) : tycoon ? (
+            <>
+              <div className="gn-standings-strip" aria-label="Balances and net worth">
+                {[...view.players].sort((a, b) => (tycoon.tycoonPlayers?.[b.id]?.netWorth ?? 0) - (tycoon.tycoonPlayers?.[a.id]?.netWorth ?? 0)).map(player => {
+                  const theirs = tycoon.tycoonPlayers?.[player.id];
+                  return (
+                    <span key={player.id} className={`gn-strip-chip${player.me ? " gn-strip-me" : ""}${tycoon.turnPlayerId === player.id ? " gn-strip-turn" : ""}${theirs?.out ? " gn-strip-out" : ""}`}>
+                      {player.isCreator ? "⭐ " : ""}{player.name}: <strong>{theirs?.balance ?? 0}</strong>
+                      {theirs?.out ? " · bankrupt" : ` · worth ${theirs?.netWorth ?? 0}`}
+                      {tycoon.turnPlayerId === player.id ? " · rolling" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+
+              <div className="gn-tycoon-board" aria-label="The board">
+                {(tycoon.spaces || []).map(space => {
+                  const total = (tycoon.spaces || []).length || 1;
+                  const angle = (space.index / total) * Math.PI * 2 - Math.PI / 2;
+                  const left = 50 + 44 * Math.cos(angle);
+                  const top = 50 + 42 * Math.sin(angle);
+                  const standing = view.players.filter(player => tycoon.tycoonPlayers?.[player.id]?.position === space.index && !tycoon.tycoonPlayers?.[player.id]?.out);
+                  return (
+                    <div
+                      key={space.index}
+                      className={`gn-tycoon-tile gn-tycoon-${space.kind}${tycoon.offer && tycoon.offer.space === space.index ? " gn-tycoon-offered" : ""}`}
+                      style={{ left: `${left}%`, top: `${top}%` }}
+                    >
+                      {space.kind === "property" && <span className="gn-tycoon-band" style={{ background: space.color }} aria-hidden="true" />}
+                      <span className="gn-tycoon-name">{space.name}</span>
+                      {space.kind === "property" && <span className="gn-tycoon-price">{space.price}</span>}
+                      {space.kind === "tax" && <span className="gn-tycoon-price">pay {space.price}</span>}
+                      {space.kind === "start" && <span className="gn-tycoon-price">+{space.price} passing</span>}
+                      {space.ownerName && <span className="gn-tycoon-owner" title={`Owned by ${space.ownerName}`}>{space.ownerName.trim().split(/\s+/).map(part => part[0]).slice(0, 2).join("").toUpperCase()}</span>}
+                      {standing.length > 0 && (
+                        <span className="gn-tycoon-tokens" aria-label="Players here">
+                          {standing.map(player => (
+                            <span key={player.id} className={`gn-tycoon-token${player.me ? " gn-tycoon-token-me" : ""}`} title={player.name}>
+                              {player.name.trim().split(/\s+/).map(part => part[0]).slice(0, 2).join("").toUpperCase()}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div className="gn-tycoon-center">
+                  <p className="gn-progress-line" role="status">
+                    {myTycoon?.out
+                      ? "You're bankrupt — watch the board finish!"
+                      : tycoon.tycoonStage === "decide"
+                        ? tycoon.turnPlayerId === me?.id
+                          ? `🏠 ${tycoon.offer?.name} is yours for ${tycoon.offer?.price} — buy it?`
+                          : `${tycoon.turnName ?? "A player"} is deciding on ${tycoon.offer?.name}…`
+                        : myTycoonTurn
+                          ? "🎲 Your roll — tap the dice!"
+                          : `${tycoon.turnName ?? "A player"} is rolling…`}
+                  </p>
+                  {tycoon.lastDice && (
+                    <div className="gn-tycoon-dice" aria-label={`Last roll: ${tycoon.lastDice[0]} and ${tycoon.lastDice[1]}`}>
+                      <span>{["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][tycoon.lastDice[0] - 1]}</span>
+                      <span>{["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][tycoon.lastDice[1] - 1]}</span>
+                    </div>
+                  )}
+                  {tycoon.lastEvent && <p className="gn-tycoon-event">{tycoon.lastEvent}</p>}
+                  {myOffer ? (
+                    <div className="gn-tycoon-actions">
+                      <button type="button" className="gn-big-btn" onClick={() => act({ type: "decide", buy: true })} disabled={busy || (myTycoon?.balance ?? 0) < (myOffer.price ?? 0)}>
+                        {busy ? "Buying…" : `Buy for ${myOffer.price}`}
+                      </button>
+                      <button type="button" className="gn-big-btn gn-ready-off" onClick={() => act({ type: "decide", buy: false })} disabled={busy}>
+                        Pass
+                      </button>
+                    </div>
+                  ) : myTycoonTurn && tycoon.tycoonStage === "roll" ? (
+                    <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "roll" })} disabled={busy}>
+                      {busy ? "Rolling…" : "🎲 Roll the dice"}
+                    </button>
+                  ) : null}
+                  <p className="gn-hint">Your turn {Math.min((myTycoon?.turnsTaken ?? 0) + 1, tycoon.turnsEach ?? 12)} of {tycoon.turnsEach ?? 12} · passing Start pays a salary</p>
+                </div>
+              </div>
+            </>
           ) : (
             <>
           <div className="gn-call-zone">
@@ -1025,7 +1127,7 @@ export default function PlayPage({ params }: { params: Promise<{ token: string }
             </>
           )}
           <button type="button" className="gn-big-btn gn-start" onClick={() => act({ type: "play-again" })} disabled={busy}>
-            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : view.gameType === "perfect-match" ? "↻ Play again — fresh hands, new prompts" : view.gameType === "word-chain" ? "↻ Play again — new starter word, everyone back in" : view.gameType === "draw-guess" ? "↻ Play again — fresh words, everyone draws again" : "↻ Play again — same game, fresh cards"}
+            {view.gameType === "quiz-board" ? "↻ Play again — same game, fresh board" : view.gameType === "survey-showdown" ? "↻ Play again — same teams, fresh board" : view.gameType === "perfect-match" ? "↻ Play again — fresh hands, new prompts" : view.gameType === "word-chain" ? "↻ Play again — new starter word, everyone back in" : view.gameType === "draw-guess" ? "↻ Play again — fresh words, everyone draws again" : view.gameType === "property-tycoon" ? "↻ Play again — fresh board, full pockets" : "↻ Play again — same game, fresh cards"}
           </button>
           <p className="gn-hint">Anyone can press Play Again — the first press deals everyone back in.</p>
         </section>

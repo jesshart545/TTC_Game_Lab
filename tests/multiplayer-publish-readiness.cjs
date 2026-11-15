@@ -29,7 +29,7 @@ console.log('PASS: multiplayer projects with a playable bingo pool publish with 
 
 // (b) Multiplayer with nothing playable is blocked by exactly ONE
 // plain-language issue — no dashboards, buttons or connections mentioned.
-const MESSAGE='Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, a prompt card list and an answer card list for a matching game, a word list with at least 10 starter words for a word chain game, or a draw list with at least 12 words to draw for a drawing game — ask Jewel to build one for you.';
+const MESSAGE='Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, a prompt card list and an answer card list for a matching game, a word list with at least 10 starter words for a word chain game, a draw list with at least 12 words to draw for a drawing game, or a property list with at least 12 properties to trade for a property trading game — ask Jewel to build one for you.';
 const bare={kind:'multiplayer',name:'Empty Night',theme:'purple',assets:[],controls:[...unwiredControls],gameTools:[...unwiredTools]};
 const bareIssues=buildReadiness(bare);
 assert.equal(bareIssues.length,1,'an unplayable game night is blocked by exactly one issue');
