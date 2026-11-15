@@ -57,18 +57,21 @@ const fileIssues=buildReadiness(browserFile);
 assert.equal(fileIssues.length,1);assert.equal(fileIssues[0].id,'cloud-browser:art');assert.equal(fileIssues[0].kind,'asset');
 console.log('PASS: saved-file asset checks still apply to multiplayer, and only when a file is actually placed.');
 
-// (c) Gameshow readiness is unchanged: the same unwired shape still reports
-// the dashboard-wiring issues it always has.
+// (c) Gameshow readiness under the tools-are-options model (Jessica,
+// 2026-11-14): the same unwired shape no longer reports dashboard-wiring
+// issues — an unconnected tool is an unused option, not a blocker. The
+// stray unassigned control is still reported, as always.
 const gameshow={kind:'gameshow',name:'Unwired Show',theme:'purple',assets:[],controls:[...unwiredControls],gameTools:[...unwiredTools,cardList('list-1',ITEMS)]};
 const showIssues=buildReadiness(gameshow);
 const showIds=showIssues.map(i=>i.id);
 assert(showIds.includes('control-empty'),'gameshow still reports the unassigned control');
-assert(showIds.includes('timer-controls-cd1'),'gameshow still requires the countdown dashboard buttons');
-assert(showIds.includes('controls-wheel1'),'gameshow still requires a dashboard button for the wheel');
-assert(showIds.includes('controls-sb1'),'gameshow still requires a dashboard button for the scoreboard');
+assert(!showIds.includes('timer-controls-cd1'),'an unconnected countdown carries no timer-button demand');
+assert(!showIds.includes('controls-wheel1'),'an unconnected wheel carries no dashboard-button demand');
+assert(!showIds.includes('controls-sb1'),'an unconnected scoreboard carries no dashboard-button demand');
 assert(!showIds.includes('playable-game'),'gameshow never gets the game-night reason');
-assert.equal(showIssues.find(i=>i.id==='controls-wheel1').message,'Game Wheel: add at least one dashboard button so the host can show or run it.');
-console.log('PASS: gameshow readiness output is unchanged for the same unwired project shape.');
+assert(showIds.includes('entries-sb1'),'content minimums still apply to an unconnected tool — the empty scoreboard still owes its entries');
+assert.equal(showIssues.length,2,'only the stray control and the scoreboard content row remain');
+console.log('PASS: gameshow readiness treats unconnected tools as unused options.');
 
 // (d) The publish-review panel summary (publishReviewSummary, which the
 // panel in app/project/[id]/page.tsx renders from): a game night has no
