@@ -1125,12 +1125,34 @@ export function tickRoom(room: Room, players: RoomPlayer[], now: number, rng: ()
     changed = true;
   }
   if (room.status === "playing") {
+    // Module ticks mutate the game state in place and return nothing, so
+    // the only way to know a timed transition actually happened is to
+    // compare the persisted shape before and after. Without this, callers
+    // that save only on change (loadPlayRoom) never store mid-game
+    // advances — a quiz reveal, a survey stage change, a match round
+    // rollover — and every poll reloads the stale copy and re-derives
+    // the same frozen moment forever.
+    const before = JSON.stringify({
+      state: room.state,
+      status: room.status,
+      round: room.round,
+      players: players.map(player => player.state),
+    });
     GAME_MODULES[room.gameType].tick(room, players, now);
     const standings = GAME_MODULES[room.gameType].checkFinish(room, players, now);
     if (standings) {
       room.status = "finished";
       room.state = { ...room.state, standings };
       changed = true;
+    }
+    if (!changed) {
+      const after = JSON.stringify({
+        state: room.state,
+        status: room.status,
+        round: room.round,
+        players: players.map(player => player.state),
+      });
+      if (after !== before) changed = true;
     }
   }
   return changed;
