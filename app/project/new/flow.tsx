@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createProject, saveProjectToServer, type ProjectKind } from "../../../lib/project";
 import { GAME_TEMPLATES, getGameTemplate } from "../../../lib/game-templates";
+import { GAME_NIGHT_TEMPLATES, applyGameNightTemplate, getGameNightTemplate } from "../../../lib/game-night-templates";
 import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, isKindGatedFor, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
 import "./new-project.css";
 
@@ -23,7 +24,8 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   const [chosenTemplate, setChosenTemplate] = useState("");
   const [start, setStart] = useState<ScratchStart | null>(null);
   const [kind, setKind] = useState<ProjectKind | null>(null);
-  const [screen, setScreen] = useState<"kinds" | "scratch" | "templates">("kinds");
+  const [screen, setScreen] = useState<"kinds" | "scratch" | "templates" | "gn-templates" | "gn-detail">("kinds");
+  const [gnDetail, setGnDetail] = useState("");
   const [popup, setPopup] = useState(false);
   const [pieces, setPieces] = useState<string[]>(() => SETUP_PIECES.filter(piece => piece.defaultOn).map(piece => piece.id));
 
@@ -44,6 +46,7 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
       const idea = params.get("idea")?.trim().slice(0, 12000) || "";
       const templateId = params.get("template")?.trim() || chosenTemplate;
       const template = templateId ? getGameTemplate(templateId) : undefined;
+      const gnTemplate = !template && templateId ? getGameNightTemplate(templateId) : undefined;
       // Restricted templates (e.g. City Crime Scene): verify entitlement before creating.
       // The save-time backstop strips restricted tools server-side, but this avoids
       // a confusing create-then-strip for unauthorized users.
@@ -75,6 +78,11 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
           role: "assistant",
           text: `Your "${template.name}" game is ready! ${template.tagline} Use "Edit with AI" below to customize anything — the questions, prizes, look, rules — or dive into the workshop and tweak it yourself.`,
         }];
+      } else if (gnTemplate) {
+        // Game Night template: the project starts as a multiplayer game
+        // night holding the template's starter content, ready to
+        // customize with Jewel (Jessica's design, 2026-11-15).
+        applyGameNightTemplate(project, gnTemplate, name);
       } else {
         project.prompt = idea;
         project.workflow = { stage: 0, workshopStep: 0, promptDraft: idea };
@@ -127,7 +135,7 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
     if (isKindGatedFor(next, viewerIsAdmin)) return;
     setKind(next);
     setPieces(defaultSetupPieces(next));
-    if (next === "gameshow") {
+    if (next === "gameshow" || next === "multiplayer") {
       setPopup(true);
       return;
     }
@@ -291,37 +299,89 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
               </div>
             </div>
           )}
+
+          {screen === "gn-templates" && (
+            <div>
+              <button type="button" className="np-back" onClick={() => { setScreen("kinds"); setKind(null); }}>← Back to kinds</button>
+              <div className="np-setuphead">
+                <div className="display">Pick your game</div>
+                <div className="np-chip set">Game Night templates</div>
+              </div>
+              <div className="np-tplgrid">
+                {GAME_NIGHT_TEMPLATES.map(template => (
+                  <div
+                    key={template.id}
+                    className="np-tplcard"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => { setGnDetail(template.id); setScreen("gn-detail"); }}
+                    onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setGnDetail(template.id); setScreen("gn-detail"); } }}
+                  >
+                    <img src={template.image} alt="" />
+                    <div className="np-shade" />
+                    <div className="np-txt">
+                      <div className="np-t display">{template.name}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {screen === "gn-detail" && (() => {
+            const template = getGameNightTemplate(gnDetail);
+            if (!template) return null;
+            return (
+              <div>
+                <div className="np-tplcard" style={{ cursor: "default" }}>
+                  <img src={template.image} alt="" />
+                  <div className="np-shade" />
+                  <div className="np-txt">
+                    <div style={{ fontSize: "2rem" }} aria-hidden="true">{template.icon}</div>
+                    <div className="np-t display">{template.name}</div>
+                  </div>
+                </div>
+                <p className="np-ask" style={{ marginTop: "18px" }}>{template.description}</p>
+                <div className="np-nextrow">
+                  <button type="button" className="np-nextbtn" onClick={() => chooseTemplate(template.id)}>Continue with this template →</button>
+                  <button type="button" className="np-back" onClick={() => setScreen("gn-templates")}>← Go back</button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {popup && (
           <div className="np-popwrap" onClick={event => { if (event.target === event.currentTarget) closePopup(); }}>
             <div className="np-pop" role="dialog" aria-modal="true" aria-label="How do you want to start?">
               <button type="button" className="np-popx" aria-label="Close" onClick={closePopup}>✕</button>
-              <div className="np-kick">Gameshow project</div>
+              <div className="np-kick">{kind === "multiplayer" ? "Game Night project" : "Gameshow project"}</div>
               <h3 className="display">How do you want to start?</h3>
               <div className="np-sub">Two ways in — pick one and you&apos;re building.</div>
-              <button type="button" className="np-opt" onClick={() => { setPopup(false); setPieces(defaultSetupPieces("gameshow")); const info = projectKindInfo("gameshow"); if (info && !name.trim()) setName(info.nameSuggestion); setScreen("scratch"); }}>
+              <button type="button" className="np-opt" onClick={() => { setPopup(false); if (kind) { setPieces(defaultSetupPieces(kind)); const info = projectKindInfo(kind); if (info && !name.trim()) setName(info.nameSuggestion); } setScreen("scratch"); }}>
                 <div className="np-ic">✨</div>
                 <div>
                   <div className="np-t">Build from Scratch</div>
-                  <div className="np-d">A blank stage. Every piece made by you, with Jewel beside you.</div>
+                  <div className="np-d">{kind === "multiplayer" ? "A blank game night. Every piece made by you, with Jewel beside you." : "A blank stage. Every piece made by you, with Jewel beside you."}</div>
                 </div>
               </button>
-              <button type="button" className="np-opt" onClick={() => { setPopup(false); setScreen("templates"); }}>
+              <button type="button" className="np-opt" onClick={() => { setPopup(false); setScreen(kind === "multiplayer" ? "gn-templates" : "templates"); }}>
                 <div className="np-ic">🎭</div>
                 <div>
                   <div className="np-t">Start with a Template</div>
-                  <div className="np-d">A mostly-finished show — Trivia Night, Million Quiz, and more — then make it yours.</div>
+                  <div className="np-d">{kind === "multiplayer" ? "A ready-to-play game — Bingo, Quiz Board, Survey Showdown, and more — then make it yours." : "A mostly-finished show — Trivia Night, Million Quiz, and more — then make it yours."}</div>
                 </div>
               </button>
               {ccssEntitled && (
-                <button type="button" className="np-opt" onClick={() => { setPopup(false); chooseTemplate("city-crime-scene"); }}>
-                  <div className="np-ic">🔎</div>
-                  <div>
-                    <div className="np-t">City Crime Scene</div>
-                    <div className="np-d">The improv whodunnit — build tonight&apos;s case.</div>
-                  </div>
-                </button>
+                kind === "gameshow" ? (
+                  <button type="button" className="np-opt" onClick={() => { setPopup(false); chooseTemplate("city-crime-scene"); }}>
+                    <div className="np-ic">🔎</div>
+                    <div>
+                      <div className="np-t">City Crime Scene</div>
+                      <div className="np-d">The improv whodunnit — build tonight&apos;s case.</div>
+                    </div>
+                  </button>
+                ) : null
               )}
             </div>
           </div>
