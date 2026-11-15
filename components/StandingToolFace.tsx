@@ -9,29 +9,40 @@ import { cardPhase, freshCardState, type CardState } from "../lib/question-cards
 import { pickerCards } from "../lib/card-lists";
 
 /**
- * Standing faces — a placed tool shows the game itself, not an empty
- * frame with a picture (Jessica, 2026-11-14: "actual working game
- * tools in the site not just empty spaces", and the standing tools
- * must work and be customizable). Each face is the tool's real display
- * in its idle/preview mode, reading the same saved config the hand
- * editor and Jewel edit — never a result, never a winner: outcomes
- * exist only when a dashboard button fires the tool and the existing
- * run layer (RuntimeActionLayers ToolRun) presents them, unchanged.
+ * Standing faces — when a tool stands on the overlay, it shows the
+ * game itself, not an empty frame with a picture (Jessica,
+ * 2026-11-14: "actual working game tools in the site not just empty
+ * spaces", and the standing tools must work and be customizable).
+ * Each face is the tool's real display in its idle/preview mode,
+ * reading the same saved config the hand editor and Jewel edit —
+ * never a result, never a winner: outcomes exist only when a
+ * dashboard button fires the tool and the existing run layer
+ * (RuntimeActionLayers ToolRun) presents them, unchanged.
  * The displays carry only their own game text; no instructions,
  * labels, or explanatory copy are added here (the site shows, it
  * doesn't tell).
  */
 export const standingToolTypes = ["plinko", "higher-lower", "cliffhanger", "prize-wheel", "game-tool-list", "random-picker", "countdown"];
 
+/** The four chance games. They are features of the whole gameshow
+ *  live: the host brings one up on the overlay by firing it from the
+ *  dashboard, and it is NOT on the overlay the whole time unless the
+ *  creator wants it to be — that is why they are game show tools
+ *  (Jessica, corrected 2026-11-14). Standing is the creator's
+ *  per-tool choice, recorded as config.alwaysVisible === true;
+ *  absent or false means fire-only. */
+export const chanceToolTypes = ["plinko", "higher-lower", "cliffhanger", "prize-wheel"];
+
 /** Would this tool stand on the overlay through StandingTools / the
  *  published overlay's standing branches? Countdown and the random
- *  picker already stand today, so they stand regardless of
- *  triggerOnly; the chance games and the gift guide follow the
+ *  picker stand as they always have; the gift guide follows the
  *  blank-board/trivia precedent — a triggerOnly tool appears only
- *  when fired. */
+ *  when fired; the chance games stand only on the creator's explicit
+ *  alwaysVisible opt-in. */
 export function standsOnOverlay(tool: GameTool | undefined): boolean {
   if (!tool || !tool.enabled || !tool.inOverlayBuild || !standingToolTypes.includes(tool.type)) return false;
   if (tool.type === "countdown" || tool.type === "random-picker") return true;
+  if (chanceToolTypes.includes(tool.type)) return tool.config?.alwaysVisible === true;
   return !tool.config?.triggerOnly;
 }
 

@@ -66,14 +66,18 @@ function partialPlacementOf(tool:GameTool):Partial<PlacementRect>{
 
 /** Mirrors standsOnOverlay (components/StandingToolFace) for the
  *  slotted types: enabled, placed on the overlay build, and — for
- *  the chance games — not trigger-only. The random picker stands
- *  regardless of triggerOnly, as it does on the overlay. Exported
- *  for surfaces that must decide standing without importing the
- *  client component module (Set the Stage's drag set). */
+ *  the chance games — carrying the creator's explicit alwaysVisible
+ *  opt-in. A fire-only chance game (no opt-in) gets no placement
+ *  completion and no drag frame: it is a show tool the host brings
+ *  up from the dashboard, not a standing piece of the overlay. The
+ *  random picker stands regardless of triggerOnly, as it does on
+ *  the overlay. Exported for surfaces that must decide standing
+ *  without importing the client component module (Set the Stage's
+ *  drag set). */
 export function standsPlaced(tool:GameTool):boolean{
  if(!standingPlacementTypes.includes(tool.type)||!tool.enabled||!tool.inOverlayBuild)return false;
  if(tool.type==='random-picker')return true;
- return !tool.config?.triggerOnly;
+ return tool.config?.alwaysVisible===true;
 }
 
 function overlapArea(a:PlacementRect,b:PlacementRect):number{
