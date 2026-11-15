@@ -33,6 +33,11 @@ import {
   SURVEY_FACEOFF_MS, SURVEY_GUESS_MS, SURVEY_REVEAL_MS,
   type SurveyConfig, type SurveyPlayerState, type SurveyRoomState,
 } from "./survey-showdown";
+import {
+  perfectMatchConfigFromSnapshot, perfectMatchPlayerState, perfectMatchRevealOrder, seededRng,
+  PERFECT_MATCH_HAND_SIZE, PERFECT_MATCH_WIN_POINTS, PERFECT_MATCH_REVEAL_MS,
+  type PerfectMatchConfig, type PerfectMatchPlayerState, type PerfectMatchRoomState,
+} from "./perfect-match";
 
 export type RoomStatus = "lobby" | "countdown" | "playing" | "finished";
 
@@ -764,6 +769,291 @@ const surveyModule: GameModule = {
 };
 
 // ---------------------------------------------------------------------------
+// Perfect Match module
+// ---------------------------------------------------------------------------
+
+function matchStateOf(room: Room): PerfectMatchRoomState {
+  return room.state as unknown as PerfectMatchRoomState;
+}
+
+function matchConfigOf(room: Room): PerfectMatchConfig {
+  return room.config as unknown as PerfectMatchConfig;
+}
+
+function matchCurrentPrompt(config: PerfectMatchConfig, state: PerfectMatchRoomState): string | null {
+  const index = state.promptOrder[state.promptIndex];
+  return index === undefined ? null : config.prompts[index] ?? null;
+}
+
+/** Draw one card for a refill, reshuffling the discard pile back in
+ * when the draw pile runs dry (played cards are the only discards, and
+ * they only reach the pile once their round is over). */
+function matchDraw(state: PerfectMatchRoomState): string | null {
+  if (!state.drawPile.length && state.discard.length) {
+    state.drawPile = shuffle(state.discard, seededRng(state.revealSeed + state.roundNumber * 31 + 1000));
+    state.discard = [];
+  }
+  return state.drawPile.pop() ?? null;
+}
+
+/** Deal up to the hand size, round-robin, from the draw pile. */
+function matchDealHand(state: PerfectMatchRoomState, mine: PerfectMatchPlayerState): void {
+  while (mine.hand.length < state.handSize) {
+    const card = matchDraw(state);
+    if (!card) break;
+    mine.hand.push(card);
+  }
+}
+
+/** The submit window closes: freeze the submissions into their
+ * shuffled, anonymous reveal order and hand the round to the judge.
+ * A round nobody played skips straight to its (pointless) reveal. */
+function matchCloseSubmissions(room: Room, now: number): void {
+  const config = matchConfigOf(room);
+  const state = matchStateOf(room);
+  state.lastRound = {
+    prompt: matchCurrentPrompt(config, state) || "",
+    judgeId: state.judgeId,
+    winnerId: null,
+    winningCard: null,
+  };
+  if (!state.submissions.length) {
+    state.revealed = [];
+    state.phase = "reveal";
+    state.revealUntil = now + PERFECT_MATCH_REVEAL_MS;
+    return;
+  }
+  state.revealed = perfectMatchRevealOrder(state.submissions, state.revealSeed, state.roundNumber);
+  state.phase = "judge";
+}
+
+/** The reveal moment ends: bank the played cards, then either finish
+ * (someone reached the winning count, or the prompts ran out) or deal
+ * the next round — hands refilled, judge rotated, next prompt up. */
+function matchAdvanceRound(room: Room, players: RoomPlayer[], now: number): void {
+  const config = matchConfigOf(room);
+  const state = matchStateOf(room);
+  state.discard = [...state.discard, ...state.submissions.map(entry => entry.card)];
+  state.submissions = [];
+  state.revealed = [];
+  const topScore = players.reduce((best, player) => Math.max(best, perfectMatchPlayerState(player.state).score), 0);
+  const promptsLeft = state.promptOrder.length - (state.promptIndex + 1);
+  if (topScore >= PERFECT_MATCH_WIN_POINTS || promptsLeft <= 0) {
+    state.phase = "done";
+    return;
+  }
+  state.promptIndex += 1;
+  state.roundNumber += 1;
+  if (state.rotation.length) {
+    state.judgeIndex = (state.judgeIndex + 1) % state.rotation.length;
+    state.judgeId = state.rotation[state.judgeIndex];
+  }
+  for (const player of players) {
+    const mine = perfectMatchPlayerState(player.state);
+    mine.submittedCard = "";
+    matchDealHand(state, mine);
+    player.state = mine as unknown as Record<string, unknown>;
+  }
+  state.roundEndsAt = now + config.submitMs;
+  state.phase = "submit";
+}
+
+const perfectMatchModule: GameModule = {
+  gameType: "perfect-match",
+
+  extractConfig(snapshot) {
+    const result = perfectMatchConfigFromSnapshot(snapshot);
+    if ("error" in result) return result;
+    return { config: result.config as unknown as Record<string, unknown> };
+  },
+
+  init() {
+    const state: PerfectMatchRoomState = {
+      startedAt: 0, phase: "submit", roundNumber: 1,
+      handSize: PERFECT_MATCH_HAND_SIZE, rotation: [], judgeIndex: 0, judgeId: null,
+      promptOrder: [], promptIndex: 0, drawPile: [], discard: [],
+      submissions: [], revealed: [], roundEndsAt: 0, revealUntil: 0,
+      revealSeed: 0, lastRound: null,
+    };
+    return state as unknown as Record<string, unknown>;
+  },
+
+  onStart(room, players, now, rng) {
+    const config = matchConfigOf(room);
+    const state = matchStateOf(room);
+    state.startedAt = now;
+    state.phase = "submit";
+    state.roundNumber = 1;
+    state.rotation = players.map(player => player.id);
+    state.judgeIndex = 0;
+    state.judgeId = state.rotation[0] ?? null;
+    state.promptOrder = shuffle(config.prompts.map((_, index) => index), rng);
+    state.promptIndex = 0;
+    state.drawPile = shuffle(config.answers, rng);
+    state.discard = [];
+    state.submissions = [];
+    state.revealed = [];
+    state.lastRound = null;
+    state.revealSeed = Math.floor(rng() * 1_000_000_000);
+    // Hands of 7 while the deck covers them; a smaller deck deals
+    // smaller hands evenly rather than leaving late seats empty.
+    state.handSize = players.length
+      ? Math.max(3, Math.min(PERFECT_MATCH_HAND_SIZE, Math.floor(config.answers.length / players.length)))
+      : PERFECT_MATCH_HAND_SIZE;
+    for (const player of players) {
+      const fresh: PerfectMatchPlayerState = { score: 0, hand: [], submittedRound: 0, submittedCard: "" };
+      player.state = fresh as unknown as Record<string, unknown>;
+    }
+    for (let round = 0; round < state.handSize; round++) {
+      for (const player of players) {
+        const card = state.drawPile.pop();
+        if (!card) break;
+        const mine = perfectMatchPlayerState(player.state);
+        mine.hand.push(card);
+        player.state = mine as unknown as Record<string, unknown>;
+      }
+    }
+    state.roundEndsAt = now + config.submitMs;
+  },
+
+  playerInit(room, player) {
+    const state = matchStateOf(room);
+    const mine = perfectMatchPlayerState(player.state);
+    if (state.startedAt && !state.rotation.includes(player.id)) {
+      // A late joiner takes the next seat in the judge rotation and is
+      // dealt a hand from what's left — the game never waits on a host.
+      state.rotation = [...state.rotation, player.id];
+      if (!state.judgeId) state.judgeId = player.id;
+      matchDealHand(state, mine);
+    }
+    player.state = mine as unknown as Record<string, unknown>;
+  },
+
+  onAction(room, players, player, action, now) {
+    const state = matchStateOf(room);
+
+    if (action.type === "submit") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase === "judge") return "The cards are already in — the judge is picking.";
+      if (state.phase !== "submit") return "Hold on — the judge is still looking at the last round.";
+      if (player.id === state.judgeId) return "You're the judge this round — your job is picking the winner, not playing a card.";
+      const mine = perfectMatchPlayerState(player.state);
+      if (mine.submittedRound === state.roundNumber) return null; // already in: a double-tap is fine
+      const card = String(action.card ?? "").trim();
+      const index = mine.hand.indexOf(card);
+      if (!card || index < 0) return "That card isn't in your hand.";
+      mine.hand.splice(index, 1);
+      mine.submittedRound = state.roundNumber;
+      mine.submittedCard = card;
+      player.state = mine as unknown as Record<string, unknown>;
+      state.submissions = [...state.submissions, { playerId: player.id, card }];
+      return null;
+    }
+
+    if (action.type === "pick") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase !== "judge") return "There's nothing to pick yet — the cards are still coming in.";
+      if (player.id !== state.judgeId) {
+        const judge = players.find(candidate => candidate.id === state.judgeId);
+        return judge ? `${judge.name} is the judge this round — the pick is theirs.` : "The pick belongs to this round's judge.";
+      }
+      const index = action.index;
+      if (!Number.isInteger(index) || (index as number) < 0 || (index as number) >= state.revealed.length) return "That card isn't on the table.";
+      const winning = state.revealed[index as number];
+      const winner = players.find(candidate => candidate.id === winning.playerId);
+      if (winner) {
+        const winnerState = perfectMatchPlayerState(winner.state);
+        winnerState.score += 1;
+        winner.state = winnerState as unknown as Record<string, unknown>;
+      }
+      state.lastRound = {
+        prompt: matchCurrentPrompt(matchConfigOf(room), state) || "",
+        judgeId: state.judgeId,
+        winnerId: winning.playerId,
+        winningCard: winning.card,
+      };
+      state.phase = "reveal";
+      state.revealUntil = now + PERFECT_MATCH_REVEAL_MS;
+      return null;
+    }
+
+    return "That move isn't part of this game.";
+  },
+
+  tick(room, players, now) {
+    const state = matchStateOf(room);
+    if (!state.startedAt) return;
+    if (state.phase === "submit") {
+      const waiting = players.filter(player => player.id !== state.judgeId)
+        .every(player => perfectMatchPlayerState(player.state).submittedRound === state.roundNumber);
+      if (waiting || now >= state.roundEndsAt) matchCloseSubmissions(room, now);
+    } else if (state.phase === "reveal") {
+      if (now >= state.revealUntil) matchAdvanceRound(room, players, now);
+    }
+  },
+
+  checkFinish(room, players) {
+    const state = matchStateOf(room);
+    if (!state.startedAt || state.phase !== "done") return null;
+    const rows = players.map(player => ({ player, score: perfectMatchPlayerState(player.state).score }));
+    const top = rows.reduce((best, row) => Math.max(best, row.score), Number.NEGATIVE_INFINITY);
+    rows.sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name));
+    return rows.map(row => ({
+      playerId: row.player.id,
+      name: row.player.name,
+      score: row.score,
+      detail: row.score === top ? `${row.score} winning cards — Perfect Match champion` : `${row.score} winning cards`,
+      winner: row.score === top,
+    }));
+  },
+
+  publicState(room, players) {
+    const config = matchConfigOf(room);
+    const state = matchStateOf(room);
+    const names = new Map(players.map(player => [player.id, player.name]));
+    const inRotation = new Set(state.rotation);
+    return {
+      accent: config.accent,
+      theme: config.theme,
+      matchStage: state.startedAt ? state.phase : "submit",
+      prompt: state.startedAt ? matchCurrentPrompt(config, state) : null,
+      promptNumber: state.promptIndex + 1,
+      promptCount: config.prompts.length,
+      judgeId: state.judgeId,
+      judgeName: state.judgeId ? names.get(state.judgeId) || null : null,
+      endsAt: state.phase === "submit" && state.startedAt ? state.roundEndsAt : null,
+      winPoints: PERFECT_MATCH_WIN_POINTS,
+      handCounts: Object.fromEntries(players.map(player => [player.id, perfectMatchPlayerState(player.state).hand.length])),
+      scores: Object.fromEntries(players.map(player => [player.id, perfectMatchPlayerState(player.state).score])),
+      submittedIds: state.submissions.map(entry => entry.playerId),
+      waitingOn: state.startedAt && state.phase === "submit"
+        ? players.filter(player => player.id !== state.judgeId && inRotation.has(player.id) && perfectMatchPlayerState(player.state).submittedRound !== state.roundNumber).length
+        : 0,
+      // The revealed cards carry ONLY their text while the judge is
+      // picking — whose card is whose exists nowhere in this payload
+      // until the pick is made and the winner is named in the reveal.
+      revealedCards: state.phase === "judge"
+        ? state.revealed.map(entry => ({ text: entry.card }))
+        : state.phase === "reveal"
+          ? state.revealed.map(entry => ({
+            text: entry.card,
+            ownerId: entry.playerId,
+            ownerName: names.get(entry.playerId) || "",
+            winner: !!state.lastRound && entry.playerId === state.lastRound.winnerId && entry.card === state.lastRound.winningCard,
+          }))
+          : [],
+      lastRound: state.phase === "reveal" && state.lastRound ? {
+        prompt: state.lastRound.prompt,
+        winnerId: state.lastRound.winnerId,
+        winnerName: state.lastRound.winnerId ? names.get(state.lastRound.winnerId) || null : null,
+        winningCard: state.lastRound.winningCard,
+        judgeName: state.lastRound.judgeId ? names.get(state.lastRound.judgeId) || null : null,
+      } : null,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Module registry
 // ---------------------------------------------------------------------------
 
@@ -771,6 +1061,7 @@ export const GAME_MODULES: Record<string, GameModule> = {
   [bingoModule.gameType]: bingoModule,
   [quizModule.gameType]: quizModule,
   [surveyModule.gameType]: surveyModule,
+  [perfectMatchModule.gameType]: perfectMatchModule,
 };
 
 /** Pick the module a published snapshot can play, and extract its config. */

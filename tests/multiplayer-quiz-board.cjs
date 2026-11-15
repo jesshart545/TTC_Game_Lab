@@ -301,7 +301,7 @@ function scores(room, players, now) {
   const listReady = { kind: 'multiplayer', name: 'List Quiz Night', theme: 'purple', assets: [], controls: [], gameTools: [listTool] };
   assert.equal(buildReadiness(listReady).length, 0, 'a categorized trivia list is a playable game night too');
 
-  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, or a survey board with questions and answers — ask Jewel to build one for you.';
+  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, or a prompt card list and an answer card list for a matching game — ask Jewel to build one for you.';
   const flatTool = { id: 'flat-1', type: 'trivia-list', name: 'Flat', enabled: true, config: { questions: Array.from({ length: 8 }, (_, i) => ({ question: `Q${i}`, answer: `A${i}` })) } };
   const blocked = { kind: 'multiplayer', name: 'Flat Night', theme: 'purple', assets: [], controls: [], gameTools: [flatTool] };
   const issues = buildReadiness(blocked);

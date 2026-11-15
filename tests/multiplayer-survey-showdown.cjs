@@ -122,7 +122,7 @@ function tick(room, players, now) {
 
 // --- config extraction & precedence ----------------------------------------
 {
-  same(Object.keys(engine.GAME_MODULES), ['bingo', 'quiz-board', 'survey-showdown'], 'registry order: bingo, quiz, survey');
+  same(Object.keys(engine.GAME_MODULES), ['bingo', 'quiz-board', 'survey-showdown', 'perfect-match'], 'registry order: bingo, quiz, survey, perfect match');
 
   const picked = engine.pickGame(surveySnapshot());
   assert.equal(picked.gameType, 'survey-showdown');
@@ -421,7 +421,7 @@ function tick(room, players, now) {
   const surveyReady = { kind: 'multiplayer', name: 'Survey Night', theme: 'pink', assets: [], controls: [], gameTools: [...unwired, surveyTool] };
   assert.equal(buildReadiness(surveyReady).length, 0, 'a multiplayer project with a playable survey board publishes with no dashboard wiring');
 
-  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, or a survey board with questions and answers — ask Jewel to build one for you.';
+  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, or a prompt card list and an answer card list for a matching game — ask Jewel to build one for you.';
   const thinTool = surveySnapshot().gameTools[0];
   thinTool.config = { categories: thinTool.config.categories.slice(0, 2) };
   const blocked = { kind: 'multiplayer', name: 'Thin Night', theme: 'pink', assets: [], controls: [], gameTools: [thinTool] };

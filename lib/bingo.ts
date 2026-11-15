@@ -53,8 +53,21 @@ const THEME_ACCENTS: Record<string, string> = {
 type AnyTool = {
   id?: unknown;
   type?: unknown;
+  name?: unknown;
   config?: Record<string, unknown> | null;
 };
+
+/** Which Perfect Match deck a card list belongs to, from its name (the
+ * same signal lib/perfect-match.ts reads). When a project holds BOTH
+ * decks, those two lists are a matching game waiting to be dealt, not a
+ * bingo call pool — bingo leaves them out and plays from any other list
+ * exactly as before. A single list, deck-named or not, is untouched. */
+function deckKind(name: unknown): "prompt" | "answer" | null {
+  const text = typeof name === "string" ? name.toLowerCase() : "";
+  if (text.includes("prompt")) return "prompt";
+  if (text.includes("answer")) return "answer";
+  return null;
+}
 
 function cardTexts(tool: AnyTool): string[] {
   const config = (tool.config || {}) as Record<string, unknown>;
@@ -100,10 +113,12 @@ export function bingoConfigFromSnapshot(snapshot: unknown): { config: BingoConfi
   const snap = (snapshot || {}) as { name?: unknown; theme?: unknown; gameTools?: unknown };
   const tools: AnyTool[] = Array.isArray(snap.gameTools) ? (snap.gameTools as AnyTool[]) : [];
   const lists = tools.filter(tool => tool.type === "card-list");
+  const deckPairPresent = lists.some(tool => deckKind(tool.name) === "prompt") && lists.some(tool => deckKind(tool.name) === "answer");
+  const poolLists = deckPairPresent ? lists.filter(tool => deckKind(tool.name) === null) : lists;
   const picker = tools.find(tool => tool.type === "random-picker" && tool.config?.source === "cards" && typeof tool.config?.listId === "string");
-  let pool = picker ? lists.find(tool => tool.id === picker.config?.listId) : undefined;
+  let pool = picker ? poolLists.find(tool => tool.id === picker.config?.listId) : undefined;
   if (!pool) {
-    pool = lists.slice().sort((a, b) => cardTexts(b).length - cardTexts(a).length)[0];
+    pool = poolLists.slice().sort((a, b) => cardTexts(b).length - cardTexts(a).length)[0];
   }
   const items = pool ? dedupe(cardTexts(pool)) : [];
   if (!pool || items.length < BINGO_MIN_ITEMS) {
