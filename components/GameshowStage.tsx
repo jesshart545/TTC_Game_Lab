@@ -32,12 +32,14 @@ import "./gameshow-workshop.css";
  * user could not see where to put it (Jessica, 2026-11-04).
  *
  * What the page shows is the ONE area Jewel is on (the workflow
- * model's first unfinished gameshow step): pictured, living
- * demonstrations first — the creator's own saved work when it
+ * model's first unfinished gameshow step): Jewel's conversation
+ * FIRST (Jessica, 2026-11-15 — she stands at the head of the
+ * working area, never down the page), then the area's pictured,
+ * living demonstrations — the creator's own saved work when it
  * exists, pictured examples until then, INCLUDING on an empty
  * project (the backdrop demo frames the example stage and the
- * effects fire over it) — then Jewel's conversation, then the
- * area's storage shelves and genuine manual doors. The plan area
+ * effects fire over it) — then the area's storage shelves and
+ * genuine manual doors. The plan area
  * carries no showpiece: creation already asked for the title and
  * theme, so it opens with Jewel's landing-page wand scene itself,
  * the whole pictured card one button into the conversation below
@@ -174,13 +176,12 @@ function YourShow({ project, onSaveProject }: { project: Project; onSaveProject:
 /* ---------------- Plan — the entry area ---------------- */
 
 function PlanArea(props: StageProps) {
-  const { doors, jewelPanel, onEnterJewel } = props;
+  const { doors, onEnterJewel } = props;
   return (
     <div>
       <div style={{ marginTop: 20, marginBottom: 12 }}>
         <JewelWandScene onEnter={onEnterJewel} />
       </div>
-      {jewelPanel}
       <PlanTemplates doors={doors} />
       <div className="gsw-card" style={{ marginTop: 14 }}>
         <div className="gsw-chipsrow" style={{ marginTop: 0, justifyContent: "space-between" }}>
@@ -200,7 +201,6 @@ function MediaArea(props: StageProps & { step?: WorkflowStepState }) {
     <div>
       <AreaHeading>Media — your backdrop and its sign are one piece, made together</AreaHeading>
       <MediaDemos {...screenProps(props, props.step)} kind={kind} onKindChange={setKind} />
-      {props.jewelPanel}
       <MediaShelf project={props.project} doors={props.doors} />
     </div>
   );
@@ -225,6 +225,13 @@ export default function GameshowStage(props: StageProps) {
   const sp = screenProps(props, stepState);
   return (
     <section className="gsw gsw-stage" aria-label="Imagine and Create — your show, as Jewel builds it with you">
+      {/* Jewel stands FIRST in the working area (Jessica, 2026-11-15):
+          her panel heads the stage, and everything else — the banner,
+          the library door, the "Your show" block, the area's own
+          demonstrations and shelves — keeps its content and its
+          relative order after her. The areas below no longer carry
+          their own copy of her panel. */}
+      {props.jewelPanel}
       {/* The liberty banner never stands on a Game Night page (Jessica,
           2026-11-15): there, creative freedom is shown, never written.
           The page mounts this frame only for gameshow projects; this
@@ -248,35 +255,30 @@ export default function GameshowStage(props: StageProps) {
           <div>
             <AreaHeading>Trivia cards — write your own, or have Jewel generate them, then make the cards yours</AreaHeading>
             <TriviaStep {...sp} />
-            {props.jewelPanel}
           </div>
         )}
         {area === "board" && (
           <div>
             <AreaHeading>Your game board</AreaHeading>
             <BoardStep {...sp} />
-            {props.jewelPanel}
           </div>
         )}
         {area === "tools" && (
           <div>
             <AreaHeading>Game tools — tap one and watch it work</AreaHeading>
             <ToolsStep {...sp} />
-            {props.jewelPanel}
           </div>
         )}
         {area === "scenes" && (
           <div>
             <AreaHeading>Scenes &amp; effects — tap an effect and watch it fire</AreaHeading>
             <ScenesStep {...sp} />
-            {props.jewelPanel}
           </div>
         )}
         {area === "toolbox" && (
           <div>
             <AreaHeading>Your toolbox — everything you’ve made, in one place</AreaHeading>
             <ToolboxStep {...sp} />
-            {props.jewelPanel}
           </div>
         )}
       </BareStageContext.Provider>

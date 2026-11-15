@@ -1,0 +1,195 @@
+/* The Imagine and Create tool shelf: pictured cards, picture + name
+   only (Jessica, 2026-11-15). Lives inside Jewel's panel in the
+   .idea-card template blocks, so its selectors carry the .idea-card
+   prefix to stand over the panel's generic button rows. */
+.idea-card .shelf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.idea-card button.shelf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: auto;
+  padding: 7px;
+  border: 1px solid #232833;
+  border-radius: 10px;
+  background: #0a0c11;
+  color: #dfe4ed;
+  text-align: left;
+  cursor: pointer;
+}
+.idea-card button.shelf-card:hover {
+  background: #12151d;
+  color: #ffffff;
+}
+.idea-card button.shelf-card:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.shelf-face {
+  position: relative;
+  display: block;
+  height: 96px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #07080c;
+  pointer-events: none;
+}
+.shelf-face > img,
+.shelf-face .shelf-face-abs > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.shelf-face svg {
+  max-width: 100%;
+}
+.shelf-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.shelf-face-abs {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.shelf-face-abs .board-artwork {
+  width: 100%;
+  height: 100%;
+}
+.shelf-face-pad {
+  display: block;
+  padding: 8px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: #cfd6e4;
+}
+.shelf-face-timer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  container-type: size;
+}
+.shelf-poll strong {
+  display: block;
+  font-size: 11px;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+.shelf-poll-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.shelf-poll-track {
+  flex: 0 0 44%;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.shelf-jeopardy {
+  display: flex;
+  gap: 3px;
+  padding: 6px;
+  height: 100%;
+  box-sizing: border-box;
+}
+.shelf-jeopardy-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.shelf-jeopardy-col strong {
+  font-size: 7.5px;
+  color: #ffd166;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shelf-jeopardy-col span {
+  background: #123a6e;
+  color: #ffd166;
+  border-radius: 3px;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-align: center;
+  padding: 1.5px 0;
+}
+.shelf-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.shelf-mini-list > span {
+  display: block;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 6px;
+  padding: 4px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shelf-mini-list strong {
+  display: block;
+  color: #ffffff;
+  font-size: 10px;
+  white-space: normal;
+}
+.shelf-mini-list em {
+  display: block;
+  font-style: normal;
+  color: #9fb4d8;
+  font-size: 9.5px;
+}
+.shelf-card-stack {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.shelf-card-stack i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52px;
+  height: 70px;
+  margin: -35px 0 0 -26px;
+  border-radius: 7px;
+  border: 1.5px solid rgba(233, 201, 121, 0.75);
+  background: linear-gradient(150deg, #1b2440, #101827);
+}
+.shelf-card-stack i:nth-child(1) { transform: rotate(-7deg) translateX(-7px); opacity: 0.55; }
+.shelf-card-stack i:nth-child(2) { transform: rotate(6deg) translateX(7px); opacity: 0.8; }
+.shelf-card-stack i:nth-child(3) { transform: none; }
+.shelf-yt-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(200, 30, 40, 0.92);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  padding-left: 2px;
+  box-sizing: border-box;
+}
+.shelf-ccs {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  background: radial-gradient(circle at 50% 35%, #2a2118, #0a0a10 75%);
+}

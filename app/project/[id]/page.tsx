@@ -1938,7 +1938,7 @@ export default function ProjectWorkspace() {
     const control = project.controls.find(c => c.id === drag.id);
     if (control) updateControl(control.id, { overlayResult: { ...(control.overlayResult || defaultOverlayResult), x: Math.max(0, Math.min(95, drag.x)), y: Math.max(0, Math.min(95, drag.y)), width: Math.min(100, drag.width), height: Math.min(100, drag.height) } });
   }
-  async function beginBlank() { const p = createProject("Create a new interactive TikTok LIVE experience"); try { await saveProjectToServer(p); window.location.href = `/project/${p.id}`; } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Project could not be created."); } }
+  async function beginBlank() { const p = { ...createProject("Create a new interactive TikTok LIVE experience"), controls: [] as Project["controls"] }; try { await saveProjectToServer(p); window.location.href = `/project/${p.id}`; } catch (error) { setAssetStatus(error instanceof Error ? error.message : "Project could not be created."); } }
 
   useSupportBridge({
     context: { scope: `project:${params.id}`, page: "project", stage: ["Imagine and Create", "Set the Stage", "Showtime!"][workflowStep], section: workflowStep === 0 ? ["Game plan", "Assets & tools", "Scenes & effects"][workshopStep] : undefined, assetCount: project?.assets.length || 0, toolCount: project?.gameTools.length || 0, controlCount: project?.controls.length || 0, selection: selectedAssetKey ? project?.assets.find(a => (a.storageKey || a.name) === selectedAssetKey)?.name : undefined, status: assetStatus || saveStatus, busy: building || assetBusy },
@@ -2123,6 +2123,9 @@ export default function ProjectWorkspace() {
         showToolTemplates={showToolTemplates}
         triviaBusy={triviaBusy}
         addGameTool={addGameTool}
+        onCreateCard={createWorkshopCard}
+        onNewList={openNewList}
+        onGenerateTriviaList={() => { void generateTriviaList(); }}
         jewelProgress={jewelProgress}
         assetStatus={assetStatus}
         addedPlaylist={addedPlaylist && addedPlaylist.projectId === project.id ? addedPlaylist : null}

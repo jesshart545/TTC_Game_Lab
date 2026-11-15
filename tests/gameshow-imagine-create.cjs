@@ -131,10 +131,15 @@ function baseProject(overrides = {}) {
   const library = fs.readFileSync('components/GameshowWorkshop.tsx', 'utf8');
   assert(library.includes('export const BareStageContext'), 'the stage context exists for the shared screens');
   assert((library.match(/useContext\(BareStageContext\)/g) || []).length >= 3, 'the step shell, the change list and the ask strip all stand down under the stage');
-  // Jewel is prominent: her wand-scene doorway and her conversation
-  // stand inside the work area, starting at the plan.
+  // Jewel is prominent: her wand-scene doorway stands in the plan
+  // area, and her conversation stands FIRST in the work area
+  // (Jessica, 2026-11-15 — she heads the stage, never buried below
+  // the areas): rendered exactly once, at the head of the stage,
+  // before the banner, the library door and the "Your show" block.
   assert(stage.includes('<JewelWandScene onEnter={onEnterJewel} />'), 'the plan area opens the way into Jewel with her landing-page wand scene');
-  assert(stage.includes('{jewelPanel}'), 'her conversation renders inside the areas, in the work area');
+  assert.equal((stage.match(/\{props\.jewelPanel\}/g) || []).length, 1, 'her conversation renders exactly once in the gameshow stage');
+  const stageRender = stage.slice(stage.indexOf('return (\n    <section'));
+  assert(stageRender.indexOf('{props.jewelPanel}') > -1 && stageRender.indexOf('{props.jewelPanel}') < stageRender.indexOf('gsw-liberty'), 'her conversation stands at the head of the stage, before the banner');
   assert(page.includes('talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement'), 'the sidebar does not render a second copy of her panel in the gameshow create view');
   assert(panel.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || stageReview;'),
     'her panel carries no progress strip in the gameshow create view — no duplicate list, no Next/Go there');
@@ -175,8 +180,8 @@ function baseProject(overrides = {}) {
   const planArea = stage.slice(stage.indexOf('function PlanArea'), stage.indexOf('/* ---------------- Media'));
   assert(!stage.includes('<PlanVisual'), 'the light stage renders no plan visual showpiece');
   assert(!stage.includes('Your game plan — as it stands'), 'the giant “Your game plan” card is off the stage');
-  assert(planArea.indexOf('<JewelWandScene') < planArea.indexOf('{jewelPanel}'), 'the plan area opens with Jewel’s wand-scene doorway');
-  assert(planArea.indexOf('{jewelPanel}') < planArea.indexOf('<PlanTemplates'), 'her conversation comes before the template shelf');
+  assert(planArea.includes('<JewelWandScene'), 'the plan area opens with Jewel’s wand-scene doorway');
+  assert(!planArea.includes('jewelPanel'), 'the plan area carries no copy of her panel — her conversation stands at the head of the stage, before the whole area (2026-11-15)');
   assert(planArea.includes('<span>Prefer to type it yourself?</span>'), 'the plan door is one short line');
   assert(planArea.includes('>Open the plan form</button>'), 'the plan door keeps its working button');
   assert(!planArea.includes('<p>'), 'the plan area carries no explanatory paragraph');

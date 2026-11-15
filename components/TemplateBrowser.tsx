@@ -68,9 +68,8 @@ export default function TemplateBrowser({ project, onChoose }: Props) {
                   const added = addedIds.has(template.id);
                   return (
                     <article key={template.id}>
-                      <div style={{ fontSize: "2rem" }} aria-hidden="true">{template.icon}</div>
+                      <img src="/redesign/kind-gameshow.webp" alt="" style={{ width: "100%", aspectRatio: "16 / 10", objectFit: "cover", borderRadius: 8, display: "block" }} />
                       <strong>{template.name}</strong>
-                      <small>{template.tagline}</small>
                       <button type="button" onClick={() => onChoose(template.id)}>
                         {added ? "Add again" : "Add to my game"}
                       </button>
