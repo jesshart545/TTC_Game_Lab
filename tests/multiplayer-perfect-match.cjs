@@ -95,7 +95,7 @@ function submitFirst(room, players, player, now) {
 
 // --- config extraction, deck identification & precedence --------------------
 {
-  same(Object.keys(engine.GAME_MODULES), ['bingo', 'quiz-board', 'survey-showdown', 'perfect-match', 'word-chain'], 'registry order: bingo, quiz, survey, perfect match, word chain');
+  same(Object.keys(engine.GAME_MODULES), ['bingo', 'quiz-board', 'survey-showdown', 'perfect-match', 'word-chain', 'draw-guess'], 'registry order: bingo, quiz, survey, perfect match, word chain');
 
   const picked = engine.pickGame(matchSnapshot());
   assert.equal(picked.gameType, 'perfect-match', 'a snapshot holding both decks is a matching game, not bingo');
@@ -132,7 +132,7 @@ function submitFirst(room, players, player, now) {
   thinPrompts.gameTools[0] = cardList('prompts-1', 'Prompt Cards', PROMPTS.slice(0, 9));
   const refused = engine.pickGame(thinPrompts);
   assert(refused.error && refused.error.includes('Perfect Match'), 'too few prompts are refused with the plain reason');
-  assert(refused.error.includes('Survey Showdown') && refused.error.includes('Quiz Board') && refused.error.includes('Bingo') && refused.error.includes('Word Chain'), 'the refusal speaks for all five games');
+  assert(refused.error.includes('Survey Showdown') && refused.error.includes('Quiz Board') && refused.error.includes('Bingo') && refused.error.includes('Word Chain'), 'the refusal speaks for all six games');
   assert(!refused.error.includes('$'), 'the refusal carries no dollar sign');
   const thinAnswers = matchSnapshot();
   thinAnswers.gameTools[1] = cardList('answers-1', 'Answer Cards', ANSWERS.slice(0, 29));
@@ -427,7 +427,7 @@ function submitFirst(room, players, player, now) {
   const matchReady = { kind: 'multiplayer', name: 'Match Night', theme: 'cyan', assets: [], controls: [], gameTools: [...unwired, ...decks] };
   assert.equal(buildReadiness(matchReady).length, 0, 'a multiplayer project with both decks publishes with no dashboard wiring');
 
-  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, a prompt card list and an answer card list for a matching game, or a word list with at least 10 starter words for a word chain game — ask Jewel to build one for you.';
+  const MESSAGE = 'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, a prompt card list and an answer card list for a matching game, a word list with at least 10 starter words for a word chain game, or a draw list with at least 12 words to draw for a drawing game — ask Jewel to build one for you.';
   const thinDecks = [
     cardList('prompts-1', 'Prompt Cards', PROMPTS.slice(0, 9)),
     cardList('answers-1', 'Answer Cards', ANSWERS),
