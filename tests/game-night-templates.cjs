@@ -23,14 +23,14 @@ const same = (actual, expected, message) => assert.equal(JSON.stringify(actual),
 // the create-flow wiring.
 
 // ---------------------------------------------------------------------------
-// 1. The shelf: exactly the five games whose engine modules are live,
+// 1. The shelf: exactly the seven games whose engine modules are live,
 //    in registry order, each with a name and a SHORT description.
 // ---------------------------------------------------------------------------
-same(GAME_NIGHT_TEMPLATES.map(t => t.gameType), ['bingo', 'quiz-board', 'survey-showdown', 'perfect-match', 'word-chain'],
-  'the shelf holds exactly the five live game-night games, in engine registry order');
-same(GAME_NIGHT_TEMPLATES.map(t => t.name), ['Bingo', 'Quiz Board', 'Survey Showdown', 'Perfect Match', 'Word Chain'],
+same(GAME_NIGHT_TEMPLATES.map(t => t.gameType), ['bingo', 'quiz-board', 'survey-showdown', 'perfect-match', 'word-chain', 'draw-guess', 'property-tycoon'],
+  'the shelf holds exactly the seven live game-night games, in engine registry order');
+same(GAME_NIGHT_TEMPLATES.map(t => t.name), ['Bingo', 'Quiz Board', 'Survey Showdown', 'Perfect Match', 'Word Chain', 'Draw & Guess', 'Property Tycoon'],
   'shelf names are the games’ own names');
-assert.equal(new Set(GAME_NIGHT_TEMPLATES.map(t => t.id)).size, 5, 'template ids are unique');
+assert.equal(new Set(GAME_NIGHT_TEMPLATES.map(t => t.id)).size, 7, 'template ids are unique');
 for (const template of GAME_NIGHT_TEMPLATES) {
   assert(template.name.trim().length > 0, `${template.id}: has a name`);
   assert(template.description.trim().length > 0, `${template.id}: has a short description for the open view`);
@@ -40,9 +40,7 @@ for (const template of GAME_NIGHT_TEMPLATES) {
   assert(template.image.startsWith('/'), `${template.id}: card artwork is a site image path`);
   assert.equal(getGameNightTemplate(template.id), template, `${template.id}: getGameNightTemplate round-trips`);
 }
-assert.equal(getGameNightTemplate('game-night-draw-guess'), undefined, 'Draw & Guess is not on the shelf until its engine module lands — no empty promises');
-assert.equal(getGameNightTemplate('game-night-property-tycoon'), undefined, 'Property Tycoon is not on the shelf until its engine module lands — no empty promises');
-console.log('PASS: the shelf exposes exactly the five live games, each with a name and a short description.');
+console.log('PASS: the shelf exposes exactly the seven live games, each with a name and a short description.');
 
 // ---------------------------------------------------------------------------
 // 2. Every template builds a project that resolves to its own game
@@ -100,7 +98,25 @@ assert(matchConfig.answers.length >= 30, `perfect match has at least 30 answers 
 
 const chainConfig = configOf('game-night-word-chain');
 assert(chainConfig.starters.length >= 10, `word chain has at least 10 starters (${chainConfig.starters.length})`);
-console.log('PASS: starter content is real and playable-sized for all five games.');
+
+const drawConfig = configOf('game-night-draw-guess');
+assert(drawConfig.words.length >= 12, `draw & guess has at least 12 words to draw (${drawConfig.words.length})`);
+
+const tycoonConfig = configOf('game-night-property-tycoon');
+assert(tycoonConfig.properties.length >= 12, `property tycoon has at least 12 properties (${tycoonConfig.properties.length})`);
+// The template carries no chance list of its own on purpose: a
+// chance-named list with five or more cards is a Bingo call pool to the
+// engine, and the project would resolve to Bingo instead of Property
+// Tycoon. The engine's built-in chance deck plays — six cards paired
+// with the fixed effect rotation. (If a chance list ever is added to
+// the draft, this pin is the one that has to be revisited.)
+assert(tycoonConfig.chanceCards.length >= 6, `property tycoon plays a full chance deck (${tycoonConfig.chanceCards.length} cards)`);
+const tycoonDraft = getGameNightTemplate('game-night-property-tycoon').buildDraft();
+const chanceLists = tycoonDraft.gameTools.filter(tool => tool.type === 'card-list' && tool.name.toLowerCase().includes('chance'));
+for (const list of chanceLists) {
+  assert(list.config.cards.length >= 6, 'a chance list in the tycoon draft holds at least 6 chance-card texts');
+}
+console.log('PASS: starter content is real and playable-sized for all seven games.');
 
 // ---------------------------------------------------------------------------
 // 4. No dollar signs anywhere in the shelf data or any template draft.
