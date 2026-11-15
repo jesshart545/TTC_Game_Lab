@@ -43,6 +43,12 @@ import {
   WORD_CHAIN_CHAIN_TARGET, WORD_CHAIN_MAX_STRIKES,
   type WordChainConfig, type WordChainPlayerState, type WordChainRoomState,
 } from "./word-chain";
+import {
+  drawGuessConfigFromSnapshot, drawGuessPlayerState, drawGuessBlanks, drawGuessCleanStroke,
+  DRAW_GUESS_DRAWS_EACH, DRAW_GUESS_GUESSER_POINTS, DRAW_GUESS_DRAWER_POINTS,
+  DRAW_GUESS_MAX_STROKES, DRAW_GUESS_FEED_LIMIT, DRAW_GUESS_REVEAL_MS,
+  type DrawGuessConfig, type DrawGuessPlayerState, type DrawGuessRoomState,
+} from "./draw-guess";
 
 export type RoomStatus = "lobby" | "countdown" | "playing" | "finished";
 
@@ -1274,6 +1280,245 @@ const wordChainModule: GameModule = {
 };
 
 // ---------------------------------------------------------------------------
+// Draw & Guess module
+// ---------------------------------------------------------------------------
+
+function drawStateOf(room: Room): DrawGuessRoomState {
+  return room.state as unknown as DrawGuessRoomState;
+}
+
+function drawConfigOf(room: Room): DrawGuessConfig {
+  return room.config as unknown as DrawGuessConfig;
+}
+
+function drawPlayer(player: RoomPlayer): DrawGuessPlayerState {
+  return drawGuessPlayerState(player.state);
+}
+
+function saveDrawPlayer(player: RoomPlayer, mine: DrawGuessPlayerState): void {
+  player.state = mine as unknown as Record<string, unknown>;
+}
+
+/** Open a round: seat the drawer, hand them their word through their
+ * own player state ONLY, and start with a blank canvas. */
+function drawBeginRound(room: Room, players: RoomPlayer[], now: number): void {
+  const config = drawConfigOf(room);
+  const state = drawStateOf(room);
+  state.drawerId = state.rotation[state.drawerIndex] ?? null;
+  const wordIndex = state.wordOrder[state.wordIndex];
+  state.currentWord = wordIndex === undefined ? "" : config.words[wordIndex] ?? "";
+  state.strokes = [];
+  state.guesses = [];
+  state.roundEndsAt = now + config.roundMs;
+  state.phase = "draw";
+  if (state.drawerId) state.drawsTaken[state.drawerId] = (state.drawsTaken[state.drawerId] || 0) + 1;
+  for (const player of players) {
+    const mine = drawPlayer(player);
+    mine.drawWord = player.id === state.drawerId ? state.currentWord : "";
+    saveDrawPlayer(player, mine);
+  }
+}
+
+/** Close the running round: the word becomes everyone's to see, and
+ * the private copy leaves the drawer's state. */
+function drawEndRound(room: Room, players: RoomPlayer[], now: number, guesserId: string | null): void {
+  const state = drawStateOf(room);
+  state.lastRound = { word: state.currentWord, drawerId: state.drawerId, guesserId };
+  state.phase = "reveal";
+  state.revealUntil = now + DRAW_GUESS_REVEAL_MS;
+  for (const player of players) {
+    const mine = drawPlayer(player);
+    if (mine.drawWord) {
+      mine.drawWord = "";
+      saveDrawPlayer(player, mine);
+    }
+  }
+}
+
+/** The reveal moment ends: either the game is over (the words ran
+ * out, or every player has had their two turns at the easel) or the
+ * next drawer in the rotation takes the next word. */
+function drawAdvanceRound(room: Room, players: RoomPlayer[], now: number): void {
+  const state = drawStateOf(room);
+  state.wordIndex += 1;
+  let next = -1;
+  for (let step = 1; step <= state.rotation.length; step++) {
+    const index = (state.drawerIndex + step) % state.rotation.length;
+    const id = state.rotation[index];
+    if (id && (state.drawsTaken[id] || 0) < DRAW_GUESS_DRAWS_EACH) { next = index; break; }
+  }
+  if (next < 0 || state.wordIndex >= state.wordOrder.length) {
+    state.phase = "done";
+    state.drawerId = null;
+    return;
+  }
+  state.drawerIndex = next;
+  drawBeginRound(room, players, now);
+}
+
+const drawGuessModule: GameModule = {
+  gameType: "draw-guess",
+
+  extractConfig(snapshot) {
+    const result = drawGuessConfigFromSnapshot(snapshot);
+    if ("error" in result) return result;
+    return { config: result.config as unknown as Record<string, unknown> };
+  },
+
+  init() {
+    const state: DrawGuessRoomState = {
+      startedAt: 0, phase: "draw",
+      wordOrder: [], wordIndex: 0,
+      rotation: [], drawerIndex: 0, drawerId: null,
+      drawsTaken: {}, currentWord: "",
+      strokes: [], guesses: [],
+      roundEndsAt: 0, revealUntil: 0, lastRound: null,
+    };
+    return state as unknown as Record<string, unknown>;
+  },
+
+  onStart(room, players, now, rng) {
+    const config = drawConfigOf(room);
+    const state = drawStateOf(room);
+    state.startedAt = now;
+    state.wordOrder = shuffle(config.words.map((_, index) => index), rng);
+    state.wordIndex = 0;
+    state.rotation = players.map(player => player.id);
+    state.drawerIndex = 0;
+    state.drawsTaken = {};
+    state.lastRound = null;
+    for (const player of players) saveDrawPlayer(player, { score: 0, drawWord: "" });
+    if (players.length) drawBeginRound(room, players, now);
+  },
+
+  playerInit(room, player) {
+    const state = drawStateOf(room);
+    if (state.startedAt && !state.rotation.includes(player.id)) {
+      // A late joiner takes the next seat in the drawing rotation —
+      // the game never waits for a host to place them.
+      state.rotation = [...state.rotation, player.id];
+    }
+    // A fresh seat never holds the word: only the seated drawer's own
+    // state carries it, and only while their round runs.
+    const mine = drawPlayer(player);
+    mine.drawWord = "";
+    saveDrawPlayer(player, mine);
+  },
+
+  onAction(room, players, player, action, now) {
+    const state = drawStateOf(room);
+
+    if (action.type === "stroke") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase !== "draw") return "That round is over — the next drawing is coming up.";
+      if (player.id !== state.drawerId) return "Only the player drawing can add to the canvas.";
+      const stroke = drawGuessCleanStroke(action.stroke);
+      if (!stroke) return "That stroke didn't come through — try again.";
+      if (state.strokes.length >= DRAW_GUESS_MAX_STROKES) return "The canvas is full — clear it to keep drawing.";
+      state.strokes = [...state.strokes, stroke];
+      return null;
+    }
+
+    if (action.type === "clear") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase !== "draw") return "That round is over — the next drawing is coming up.";
+      if (player.id !== state.drawerId) return "Only the player drawing can clear the canvas.";
+      state.strokes = [];
+      return null;
+    }
+
+    if (action.type === "guess") {
+      if (room.status !== "playing") return "The game isn't running right now.";
+      if (state.phase === "reveal") return "That round is over — the next word is coming up.";
+      if (state.phase !== "draw") return "Hold on — there's nothing to guess right now.";
+      if (player.id === state.drawerId) return "You're drawing this one — everyone else does the guessing.";
+      const text = String(action.text ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+      if (!text) return "Type your guess first.";
+      if (quizAnswerMatches(text, state.currentWord)) {
+        // The first right guess ends the round on the spot: the
+        // guesser takes 3 points, the drawer takes 1, and the word is
+        // revealed to everyone.
+        const mine = drawPlayer(player);
+        mine.score += DRAW_GUESS_GUESSER_POINTS;
+        saveDrawPlayer(player, mine);
+        const drawer = players.find(candidate => candidate.id === state.drawerId);
+        if (drawer) {
+          const drawerState = drawPlayer(drawer);
+          drawerState.score += DRAW_GUESS_DRAWER_POINTS;
+          saveDrawPlayer(drawer, drawerState);
+        }
+        drawEndRound(room, players, now, player.id);
+        return null;
+      }
+      state.guesses = [...state.guesses, { playerId: player.id, text, at: now }].slice(-DRAW_GUESS_FEED_LIMIT);
+      return null;
+    }
+
+    return "That move isn't part of this game.";
+  },
+
+  tick(room, players, now) {
+    const state = drawStateOf(room);
+    if (!state.startedAt) return;
+    if (state.phase === "draw" && now >= state.roundEndsAt) {
+      // The clock ran out: the word is revealed, nobody scores.
+      drawEndRound(room, players, now, null);
+    } else if (state.phase === "reveal" && now >= state.revealUntil) {
+      drawAdvanceRound(room, players, now);
+    }
+  },
+
+  checkFinish(room, players) {
+    const state = drawStateOf(room);
+    if (!state.startedAt || state.phase !== "done") return null;
+    const rows = players.map(player => ({ player, score: drawPlayer(player).score }));
+    const top = rows.reduce((best, row) => Math.max(best, row.score), Number.NEGATIVE_INFINITY);
+    rows.sort((a, b) => b.score - a.score || a.player.name.localeCompare(b.player.name));
+    return rows.map(row => ({
+      playerId: row.player.id,
+      name: row.player.name,
+      score: row.score,
+      detail: row.score === top ? `${row.score} points — Draw & Guess champion` : `${row.score} points`,
+      winner: row.score === top,
+    }));
+  },
+
+  publicState(room, players) {
+    const config = drawConfigOf(room);
+    const state = drawStateOf(room);
+    const names = new Map(players.map(player => [player.id, player.name]));
+    return {
+      accent: config.accent,
+      theme: config.theme,
+      drawStage: state.startedAt ? state.phase : "draw",
+      drawerId: state.startedAt ? state.drawerId : null,
+      drawerName: state.drawerId ? names.get(state.drawerId) || null : null,
+      // Letter blanks only while the round runs: the word's length is
+      // all a guesser gets. The word itself appears in this payload
+      // ONLY inside the reveal, once the round is over.
+      blanks: state.startedAt && state.phase === "draw" ? drawGuessBlanks(state.currentWord) : null,
+      strokes: state.startedAt ? state.strokes : [],
+      guesses: state.startedAt ? state.guesses.map(guess => ({
+        playerId: guess.playerId,
+        name: names.get(guess.playerId) || "",
+        text: guess.text,
+      })) : [],
+      endsAt: state.startedAt && state.phase === "draw" ? state.roundEndsAt : null,
+      wordNumber: state.wordIndex + 1,
+      wordCount: config.words.length,
+      scores: Object.fromEntries(players.map(player => [player.id, drawPlayer(player).score])),
+      drawReveal: state.phase === "reveal" && state.lastRound ? {
+        word: state.lastRound.word,
+        drawerId: state.lastRound.drawerId,
+        drawerName: state.lastRound.drawerId ? names.get(state.lastRound.drawerId) || null : null,
+        guesserId: state.lastRound.guesserId,
+        guesserName: state.lastRound.guesserId ? names.get(state.lastRound.guesserId) || null : null,
+      } : null,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Module registry
 // ---------------------------------------------------------------------------
 
@@ -1283,6 +1528,7 @@ export const GAME_MODULES: Record<string, GameModule> = {
   [surveyModule.gameType]: surveyModule,
   [perfectMatchModule.gameType]: perfectMatchModule,
   [wordChainModule.gameType]: wordChainModule,
+  [drawGuessModule.gameType]: drawGuessModule,
 };
 
 /** Pick the module a published snapshot can play, and extract its config. */
