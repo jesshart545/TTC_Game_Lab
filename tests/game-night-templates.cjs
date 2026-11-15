@@ -153,3 +153,62 @@ assert(detailBlock.includes('Continue with this template'), 'the open view promp
 assert(detailBlock.includes('Go back'), 'the open view prompts: or go back');
 assert(detailBlock.includes('chooseTemplate(template.id)'), 'continue starts the project from that template');
 console.log('PASS: create flow offers scratch + the pictured shelf; cards are picture + name only; the open view asks continue-or-go-back.');
+
+// ---------------------------------------------------------------------------
+// 6. The universal two-input start (Jessica, 2026-11-15): EVERY category
+//    begins with exactly two inputs from the creator — (1) the title of
+//    their game and (2) its theme / vibe / subject — asked FIRST, before
+//    Jewel. The Game Night template's open view asks both, Continue
+//    carries them into the project as its name and its theme/idea (NOT
+//    the template's name or stock description), and the from-scratch
+//    screen asks both the same way the Gameshow screen does. Blanks
+//    fall back the Gameshow way: template name / template description.
+// ---------------------------------------------------------------------------
+assert(detailBlock.includes('the title of your game'), 'the open view asks for the title of the creator’s game');
+assert(detailBlock.includes('aria-label="Game title"'), 'the open view carries a game title input');
+assert(detailBlock.includes('aria-label="Theme, vibe, or subject"'), 'the open view carries a theme input, labeled as creation labels it');
+assert(detailBlock.includes('value={name}') && detailBlock.includes('value={theme}'), 'the open view’s two inputs bind the same title/theme state the Gameshow ask uses');
+assert(flow.includes('applyGameNightTemplate(project, gnTemplate, name, theme)'), 'continue passes the creator’s title AND theme into the template helper');
+
+const scratchBlock = flow.slice(flow.indexOf('screen === "scratch"'), flow.indexOf('screen === "templates"'));
+assert(scratchBlock.includes(') : kind === "multiplayer" ? ('), 'the scratch screen gives multiplayer its own two-input branch');
+assert(scratchBlock.includes('the title of your game'), 'the scratch screen asks a game night for its title and theme, like a show');
+assert(flow.includes('if (kind === "multiplayer") scratch.theme = theme.trim() || undefined;'), 'starting a game night from scratch carries the theme answer forward');
+assert(flow.includes('if (start.kind === "multiplayer" && start.theme) {'), 'game-night scratch creation seeds the theme into gamePlan.theme');
+
+const matchTemplate = getGameNightTemplate('game-night-perfect-match');
+const matchDraft = matchTemplate.buildDraft();
+
+// With the creator's two inputs: their title is the project name, their
+// theme is the project idea and its gamePlan.theme, Jewel greets THEM —
+// and the template's game content is untouched.
+const creatorProject = createProject('');
+applyGameNightTemplate(creatorProject, matchTemplate, 'Haunted Manor Night', 'spooky Halloween sleepover');
+assert.equal(creatorProject.name, 'Haunted Manor Night', 'the creator’s title is the project name, not the template’s name');
+assert.equal(creatorProject.description, 'spooky Halloween sleepover', 'the creator’s theme is the project idea, not the template’s stock description');
+assert.equal(creatorProject.gamePlan && creatorProject.gamePlan.theme, 'spooky Halloween sleepover', 'the creator’s theme seeds gamePlan.theme, the slot Jewel works from');
+const greeting = creatorProject.messages[0].text;
+assert(greeting.includes('"Haunted Manor Night"'), 'Jewel’s greeting speaks to the creator’s title');
+assert(greeting.includes('spooky Halloween sleepover'), 'Jewel’s greeting speaks to the creator’s theme');
+assert(!greeting.includes(matchTemplate.description), 'the greeting does not recite the template’s shelf description as the idea');
+assert(!greeting.includes(matchDraft.description), 'the greeting does not recite the template’s stock draft description as the idea');
+assert(!creatorProject.description.includes(matchDraft.description), 'the project idea is not the template’s stock description');
+same(creatorProject.gameTools, matchDraft.gameTools, 'the template’s game content is unchanged by the two inputs');
+assert.equal(creatorProject.kind, 'multiplayer', 'two-input project kind is still multiplayer');
+same(creatorProject.controls, [], 'two-input project still carries no dashboard controls');
+assert.equal(engine.pickGame(JSON.parse(JSON.stringify(creatorProject))).gameType, 'perfect-match', 'two-input project still resolves to its template’s game');
+
+// Blanks (and whitespace) fall back exactly as before this change: the
+// template’s name, the template’s descriptions, the same greeting.
+for (const template of GAME_NIGHT_TEMPLATES) {
+  const draft = template.buildDraft();
+  for (const args of [[], ['  ', '   ']]) {
+    const blankProject = createProject('');
+    applyGameNightTemplate(blankProject, template, ...args);
+    assert.equal(blankProject.name, draft.name, `${template.id}: a blank title keeps the template’s name`);
+    assert.equal(blankProject.description, draft.description, `${template.id}: a blank theme keeps the template’s description as the idea`);
+    assert(!(blankProject.gamePlan && blankProject.gamePlan.theme), `${template.id}: a blank theme stamps no gamePlan.theme`);
+    assert(blankProject.messages[0].text.startsWith(`Your "${template.name}" game night is ready! ${template.description} `), `${template.id}: the blank-case greeting is the one the site has always given`);
+  }
+}
+console.log('PASS: the two-input start — the template view and the scratch screen both ask title + theme; the creator’s words become the project’s name and idea; blanks fall back to the template’s own.');

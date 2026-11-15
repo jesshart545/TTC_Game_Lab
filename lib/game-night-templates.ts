@@ -362,11 +362,25 @@ export function getGameNightTemplate(id: string): GameNightTemplate | undefined 
 /** Start a project from a game-night template: the project exists with
  *  the template's starter content and kind "multiplayer", no dashboard
  *  controls (a game night has no host), and a first word from Jewel
- *  pointing at customization — the site's model for every template. */
-export function applyGameNightTemplate(project: Project, template: GameNightTemplate, nameOverride?: string): Project {
+ *  pointing at customization — the site's model for every template.
+ *
+ *  The universal two-input start (Jessica, 2026-11-15) applies here
+ *  too: the creator's own title and theme, asked on the template's open
+ *  view before Continue, are the project's name and idea. The theme
+ *  lands where the template's stock description used to be written as
+ *  the idea (project.description) and in the theme slot Jewel works
+ *  from (gamePlan.theme — the same slot the Gameshow scratch start
+ *  seeds). Blanks fall back the way the Gameshow flow treats them: a
+ *  blank title keeps the template's name, a blank theme keeps the
+ *  template's description. Jewel's greeting speaks to the project's
+ *  own name and idea, so a creator's title and theme are what she
+ *  greets — never the template's stock words dressed as the idea. */
+export function applyGameNightTemplate(project: Project, template: GameNightTemplate, nameOverride?: string, themeOverride?: string): Project {
   const draft = template.buildDraft();
+  const creatorTheme = themeOverride?.trim() || "";
   project.name = nameOverride?.trim() || draft.name;
-  project.description = draft.description;
+  project.description = creatorTheme || draft.description;
+  if (creatorTheme) project.gamePlan = { ...(project.gamePlan || {}), theme: creatorTheme };
   project.overlay = { ...project.overlay, ...draft.overlay };
   project.gameTools = draft.gameTools;
   project.controls = [];
@@ -375,7 +389,7 @@ export function applyGameNightTemplate(project: Project, template: GameNightTemp
   project.prompt = `Started from the "${template.name}" game night template.`;
   project.messages = [{
     role: "assistant",
-    text: `Your "${template.name}" game night is ready! ${template.description} Tell me what you want different — the name, the items, the questions — and I'll change it. When it plays the way you want, publish it and share the play link: friends join by name, no account needed, and the game runs itself.`,
+    text: `Your "${project.name}" game night is ready! ${creatorTheme || template.description} Tell me what you want different — the name, the items, the questions — and I'll change it. When it plays the way you want, publish it and share the play link: friends join by name, no account needed, and the game runs itself.`,
   }];
   return project;
 }
