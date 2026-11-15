@@ -447,14 +447,20 @@ export default function TalkshowStage({ project, workflow, doors, onSaveProject,
   const stageProps: StageProps = { project, doors, onSaveProject, jewelPanel, onEnterJewel };
   return (
     <section className="gsw" aria-label="Imagine and Create — your show, as Jewel builds it with you">
-      <div className="gsw-liberty">
-        <JewelAvatar size={58} />
-        <div>
-          <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
-          <div className="gsw-ltext">{TALK_CREATIVITY_BANNER}</div>
+      {/* The liberty banner never stands on a Game Night page (Jessica,
+          2026-11-15): there, creative freedom is shown, never written.
+          The page mounts this frame only for talk projects; this gate
+          keeps the banner off a multiplayer project regardless. */}
+      {project.kind !== "multiplayer" && (
+        <div className="gsw-liberty">
+          <JewelAvatar size={58} />
+          <div>
+            <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
+            <div className="gsw-ltext">{TALK_CREATIVITY_BANNER}</div>
+          </div>
+          <div className="gsw-lwand" aria-hidden="true">🪄</div>
         </div>
-        <div className="gsw-lwand" aria-hidden="true">🪄</div>
-      </div>
+      )}
       <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={doors.showSavedWork}>Your library & uploads</button>
       {topic === "background" && <BackgroundStage {...stageProps} />}
       {topic === "prompt" && <PromptStage {...stageProps} />}

@@ -225,14 +225,20 @@ export default function GameshowStage(props: StageProps) {
   const sp = screenProps(props, stepState);
   return (
     <section className="gsw gsw-stage" aria-label="Imagine and Create — your show, as Jewel builds it with you">
-      <div className="gsw-liberty">
-        <JewelAvatar size={58} />
-        <div>
-          <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
-          <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
+      {/* The liberty banner never stands on a Game Night page (Jessica,
+          2026-11-15): there, creative freedom is shown, never written.
+          The page mounts this frame only for gameshow projects; this
+          gate keeps the banner off a multiplayer project regardless. */}
+      {props.project.kind !== "multiplayer" && (
+        <div className="gsw-liberty">
+          <JewelAvatar size={58} />
+          <div>
+            <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
+            <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
+          </div>
+          <div className="gsw-lwand" aria-hidden="true">🪄</div>
         </div>
-        <div className="gsw-lwand" aria-hidden="true">🪄</div>
-      </div>
+      )}
       <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={() => props.doors.showSavedWork()}>Your library & uploads</button>
       <YourShow key={props.project.id} project={props.project} onSaveProject={props.onSaveProject} />
       <BareStageContext.Provider value={true}>

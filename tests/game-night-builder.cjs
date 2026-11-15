@@ -105,6 +105,30 @@ for (const viewFile of ['components/GameNightStage.tsx', 'components/GameNightSe
 console.log('PASS: neither Game Night view carries the liberty text banner.');
 
 // ---------------------------------------------------------------------------
+// 2c. The banner's other homes can never reach a Game Night page
+//     either (live check after PR #206: the banner was still seen
+//     on the owner's multiplayer project, above the stage buttons).
+//     The banner JSX lives only in the Gameshow/Talk frames and
+//     their legacy workshops. Page wiring: the page mounts those
+//     frames only for their own kinds. Render site: every banner
+//     block is itself gated on the project not being multiplayer,
+//     so no present or future mount can put the words on a Game
+//     Night page — while gameshow and talk keep the banner exactly
+//     as before (their own tests pin its presence there).
+// ---------------------------------------------------------------------------
+assert(page.includes('{workflowStep === 0 && project.kind === "gameshow" && (\n        <GameshowStage'), 'the page mounts the Gameshow stage only for gameshow projects');
+assert(page.includes('{workflowStep === 0 && project.kind === "talk" && (\n        <TalkshowStage'), 'the page mounts the Talk stage only for talk projects');
+for (const bannerFile of ['components/GameshowStage.tsx', 'components/TalkshowStage.tsx', 'components/GameshowWorkshop.tsx', 'components/TalkshowWorkshop.tsx']) {
+  const bannerSource = fs.readFileSync(bannerFile, 'utf8');
+  const gateAt = bannerSource.indexOf('kind !== "multiplayer"');
+  const bannerAt = bannerSource.indexOf('className="gsw-liberty"');
+  assert(gateAt !== -1, `${bannerFile} gates its liberty banner on the project kind`);
+  assert(bannerAt !== -1 && gateAt < bannerAt, `${bannerFile} renders its liberty banner only inside the not-multiplayer gate`);
+  assert(bannerSource.includes('Your creative liberty'), `${bannerFile} still carries the banner for its own kinds`);
+}
+console.log('PASS: the liberty banner is gated away from multiplayer at the page wiring and at every render site.');
+
+// ---------------------------------------------------------------------------
 // 3. Rendered stage 0 — a template project (Perfect Match, the
 //    owner's own walkthrough project shape). The area's one job is
 //    customizing: Jewel's doorway first, the game's pieces as a

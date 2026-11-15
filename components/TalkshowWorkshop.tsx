@@ -140,14 +140,18 @@ export default function TalkshowWorkshop(props: TalkshowWorkshopProps) {
         Each area opens by showing you the thing itself — then you make yours with Jewel.
         An area earns its green ✓ when Jewel has checked it against what’s actually in your project — or when you skip it, where skipping is offered.
       </p>
-      <div className="gsw-liberty">
-        <JewelAvatar size={58} />
-        <div>
-          <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
-          <div className="gsw-ltext">{TALK_CREATIVITY_BANNER}</div>
+      {/* The liberty banner never stands on a Game Night page (Jessica,
+          2026-11-15): there, creative freedom is shown, never written. */}
+      {props.project.kind !== "multiplayer" && (
+        <div className="gsw-liberty">
+          <JewelAvatar size={58} />
+          <div>
+            <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
+            <div className="gsw-ltext">{TALK_CREATIVITY_BANNER}</div>
+          </div>
+          <div className="gsw-lwand" aria-hidden="true">🪄</div>
         </div>
-        <div className="gsw-lwand" aria-hidden="true">🪄</div>
-      </div>
+      )}
 
       {active.id === "theme" && <ThemeStep {...screenProps} />}
       {active.id === "background" && <BackgroundStep {...screenProps} />}
