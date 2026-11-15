@@ -4,6 +4,7 @@ import {bingoConfigFromSnapshot} from './bingo';
 import {quizConfigFromSnapshot} from './quiz-board';
 import {surveyConfigFromSnapshot} from './survey-showdown';
 import {perfectMatchConfigFromSnapshot} from './perfect-match';
+import {wordChainConfigFromSnapshot} from './word-chain';
 import {assetPlaced} from './asset-filing';
 import type { Project } from './project';
 import { controlConnectionError } from './control-connections';
@@ -32,18 +33,20 @@ export function buildReadiness(project: Project): BuildIssue[] {
  // game: bingo (a card list the bingo extraction can play), Quiz Board (a
  // trivia board / categorized trivia list the quiz extraction can play),
  // Survey Showdown (a survey-shaped trivia board the survey extraction can
- // play) or Perfect Match (a prompt card list and an answer card list the
- // perfect-match extraction can play), judged by the very extractions the
- // game-room share route runs (lib/bingo.ts / lib/quiz-board.ts /
- // lib/survey-showdown.ts / lib/perfect-match.ts on the published
- // snapshot), so "ready to publish" and "ready to share" can never
- // disagree. The asset checks at the bottom still run for every
- // kind: they only fire for assets actually placed, so a game night with
- // no assets is never blocked on asset grounds.
+ // play), Perfect Match (a prompt card list and an answer card list the
+ // perfect-match extraction can play) or Word Chain (a word-named card
+ // list of starter words the word-chain extraction can play), judged by
+ // the very extractions the game-room share route runs (lib/bingo.ts /
+ // lib/quiz-board.ts / lib/survey-showdown.ts / lib/perfect-match.ts /
+ // lib/word-chain.ts on the published snapshot), so "ready to publish"
+ // and "ready to share" can never disagree. The asset checks at the
+ // bottom still run for every kind: they only fire for assets actually
+ // placed, so a game night with no assets is never blocked on asset
+ // grounds.
  const multiplayer=project.kind==='multiplayer';
- if(multiplayer&&'error' in bingoConfigFromSnapshot(project)&&'error' in quizConfigFromSnapshot(project)&&'error' in surveyConfigFromSnapshot(project)&&'error' in perfectMatchConfigFromSnapshot(project)){
+ if(multiplayer&&'error' in bingoConfigFromSnapshot(project)&&'error' in quizConfigFromSnapshot(project)&&'error' in surveyConfigFromSnapshot(project)&&'error' in perfectMatchConfigFromSnapshot(project)&&'error' in wordChainConfigFromSnapshot(project)){
   const target=project.gameTools.find(t=>t.type==='card-list')||project.gameTools.find(t=>t.type==='trivia-board')||project.gameTools.find(t=>t.type==='trivia-list');
-  issues.push({id:'playable-game',message:'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, or a prompt card list and an answer card list for a matching game — ask Jewel to build one for you.',kind:'tool',targetId:target?target.id:'',fix:'customize'});
+  issues.push({id:'playable-game',message:'Your game night needs something to play: add a card list with at least 5 items, a quiz board with questions, a survey board with questions and answers, a prompt card list and an answer card list for a matching game, or a word list with at least 10 starter words for a word chain game — ask Jewel to build one for you.',kind:'tool',targetId:target?target.id:'',fix:'customize'});
  }
  if(!multiplayer){
  for(const control of project.controls){

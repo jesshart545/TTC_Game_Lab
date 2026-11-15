@@ -69,6 +69,17 @@ function deckKind(name: unknown): "prompt" | "answer" | null {
   return null;
 }
 
+/** The Word Chain deck signal (lib/word-chain.ts reads the same one):
+ * a card-list name containing "word". WORD_DECK_MIN_STARTERS mirrors
+ * WORD_CHAIN_MIN_STARTERS there — a list only counts as a word deck
+ * when it holds at least that many different starter words. */
+const WORD_DECK_MIN_STARTERS = 10;
+
+function isWordDeck(name: unknown): boolean {
+  const text = typeof name === "string" ? name.toLowerCase() : "";
+  return text.includes("word");
+}
+
 function cardTexts(tool: AnyTool): string[] {
   const config = (tool.config || {}) as Record<string, unknown>;
   const fromCards: string[] = [];
@@ -115,10 +126,19 @@ export function bingoConfigFromSnapshot(snapshot: unknown): { config: BingoConfi
   const lists = tools.filter(tool => tool.type === "card-list");
   const deckPairPresent = lists.some(tool => deckKind(tool.name) === "prompt") && lists.some(tool => deckKind(tool.name) === "answer");
   const poolLists = deckPairPresent ? lists.filter(tool => deckKind(tool.name) === null) : lists;
+  // Word Chain's deck: a word-named list that qualifies as a word deck
+  // is left out of the call pool ONLY when it is the snapshot's sole
+  // bingo candidate — a project whose only content is a starter deck is
+  // a chain game, and the room falls through the registry to Word
+  // Chain. With any other candidate present, bingo plays exactly as it
+  // always has, word list included.
+  const wordDeckAlone = poolLists.length === 1 && isWordDeck(poolLists[0].name)
+    && dedupe(cardTexts(poolLists[0])).length >= WORD_DECK_MIN_STARTERS;
+  const candidates = wordDeckAlone ? [] : poolLists;
   const picker = tools.find(tool => tool.type === "random-picker" && tool.config?.source === "cards" && typeof tool.config?.listId === "string");
-  let pool = picker ? poolLists.find(tool => tool.id === picker.config?.listId) : undefined;
+  let pool = picker ? candidates.find(tool => tool.id === picker.config?.listId) : undefined;
   if (!pool) {
-    pool = poolLists.slice().sort((a, b) => cardTexts(b).length - cardTexts(a).length)[0];
+    pool = candidates.slice().sort((a, b) => cardTexts(b).length - cardTexts(a).length)[0];
   }
   const items = pool ? dedupe(cardTexts(pool)) : [];
   if (!pool || items.length < BINGO_MIN_ITEMS) {

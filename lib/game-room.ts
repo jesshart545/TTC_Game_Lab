@@ -38,6 +38,11 @@ import {
   PERFECT_MATCH_HAND_SIZE, PERFECT_MATCH_WIN_POINTS, PERFECT_MATCH_REVEAL_MS,
   type PerfectMatchConfig, type PerfectMatchPlayerState, type PerfectMatchRoomState,
 } from "./perfect-match";
+import {
+  wordChainConfigFromSnapshot, wordChainPlayerState, wordChainCheckWord,
+  WORD_CHAIN_CHAIN_TARGET, WORD_CHAIN_MAX_STRIKES,
+  type WordChainConfig, type WordChainPlayerState, type WordChainRoomState,
+} from "./word-chain";
 
 export type RoomStatus = "lobby" | "countdown" | "playing" | "finished";
 
@@ -1054,6 +1059,221 @@ const perfectMatchModule: GameModule = {
 };
 
 // ---------------------------------------------------------------------------
+// Word Chain module
+// ---------------------------------------------------------------------------
+
+function chainStateOf(room: Room): WordChainRoomState {
+  return room.state as unknown as WordChainRoomState;
+}
+
+function chainConfigOf(room: Room): WordChainConfig {
+  return room.config as unknown as WordChainConfig;
+}
+
+function chainPlayer(player: RoomPlayer): WordChainPlayerState {
+  return wordChainPlayerState(player.state);
+}
+
+function saveChainPlayer(player: RoomPlayer, mine: WordChainPlayerState): void {
+  player.state = mine as unknown as Record<string, unknown>;
+}
+
+/** Players still in the chain, in join order. */
+function chainAlive(players: RoomPlayer[]): RoomPlayer[] {
+  return players.filter(player => !chainPlayer(player).out);
+}
+
+/** Hand the turn to the next player still in, scanning in join order. */
+function chainAdvanceTurn(room: Room, players: RoomPlayer[], now: number): void {
+  const state = chainStateOf(room);
+  const alive = chainAlive(players);
+  if (!alive.length) { state.turnPlayerId = null; return; }
+  const index = players.findIndex(candidate => candidate.id === state.turnPlayerId);
+  for (let step = 1; step <= players.length; step++) {
+    const next = players[(index + step) % players.length];
+    if (next && !chainPlayer(next).out) {
+      state.turnPlayerId = next.id;
+      state.turnNumber += 1;
+      state.turnEndsAt = now + chainConfigOf(room).turnMs;
+      return;
+    }
+  }
+  state.turnPlayerId = alive[0].id;
+  state.turnNumber += 1;
+  state.turnEndsAt = now + chainConfigOf(room).turnMs;
+}
+
+/** One strike against a player; the second puts them out of the chain. */
+function chainStrike(room: Room, player: RoomPlayer): void {
+  const state = chainStateOf(room);
+  const mine = chainPlayer(player);
+  mine.strikes += 1;
+  if (mine.strikes >= WORD_CHAIN_MAX_STRIKES && !mine.out) {
+    mine.out = true;
+    mine.outAt = state.chain.length;
+  }
+  saveChainPlayer(player, mine);
+}
+
+const wordChainModule: GameModule = {
+  gameType: "word-chain",
+
+  extractConfig(snapshot) {
+    const result = wordChainConfigFromSnapshot(snapshot);
+    if ("error" in result) return result;
+    return { config: result.config as unknown as Record<string, unknown> };
+  },
+
+  init() {
+    const state: WordChainRoomState = {
+      startedAt: 0, phase: "play",
+      starterOrder: [], starterIndex: 0,
+      chain: [], turnPlayerId: null, turnEndsAt: 0, turnNumber: 0,
+      lastPlay: null,
+    };
+    return state as unknown as Record<string, unknown>;
+  },
+
+  onStart(room, players, now, rng) {
+    const config = chainConfigOf(room);
+    const state = chainStateOf(room);
+    state.startedAt = now;
+    state.phase = "play";
+    state.starterOrder = shuffle(config.starters.map((_, index) => index), rng);
+    state.starterIndex = 0;
+    const starter = config.starters[state.starterOrder[0]] ?? config.starters[0] ?? "";
+    state.chain = starter ? [starter] : [];
+    state.lastPlay = null;
+    for (const player of players) {
+      const fresh: WordChainPlayerState = { strikes: 0, out: false, outAt: null, added: 0 };
+      saveChainPlayer(player, fresh);
+    }
+    state.turnPlayerId = players[0]?.id ?? null;
+    state.turnNumber = 1;
+    state.turnEndsAt = now + config.turnMs;
+  },
+
+  playerInit(room, player) {
+    // A late joiner takes the next seat in the turn order with a clean
+    // slate — the chain never waits for a host to place them. If the
+    // turn somehow points nowhere (everyone ahead went out), the new
+    // seat picks it up.
+    const state = chainStateOf(room);
+    saveChainPlayer(player, chainPlayer(player));
+    if (state.startedAt && !state.turnPlayerId) {
+      state.turnPlayerId = player.id;
+      state.turnNumber += 1;
+      state.turnEndsAt = Date.now() + chainConfigOf(room).turnMs;
+    }
+  },
+
+  onAction(room, players, player, action, now) {
+    if (action.type !== "play") return "That move isn't part of this game.";
+    if (room.status !== "playing") return "The game isn't running right now.";
+    const state = chainStateOf(room);
+    if (state.phase !== "play") return "The chain is finished.";
+    if (chainPlayer(player).out) return "You're out of this chain — two strikes. You can watch it finish!";
+    if (player.id !== state.turnPlayerId) {
+      const turn = players.find(candidate => candidate.id === state.turnPlayerId);
+      return turn ? `It's ${turn.name}'s turn — yours comes around.` : "It's not your turn right now.";
+    }
+    const raw = String(action.text ?? "");
+    if (!raw.trim()) return "Type your word first.";
+    const check = wordChainCheckWord(raw, state.chain);
+    if (!check.ok) {
+      // A submitted word that breaks a rule is a played move, not a
+      // refused one: it earns its strike and the turn moves on.
+      chainStrike(room, player);
+      state.lastPlay = { playerId: player.id, word: raw.trim().slice(0, 60), result: check.result };
+      chainAdvanceTurn(room, players, now);
+      return null;
+    }
+    state.chain = [...state.chain, check.word];
+    const mine = chainPlayer(player);
+    mine.added += 1;
+    saveChainPlayer(player, mine);
+    state.lastPlay = { playerId: player.id, word: check.word, result: "in" };
+    chainAdvanceTurn(room, players, now);
+    return null;
+  },
+
+  tick(room, players, now) {
+    const state = chainStateOf(room);
+    if (!state.startedAt || state.phase !== "play") return;
+    if (!state.turnPlayerId || now < state.turnEndsAt) return;
+    const turn = players.find(candidate => candidate.id === state.turnPlayerId);
+    if (!turn || chainPlayer(turn).out) { chainAdvanceTurn(room, players, now); return; }
+    // The clock ran out on this seat: a strike, and the chain moves on.
+    chainStrike(room, turn);
+    state.lastPlay = { playerId: turn.id, word: "", result: "timeout" };
+    chainAdvanceTurn(room, players, now);
+  },
+
+  checkFinish(room, players) {
+    const state = chainStateOf(room);
+    if (!state.startedAt) return null;
+    const alive = chainAlive(players);
+    const chainFull = state.chain.length >= WORD_CHAIN_CHAIN_TARGET;
+    if (!chainFull && alive.length > 1) return null;
+    if (!players.length) return null;
+    state.phase = "done";
+    const rows = players.map(player => ({ player, mine: chainPlayer(player) }));
+    rows.sort((a, b) => {
+      // Still in before out; among the standing, fewest strikes first;
+      // among the out, whoever lasted longest (went out latest) first.
+      if (a.mine.out !== b.mine.out) return a.mine.out ? 1 : -1;
+      if (!a.mine.out && a.mine.strikes !== b.mine.strikes) return a.mine.strikes - b.mine.strikes;
+      if (a.mine.out && b.mine.out && (a.mine.outAt ?? 0) !== (b.mine.outAt ?? 0)) return (b.mine.outAt ?? 0) - (a.mine.outAt ?? 0);
+      if (a.mine.added !== b.mine.added) return b.mine.added - a.mine.added;
+      return a.player.name.localeCompare(b.player.name);
+    });
+    return rows.map(row => {
+      const standing = !row.mine.out;
+      const winner = chainFull ? standing : row === rows[0];
+      return {
+        playerId: row.player.id,
+        name: row.player.name,
+        score: row.mine.added,
+        detail: chainFull
+          ? (standing ? `Finished the ${WORD_CHAIN_CHAIN_TARGET}-word chain · added ${row.mine.added}` : `Out at word ${row.mine.outAt ?? 0} · added ${row.mine.added}`)
+          : (winner ? `Last one standing · added ${row.mine.added}` : `Out at word ${row.mine.outAt ?? 0} · added ${row.mine.added}`),
+        winner,
+      };
+    });
+  },
+
+  publicState(room, players) {
+    const config = chainConfigOf(room);
+    const state = chainStateOf(room);
+    const names = new Map(players.map(player => [player.id, player.name]));
+    return {
+      accent: config.accent,
+      theme: config.theme,
+      chainStage: state.startedAt ? state.phase : "play",
+      chain: state.startedAt ? state.chain : [],
+      currentWord: state.chain.length ? state.chain[state.chain.length - 1] : null,
+      chainLength: state.chain.length,
+      chainTarget: WORD_CHAIN_CHAIN_TARGET,
+      turnPlayerId: state.startedAt ? state.turnPlayerId : null,
+      turnName: state.turnPlayerId ? names.get(state.turnPlayerId) || null : null,
+      turnEndsAt: state.startedAt && state.phase === "play" ? state.turnEndsAt : null,
+      turnNumber: state.turnNumber,
+      maxStrikes: WORD_CHAIN_MAX_STRIKES,
+      wordPlayers: Object.fromEntries(players.map(player => {
+        const mine = chainPlayer(player);
+        return [player.id, { strikes: mine.strikes, out: mine.out, added: mine.added }];
+      })),
+      lastPlay: state.lastPlay ? {
+        playerId: state.lastPlay.playerId,
+        name: names.get(state.lastPlay.playerId) || "",
+        word: state.lastPlay.word,
+        result: state.lastPlay.result,
+      } : null,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Module registry
 // ---------------------------------------------------------------------------
 
@@ -1062,6 +1282,7 @@ export const GAME_MODULES: Record<string, GameModule> = {
   [quizModule.gameType]: quizModule,
   [surveyModule.gameType]: surveyModule,
   [perfectMatchModule.gameType]: perfectMatchModule,
+  [wordChainModule.gameType]: wordChainModule,
 };
 
 /** Pick the module a published snapshot can play, and extract its config. */
