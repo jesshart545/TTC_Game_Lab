@@ -24,7 +24,8 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   const [chosenTemplate, setChosenTemplate] = useState("");
   const [start, setStart] = useState<ScratchStart | null>(null);
   const [kind, setKind] = useState<ProjectKind | null>(null);
-  const [screen, setScreen] = useState<"kinds" | "scratch" | "templates" | "gn-templates" | "gn-detail">("kinds");
+  const [screen, setScreen] = useState<"kinds" | "scratch" | "templates" | "tpl-detail" | "gn-templates" | "gn-detail">("kinds");
+  const [tplDetail, setTplDetail] = useState("");
   const [gnDetail, setGnDetail] = useState("");
   const [popup, setPopup] = useState(false);
   const [pieces, setPieces] = useState<string[]>(() => SETUP_PIECES.filter(piece => piece.defaultOn).map(piece => piece.id));
@@ -65,8 +66,17 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
       let project = createProject("");
       if (template) {
         const draft = template.buildDraft();
+        // The universal two-input start (Jessica, 2026-11-15): the
+        // template's open view asked for the creator's own title and
+        // theme, and they seed the project exactly as the Game Night
+        // template path seeds them — title as the name, theme as the
+        // project idea and gamePlan.theme. Blanks mirror the scratch
+        // path: no title falls back to the template's name, no theme
+        // stamps nothing.
+        const creatorTheme = theme.trim();
         project.name = name.trim() || draft.name;
-        project.description = draft.description;
+        project.description = creatorTheme || draft.description;
+        if (creatorTheme) project.gamePlan = { ...(project.gamePlan || {}), theme: creatorTheme };
         project.overlay = { ...project.overlay, ...draft.overlay };
         project.gameTools = draft.gameTools;
         project.controls = draft.controls;
@@ -304,21 +314,45 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                     className="np-tplcard"
                     role="button"
                     tabIndex={0}
-                    onClick={() => chooseTemplate(template.id)}
-                    onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseTemplate(template.id); } }}
+                    onClick={() => { setTplDetail(template.id); setScreen("tpl-detail"); }}
+                    onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setTplDetail(template.id); setScreen("tpl-detail"); } }}
                   >
                     <img src="/redesign/kind-gameshow.webp" alt="" />
                     <div className="np-shade" />
                     <div className="np-txt">
                       <div className="np-kick">{template.category}</div>
                       <div className="np-t display">{template.name}</div>
-                      <div className="np-d">{template.description}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {screen === "tpl-detail" && (() => {
+            const template = getGameTemplate(tplDetail);
+            if (!template) return null;
+            return (
+              <div>
+                <div className="np-tplcard" style={{ cursor: "default" }}>
+                  <img src="/redesign/kind-gameshow.webp" alt="" />
+                  <div className="np-shade" />
+                  <div className="np-txt">
+                    <div style={{ fontSize: "2rem" }} aria-hidden="true">{template.icon}</div>
+                    <div className="np-t display">{template.name}</div>
+                  </div>
+                </div>
+                <p className="np-ask" style={{ marginTop: "18px" }}>{template.description}</p>
+                <div className="np-ask" style={{ marginTop: "18px" }}>First things first — two things only you can give: <b>the title of your show</b>, and <b>its theme, vibe, or subject</b>.</div>
+                <input className="np-nameinput" aria-label="Show title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+                <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder="Its theme, vibe, or subject — e.g. neon 90s music trivia" value={theme} onChange={event => setTheme(event.target.value)} />
+                <div className="np-nextrow">
+                  <button type="button" className="np-nextbtn" onClick={() => chooseTemplate(template.id)}>Continue with this template →</button>
+                  <button type="button" className="np-back" onClick={() => setScreen("templates")}>← Go back</button>
+                </div>
+              </div>
+            );
+          })()}
 
           {screen === "gn-templates" && (
             <div>
