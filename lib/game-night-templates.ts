@@ -271,6 +271,77 @@ const wordChain: GameNightTemplate = {
 };
 
 // ---------------------------------------------------------------------------
+// Draw & Guess — one player draws the secret word, everyone else guesses
+// ---------------------------------------------------------------------------
+const drawGuess: GameNightTemplate = {
+  id: "game-night-draw-guess",
+  gameType: "draw-guess",
+  name: "Draw & Guess",
+  description:
+    "One player draws a secret word while everyone else races to guess it. First correct guess scores — and the drawer scores too.",
+  icon: "🎨",
+  image: KIND_ART,
+  buildDraft: () => {
+    const words = [
+      "Bicycle", "Birthday Cake", "Lighthouse", "Elephant", "Guitar", "Snowman",
+      "Rocket", "Umbrella", "Turtle", "Castle", "Popcorn", "Dragon",
+    ];
+    return {
+      name: "Draw & Guess",
+      description: "A drawing-and-guessing game with 12 starter words, ready to play. Ask Jewel for more words on any theme you like.",
+      overlay: { title: "DRAW & GUESS", subtitle: "DRAW IT · GUESS IT", showChat: false, showAlerts: false, showCharacter: false },
+      gameTools: [
+        {
+          id: "gn-draw-words", type: "card-list", name: "Draw Words", enabled: true, inToolbox: true, inOverlayBuild: false,
+          config: { cards: cardsOf("gn-draw", words) },
+        },
+      ],
+      controls: [],
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Property Tycoon — roll, travel the board, buy streets, charge rent
+// ---------------------------------------------------------------------------
+const propertyTycoon: GameNightTemplate = {
+  id: "game-night-property-tycoon",
+  gameType: "property-tycoon",
+  name: "Property Tycoon",
+  description:
+    "Roll the dice, travel the board, and buy streets as you land on them. Charge rent, dodge tax, and finish with the greatest fortune.",
+  icon: "🏠",
+  image: KIND_ART,
+  buildDraft: () => {
+    // The board follows list order: the properties below run from the
+    // quiet end of town to the grandest squares. There is deliberately
+    // no chance list of the template's own — a chance-named list with
+    // five or more cards reads to the engine as a Bingo call pool and
+    // the project would resolve to Bingo instead (the precedence the
+    // engine's own tests pin). The engine's built-in chance deck —
+    // six cards on the same fixed effect rotation — plays instead.
+    const properties = [
+      "Maple Lane", "Cedar Street", "Willow Way", "Birch Boulevard",
+      "Harbor Road", "Sunset Avenue", "Meadow Drive", "Riverbend Road",
+      "Hillcrest Avenue", "Old Mill Lane", "Garden District", "Lakeside Drive",
+      "Downtown Plaza", "University Heights", "Marina Bay", "Crown Point",
+    ];
+    return {
+      name: "Property Tycoon",
+      description: "A property-trading board game with 16 streets, ready to play. Rename the streets for your own town or theme with Jewel.",
+      overlay: { title: "PROPERTY TYCOON", subtitle: "BUY · TRADE · CHARGE RENT", showChat: false, showAlerts: false, showCharacter: false },
+      gameTools: [
+        {
+          id: "gn-tycoon-properties", type: "card-list", name: "Properties", enabled: true, inToolbox: true, inOverlayBuild: false,
+          config: { cards: cardsOf("gn-property", properties) },
+        },
+      ],
+      controls: [],
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // The shelf — append new game-night templates here as their engine
 // modules land; the create flow renders this list as-is.
 // ---------------------------------------------------------------------------
@@ -280,6 +351,8 @@ export const GAME_NIGHT_TEMPLATES: GameNightTemplate[] = [
   surveyShowdown,
   perfectMatch,
   wordChain,
+  drawGuess,
+  propertyTycoon,
 ];
 
 export function getGameNightTemplate(id: string): GameNightTemplate | undefined {
