@@ -81,3 +81,35 @@
 .rd-foot { position:relative; z-index:1; display:flex; gap:18px; flex-wrap:wrap; align-items:center; justify-content:center; text-align:center; color:#6d6391; font-size:13px; padding:26px 20px 30px; }
 .rd-foot a { color:#948bb3; text-decoration:none; }
 .rd-foot a:hover { color:#e9c979; }
+
+/* Main HOME page (feat/home-landing): hero tagline, the two doors, news
+   cards, coming-soon cards, the prominent donate section, help doors. */
+.rd-tagline { font-family:'Anton','Arial Narrow',Impact,sans-serif; font-size:21px; letter-spacing:1.5px; color:#e9c979; margin-top:6px; text-transform:uppercase; }
+.rd-homelede { color:#948bb3; font-size:15.5px; margin-top:8px; max-width:640px; line-height:1.55; }
+.rd-doors { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:24px; }
+@media (max-width:620px){ .rd-doors{ grid-template-columns:1fr; } }
+.rd-door { height:178px; }
+.rd-doorline { font-size:13.5px; color:#cfc8e6; margin-top:5px; line-height:1.45; }
+.rd-news { display:flex; flex-direction:column; gap:14px; }
+.rd-news-card { border-radius:18px; overflow:hidden; background:#17131f; border:1px solid #2b2444; box-shadow:0 12px 30px rgba(0,0,0,.4); }
+.rd-news-imgwrap { height:148px; overflow:hidden; }
+.rd-news-imgwrap img { width:100%; height:100%; object-fit:cover; display:block; }
+.rd-news-body { padding:14px 18px 16px; }
+.rd-news-t { font-size:17.5px; font-weight:800; line-height:1.3; }
+.rd-news-d { font-size:14px; color:#b6add4; margin-top:5px; line-height:1.55; }
+.rd-soonwrap { margin-top:26px; }
+.rd-soon { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:620px){ .rd-soon{ grid-template-columns:1fr; } }
+.rd-soon-card { display:flex; gap:12px; align-items:flex-start; border:1px dashed #3a2f63; border-radius:18px; background:#12101c; padding:16px 18px; }
+.rd-soon-star { color:#e9c979; font-size:17px; line-height:1.4; }
+.rd-donate { margin-top:26px; border:2px solid #e9c979; border-radius:18px; background:linear-gradient(180deg, rgba(233,201,121,.08), rgba(233,201,121,.02)), #14101f; padding:22px 24px; }
+.rd-donate-h { font-size:23px; font-weight:800; }
+.rd-donate-p { color:#cfc8e6; font-size:15px; line-height:1.65; margin-top:8px; max-width:760px; }
+.rd-donate-row { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:16px; }
+.rd-donatebtn { background:#e9c979; color:#1a1206; font-size:16px; font-weight:800; padding:13px 34px; border-radius:12px; text-decoration:none; }
+.rd-donate-story { color:#e9c979; font-weight:700; text-decoration:none; }
+.rd-donate-fine { color:#948bb3; font-size:12.5px; line-height:1.6; margin-top:14px; max-width:760px; }
+.rd-helpdoors { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px; }
+@media (max-width:620px){ .rd-helpdoors{ grid-template-columns:1fr; } }
+.rd-helpdoor { display:block; border:1px solid #2b2444; border-radius:18px; background:#14101f; padding:18px 20px; text-decoration:none; color:#f0edf7; transition:border-color .15s; }
+.rd-helpdoor:hover { border-color:#e9c979; }
