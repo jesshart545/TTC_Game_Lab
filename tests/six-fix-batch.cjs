@@ -49,7 +49,7 @@ assert(shelf.includes('handlers.addGameTool(item.type)'), 'plain tiles add throu
 console.log('PASS: routed tiles use the existing creators; plain tiles use addGameTool; talk and review stay shelf-free.');
 
 // Shelf cards are picture + name only, each with its own visual.
-assert(shelf.includes('/game-art/plinko-board.webp'), 'the Plinko card carries the shipped board artwork');
+assert(shelf.includes('PLINKO_DEFAULT_BOARD_ART'), 'the Plinko card carries the neutral house board artwork via the shared default constant — never a specific creator\u2019s board');
 assert(!shelf.includes('item.description'), 'no description text is rendered on a shelf card');
 assert(shelf.includes('shelf-name') && shelf.includes('{item.name}'), 'the card face is its picture and its name');
 for (const face of ['WheelDisplay', 'DiceDisplay', 'CoinDisplay', 'HigherLowerDisplay', 'CliffhangerDisplay', 'StyledTimer', 'GameInfoOverlay', 'StandingToolFace', 'BoardArtwork', 'FittedCard']) {

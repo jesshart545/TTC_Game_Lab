@@ -1,6 +1,15 @@
 "use client";
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import './chance-tools.css';
+
+// The neutral house board a Plinko shows when it has no artwork of
+// its own — and the fallback when its own artwork fails to load.
+// Must equal PLINKO_DEFAULT_BOARD_ART in lib/plinko-art (pinned by
+// tests/plinko-overlay-board.cjs); kept as a local literal because
+// this component is loaded standalone by the render test harnesses.
+// It is deliberately NOT the first board Jessica uploaded: she ruled
+// her board was not to become the face of every Plinko game.
+const PLINKO_HOUSE_BOARD = "/game-art/plinko-board-default.webp";
 
 // The animation presents an already-selected result; it never draws another winner.
 export function wheelRotation(winner:number,count:number,progress:number){return (2160-(winner+.5)*360/Math.max(1,count))*(1-Math.pow(1-Math.min(1,Math.max(0,progress)),4));}
@@ -74,8 +83,8 @@ export function plinkoPath(winner:number,slots:number,rows:number){
 // OWN board when the caller resolves one (artSrc: the board artwork
 // Jewel generated from the creator's style words at creation time,
 // saved on the tool's config as boardArtKey — lib/plinko-art), and
-// the approved shipped neon-cabinet artwork (public/game-art/
-// plinko-board.webp) otherwise. The artwork never carries values or
+// the neutral house board (public/game-art/plinko-board-default.webp)
+// otherwise. The artwork never carries values or
 // text; the layering below writes both. plinkoPath above still
 // decides everything; the mapping below only re-plots the same points
 // into the artwork's perspective (the cabinet narrows toward the
@@ -88,7 +97,7 @@ function plinkoArtPoint(p:{x:number;y:number}){
   const cx=1075-30*t,half=415+278.5*t;
   return {x:cx+((p.x-200)/190)*half,y:252+633*t};
 }
-export function PlinkoDisplay({slots,winner=0,rows=9,elapsed=0,duration=3000,preview=false,pegColor="#8b9bb4",ballColor="#ff5d5d",colors=["#154c69","#512b75"],textColor="#ffffff",title="Plinko",artSrc}:{slots:string[];winner?:number;rows?:number;elapsed?:number;duration?:number;preview?:boolean;pegColor?:string;ballColor?:string;colors?:string[];textColor?:string;title?:string;artSrc?:string}){
+export function PlinkoDisplay({slots,winner=0,rows=9,elapsed=0,duration=3000,preview=false,pegColor="#8b9bb4",ballColor="#ff5d5d",colors=["#154c69","#512b75"],textColor="#ffffff",title="Plinko",artSrc,fill=false}:{slots:string[];winner?:number;rows?:number;elapsed?:number;duration?:number;preview?:boolean;pegColor?:string;ballColor?:string;colors?:string[];textColor?:string;title?:string;artSrc?:string;fill?:boolean}){
   const S=Math.max(2,slots.length),R=Math.min(14,Math.max(4,rows||9));
   const win=Math.min(S-1,Math.max(0,winner));
   const progress=preview?0:Math.min(1,Math.max(0,elapsed/duration));
@@ -101,8 +110,19 @@ export function PlinkoDisplay({slots,winner=0,rows=9,elapsed=0,duration=3000,pre
   const titleSize=Math.min(84,Math.max(30,Math.round(675/Math.max(1,title.length))));
   const ballPos=preview?plinkoArtPoint(path[0]):landed?{x:slotCx(win),y:PLINKO_SLOT_Y}:plinkoArtPoint(ball);
   const trail=!preview&&progress>0&&!landed?[...path.slice(Math.max(0,fi-2),fi+1).map(plinkoArtPoint),ballPos]:[];
-  return <div className="chance-tool"><div className="chance-plinko"><svg viewBox="0 0 2080 1136" role="img" aria-label={preview?'Plinko board design':landed?`Plinko landed on ${slots[win]}`:'Plinko ball dropping'}>
-    <image href={artSrc || "/game-art/plinko-board.webp"} preserveAspectRatio={artSrc ? "none" : undefined} x={0} y={0} width={2080} height={1136}/>
+  // The artwork must never render blank. A resolved artSrc can still
+  // be a dead URL — a published snapshot keeps pointing at the asset
+  // record after the stored object behind it is gone (the live
+  // overlay rendered a dark empty panel for exactly this on
+  // 2026-11-15: the record resolved, the file 404'd). Probe the URL
+  // and let the image itself report failure too; either way the
+  // neutral house board takes the dead artwork's place.
+  const [artBroken,setArtBroken]=useState(false);
+  useEffect(()=>{setArtBroken(false);if(!artSrc)return;let live=true;const probe=new Image();probe.onerror=()=>{if(live)setArtBroken(true)};probe.src=artSrc;return ()=>{live=false};},[artSrc]);
+  const ownArt=!!artSrc&&!artBroken;
+  const boardSrc=ownArt?artSrc:PLINKO_HOUSE_BOARD;
+  return <div className={fill?"chance-tool chance-tool-fill":"chance-tool"}><div className="chance-plinko"><svg viewBox="0 0 2080 1136" role="img" aria-label={preview?'Plinko board design':landed?`Plinko landed on ${slots[win]}`:'Plinko ball dropping'}>
+    <image href={boardSrc} preserveAspectRatio={ownArt ? "none" : undefined} x={0} y={0} width={2080} height={1136} onError={()=>setArtBroken(true)}/>
     <text className="chance-plinko-title" x={1072} y={124} textAnchor="middle" fill={textColor} fontSize={titleSize} fontWeight={900} letterSpacing={Math.round(titleSize*0.1)} stroke="rgba(8,4,26,.9)" strokeWidth={3} paintOrder="stroke">{title}</text>
     {slots.map((s,i)=><g key={i} className={landed&&i===win?"chance-plinko-slot-win":undefined}>{landed&&i===win&&<rect x={PLINKO_SLOT_X0+i*slotW+5} y={948} width={slotW-10} height={118} rx={20} fill={colors[i%colors.length]} opacity={.45} stroke="#ffd166" strokeWidth={6}/>}<text x={slotCx(i)} y={PLINKO_SLOT_Y+labelSize*0.36} textAnchor="middle" fill={textColor} fontSize={labelSize} fontWeight={800} stroke="rgba(8,4,26,.92)" strokeWidth={Math.max(3,labelSize/10)} paintOrder="stroke">{s.length>8?s.slice(0,7)+'…':s}</text></g>)}
     {trail.length>1&&<polyline className="chance-plinko-trail" points={trail.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ballColor} strokeWidth={24} strokeLinecap="round" strokeLinejoin="round"/>}

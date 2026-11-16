@@ -38,12 +38,12 @@ console.log('PASS: cliffhanger shows the item, climbs the guessed steps, and fal
 
 // ---- Rich faces: marquee cabinet, real cards, mountain scene, glossy wheel ----
 const {WheelDisplay,cardSuit}=exportsObject;
-// Plinko's face is the approved neon-cabinet artwork with the live
+// Plinko's face is the neutral house board artwork with the live
 // elements layered over it: the artwork image itself, the configured
 // slot values in the slot band, and the glowing puck resting at the
 // drop slot; the landed slot flashes, and no dollar sign ever renders.
 html=renderToStaticMarkup(React.createElement(PlinkoDisplay,{slots:['10','500','1000'],winner:1,preview:true}));
-assert(html.includes('/game-art/plinko-board.webp')&&html.includes('chance-plinko-halo'),'plinko preview is the artwork board with a glowing puck');
+assert(html.includes('/game-art/plinko-board-default.webp')&&html.includes('chance-plinko-halo'),'plinko preview is the artwork board with a glowing puck');
 assert(html.includes('>10<')&&html.includes('>500<')&&html.includes('>1000<'),'plinko preview layers the configured slot values over the artwork slot band');
 assert(!html.includes('$'),'plinko never renders a dollar sign');
 html=renderToStaticMarkup(React.createElement(PlinkoDisplay,{slots:['10','500','1000'],winner:2,elapsed:3000}));

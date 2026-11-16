@@ -8,7 +8,7 @@ const { applyDraftChanges } = load('lib/draft-edit.ts');
 // from the creator's style words at creation time, files it into the
 // project, and stores the asset key on the tool's config as
 // boardArtKey; PlinkoDisplay renders that artwork with the same
-// title/slot layering as the shipped board, which remains the
+// title/slot layering as the neutral house board, which remains the
 // fallback. The artwork never carries values or text — the prompt
 // builder's composition locks (blank marquee, nine EMPTY slot boxes,
 // no text, no dollar signs) are what the layering relies on.
@@ -24,7 +24,8 @@ const plinkoTool = (over = {}) => ({ id: 'plinko-1', type: 'plinko', name: 'My B
 // ---- Field names -----------------------------------------------------------
 assert.equal(PLINKO_BOARD_ART_FIELD, 'boardArtKey', 'the artwork reference lives on config.boardArtKey');
 assert.equal(PLINKO_ART_STYLE_FIELD, 'artStyle', 'the creator style words live on config.artStyle');
-assert.equal(PLINKO_DEFAULT_BOARD_ART, '/game-art/plinko-board.webp', 'the shipped board stays the fallback artwork');
+assert.equal(PLINKO_DEFAULT_BOARD_ART, '/game-art/plinko-board-default.webp', 'the neutral house board is the fallback artwork');
+assert.notEqual(PLINKO_DEFAULT_BOARD_ART, '/game-art/plinko-board.webp', 'the fallback is NOT Jessica\u2019s uploaded neon board — her board is not the face of every Plinko');
 
 // ---- The prompt builder ----------------------------------------------------
 {
@@ -37,7 +38,12 @@ assert.equal(PLINKO_DEFAULT_BOARD_ART, '/game-art/plinko-board.webp', 'the shipp
   assert.ok(prompt.includes('No dollar signs'), 'prompt forbids dollar signs in words');
   assert.ok(!prompt.includes('$'), 'the built prompt never contains a dollar-sign character');
   assert.ok(prompt.includes('Style and theme: neon carnival.'), 'prompt carries the creator\'s style words');
+  assert.ok(prompt.includes('Quality floor, whatever the theme'), 'prompt carries the unconditional quality-floor clause');
+  assert.ok(prompt.includes('glowing marquee bulbs') && prompt.includes('flagship television game-show cabinet'), 'the quality floor benchmarks detail and finish against a generic flagship cabinet, whatever the theme');
+  assert.ok(prompt.includes('always an original design built from the creator\'s own specification'), 'generated boards are original designs from the creator’s own spec');
   const bare = plinkoBoardArtPrompt('');
+  assert.ok(bare.includes('Quality floor, whatever the theme'), 'the quality floor holds without style words too');
+  assert.ok(!/dial/i.test(bare) && !/neon/i.test(bare) && !/standard board/i.test(bare) && !/uploaded/i.test(bare), 'the built prompt never evokes Jessica\u2019s board — no dial, no neon identity, no reference to her board at all; her board is the detail bar only, never a look to resemble');
   assert.ok(bare.includes('exactly nine empty open slot boxes'), 'composition locks hold without style words');
   assert.ok(bare.includes('Style and theme:'), 'a style-less board still gets a neutral style direction');
   const dirty = plinkoBoardArtPrompt('gold $ rush');
@@ -61,8 +67,8 @@ assert.equal(plinkoBoardArtKeyOf({}), '', 'no art key reads as empty');
   ];
   assert.equal(plinkoBoardArtUrl(plinkoTool({ config: { boardArtKey: 'k-board' } }), assets), 'https://cdn.example/board.png', 'resolves by storageKey');
   assert.equal(plinkoBoardArtUrl(plinkoTool({ config: { boardArtKey: 'Nameless key art' } }), assets), 'https://cdn.example/by-name.png', 'resolves by asset name, like every other asset key in the app');
-  assert.equal(plinkoBoardArtUrl(plinkoTool(), assets), undefined, 'a board without its own artwork resolves to the shipped board');
-  assert.equal(plinkoBoardArtUrl(plinkoTool({ config: { boardArtKey: 'missing' } }), assets), undefined, 'a dangling key resolves to the shipped board, never a blank');
+  assert.equal(plinkoBoardArtUrl(plinkoTool(), assets), undefined, 'a board without its own artwork resolves to the house board');
+  assert.equal(plinkoBoardArtUrl(plinkoTool({ config: { boardArtKey: 'missing' } }), assets), undefined, 'a dangling key resolves to the house board, never a blank');
   assert.equal(plinkoBoardArtUrl(plinkoTool({ config: { boardArtKey: 'k-board' } }), []), undefined, 'no assets, no own art');
 }
 
@@ -107,7 +113,7 @@ assert.equal(plinkoBoardArtKeyOf({}), '', 'no art key reads as empty');
   assert.deepEqual(targetIds(noStyleYet, firstStyle.project), ['plinko-1'], 'a board with no artwork yet gains a target when Jewel first styles it');
 }
 
-// ---- The render: own art when resolved, the shipped board otherwise ----------
+// ---- The render: own art when resolved, the house board otherwise ----------
 {
   const exportsObject = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/ChanceTools.tsx', 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: exportsObject, require: id => id.endsWith('.css') ? {} : require(id), Math });
@@ -116,8 +122,8 @@ assert.equal(plinkoBoardArtKeyOf({}), '', 'no art key reads as empty');
   assert.ok(own.includes('href="https://cdn.example/board-art.png"'), 'render: the board\'s own artwork fills the board');
   assert.ok(own.includes('preserveAspectRatio="none"'), 'render: generated art fills the exact frame the layering is mapped to');
   const shipped = renderToStaticMarkup(React.createElement(PlinkoDisplay, { slots: ['10', '50', '100'], preview: true }));
-  assert.ok(shipped.includes('href="/game-art/plinko-board.webp"'), 'render: without own art the shipped board renders, unchanged');
-  assert.ok(!shipped.includes('preserveAspectRatio'), 'render: the shipped board\'s markup carries no new attributes');
+  assert.ok(shipped.includes('href="/game-art/plinko-board-default.webp"'), 'render: without own art the neutral house board renders, unchanged');
+  assert.ok(!shipped.includes('preserveAspectRatio'), 'render: the house board\'s markup carries no new attributes');
 }
 
 // ---- Wiring: the executor and every render surface ---------------------------
@@ -129,7 +135,7 @@ assert.equal(plinkoBoardArtKeyOf({}), '', 'no art key reads as empty');
   const plinkoFn = page.slice(page.indexOf('async function generatePlinkoBoardArt'), page.indexOf('async function generateChanceArt'));
   assert.ok(plinkoFn.length > 0, 'the board-artwork generation step body is found for the reference check');
   assert.ok(!plinkoFn.includes('referenceUrl'), 'board artwork generation passes NO reference image — text-to-image, so the creator\'s style words direct the art instead of the shipped board dominating it');
-  assert.ok(!plinkoFn.includes('PLINKO_DEFAULT_BOARD_ART'), 'the shipped board is not wired into generation at all — it remains only the display fallback');
+  assert.ok(!plinkoFn.includes('PLINKO_DEFAULT_BOARD_ART'), 'the house board is not wired into generation at all — it remains only the display fallback');
   assert.ok(plinkoFn.includes('generateAsset("image", plinkoBoardArtPrompt(plinkoArtStyleOf(tool.config)), { sourceKey: null, baseProject: current, aspectRatio: "auto", backdropEligible: false })'), 'the board artwork call mirrors the chance tools\' text-to-image call shape exactly');
   assert.ok(page.includes('backdropEligible: false'), 'board artwork is filed as a layer, never made the project background');
   for (const file of ['components/GameToolEditor.tsx', 'components/StandingToolFace.tsx', 'components/RuntimeActionLayers.tsx', 'components/GameshowToolDemos.tsx']) {
@@ -145,4 +151,4 @@ assert.equal(plinkoBoardArtKeyOf({}), '', 'no art key reads as empty');
   }
 }
 
-console.log('PASS: a Plinko board Jewel creates carries its own artwork — the prompt builder locks the composition (blank marquee, nine empty slots, no text, no dollar signs) around the creator\'s style words, the generated asset\'s key is stored on the tool by the attach patch, restyles retarget by artStyle diff, and every render surface resolves the board\'s own art with the shipped board as fallback.');
+console.log('PASS: a Plinko board Jewel creates carries its own artwork — the prompt builder locks the composition (blank marquee, nine empty slots, no text, no dollar signs) around the creator\'s style words, the generated asset\'s key is stored on the tool by the attach patch, restyles retarget by artStyle diff, and every render surface resolves the board\'s own art with the neutral house board as fallback.');
