@@ -54,7 +54,7 @@ import { ccssMediaAttachPatch } from "../../../lib/city-crime-scene";
 import {addCreationControl,clarifyYoutubeSearch} from "../../../lib/build-controls";
 import {toolDefaults,infoTypes,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText,convertPrizeWheelTools} from "../../../lib/game-tools";
 import {clampBankPressValue,clampBankRoundSeconds} from "../../../lib/bank";
-import {PLINKO_BOARD_ART_FIELD,PLINKO_DEFAULT_BOARD_ART,plinkoArtStyleOf,plinkoArtTargets,plinkoBoardArtPrompt} from "../../../lib/plinko-art";
+import {PLINKO_BOARD_ART_FIELD,plinkoArtStyleOf,plinkoArtTargets,plinkoBoardArtPrompt} from "../../../lib/plinko-art";
 import {CHANCE_ART_KEY_FIELD,CHANCE_ART_FALLBACK_DESIGN,chanceArtStyleOf,chanceArtTargets,chanceArtPrompt,isChanceArtType} from "../../../lib/chance-art";
 import {PROJECT_KINDS, isKindGatedFor} from "../../../lib/project-kinds";
 import {TALK_TOOL_TYPES} from "../../../lib/talkshow-path";
@@ -1286,9 +1286,11 @@ export default function ProjectWorkspace() {
 
   // A Plinko board's OWN artwork (lib/plinko-art): when Jewel creates
   // a board — or a draft edit restyles one — the site generates the
-  // board's artwork from the creator's style words through the same
-  // generateAsset funnel as every Jewel image, with the shipped board
-  // as the reference image, then writes the saved asset's key onto
+  // board's artwork text-to-image from the code-built prompt and the
+  // creator's style words through the same generateAsset funnel as
+  // every Jewel image (no reference image — a reference restyle made
+  // every board a near-copy of the shipped board and defeated the
+  // creator's theme), then writes the saved asset's key onto
   // the tool's config (the ccssAttach pattern: generate first, attach
   // by key once the stored identity exists). The targets must already
   // be persisted — generation threads from the current project — so
@@ -1303,8 +1305,7 @@ export default function ProjectWorkspace() {
       if (!current || !tool) { failed.push(target.name); continue; }
       onProgress?.(`Creating the board artwork for ${tool.name}…`);
       try {
-        const referenceUrl = typeof window !== "undefined" ? `${window.location.origin}${PLINKO_DEFAULT_BOARD_ART}` : "";
-        const generated = await generateAsset("image", plinkoBoardArtPrompt(plinkoArtStyleOf(tool.config)), { sourceKey: null, baseProject: current, aspectRatio: "auto", referenceUrl: referenceUrl || null, backdropEligible: false });
+        const generated = await generateAsset("image", plinkoBoardArtPrompt(plinkoArtStyleOf(tool.config)), { sourceKey: null, baseProject: current, aspectRatio: "auto", backdropEligible: false });
         if (!generated) throw new Error("The board artwork generation did not start.");
         const lineage = projectRef.current || generated.project;
         const stored = [...lineage.assets].reverse().find(a => a.name === generated.name) || [...generated.project.assets].reverse().find(a => a.name === generated.name);

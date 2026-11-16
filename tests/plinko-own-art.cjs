@@ -126,7 +126,11 @@ assert.equal(plinkoBoardArtKeyOf({}), '', 'no art key reads as empty');
   assert.ok(page.includes('async function generatePlinkoBoardArt'), 'the executor has the board-artwork generation step');
   assert.equal((page.match(/generatePlinkoBoardArt\(/g) || []).length, 4, 'the generation step is defined once and called at all three doors: the tool action, the changes commit before an action, and the changes-only completion');
   assert.ok(page.includes('plinkoArtTargets(baseProject, result.project)'), 'the changes doors pick their boards by diffing the change');
-  assert.ok(page.includes('PLINKO_DEFAULT_BOARD_ART'), 'the shipped board is the generation reference');
+  const plinkoFn = page.slice(page.indexOf('async function generatePlinkoBoardArt'), page.indexOf('async function generateChanceArt'));
+  assert.ok(plinkoFn.length > 0, 'the board-artwork generation step body is found for the reference check');
+  assert.ok(!plinkoFn.includes('referenceUrl'), 'board artwork generation passes NO reference image — text-to-image, so the creator\'s style words direct the art instead of the shipped board dominating it');
+  assert.ok(!plinkoFn.includes('PLINKO_DEFAULT_BOARD_ART'), 'the shipped board is not wired into generation at all — it remains only the display fallback');
+  assert.ok(plinkoFn.includes('generateAsset("image", plinkoBoardArtPrompt(plinkoArtStyleOf(tool.config)), { sourceKey: null, baseProject: current, aspectRatio: "auto", backdropEligible: false })'), 'the board artwork call mirrors the chance tools\' text-to-image call shape exactly');
   assert.ok(page.includes('backdropEligible: false'), 'board artwork is filed as a layer, never made the project background');
   for (const file of ['components/GameToolEditor.tsx', 'components/StandingToolFace.tsx', 'components/RuntimeActionLayers.tsx', 'components/GameshowToolDemos.tsx']) {
     const source = fs.readFileSync(file, 'utf8');
