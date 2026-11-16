@@ -62,12 +62,12 @@ function appearanceTextColor(tool: GameTool): string {
  *  placed-tool wrapper (toolStyle + overlayToolPlacement + artwork).
  *  Countdown and the gift guide position themselves, so they return
  *  null here and are rendered by the standing layer / overlay map. */
-export function StandingToolFace({ tool, project }: { tool: GameTool; project: Project }) {
+export function StandingToolFace({ tool, project, fill = false }: { tool: GameTool; project: Project; fill?: boolean }) {
   const config = tool.config;
   const textColor = appearanceTextColor(tool);
   if (tool.type === "plinko") {
     const slots = (Array.isArray(config.slots) ? config.slots : []).map(String);
-    return <PlinkoDisplay title={String(config.title || tool.name)} slots={slots} rows={Math.min(14, Math.max(4, Number(config.rows) || 9))} preview pegColor={String(config.pegColor || "#8b9bb4")} ballColor={String(config.ballColor || "#ff5d5d")} colors={[String(config.slotColor || "#154c69"), String(config.alternateSlotColor || "#512b75")]} textColor={textColor} artSrc={plinkoBoardArtUrl(tool, project.assets)} />;
+    return <PlinkoDisplay fill={fill} title={String(config.title || tool.name)} slots={slots} rows={Math.min(14, Math.max(4, Number(config.rows) || 9))} preview pegColor={String(config.pegColor || "#8b9bb4")} ballColor={String(config.ballColor || "#ff5d5d")} colors={[String(config.slotColor || "#154c69"), String(config.alternateSlotColor || "#512b75")]} textColor={textColor} artSrc={plinkoBoardArtUrl(tool, project.assets)} />;
   }
   if (tool.type === "higher-lower") {
     const deck = (Array.isArray(config.cards) ? config.cards : []).map((c: any) => ({ label: String(c?.label ?? c?.value ?? "?"), value: Number(c?.value) || 0 }));

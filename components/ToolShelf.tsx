@@ -7,6 +7,7 @@ import { freshCardState } from "../lib/question-cards";
 import { listCards, savedListEntries } from "../lib/card-lists";
 import { WheelDisplay, DiceDisplay, CoinDisplay, HigherLowerDisplay, CliffhangerDisplay } from "./ChanceTools";
 import { chanceArtUrl } from "../lib/chance-art";
+import { PLINKO_DEFAULT_BOARD_ART } from "../lib/plinko-art";
 import { BankDisplay } from "./BankDisplay";
 import { FittedCard, StyledTimer } from "./QuestionCards";
 import { GameInfoOverlay } from "./GameInfoTools";
@@ -59,8 +60,10 @@ function ShelfFace({ item, project }: { item: LibraryItem; project: Project }) {
   const cfg = cfgOf(tool);
   switch (item.type) {
     case "plinko":
-      // The shipped artwork is the board's face (PR #210).
-      return <img src="/game-art/plinko-board.webp" alt="" />;
+      // The neutral house board is the shelf face — never a specific
+      // creator's own board (Jessica's ruling: her uploaded board is
+      // not the face of every Plinko).
+      return <img src={PLINKO_DEFAULT_BOARD_ART} alt="" />;
     case "wheel": {
       const segments = texts(cfg.segments);
       return <WheelDisplay entries={segments} result={segments[0] || ""} preview colors={[String(cfg.slotColor || "#154c69"), String(cfg.alternateSlotColor || "#512b75")]} textColor={appearanceText(cfg)} artSrc={chanceArtUrl(tool, project.assets)} />;
