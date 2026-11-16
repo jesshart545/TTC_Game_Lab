@@ -101,30 +101,38 @@ export function plinkoBoardArtUrl(tool: GameTool, assets: ProjectAsset[] | undef
 /**
  * The board-artwork generation prompt, built by code so the
  * composition locks hold no matter what style the creator asked for:
- * a front-facing cabinet, a wide marquee band with NO lettering, a
- * peg field, exactly nine EMPTY slot boxes along the bottom (the
+ * a front-facing trapezoidal board, a wide marquee band with NO
+ * lettering, a peg field with no balls in it (the display draws its
+ * own ball), exactly nine EMPTY slot boxes along the bottom (the
  * display writes the board's own slot labels over them), and no text
  * or currency marks anywhere. The creator's style/theme words ride
- * along as the art direction; without them the board still generates,
- * in a neutral vivid game-show styling. One clause is unconditional:
- * the quality floor. Jessica's uploaded board set the DETAIL bar for
- * every board the site generates — but generated boards must always
- * be ORIGINAL designs from the requesting creator's own spec, never
- * the same as or resembling hers. So the clause benchmarks detail
- * and finish against a generic flagship television game-show cabinet
- * only: it never names, describes, or evokes her board's identity,
- * and the design direction comes from the creator's words alone.
+ * along as the art direction; without them the board still
+ * generates, in a neutral vivid illustrated game-show styling. The
+ * style direction is unconditional, and it aims at the family of
+ * the exemplar boards Jessica set as the standard (2026-11-15):
+ * vibrant ILLUSTRATED game-show art — never a photograph of a
+ * physical cabinet — where the creator's theme is realized as a
+ * living world around and within the board, its characters, props,
+ * scenery and atmosphere drawn from the theme itself, in saturated
+ * color with glowing lights and dense detail in every region, the
+ * frame, peg-field surround and slot row all built out of the
+ * theme. And the originality law holds: generated boards are always
+ * ORIGINAL designs from the requesting creator's own spec — the
+ * prompt never names, describes, or evokes any specific existing
+ * board, and the design direction comes from the creator's words
+ * alone.
  */
 export function plinkoBoardArtPrompt(styleWords?: unknown): string {
   const style = cleanStyleWords(styleWords);
   return [
-    "Plinko board artwork for a television game show: a front-facing Plinko game cabinet standing on a glossy game-show stage, seen straight on — rich, detailed, glossy art with bright marquee lights and polished reflections.",
-    "A wide empty marquee band stretches across the top of the cabinet, with no lettering on it.",
-    "Below the marquee, a tall field of round metal pegs in offset rows.",
-    "Along the very bottom, a single row of exactly nine empty open slot boxes side by side, with nothing inside them — the game writes its own prize labels over the slots, so the boxes stay blank.",
-    "No text, no words, no letters, no numbers anywhere in the image. No dollar signs, no currency symbols, no markings on any ball or coin.",
-    "Quality floor, whatever the theme: richly detailed, glossy, premium television game-show finish — glowing marquee bulbs, polished reflective surfaces, and real depth and shading — detail and finish at the level of a flagship television game-show cabinet; never flat, plain, or cheap-looking, and always an original design built from the creator's own specification.",
-    style ? `Style and theme: ${style}.` : "Style and theme: vivid television game-show styling, rich colors and glossy finishes.",
+    "Plinko board artwork for a television game show: a front-facing trapezoidal Plinko board, seen straight on, drawn as vibrant illustrated game-show art — a richly illustrated scene, not a photograph of a physical cabinet standing on a stage.",
+    "A wide empty marquee band stretches across the top of the board, with no lettering on it.",
+    "Below the marquee, a tall field of round pegs in offset rows, and no balls anywhere in the peg field — the game draws its own ball over the artwork.",
+    "Along the very bottom, a single row of exactly nine empty open slot boxes side by side, with nothing inside them — the game writes its own prize labels over the slots, so the boxes stay blank, with no text, numbers, or symbols painted inside them.",
+    "No text, no words, no letters, no numbers anywhere in the image. No dollar signs, no currency symbols.",
+    "Bring the theme to life as a living world around and within the board: characters, props, scenery, and atmosphere drawn from the theme itself fill the scene — an underwater theme brings coral, sea life, and bubbles; an outer-space theme brings planets, stars, and a rocket — and the board's frame, the surround of the peg field, and the slot row are all built out of the theme, styled from the theme itself, not a plain cabinet decorated with it.",
+    "Quality floor, whatever the theme: vibrant, richly illustrated game-show art in saturated color — glowing marquee bulbs and luminous accents, dense and lively detail in every region of the picture, real depth and atmosphere; never flat, plain, photographic, or cheap-looking, and always an original design built from the creator's own specification.",
+    style ? `Style and theme: ${style}.` : "Style and theme: a vivid illustrated game-show world in rich saturated colors, glowing lights, and lively themed detail.",
   ].join(" ");
 }
 

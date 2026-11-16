@@ -38,12 +38,14 @@ assert.ok(fs.existsSync('public/game-art/plinko-board-default.webp'), 'the neutr
   for (const words of ['underwater coral reef', '']) {
     const prompt = plinkoBoardArtPrompt(words);
     assert.ok(prompt.includes('Quality floor, whatever the theme'), 'the quality-floor clause is unconditional');
-    assert.ok(prompt.includes('glowing marquee bulbs') && prompt.includes('flagship television game-show cabinet'), 'the floor benchmarks detail and finish against a generic flagship cabinet');
+    assert.ok(prompt.includes('glowing marquee bulbs') && prompt.includes('richly illustrated'), 'the floor demands richly illustrated art with glowing marquee bulbs');
+    assert.ok(prompt.includes('not a photograph') && prompt.includes('living world'), 'the floor aims at an illustrated themed scene — a living world drawn from the theme — never a photograph of a cabinet');
     assert.ok(prompt.includes('exactly nine empty open slot boxes'), 'the composition locks stay');
   }
   const barePrompt = plinkoBoardArtPrompt('');
   assert.ok(barePrompt.includes('always an original design built from the creator\'s own specification'), 'generated boards are original designs from the requesting creator’s own spec');
   assert.ok(!/dial/i.test(barePrompt) && !/neon/i.test(barePrompt) && !/standard board/i.test(barePrompt) && !/uploaded/i.test(barePrompt), 'the built prompt never evokes Jessica\u2019s board — her board is the detail bar only, never a look to resemble');
+  assert.ok(!/clown/i.test(barePrompt) && !/zombie/i.test(barePrompt) && !/rainbow/i.test(barePrompt) && !barePrompt.includes('TTC Game Lab'), 'the built prompt never evokes Jessica\u2019s specific exemplar boards — they set the standard, they are not designs to copy');
 }
 
 // ---- The artwork never renders blank -----------------------------------------
