@@ -43,6 +43,34 @@ assert.ok(chanceArtPrompt('dice').includes('No dice, no dots'), 'dice prompt for
 assert.ok(chanceArtPrompt('higher-lower').includes('cards are placed over the middle'), 'HL prompt locks the playing area plain — the code places the cards');
 assert.ok(chanceArtPrompt('cliffhanger').includes('mountain and climber are drawn over the middle'), 'cliffhanger prompt locks the center plain — the code draws the mountain and climber');
 
+// ---- The illustrated themed-world direction (Jessica's standard, 2026-11-15) --------
+// The same re-aim PR #217 gave the Plinko prompt: vibrant
+// ILLUSTRATED game-show art — never a photograph — with the
+// creator's theme realized as a living world, at an unconditional
+// quality floor, and always an original design from the creator's
+// own spec. The exemplars set the standard; they are never designs
+// to copy, so the built prompt never evokes them.
+for (const type of ['wheel', 'dice', 'higher-lower', 'cliffhanger']) {
+  const bare = chanceArtPrompt(type, '');
+  assert.ok(bare.includes('illustrated game-show art') && bare.includes('not a photograph'), `${type}: the art direction is illustrated game-show art, never a photograph of a physical prop`);
+  assert.ok(bare.includes('Quality floor, whatever the theme'), `${type}: prompt carries the unconditional quality-floor clause`);
+  assert.ok(bare.includes('richly illustrated') && bare.includes('saturated color'), `${type}: the quality floor demands richly illustrated art in saturated color`);
+  assert.ok(bare.includes('never flat, plain, photographic, or cheap-looking'), `${type}: the quality floor forbids flat, plain, photographic, cheap-looking art`);
+  assert.ok(bare.includes("always an original design built from the creator's own specification"), `${type}: generated artwork is an original design from the creator's own spec`);
+  assert.ok(bare.includes('glowing') && bare.includes('lively'), `${type}: the direction holds without style words too — glowing, lively, themed`);
+  assert.ok(!/clown/i.test(bare) && !/zombie/i.test(bare) && !/rainbow/i.test(bare) && !bare.includes('TTC Game Lab'), `${type}: the built prompt never evokes Jessica's specific exemplar boards — they set the standard, they are not designs to copy`);
+}
+for (const type of ['wheel', 'higher-lower', 'cliffhanger']) {
+  const bare = chanceArtPrompt(type, '');
+  assert.ok(bare.includes('living world') && bare.includes('drawn from the theme itself'), `${type}: the theme is realized as a living world — characters, props, scenery and atmosphere drawn from the theme itself`);
+  assert.ok(bare.includes('glowing marquee bulbs'), `${type}: the quality floor demands glowing marquee bulbs where the piece calls for them`);
+}
+for (const type of ['wheel', 'higher-lower']) {
+  assert.ok(chanceArtPrompt(type, '').includes('built out of the theme'), `${type}: the piece itself — frame and surround — is built out of the theme`);
+}
+assert.ok(chanceArtPrompt('dice').includes("drawn from the theme's own world"), 'dice: the character is drawn from the theme\'s own world — the theme lives in the character itself');
+assert.ok(chanceArtPrompt('dice').includes('plain solid pale background'), 'dice: the portrait background stays plain — the code places the portrait in the pip positions');
+
 // ---- Style/key readers ------------------------------------------------------------
 assert.equal(chanceArtStyleOf({ artStyle: '  underwater   treasure ' }), 'underwater treasure', 'style words are trimmed and collapsed');
 assert.equal(chanceArtStyleOf({}), '', 'no style words reads as empty');

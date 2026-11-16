@@ -110,40 +110,60 @@ export function chanceArtUrl(tool: GameTool, assets: ProjectAsset[] | undefined)
 /**
  * The artwork generation prompt for one of the chance tools, built
  * by code so the composition locks hold no matter what style the
- * creator asked for: rich, detailed, glossy game-show art whose
+ * creator asked for: vibrant illustrated game-show art whose
  * playing area stays plain, because the display composites the real
  * game over the middle of the art — and no text, numbers, or
- * currency marks anywhere. The creator's style/theme words ride
- * along as the art direction; without them the tool still generates,
- * in a neutral vivid game-show styling.
+ * currency marks anywhere. The style direction is unconditional,
+ * and it aims at the family of the exemplar boards Jessica set as
+ * the standard (2026-11-15), exactly as the Plinko prompt does
+ * (lib/plinko-art): vibrant ILLUSTRATED game-show art — never a
+ * photograph of a physical prop — where the creator's theme is
+ * realized as a living world around and within the piece, its
+ * characters, props, scenery and atmosphere drawn from the theme
+ * itself, in saturated color with glowing lights and dense detail
+ * in every region, the frame and surround built out of the theme.
+ * Each tool's functional locks shape where that world may live:
+ * the wheel's center circle, the card game's playing area, and the
+ * cliffhanger's center stay plain for the code-drawn game, and the
+ * dice portrait stays a single character on a plain background —
+ * for the dice, the theme's world is carried by the character
+ * itself. And the originality law holds: generated artwork is
+ * always an ORIGINAL design from the requesting creator's own
+ * spec — the prompt never names, describes, or evokes any specific
+ * existing board or design, and the design direction comes from
+ * the creator's words alone. The creator's style/theme words ride
+ * along as the art direction; without them the tool still
+ * generates, in a neutral vivid illustrated game-show styling.
  */
 export function chanceArtPrompt(type: GameToolType, styleWords?: unknown): string {
   const style = cleanStyleWords(styleWords);
   const locks = "No text, no words, no letters, no numbers anywhere in the image. No dollar signs, no currency symbols.";
-  const direction = style ? `Style and theme: ${style}.` : "Style and theme: vivid television game-show styling, rich colors and glossy finishes.";
+  const quality = "Quality floor, whatever the theme: vibrant, richly illustrated game-show art in saturated color — glowing marquee bulbs and luminous accents, dense and lively detail in every region of the picture, real depth and atmosphere; never flat, plain, photographic, or cheap-looking, and always an original design built from the creator's own specification.";
+  const portraitQuality = "Quality floor, whatever the theme: vibrant, richly illustrated art in saturated color — dense and lively detail, real depth; never flat, plain, photographic, or cheap-looking, and always an original design built from the creator's own specification.";
+  const direction = style ? `Style and theme: ${style}.` : "Style and theme: a vivid illustrated game-show world in rich saturated colors, glowing lights, and lively themed detail.";
   switch (type) {
     case "wheel":
       return [
-        "Game-show stage artwork for a spinning prize wheel: a rich, glossy, cartoonish television stage backboard — a square panel with marquee lights, sparkle, and themed decoration concentrated around its edges and corners, and a plain, calm circular area in the center, because the game's own wheel is composited over the middle of this panel and paints its own segments and labels there. The center circle stays empty and undecorated.",
-        locks, direction,
+        "Game-show stage artwork for a spinning prize wheel, drawn as vibrant illustrated game-show art — a richly illustrated scene, not a photograph of a physical stage prop: a square backboard panel whose frame and surround are built out of the theme, with the theme realized as a living world around its edges and corners — characters, props, scenery, and atmosphere drawn from the theme itself, glowing marquee bulbs and luminous accents — and a plain, calm circular area in the center, because the game's own wheel is composited over the middle of this panel and paints its own segments and labels there. The center circle stays empty and undecorated.",
+        quality, locks, direction,
       ].join(" ");
     case "dice":
       return [
-        "A single cute cartoon character portrait for a game die: one character's head and shoulders, front view, large and centered, cheerful and bold, rich glossy cartoon game art on a plain solid pale background. In the game this character stands in for the dots on the die's faces, so the portrait must read clearly at small sizes. No dice, no dots, no other characters in the image.",
-        locks, direction,
+        "A single cartoon character portrait for a game die, drawn as vibrant illustrated game-show art — a richly illustrated character, not a photograph: one character's head and shoulders, front view, large and centered, cheerful and bold, in saturated color with lively detail. The character belongs to the creator's theme — a character drawn from the theme's own world, styled from the theme itself. The portrait sits on a plain solid pale background, because in the game this character stands in for the dots on the die's faces, so the portrait must read clearly at small sizes. No dice, no dots, no other characters in the image.",
+        portraitQuality, locks, direction,
       ].join(" ");
     case "higher-lower":
       return [
-        "Game-show stage artwork for a card game: a rich, glossy, cartoonish card-table stage backdrop with dramatic spotlights, sparkle, and an elegant empty playing area in the center, because the game's own cards are placed over the middle of this scene by the game itself. No playing cards and no card suits anywhere in the image.",
-        locks, direction,
+        "Game-show stage artwork for a card game, drawn as vibrant illustrated game-show art — a richly illustrated scene, not a photograph of a physical stage: a card-table stage backdrop whose frame and surround are built out of the theme, with the theme realized as a living world around the edges — characters, props, scenery, and atmosphere drawn from the theme itself, dramatic spotlights, glowing accents and sparkle — and an elegant empty playing area in the center, because the game's own cards are placed over the middle of this scene by the game itself. No playing cards and no card suits anywhere in the image.",
+        quality, locks, direction,
       ].join(" ");
     case "cliffhanger":
       return [
-        "Game-show stage artwork for a mountain climbing game: a rich, glossy, cartoonish alpine stage backdrop — sky, clouds, and distant snowy scenery around the edges, with a plain, calm open area in the center, because the game's own mountain and climber are drawn over the middle of this scene by the game itself. No climber, no people, no flags in the image.",
-        locks, direction,
+        "Game-show stage artwork for a mountain climbing game, drawn as vibrant illustrated game-show art — a richly illustrated scene, not a photograph of a physical stage: an alpine stage backdrop — sky, clouds, and distant snowy scenery around the edges, with the theme realized as a living world in the scenery itself, its colors, scenery details, props, and atmosphere drawn from the theme itself — with a plain, calm open area in the center, because the game's own mountain and climber are drawn over the middle of this scene by the game itself. No climber, no people, no flags in the image.",
+        quality, locks, direction,
       ].join(" ");
     default:
-      return ["Game-show stage artwork: a rich, glossy, cartoonish television stage scene.", locks, direction].join(" ");
+      return ["Game-show stage artwork, drawn as vibrant illustrated game-show art — a richly illustrated scene, not a photograph of a physical stage: a television stage scene whose frame and surround are built out of the theme, the theme realized as a living world of characters, props, scenery, and atmosphere drawn from the theme itself.", quality, locks, direction].join(" ");
   }
 }
 
