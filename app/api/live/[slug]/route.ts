@@ -1,7 +1,9 @@
 import {timerAction} from '../../../../lib/timer-controls';
 import {coinOutcome} from "../../../../lib/coin-toss";
 import {controlConnectionError} from "../../../../lib/control-connections";
+import {convertPrizeWheelTools} from "../../../../lib/game-tools";
 import {changeCard} from "../../../../lib/card-server";
+import {changeBank} from "../../../../lib/bank-server";
 import {cardControl} from "../../../../lib/question-cards";
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
@@ -21,7 +23,10 @@ async function published(slug: string) {
   await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`;
   const rows = await db`SELECT data FROM projects WHERE slug = ${slug} AND deleted_at IS NULL LIMIT 1`;
   const project = rows[0]?.data as Project | undefined;
-  return project?.publishedSnapshot ? { db, project: project.publishedSnapshot } : null;
+  // A snapshot saved before the second wheel's removal can still
+  // hold one: at runtime it is the selector wheel it converts to
+  // (lib/game-tools convertPrizeWheelTools).
+  return project?.publishedSnapshot ? { db, project: convertPrizeWheelTools(project.publishedSnapshot as Project) } : null;
 }
 
 async function ensureLiveEvents(db: ReturnType<typeof getDb>) {
@@ -319,6 +324,9 @@ export async function POST(request: Request, context: Context) {
       if(tool.enabled&&tool.inOverlayBuild&&cardTypes.includes(tool.type)){
         try{ await changeCard(live.db,live.project,tool.id,'new-game'); }catch{}
       }
+      if(tool.enabled&&tool.inOverlayBuild&&tool.type==='bank'){
+        try{ await changeBank(live.db,live.project,tool.id,'new-game'); }catch{}
+      }
     }
     const payload=JSON.stringify({at:Date.now(),wipe:!!body.wipeEdits});
     const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},'reset-game','reset',${payload}::jsonb) RETURNING id`;
@@ -450,6 +458,17 @@ export async function POST(request: Request, context: Context) {
       SELECT ${live.project.id},${control.id},'control',jsonb_build_object('outcomes',jsonb_build_object(${toolId}::text,jsonb_build_object('phase',CASE phase WHEN 1 THEN 'show' WHEN 2 THEN 'flip' ELSE 'hide' END,'result',result))) FROM next_coin RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id)});
   }
+  if(control.action.startsWith('bank.toggle.')){
+    const toolId=control.action.slice('bank.toggle.'.length);
+    const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='bank'&&t.enabled);
+    if(!tool)return NextResponse.json({error:"Bank tool not found."},{status:400});
+    try{
+      const state=await changeBank(live.db,live.project,tool.id,'toggle');
+      const payload=JSON.stringify({outcomes:{[tool.id]:{bank:state}}});
+      const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
+      return NextResponse.json({ok:true,id:Number(rows[0].id)});
+    }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Bank action failed."},{status:409});}
+  }
   // ---- Higher or Lower ----
   if(control.action.startsWith('hl.')){
     const rest=control.action.slice(3),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
@@ -495,16 +514,6 @@ export async function POST(request: Request, context: Context) {
     const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id)});
   }
-  // ---- Prize wheel: next player resets the total ----
-  if(control.action.startsWith('prizewheel.')){
-    const rest=control.action.slice(11),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
-    const tool=live.project.gameTools.find(t=>t.id===toolId&&t.type==='prize-wheel'&&t.enabled);
-    if(!tool||op!=='nextplayer')return NextResponse.json({error:"Big Wheel tool not found."},{status:400});
-    const outcome={phase:'nextplayer',total:0};
-    const payload=JSON.stringify({outcomes:{[tool.id]:{result:JSON.stringify(outcome)}}});
-    const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
-    return NextResponse.json({ok:true,id:Number(rows[0].id)});
-  }
   // ---- City Crime Scene: dashboard buttons (crime intro / lineup / evidence / hide) ----
   if(control.action.startsWith('ccss.')){
     const rest=control.action.slice(5),op=rest.split('.')[0],toolId=rest.slice(op.length+1);
@@ -534,16 +543,6 @@ export async function POST(request: Request, context: Context) {
       const slots=(Array.isArray(tool.config.slots)?tool.config.slots:[]).map(String).filter(Boolean);
       if(!slots.length)return NextResponse.json({error:"Add prize slots to the Plinko board first."},{status:400});
       outcomes[tool.id]={result:JSON.stringify({winner:randomInt(slots.length),slots})};
-    }
-    if(tool.type==="prize-wheel"){
-      const values=(Array.isArray(tool.config.values)?tool.config.values:[]).map(String).filter(Boolean);
-      if(!values.length)return NextResponse.json({error:"Add values to the Big Wheel first."},{status:400});
-      const winner=randomInt(values.length);
-      const cents=(label:string)=>{const c=label.match(/(\d+)\s*¢/);if(c)return parseInt(c[1],10);const d=label.match(/\$\s*(\d+(?:\.\d{1,2})?)/);if(d)return Math.round(parseFloat(d[1])*100);const n=label.match(/(\d+(?:\.\d{1,2})?)/);return n?Math.round(parseFloat(n[1])*100):0;};
-      const last=await live.db`SELECT payload FROM live_events WHERE project_id=${live.project.id} AND control_id=${tool.id} AND event_type='control' ORDER BY id DESC LIMIT 1`;
-      let prevTotal=0;try{prevTotal=Number(JSON.parse(String(last[0]?.payload?.outcomes?.[tool.id]?.result||'{}')).total)||0;}catch{}
-      const total=prevTotal+cents(values[winner]);
-      outcomes[tool.id]={result:JSON.stringify({winner,values,total,busted:total>100})};
     }
   }
   const payload=JSON.stringify({outcomes});

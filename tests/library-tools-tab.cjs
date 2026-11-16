@@ -114,7 +114,6 @@ function propsFor(testProject, changes) {
     'Create plinko',
     'Create higher or lower',
     'Create cliffhanger',
-    'Create big wheel',
     'Create timers',
     'Create polls',
     'Create scoreboard',

@@ -137,7 +137,7 @@ export type SetupPiece = {
 
 export const SETUP_PIECES: SetupPiece[] = [
   { id: "question-cards", label: "Question cards", defaultOn: false, image: "/redesign/kind-talkshow.webp" },
-  { id: "prize-wheel", label: "Prize wheel", defaultOn: false, glyph: "◐", toolType: "wheel", toolName: "Game Wheel" },
+  { id: "game-wheel", label: "Game Wheel", defaultOn: false, glyph: "◐", toolType: "wheel", toolName: "Game Wheel" },
   { id: "dice", label: "Dice", defaultOn: false, glyph: "⚄", toolType: "dice", toolName: "Dice Roll" },
   { id: "timer", label: "Timer", defaultOn: false, glyph: "1:00", toolType: "countdown", toolName: "Countdown" },
   { id: "scoreboard", label: "Scoreboard", defaultOn: false, image: "/redesign/kind-gameshow.webp", toolType: "scoreboard", toolName: "Scoreboard" },

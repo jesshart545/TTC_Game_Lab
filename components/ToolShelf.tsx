@@ -5,7 +5,9 @@ import { shelfRoute, type LibraryItem } from "../lib/workshop-libraries";
 import { EXAMPLE_QUESTIONS, demoTool } from "../lib/gameshow-path";
 import { freshCardState } from "../lib/question-cards";
 import { listCards, savedListEntries } from "../lib/card-lists";
-import { WheelDisplay, DiceDisplay, CoinDisplay, PrizeWheelDisplay, HigherLowerDisplay, CliffhangerDisplay } from "./ChanceTools";
+import { WheelDisplay, DiceDisplay, CoinDisplay, HigherLowerDisplay, CliffhangerDisplay } from "./ChanceTools";
+import { chanceArtUrl } from "../lib/chance-art";
+import { BankDisplay } from "./BankDisplay";
 import { FittedCard, StyledTimer } from "./QuestionCards";
 import { GameInfoOverlay } from "./GameInfoTools";
 import { StandingToolFace } from "./StandingToolFace";
@@ -61,26 +63,24 @@ function ShelfFace({ item, project }: { item: LibraryItem; project: Project }) {
       return <img src="/game-art/plinko-board.webp" alt="" />;
     case "wheel": {
       const segments = texts(cfg.segments);
-      return <WheelDisplay entries={segments} result={segments[0] || ""} preview colors={[String(cfg.slotColor || "#154c69"), String(cfg.alternateSlotColor || "#512b75")]} textColor={appearanceText(cfg)} />;
+      return <WheelDisplay entries={segments} result={segments[0] || ""} preview colors={[String(cfg.slotColor || "#154c69"), String(cfg.alternateSlotColor || "#512b75")]} textColor={appearanceText(cfg)} artSrc={chanceArtUrl(tool, project.assets)} />;
     }
     case "dice": {
       const sides = Number(cfg.sides) || 6;
-      return <DiceDisplay result={Math.min(6, sides)} sides={sides} preview faceColor={String(cfg.faceColor || "#f5faff")} pipColor={String(cfg.pipColor || "#102132")} />;
+      return <DiceDisplay result={Math.min(6, sides)} sides={sides} preview faceColor={String(cfg.faceColor || "#f5faff")} pipColor={String(cfg.pipColor || "#102132")} artSrc={chanceArtUrl(tool, project.assets)} />;
     }
     case "coin-toss":
       return <CoinDisplay result="Heads" preview ready faceColor={String(cfg.faceColor || "#ffd166")} textColor={String(cfg.textColor || "#382608")} />;
-    case "prize-wheel": {
-      const values = texts(cfg.values);
-      return <PrizeWheelDisplay outcome={{ values }} preview colors={[String(cfg.slotColor || "#b3123f"), String(cfg.alternateSlotColor || "#0f6b4f")]} textColor={appearanceText(cfg)} />;
-    }
     case "higher-lower": {
       const cards = (Array.isArray(cfg.cards) ? cfg.cards : []).map((c: any) => ({ label: String(c?.label ?? c?.value ?? "?"), value: Number(c?.value) || 0 }));
-      return <HigherLowerDisplay outcome={{ phase: "draw", card: cards[0] || { label: "?", value: 0 } }} preview textColor={appearanceText(cfg)} />;
+      return <HigherLowerDisplay outcome={{ phase: "draw", card: cards[0] || { label: "?", value: 0 } }} preview textColor={appearanceText(cfg)} artSrc={chanceArtUrl(tool, project.assets)} />;
     }
     case "cliffhanger": {
       const items = (Array.isArray(cfg.items) ? cfg.items : []).map((c: any) => ({ label: String(c?.label ?? "Item"), price: Number(c?.price) || 0 }));
-      return <CliffhangerDisplay outcome={{ phase: "item", item: items[0] || { label: "Item", price: 0 }, position: 0, stepsToFall: Number(cfg.stepsToFall) || 25, dollarsPerStep: Math.max(1, Number(cfg.dollarsPerStep) || 1) }} preview textColor={appearanceText(cfg)} />;
+      return <CliffhangerDisplay outcome={{ phase: "item", item: items[0] || { label: "Item", price: 0 }, position: 0, stepsToFall: Number(cfg.stepsToFall) || 25, dollarsPerStep: Math.max(1, Number(cfg.dollarsPerStep) || 1) }} preview textColor={appearanceText(cfg)} artSrc={chanceArtUrl(tool, project.assets)} />;
     }
+    case "bank":
+      return <span className="shelf-face-pad"><BankDisplay tool={tool} preview /></span>;
     case "countdown": {
       const total = Number(cfg.seconds) || 10;
       return <span className="shelf-face-timer"><StyledTimer tool={tool} remaining={total} total={total} /></span>;

@@ -167,7 +167,7 @@ test('the page wires the heal into load and saves a healed project once through 
   assert(start >= 0 && end > start, 'the load-path heal block is found');
   const loadBlock = page.slice(start, end);
   assert(loadBlock.includes('reattachDeckOrphans(hydrated, hydrateAsset)'), 'the existence check reuses hydrateAsset — the client resolution behind GET /api/assets?key= — not a new probe');
-  assert(loadBlock.includes('const loadedProject = removeLegacyCardTimers({ ...clarifyYoutubeSearch(healed)'), 'the page renders the healed project, so the deck slide resolves its picture on first paint');
-  assert(loadBlock.includes('if (healed !== hydrated) void enqueueSave(loadedProject);'), 'a healed project is saved exactly once, through PR #158’s guarded enqueueSave — and an unhealed project is not saved at all');
+  assert(loadBlock.includes('const loadedProject = removeLegacyCardTimers({ ...clarifyYoutubeSearch(converted)'), 'the page renders the healed project (passed through the saved-wheel conversion), so the deck slide resolves its picture on first paint');
+  assert(loadBlock.includes('if (healed !== hydrated || converted !== healed) void enqueueSave(loadedProject);'), 'a healed (or wheel-converted) project is saved exactly once, through PR #158’s guarded enqueueSave — and an untouched project is not saved at all');
   assert(!loadBlock.includes('saveProjectToServer'), 'the heal never direct-saves around the guarded queue');
 });

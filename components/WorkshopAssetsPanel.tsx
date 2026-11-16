@@ -308,7 +308,7 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
       </div>
     )}
   </div></CollapsibleFolder></div>
-  {!isTalk && (project.wheel?.enabled || (project.gameTools || []).some(tool => tool.type === "wheel" || tool.type === "prize-wheel")) && <CollapsibleFolder title="Wheel settings" storageKey={`${project.id}:wheel`} keepMounted><div className="detail-block">
+  {!isTalk && (project.wheel?.enabled || (project.gameTools || []).some(tool => tool.type === "wheel")) && <CollapsibleFolder title="Wheel settings" storageKey={`${project.id}:wheel`} keepMounted><div className="detail-block">
     <span>WHEEL SETTINGS</span>
     {project.wheel?.enabled ? (
       <>

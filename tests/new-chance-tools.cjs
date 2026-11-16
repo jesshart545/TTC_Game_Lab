@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),ts=require('typescript'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
 const exportsObject={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('components/ChanceTools.tsx','utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports:exportsObject,require:id=>id.endsWith('.css')?{}:require(id),Math});
-const {PlinkoDisplay,plinkoPath,HigherLowerDisplay,CliffhangerDisplay,PrizeWheelDisplay}=exportsObject;
+const {PlinkoDisplay,plinkoPath,HigherLowerDisplay,CliffhangerDisplay}=exportsObject;
 
 // ---- Plinko: ball lands in the predetermined winner slot, deterministic ----
 for(let w=0;w<9;w++){
@@ -35,15 +35,6 @@ assert(html.includes('HE FALLS!'));
 html=renderToStaticMarkup(React.createElement(CliffhangerDisplay,{outcome:{phase:'reset',position:0,stepsToFall:25},elapsed:1500}));
 assert(html.includes('Climber reset'));
 console.log('PASS: cliffhanger shows the item, climbs the guessed steps, and falls at the limit.');
-
-// ---- Prize wheel: spin result, running total, and the bust ----
-html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{winner:0,values:['5¢','10¢','$1.00'],total:5,busted:false},elapsed:4000}));
-assert(html.includes('Total: 0.05'));assert(!html.includes('BUSTED'));
-html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{winner:2,values:['5¢','10¢','$1.00'],total:105,busted:true},elapsed:4000}));
-assert(html.includes('BUSTED! Over 1.00'));
-html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{phase:'nextplayer',total:0}}));
-assert(html.includes('Next player'));
-console.log('PASS: the big wheel shows the spin, tracks the running total, and calls the bust.');
 
 // ---- Rich faces: marquee cabinet, real cards, mountain scene, glossy wheel ----
 const {WheelDisplay,cardSuit}=exportsObject;

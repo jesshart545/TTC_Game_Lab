@@ -55,17 +55,17 @@ function baseProject(overrides = {}) {
   console.log('PASS: creative-freedom banner wording is exact and rendered exactly once.');
 }
 
-// --- The four Jewel-only tools are tiles, in the demo's order ---------------
+// --- The three Jewel-only tools are tiles, in the demo's order ---------------
 {
-  eq(JEWEL_ONLY_TILES.map(tile => tile.type), ['plinko', 'prize-wheel', 'higher-lower', 'cliffhanger']);
-  assert(JEWEL_ONLY_TILES.every(tile => tile.jewelMade), 'each of the four is badged as made by Jewel');
-  console.log('PASS: Plinko, Big Prize Wheel, Higher or Lower and Cliffhanger surface as Jewel-made tiles.');
+  eq(JEWEL_ONLY_TILES.map(tile => tile.type), ['plinko', 'higher-lower', 'cliffhanger']);
+  assert(JEWEL_ONLY_TILES.every(tile => tile.jewelMade), 'each of the three is badged as made by Jewel');
+  console.log('PASS: Plinko, Higher or Lower and Cliffhanger surface as Jewel-made tiles.');
 }
 
 // --- Demonstrations run on real configs or the tools' real defaults --------
 {
   const empty = baseProject({ kind: 'gameshow' });
-  for (const type of ['plinko', 'prize-wheel', 'higher-lower', 'cliffhanger', 'wheel', 'dice', 'coin-toss', 'countdown', 'poll']) {
+  for (const type of ['plinko', 'higher-lower', 'cliffhanger', 'wheel', 'dice', 'coin-toss', 'countdown', 'poll']) {
     const { tool, fromProject } = demoTool(empty, type);
     assert.equal(fromProject, false, `${type}: an empty project demonstrates the defaults, flagged as such`);
     eq(tool.config, toolDefaults(type), `${type}: demo config is the tool's own built-in defaults, nothing fabricated`);

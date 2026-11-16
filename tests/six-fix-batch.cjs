@@ -21,7 +21,7 @@ assert.equal(allTypes.length, 20, 'the site has 20 game tool types');
 const shelfTypes = SHELF_LIBRARY.map(item => item.type);
 assert.deepEqual([...shelfTypes].sort(), [...allTypes].sort(), 'the shelf covers every GameToolType exactly once');
 assert.equal(new Set(shelfTypes).size, 20, 'no tool appears twice on the shelf');
-for (const missing of ['plinko', 'prize-wheel', 'higher-lower', 'cliffhanger', 'youtube', 'question-card', 'blank-card', 'card-list', 'trivia-list']) {
+for (const missing of ['plinko', 'higher-lower', 'cliffhanger', 'youtube', 'question-card', 'blank-card', 'card-list', 'trivia-list']) {
   assert(shelfTypes.includes(missing), `the shelf offers ${missing} (it was missing before this batch)`);
 }
 const ccs = SHELF_LIBRARY.find(item => item.type === 'city-crime-scene');
@@ -33,7 +33,7 @@ console.log('PASS: the Imagine and Create shelf offers all 20 game tools, CCS st
 for (const [type, route] of [['question-card', 'question-card'], ['blank-card', 'blank-card'], ['card-list', 'card-list'], ['trivia-list', 'trivia-list']]) {
   assert.equal(shelfRoute(SHELF_LIBRARY.find(item => item.type === type)), route, `${type} routes to its existing creator`);
 }
-for (const type of ['plinko', 'prize-wheel', 'higher-lower', 'cliffhanger', 'youtube', 'wheel', 'dice']) {
+for (const type of ['plinko', 'higher-lower', 'cliffhanger', 'youtube', 'wheel', 'dice']) {
   assert.equal(shelfRoute(SHELF_LIBRARY.find(item => item.type === type)), 'add', `${type} is a plain shelf add`);
 }
 const panel = read('components/WorkshopAiPanel.tsx');
@@ -52,7 +52,7 @@ console.log('PASS: routed tiles use the existing creators; plain tiles use addGa
 assert(shelf.includes('/game-art/plinko-board.webp'), 'the Plinko card carries the shipped board artwork');
 assert(!shelf.includes('item.description'), 'no description text is rendered on a shelf card');
 assert(shelf.includes('shelf-name') && shelf.includes('{item.name}'), 'the card face is its picture and its name');
-for (const face of ['WheelDisplay', 'DiceDisplay', 'CoinDisplay', 'PrizeWheelDisplay', 'HigherLowerDisplay', 'CliffhangerDisplay', 'StyledTimer', 'GameInfoOverlay', 'StandingToolFace', 'BoardArtwork', 'FittedCard']) {
+for (const face of ['WheelDisplay', 'DiceDisplay', 'CoinDisplay', 'HigherLowerDisplay', 'CliffhangerDisplay', 'StyledTimer', 'GameInfoOverlay', 'StandingToolFace', 'BoardArtwork', 'FittedCard']) {
   assert(shelf.includes(face), `the shelf renders the tool's own face: ${face}`);
 }
 console.log('PASS: every shelf card is pictured with the tool\u2019s own face; no text-only cards.');
@@ -66,7 +66,7 @@ const page = read('app/project/[id]/page.tsx');
 assert(page.includes('const config = {...toolDefaults(type),'), 'addGameTool builds from toolDefaults');
 const buildEdits = read('lib/build-edits.ts');
 assert(buildEdits.includes('config:{...toolDefaults(item.type)'), 'Jewel\u2019s creation path builds from the same toolDefaults');
-for (const type of ['plinko', 'prize-wheel', 'higher-lower', 'cliffhanger']) {
+for (const type of ['plinko', 'higher-lower', 'cliffhanger']) {
   const info = [...BOARD_LIBRARY, ...TOOL_LIBRARY].find(t => t.type === type);
   assert(info, `addGameTool can find ${type} in the libraries (previously unavailable)`);
   assert(Object.keys(toolDefaults(type)).length > 0, `${type} has starting defaults`);

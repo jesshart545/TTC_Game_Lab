@@ -3,7 +3,8 @@ import {assetPlaced} from "./asset-filing";
 import {assignControlAction,controlConnectionError} from "./control-connections";
 import {cleanBackdropText} from "./backdrop-text";
 import {cleanTriviaQuestions} from "./quiz";
-import {infoTypes,cleanInfoEntries} from "./game-tools";
+import {infoTypes,cleanInfoEntries,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText,mergeCleanedLabels} from "./game-tools";
+import {clampBankPressValue,clampBankRoundSeconds} from "./bank";
 import {standingPlacementTypes} from "./standing-placement";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
@@ -121,6 +122,35 @@ export function applyDraftChanges(project: Project, input: unknown) {
     if(tool.type==='trivia-list'&&Array.isArray(config.questions))config.questions=cleanTriviaQuestions(config.questions);
     if(tool.type==='card-list'&&Array.isArray(config.entries))config.entries=config.entries.filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).slice(0,500).map((e:any)=>({...e,id:e.id||crypto.randomUUID(),text:e.text.slice(0,20000)}));
     if(infoTypes.includes(tool.type)&&Array.isArray(config.entries))config.entries=cleanInfoEntries(config.entries);
+    if(tool.type==='plinko'&&config.slots!==undefined){
+      // A Plinko slot patch: dollar signs are stripped (absolute rule),
+      // and the board stays the creator's own — a position the patch
+      // leaves blank, or does not reach, keeps the tool's existing
+      // value at that position; the stock defaults are never filled
+      // in (Jessica, 2026-11-15). A blank the tool has no value for
+      // stays blank rather than borrowing a default.
+      config.slots=mergeCleanedLabels(cleanPlinkoSlots(config.slots),cleanPlinkoSlots(tool.config.slots));
+    }
+    // The other chance games' label patches get the Plinko treatment
+    // (Jessica, 2026-11-15): wheel segments merge positionally exactly
+    // like Plinko slots; Higher or Lower
+    // card labels and Cliffhanger item labels are cleaned entry by
+    // entry (a card/item patch is a whole-list replacement, as in the
+    // hand editor — cleaning is what keeps the creator's own entries
+    // and keeps dollar signs out). A title patch on any of these
+    // tools is cleaned the same way.
+    if(tool.type==='wheel'&&config.segments!==undefined){
+      config.segments=mergeCleanedLabels(cleanWheelSegments(config.segments),cleanWheelSegments(tool.config.segments));
+    }
+    if(tool.type==='higher-lower'&&config.cards!==undefined)config.cards=cleanHigherLowerCards(config.cards);
+    if(tool.type==='cliffhanger'&&config.items!==undefined)config.items=cleanCliffhangerItems(config.items);
+    if(['wheel','dice','higher-lower','cliffhanger'].includes(tool.type)&&typeof config.title==='string')config.title=cleanLabelText(config.title);
+    if(tool.type==='bank'){
+      // Bank config the model patches is coerced and clamped to sane
+      // ranges, the same sanitizer treatment as at creation.
+      if(config.roundSeconds!==undefined)config.roundSeconds=clampBankRoundSeconds(config.roundSeconds);
+      if(config.pressValue!==undefined)config.pressValue=clampBankPressValue(config.pressValue);
+    }
     if(tool.type==='card-list'&&config.makeCardsFromEntries===true){
       const entries=Array.isArray(config.entries)?config.entries:Array.isArray(tool.config.entries)?tool.config.entries:[];
       config.cards=entries.map((e:any)=>({...e,id:crypto.randomUUID(),design:{}}));delete config.makeCardsFromEntries;

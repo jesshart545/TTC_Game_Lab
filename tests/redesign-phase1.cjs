@@ -39,7 +39,7 @@ console.log('PASS: four kinds carry the approved wording and shipped artwork.');
 
 // 2. Setup pieces map only to tools that honestly exist — no invented
 // "Effects" or "Music & sounds" tool tiles.
-eq(SETUP_PIECES.map(p => p.label), ['Question cards', 'Prize wheel', 'Dice', 'Timer', 'Scoreboard', 'Video clips']);
+eq(SETUP_PIECES.map(p => p.label), ['Question cards', 'Game Wheel', 'Dice', 'Timer', 'Scoreboard', 'Video clips']);
 assert(!SETUP_PIECES.some(p => /effect|music/i.test(p.label)), 'no fake Effects / Music & sounds tiles');
 console.log('PASS: setup tiles map only to real tools.');
 

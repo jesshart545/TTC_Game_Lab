@@ -39,7 +39,7 @@ import { useParams } from "next/navigation";
 import { ChangeEvent, FormEvent, cloneElement, useEffect, useMemo, useRef, useState } from "react";
 import { AssetComposition, createProject, deleteProjectFromServer, Project, ProjectAsset, ProjectAssetGeneration, saveProjectToServer, loadProjectFromServer, titleFromProjectTools, GameTool, GameToolType } from "../../../lib/project";
 
-type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number]; forCaseItem?: boolean };
+type GenerateOptions = { sourceKey?: string | null; voice?: string | null; baseProject?: Project; durationSeconds?: number; lyrics?: string; instrumental?: boolean; aspectRatio?: string; stability?: number; pendingVideo?: NonNullable<Project["pendingVideos"]>[number]; forCaseItem?: boolean; referenceUrl?: string | null; backdropEligible?: boolean };
 import { deleteStoredAsset, hydrateAsset, hydrateProjectAssets, storeGeneratedAsset, storeUploadedAsset } from "../../../lib/asset-store";
 import { reattachDeckOrphans } from "../../../lib/deck-orphans";
 import { landscapeAnimationReference } from "../../../lib/overlay-media";
@@ -52,10 +52,14 @@ import CompositionPlayer, { defaultOverlayResult } from "../../../components/Com
 import { applyBuildChanges } from "../../../lib/build-edits";
 import { ccssMediaAttachPatch } from "../../../lib/city-crime-scene";
 import {addCreationControl,clarifyYoutubeSearch} from "../../../lib/build-controls";
-import {toolDefaults,infoTypes} from "../../../lib/game-tools";
+import {toolDefaults,infoTypes,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText,convertPrizeWheelTools} from "../../../lib/game-tools";
+import {clampBankPressValue,clampBankRoundSeconds} from "../../../lib/bank";
+import {PLINKO_BOARD_ART_FIELD,PLINKO_DEFAULT_BOARD_ART,plinkoArtStyleOf,plinkoArtTargets,plinkoBoardArtPrompt} from "../../../lib/plinko-art";
+import {CHANCE_ART_KEY_FIELD,CHANCE_ART_FALLBACK_DESIGN,chanceArtStyleOf,chanceArtTargets,chanceArtPrompt,isChanceArtType} from "../../../lib/chance-art";
 import {PROJECT_KINDS, isKindGatedFor} from "../../../lib/project-kinds";
 import {TALK_TOOL_TYPES} from "../../../lib/talkshow-path";
 import {GameInfoHostPanel} from "../../../components/GameInfoTools";
+import {BankHostPanel} from "../../../components/BankHostPanel";
 import {buildReadiness, publishReviewSummary, type BuildIssue} from "../../../lib/build-readiness";
 import {allCreateStepsComplete, evaluateWorkflow, newlyCompletedSteps, resolveNavigateTarget, workflowStepKey, type JewelNavigate} from "../../../lib/workflow-progress";
 import "./workflow.css";
@@ -542,9 +546,19 @@ export default function ProjectWorkspace() {
         healed = hydrated;
       }
       if (cancelled) return;
-      const loadedProject = removeLegacyCardTimers({ ...clarifyYoutubeSearch(healed), gameTools: (clarifyYoutubeSearch(healed).gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) });
+      // The second wheel is gone (Jessica, 2026-11-15: "there is no
+      // need for a second big wheel"): a saved Big Prize Wheel becomes
+      // the selector Game Wheel on load, losslessly — its values
+      // become the wheel's segments, cleaned like any Jewel-written
+      // labels, and its name, title, colors, artwork and placement
+      // carry over (lib/game-tools convertPrizeWheelTools). Like the
+      // deck heal above, a converted project is saved back once
+      // through the guarded queue; an untouched project loads exactly
+      // as before.
+      const converted = convertPrizeWheelTools(healed);
+      const loadedProject = removeLegacyCardTimers({ ...clarifyYoutubeSearch(converted), gameTools: (clarifyYoutubeSearch(converted).gameTools || []).map(tool => tool.type !== "trivia-board" && tool.type !== "blank-board" ? { ...tool, inToolbox: true } : tool) });
       setProject(loadedProject);
-      if (healed !== hydrated) void enqueueSave(loadedProject);
+      if (healed !== hydrated || converted !== healed) void enqueueSave(loadedProject);
       setWorkflowStep(Math.max(0, Math.min(2, found.workflow?.stage ?? 0)));
       setWorkshopStep(Math.max(0, Math.min(2, found.workflow?.workshopStep ?? 0)));
       setDraft(found.workflow?.promptDraft || "");
@@ -1156,6 +1170,12 @@ export default function ProjectWorkspace() {
       } catch {}
       if (!promptImage) { setAssetStatus("The selected reference image could not be loaded. Refresh the project and try again."); return; }
     }
+    // A direct reference URL rather than a project asset: the Plinko
+    // board artwork generation restyles the shipped board, which lives
+    // at a public path instead of in this project's assets. The
+    // generate route accepts an HTTPS reference on both image rungs
+    // (fal's edit model and the Agnes fallback alike).
+    if (!promptImage && type === "image" && options?.referenceUrl) promptImage = options.referenceUrl;
     const requested = (explicitPrompt || "").trim();
     if (!requested) { setAssetStatus(`Describe the ${type} you want to generate.`); return; }
     setAssetBusy(true);
@@ -1241,7 +1261,7 @@ export default function ProjectWorkspace() {
       // decides the placement (overlay now, a card, or the shelf).
       const asset: ProjectAsset = !options && backgroundIntent && (type === "image"||type === "video")
         ? { ...fittedAsset, role: "background", inProject: true, inOverlayBuild: false }
-        : fileGeneratedAsset(currentAfterStore, fittedAsset, { backdropEligible: !options?.forCaseItem });
+        : fileGeneratedAsset(currentAfterStore, fittedAsset, { backdropEligible: options?.backdropEligible ?? !options?.forCaseItem });
       const savedProject = { ...currentAfterStore, pendingVideos: type === "video" ? (currentAfterStore.pendingVideos || []).filter(job => job.videoId !== String(data.videoId)) : currentAfterStore.pendingVideos, assets: [...currentAfterStore.assets, asset], updatedAt: "just now" };
       projectRef.current = savedProject;
       setProject(savedProject);
@@ -1262,6 +1282,81 @@ export default function ProjectWorkspace() {
     } finally {
       setAssetBusy(false);
     }
+  }
+
+  // A Plinko board's OWN artwork (lib/plinko-art): when Jewel creates
+  // a board — or a draft edit restyles one — the site generates the
+  // board's artwork from the creator's style words through the same
+  // generateAsset funnel as every Jewel image, with the shipped board
+  // as the reference image, then writes the saved asset's key onto
+  // the tool's config (the ccssAttach pattern: generate first, attach
+  // by key once the stored identity exists). The targets must already
+  // be persisted — generation threads from the current project — so
+  // callers persist the tool first. A failure never loses the board:
+  // it keeps the shipped artwork, and the caller tells the creator
+  // plainly that its own artwork did not come through.
+  async function generatePlinkoBoardArt(targets: GameTool[], onProgress?: (line: string) => void): Promise<{ succeeded: string[]; failed: string[] }> {
+    const succeeded: string[] = [], failed: string[] = [];
+    for (const target of targets) {
+      const current = projectRef.current;
+      const tool = current?.gameTools.find(t => t.id === target.id && t.type === "plinko");
+      if (!current || !tool) { failed.push(target.name); continue; }
+      onProgress?.(`Creating the board artwork for ${tool.name}…`);
+      try {
+        const referenceUrl = typeof window !== "undefined" ? `${window.location.origin}${PLINKO_DEFAULT_BOARD_ART}` : "";
+        const generated = await generateAsset("image", plinkoBoardArtPrompt(plinkoArtStyleOf(tool.config)), { sourceKey: null, baseProject: current, aspectRatio: "auto", referenceUrl: referenceUrl || null, backdropEligible: false });
+        if (!generated) throw new Error("The board artwork generation did not start.");
+        const lineage = projectRef.current || generated.project;
+        const stored = [...lineage.assets].reverse().find(a => a.name === generated.name) || [...generated.project.assets].reverse().find(a => a.name === generated.name);
+        const artKey = stored ? (stored.storageKey || stored.name) : "";
+        if (!artKey) throw new Error("The generated board artwork was not saved.");
+        const patched = applyBuildChanges(lineage, { gameTools: [{ id: tool.id, config: { [PLINKO_BOARD_ART_FIELD]: artKey } }] });
+        if (!patched.applied || patched.warnings.length) throw new Error("The board artwork could not be attached to the board.");
+        persist(patched.project);
+        succeeded.push(tool.name);
+      } catch {
+        failed.push(tool.name);
+      }
+    }
+    return { succeeded, failed };
+  }
+
+  // The other chance games' OWN artwork (lib/chance-art): the same
+  // pattern as the Plinko board art above — when Jewel creates a Game
+  // Wheel, Dice, Higher or Lower, or Cliffhanger, or
+  // a draft edit restyles one, the site generates the tool's artwork
+  // from the creator's style words through the same generateAsset
+  // funnel as every Jewel image, then writes the saved asset's key
+  // onto the tool's config. These tools ship no artwork file to
+  // restyle from, so the generation is text-to-image. The targets
+  // must already be persisted — generation threads from the current
+  // project — so callers persist the tool first. A failure never
+  // loses the tool: it keeps its standard design, and the caller
+  // tells the creator plainly that its own artwork did not come
+  // through.
+  async function generateChanceArt(targets: GameTool[], onProgress?: (line: string) => void): Promise<{ succeeded: string[]; failed: string[] }> {
+    const succeeded: string[] = [], failed: string[] = [];
+    for (const target of targets) {
+      const current = projectRef.current;
+      const tool = current?.gameTools.find(t => t.id === target.id && isChanceArtType(t.type));
+      if (!current || !tool) { failed.push(target.name); continue; }
+      onProgress?.(`Creating the artwork for ${tool.name}…`);
+      try {
+        const generated = await generateAsset("image", chanceArtPrompt(tool.type, chanceArtStyleOf(tool.config)), { sourceKey: null, baseProject: current, aspectRatio: "auto", backdropEligible: false });
+        if (!generated) throw new Error("The artwork generation did not start.");
+        const lineage = projectRef.current || generated.project;
+        const stored = [...lineage.assets].reverse().find(a => a.name === generated.name) || [...generated.project.assets].reverse().find(a => a.name === generated.name);
+        const artKey = stored ? (stored.storageKey || stored.name) : "";
+        if (!artKey) throw new Error("The generated artwork was not saved.");
+        const patched = applyBuildChanges(lineage, { gameTools: [{ id: tool.id, config: { [CHANCE_ART_KEY_FIELD]: artKey } }] });
+        if (!patched.applied || patched.warnings.length) throw new Error("The artwork could not be attached to the tool.");
+        persist(patched.project);
+        succeeded.push(tool.name);
+      } catch {
+        failed.push(tool.name);
+      }
+    }
+    return { succeeded, failed };
   }
 
   function placeSceneImage(index: number, role: "background" | "layer") {
@@ -1601,6 +1696,28 @@ export default function ProjectWorkspace() {
         // Commit independently valid requested edits before asynchronous media/trivia work.
         // Helpers then start from the same current project and failures keep completed work.
         if (result.applied) { persist(result.project); draftChangedThisTask = true; }
+        if (result.applied) {
+          // Plinko boards this change created — or restyled — get
+          // their own artwork (lib/plinko-art), generated now that
+          // the change is committed; the action below then works from
+          // the project that carries it. A generation failure leaves
+          // the shipped artwork in place and surfaces through the
+          // generation status line, as media failures do.
+          const artTargets = plinkoArtTargets(baseProject, result.project);
+          if (artTargets.length) {
+            await generatePlinkoBoardArt(artTargets, progress);
+            guard();
+            if (projectRef.current) result.project = projectRef.current;
+          }
+          // Chance tools this change created — or restyled — get
+          // their own artwork the same way (lib/chance-art).
+          const chanceTargets = chanceArtTargets(baseProject, result.project);
+          if (chanceTargets.length) {
+            await generateChanceArt(chanceTargets, progress);
+            guard();
+            if (projectRef.current) result.project = projectRef.current;
+          }
+        }
         const action = data.action;
         if (action.type === "trivia") {
           const generated = await generateTriviaList({count:action.count,categories:action.categories,baseProject:result.project});
@@ -1613,12 +1730,73 @@ export default function ProjectWorkspace() {
         if (action.type === "tool") {
           const info = [...BOARD_LIBRARY,...TOOL_LIBRARY].find(t=>t.type===action.toolType);
           if (!info) throw new Error("That tool template is unavailable.");
-          const tool: GameTool = {id:crypto.randomUUID(),type:action.toolType as GameToolType,name:action.name || info.name,enabled:true,inToolbox:action.toolType!=="blank-board",config:{...toolDefaults(action.toolType),...action.config}};
+          const toolConfig: Record<string, unknown> = {...toolDefaults(action.toolType),...action.config};
+          // A Plinko board Jewel creates carries the creator's own slot
+          // labels: dollar signs are stripped (absolute rule) and the
+          // stock defaults are never padded in (Jessica, 2026-11-15).
+          // The list is otherwise kept exactly as supplied — partial
+          // boards are legitimate (the standing-tools guard pins them),
+          // so the exactly-9 instruction lives in the Jewel prompt, not
+          // in a refusal here. Absent slots keep the defaults.
+          if (action.toolType === "plinko" && action.config?.slots !== undefined) {
+            toolConfig.slots = cleanPlinkoSlots(action.config.slots);
+          }
+          // A Bank Jewel creates: numeric config is coerced and clamped
+          // to sane ranges, the same sanitizer treatment as creation
+          // through changes.newTools.
+          if (action.toolType === "bank") {
+            toolConfig.roundSeconds = clampBankRoundSeconds(toolConfig.roundSeconds);
+            toolConfig.pressValue = clampBankPressValue(toolConfig.pressValue);
+          }
+          // The other chance games Jewel creates carry the creator's
+          // own labels, exactly as through changes.newTools (Jessica,
+          // 2026-11-15): dollar signs stripped from wheel segments,
+          // Higher or Lower card labels, Cliffhanger item labels, and
+          // the tool's title — the stock defaults are never padded
+          // into a supplied list.
+          if (action.toolType === "wheel" && action.config?.segments !== undefined) {
+            toolConfig.segments = cleanWheelSegments(action.config.segments);
+          }
+          if (action.toolType === "higher-lower" && action.config?.cards !== undefined) {
+            toolConfig.cards = cleanHigherLowerCards(action.config.cards);
+          }
+          if (action.toolType === "cliffhanger" && action.config?.items !== undefined) {
+            toolConfig.items = cleanCliffhangerItems(action.config.items);
+          }
+          if (["wheel", "dice", "higher-lower", "cliffhanger"].includes(action.toolType) && typeof toolConfig.title === "string") {
+            toolConfig.title = cleanLabelText(toolConfig.title);
+          }
+          const tool: GameTool = {id:crypto.randomUUID(),type:action.toolType as GameToolType,name:action.name || info.name,enabled:true,inToolbox:action.toolType!=="blank-board",config:toolConfig};
           let next:Project={...result.project,gameTools:[...(result.project.gameTools||[]),tool]};
           if(workflowStep===1)next=addCreationControl(next,'tool',tool.id).project;
-          persist({...next,messages:[...updated.messages,{role:"assistant",text:tool.name+(workflowStep===1?" is connected in your draft. Try its controls in Test.":" is saved in Imagine and Create. Customize its entries and appearance, then add it in Set the Stage.")} ]});
+          persist(next);
+          // A Plinko board Jewel creates gets its OWN artwork,
+          // generated from the creator's style words (lib/plinko-art)
+          // now that the board itself is saved. On failure the board
+          // keeps the shipped artwork and the reply says so plainly —
+          // custom artwork is never claimed when it did not happen.
+          let artNote = "";
+          if (action.toolType === "plinko") {
+            const art = await generatePlinkoBoardArt([tool], progress);
+            guard();
+            artNote = art.succeeded.length
+              ? " Its own board artwork was generated from your description and saved with it."
+              : " It is showing the standard board artwork for now — its own artwork could not be generated this time. Ask Jewel to restyle the board to try again.";
+          } else if (isChanceArtType(action.toolType)) {
+            // A chance tool Jewel creates gets its OWN artwork,
+            // generated from the creator's style words (lib/chance-art)
+            // now that the tool itself is saved. On failure the tool
+            // keeps its standard design and the reply says so plainly —
+            // custom artwork is never claimed when it did not happen.
+            const art = await generateChanceArt([tool], progress);
+            guard();
+            artNote = art.succeeded.length
+              ? " Its own artwork was generated from your description and saved with it."
+              : ` It is showing ${CHANCE_ART_FALLBACK_DESIGN[action.toolType as keyof typeof CHANCE_ART_FALLBACK_DESIGN] || "the standard design"} for now — its own artwork could not be generated this time. Ask Jewel to restyle it to try again.`;
+          }
+          persist({...(projectRef.current || next),messages:[...updated.messages,{role:"assistant",text:tool.name+(workflowStep===1?" is connected in your draft. Try its controls in Test.":" is saved in Imagine and Create. Customize its entries and appearance, then add it in Set the Stage.")+artNote} ]});
           setAiUndo(baseProject);
-          return complete(tool.name + " was created in your draft. Its live version has not changed.");
+          return complete(tool.name + " was created in your draft." + artNote + " Its live version has not changed.");
         }
         if (action.type === "board-regenerate") {
           // The board's own Regenerate/Refresh buttons, run through Jewel:
@@ -1786,9 +1964,43 @@ export default function ProjectWorkspace() {
         setAiUndo(baseProject);
         complete(finished);
       } else {
-        persist({ ...result.project, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: reply }] });
+        // Plinko boards this change created — or restyled — get their
+        // own artwork (lib/plinko-art) before the reply is saved, so
+        // the reply says truthfully whether it came through. The
+        // change is persisted first because generation threads from
+        // the current project.
+        let finalProject = result.project;
+        let finalReply = reply;
+        if (result.applied) {
+          const artTargets = plinkoArtTargets(baseProject, result.project);
+          if (artTargets.length) {
+            persist(result.project);
+            const art = await generatePlinkoBoardArt(artTargets, progress);
+            guard();
+            finalProject = projectRef.current || result.project;
+            const artNotes: string[] = [];
+            if (art.succeeded.length) artNotes.push(`${art.succeeded.join(", ")} ${art.succeeded.length === 1 ? "has" : "have"} its own board artwork, generated from your description.`);
+            if (art.failed.length) artNotes.push(`${art.failed.join(", ")} ${art.failed.length === 1 ? "is" : "are"} showing the standard board artwork for now — its own artwork could not be generated this time. Ask Jewel to restyle the board to try again.`);
+            if (artNotes.length) finalReply = [reply, ...artNotes].filter(Boolean).join("\n\n");
+          }
+          // Chance tools this change created — or restyled — get
+          // their own artwork the same way (lib/chance-art), with the
+          // same truthful reply notes.
+          const chanceTargets = chanceArtTargets(baseProject, finalProject);
+          if (chanceTargets.length) {
+            persist(finalProject);
+            const art = await generateChanceArt(chanceTargets, progress);
+            guard();
+            finalProject = projectRef.current || finalProject;
+            const artNotes: string[] = [];
+            if (art.succeeded.length) artNotes.push(`${art.succeeded.join(", ")} ${art.succeeded.length === 1 ? "has" : "have"} its own artwork, generated from your description.`);
+            if (art.failed.length) artNotes.push(`${art.failed.join(", ")} ${art.failed.length === 1 ? "is" : "are"} showing the standard design for now — its own artwork could not be generated this time. Ask Jewel to restyle it to try again.`);
+            if (artNotes.length) finalReply = [finalReply, ...artNotes].filter(Boolean).join("\n\n");
+          }
+        }
+        persist({ ...finalProject, updatedAt: "just now", messages: [...updated.messages, { role: "assistant", text: finalReply }] });
         if(result.applied)setAiUndo(baseProject);
-        complete(reply, Boolean(result.applied), unapplied ? "failed" : data.needsClarification === true ? "clarification" : "complete");
+        complete(finalReply, Boolean(result.applied), unapplied ? "failed" : data.needsClarification === true ? "clarification" : "complete");
         if(workflowStep===1&&affectedControls.length){const focus=affectedControls.find(control=>control.action.startsWith('coin.cycle.'))||affectedControls.find(control=>control.action==='sequence')||affectedControls[0];setAiControlFocus({id:focus.id,request:Date.now()});}
       }
     } catch (error) {
@@ -2102,7 +2314,7 @@ export default function ProjectWorkspace() {
   const gameNightSetView = project.kind === "multiplayer" && workflowStep === 1;
   const gameNightViews = gameNightCreateView || gameNightSetView;
   const talkCreateComplete = project.kind === "talk" && allCreateStepsComplete(evaluateWorkflow(project));
-  const draftOverlay = <>{(() => { const selected = project.assets.filter(a => assetPlaced(a) && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}{bg && assetBackdropText(bg) && <BackdropTextLayer spec={assetBackdropText(bg)!}/>}{bg && assetPromptText(bg) && <BackdropTextLayer spec={assetPromptText(bg)!} placement="lower"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">{q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}<StandingTools project={project} states={runtime.cardStates}/><RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
+  const draftOverlay = <>{(() => { const selected = project.assets.filter(a => assetPlaced(a) && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}{bg && assetBackdropText(bg) && <BackdropTextLayer spec={assetBackdropText(bg)!}/>}{bg && assetPromptText(bg) && <BackdropTextLayer spec={assetPromptText(bg)!} placement="lower"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">{q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}<StandingTools project={project} states={runtime.cardStates} bankStates={runtime.bankStates}/><RuntimeActionLayers runtime={runtime} project={project}/><YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</>;
   const jewelPanelElement = (
       <WorkshopAiPanel
         workflowStep={workflowStep}
@@ -2304,9 +2516,9 @@ export default function ProjectWorkspace() {
       {!stageReviewView && Boolean(project.pendingVideos?.length) && <section aria-label="Pending video generation" className="idea-card"><strong>Video requests awaiting a result</strong><p>Check a saved request without generating another copy.</p>{project.pendingVideos?.map(job => <div key={job.videoId}><p>{job.prompt}</p>{assetBusy ? <p role="status">Already checking — the finished video will appear in your assets automatically.</p> : <button type="button" className="outline-btn" disabled={building} onClick={() => void generateAsset("video", job.prompt, { pendingVideo: job }).catch(() => undefined)}>Check video result</button>}</div>)}</section>}
       {talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement}
       {!stageReviewView && backgroundDestinationKey&&(()=>{const asset=project.assets.find(a=>(a.storageKey||a.name)===backgroundDestinationKey);return asset?<section><BackgroundDestination project={project} asset={asset} onChange={persist}/><button type="button" onClick={()=>setBackgroundDestinationKey("")}>Done choosing background destination</button></section>:null;})()}
-      {workflowStep===1 && stageReviewView && <StageReview ccssEntitled={ccssEntitled} jewelPanel={jewelPanelElement} onEnterJewel={enterJewelFromScene} focusControl={aiControlFocus} onSelect={setBuildSelection} cardStates={runtime.cardStates} liveControlIds={runtime.runs.map(r => r.control.id)} feedback={eventLog[0]} project={project} onChange={persist} overlay={draftOverlay} onTrigger={trigger} onWorkshop={()=>chooseWorkflowStep(0,1)} youtubeOpen={youtubeToolOpen} onOpenYoutube={()=>setYoutubeToolOpen(true)} onCloseYoutube={()=>setYoutubeToolOpen(false)} onYoutubeCommand={previewYoutube} youtubeState={youtubePreview} youtubeFeedback={youtubeFeedback} sequenceRunning={runtime.sequenceRunning} onStopSequence={runtime.stopSequence} sequenceError={runtime.sequenceError} onResetGame={resetDraftGame} dashboardExtras={()=><>{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker").map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&(t.type==="question-card"||t.type==="blank-card")).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}</>}/>}
-      {workflowStep===1 && !stageReviewView && <BuildSpace ccssEntitled={ccssEntitled} onAddTemplate={applyTemplateToProject} onAskAi={openJewel} entryRequest={buildEntryRequest} onEntryHandled={finishBuildEntry} showNextGuidance={firstActionTaken} focusControl={aiControlFocus} onSelect={setBuildSelection} cardStates={runtime.cardStates} onPublishStep={()=>chooseWorkflowStep(2)} feedback={eventLog[0]} project={project} onChange={persist} overlay={draftOverlay} onTrigger={trigger} onWorkshop={()=>chooseWorkflowStep(0,1)} youtubeOpen={youtubeToolOpen} onOpenYoutube={()=>setYoutubeToolOpen(true)} onCloseYoutube={()=>setYoutubeToolOpen(false)} onYoutubeCommand={previewYoutube} youtubeState={youtubePreview} youtubeFeedback={youtubeFeedback} sequenceRunning={runtime.sequenceRunning} onStopSequence={runtime.stopSequence} sequenceError={runtime.sequenceError} onResetGame={resetDraftGame} dashboardExtras={toolId=><>{!toolId&&<GoogleSearch projectId={project.id} onSavePool={(name,results)=>{const current=projectRef.current||project;const pool={...createCardList(),name,config:{entries:results.map(result=>({id:crypto.randomUUID(),text:result.summary||result.title,sourceUrl:result.url,sourceTitle:result.title})),cards:[]}};persist({...current,gameTools:[...current.gameTools,pool]});}}/>}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)&&(!toolId||t.id===toolId)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker"&&(!toolId||t.id===toolId)).map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&(t.type==="question-card"||t.type==="blank-card")&&(!toolId||t.id===toolId)).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}</>}/>}
-      {workflowStep===0 && <section className="preview-panel"><div className="preview-head"><div><small>FULL LIVESTREAM PREVIEW</small><h2>{project.name}</h2></div><div className="preview-switch"><button type="button" aria-pressed={sideBySideTesting} onClick={()=>setSideBySideTesting(!sideBySideTesting)}>{sideBySideTesting ? "Exit side-by-side test" : "Test side by side"}</button><button className={previewMode==="overlay"?"active":""} onClick={()=>setPreviewMode("overlay")}>Audience Overlay</button><button className={previewMode==="dashboard"?"active":""} onClick={()=>setPreviewMode("dashboard")}>Host Dashboard</button><span className="preview-mode-badge">DRAFT PREVIEW</span></div></div><div className="stage" style={{display:sideBySideTesting || previewMode==="overlay" ? undefined : "none"}}>{(() => { const selected = project.assets.filter(a => assetPlaced(a) && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}{bg && assetBackdropText(bg) && <BackdropTextLayer spec={assetBackdropText(bg)!}/>}{bg && assetPromptText(bg) && <BackdropTextLayer spec={assetPromptText(bg)!} placement="lower"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">{q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId&&c.compositionId);if(!control)return null;const r=dragPlacement?.id===control.id?dragPlacement:control.overlayResult||defaultOverlayResult;return <div className="overlay-placement-marker" style={{left:`${r.x}%`,top:`${r.y}%`,width:`${r.width}%`,height:`${r.height}%`}} onPointerDown={e=>startPlacement(e,control,e.target instanceof HTMLElement&&e.target.dataset.resize==="true")} onPointerMove={movePlacement} onPointerUp={endPlacement}><span>{control.label} · drag to position</span><i data-resize="true" title="Drag to resize"/></div>})()}<StandingTools project={project} states={runtime.cardStates}/><RuntimeActionLayers runtime={runtime} project={project}/>{(()=>{const asset=project.assets.find(a=>(a.storageKey||a.name)===positionAssetKey&&assetPlaced(a)&&a.role!=="background");return asset?<YouTubePlacementEditor label={asset.name} top={44} placement={asset.edits?.placement||{x:0,y:0,width:100,height:100}} onChange={placement=>persist({...project,assets:project.assets.map(a=>a===asset?{...a,edits:{...a.edits,placement}}:a)})}/>:null;})()}{selectedControlId&&project.controls.some(c=>c.id===selectedControlId&&c.toolIds?.some(id=>project.gameTools.some(t=>t.id===id&&t.type==="youtube"))) && <YouTubePlacementEditor placement={safeYoutubePlacement(project.gameTools.find(t=>t.type==="youtube")?.config.placement)} onChange={placement=>{persist({...project,gameTools:project.gameTools.map(t=>t.type==="youtube"?{...t,config:{...t.config,placement}}:t)});setYoutubePreview(current=>current?{...current,placement}:current);}}/>}<YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</div><div className="dashboard-preview" style={{display:sideBySideTesting || previewMode==="dashboard" ? undefined : "none"}}><h3>{project.name} · Draft dashboard</h3><p>Build the dashboard with blank trigger buttons. Choose the creations you want here, from Imagine and Create, then choose what each control does. Test these controls alongside the draft overlay before publishing.</p><div className="dashboard-toolbox"><small>CUSTOMIZED TOOLBOX</small>{(project.gameTools||[]).filter(tool=>tool.enabled && tool.type!=="trivia-board" && tool.inToolbox && (project.kind!=="talk" || TALK_TOOL_TYPES.includes(tool.type))).map(tool=>{const selected=project.controls.find(control=>control.id===selectedControlId);const assigned=Boolean(selected?.toolIds?.includes(tool.id));return <div className="tool-library-row" key={tool.id}><div><b>{tool.name}</b><small>Customized workspace tool</small></div><button className="outline-btn" disabled={!selected||assigned} onClick={()=>selected&&assignToolToButton(selected.id,tool)}>{assigned?"✓ Assigned":selected?"+ Assign to selected button":"Select a dashboard button"}</button></div>})}</div><div className="dashboard-preview-buttons">{project.controls.filter(c=>!c.toolIds?.some(id=>project.gameTools.find(t=>t.id===id)?.type==="youtube")).map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div></div><div className="preview-foot"><span>Dashboard <b>/</b> Overlay <b>/</b> Events</span><span>{project.status} · {project.updatedAt}</span></div><CollapsibleFolder title="Quick rehearsal controls" count={project.controls.length} storageKey={`${project.id}:quick-rehearsal`} keepMounted><div className="control-strip"><div><small>HOST CONTROLS</small><strong>Trigger your generated experience</strong></div><div className="control-buttons">{project.controls.filter(c=>!c.toolIds?.some(id=>project.gameTools.find(t=>t.id===id)?.type==="youtube")).map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div>{eventLog.length>0&&<div className="event-log">{eventLog.map((x,i)=><span key={i}>✓ {x}</span>)}</div>}</div></CollapsibleFolder><CollapsibleFolder title="Advanced dashboard editing" count={project.controls.length} storageKey={`${project.id}:advanced-dashboard`} keepMounted><div className="dashboard-action-editor"><h3>Dashboard buttons</h3>{project.controls.map(control=><div className="dashboard-action-row" key={control.id}><button className="outline-btn" onClick={()=>{setSelectedControlId(control.id);setPreviewMode("overlay")}}>{control.label} · Edit Overlay Result</button>{control.compositionId&&<small>{project.compositions?.find(c=>c.id===control.compositionId)?.name||"Missing composition"}</small>}</div>)}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId);if(!control)return null;const result=control.overlayResult||defaultOverlayResult;return <div className="overlay-result-editor"><h4>Configure Dashboard Button · {control.label}</h4><label>Button label<input value={control.label} onChange={e=>updateControl(control.id,{label:e.target.value})}/></label><label>Background action<select value={control.action.startsWith("background.show.")?control.action:""} onChange={e=>updateControl(control.id,{action:e.target.value || "unassigned",toolIds:[],compositionId:undefined,detail:e.target.value?"Show chosen background":"Unassigned dashboard button"})}><option value="">No background change</option>{project.assets.filter(a=>isImage(a)||isVideo(a)).map((asset,i)=><option key={(asset.storageKey||asset.name)+i} value={"background.show."+(asset.storageKey||asset.name)}>{asset.name}</option>)}</select></label><label>Button type<select value={control.buttonMode||"single"} onChange={e=>updateControl(control.id,{buttonMode:e.target.value as "single"|"chain"})}><option value="single">Single Action</option><option value="chain">Multi-Link Chain Command</option></select></label><div className="tool-config-list"><small>PRIMARY TOOLS · {(control.toolIds||[]).length}/2</small>{(control.toolIds||[]).map(id=>{const tool=(project.gameTools||[]).find(t=>t.id===id);return tool?<div className="tool-config" key={id}><b>{tool.name}</b><button className="danger-btn" onClick={()=>updateControl(control.id,{toolIds:(control.toolIds||[]).filter(x=>x!==id),action:control.action===`tool.${id}`?"":control.action})}>Remove</button></div>:null})}</div>{control.buttonMode==="chain"&&<div className="tool-config-list"><strong>CHAIN SUPPORTING ACTIONS</strong><small>Add media/effects to this button. Steps run in order. Each timed delay is measured after the previous step.</small><div className="trivia-actions">{project.assets.filter(a=>a.inProject).map((asset,i)=><button className="outline-btn" key={(asset.storageKey||asset.name)+i} onClick={()=>addChainStep(control.id,"asset",asset.storageKey||asset.name,asset.name)}>＋ {asset.name}</button>)}{(project.compositions||[]).filter(x=>x.inProject).map(comp=><button className="outline-btn" key={comp.id} onClick={()=>addChainStep(control.id,"composition",comp.id,comp.name)}>＋ {comp.name}</button>)}</div>{(control.chain||[]).map((step,index)=><div className="tool-config" key={step.id}><b>{index+1}. {step.label}</b><label>Timing<select value={step.timing.mode} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{...s.timing,mode:e.target.value as "immediate"|"delay"}}:s)})}><option value="immediate">Immediately</option><option value="delay">Timed delay</option></select></label>{step.timing.mode==="delay"&&<label>Seconds<input type="number" min="0" step=".1" value={step.timing.seconds||0} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{mode:"delay",seconds:Math.max(0,+e.target.value||0)}}:s)})}/></label>}<button className="danger-btn" onClick={()=>updateControl(control.id,{chain:(control.chain||[]).filter(s=>s.id!==step.id)})}>Remove</button></div>)}</div>}<button className="build-btn" onClick={()=>trigger(control)}>Test button</button>{control.compositionId&&<><label>Composition<select value={control.compositionId} onChange={e=>updateControl(control.id,{compositionId:e.target.value})}>{(project.compositions||[]).filter(c=>c.inProject).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>{(["x","y","width","height","layer","entranceSeconds","exitSeconds"] as const).map(key=><label key={key}>{key}<input type="number" value={result[key]} min={key==="width"||key==="height"?1:0} max={key==="layer"?100:100} step={key.endsWith("Seconds")?.1:1} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:+e.target.value}})}/></label>)}{(["entrance","exit"] as const).map(key=><label key={key}>{key}<select value={result[key]} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:e.target.value as typeof result[typeof key]}})}>{["none","fade","slide","zoom"].map(option=><option key={option}>{option}</option>)}</select></label>)}<button className="build-btn" onClick={()=>trigger(control)}>Test Trigger</button></>}<button className="danger-btn" onClick={()=>{persist({...project,controls:project.controls.filter(c=>c.id!==control.id)});setSelectedControlId(null)}}>Remove button</button></div>})()}</div></CollapsibleFolder></section>}
+      {workflowStep===1 && stageReviewView && <StageReview ccssEntitled={ccssEntitled} jewelPanel={jewelPanelElement} onEnterJewel={enterJewelFromScene} focusControl={aiControlFocus} onSelect={setBuildSelection} cardStates={runtime.cardStates} liveControlIds={runtime.runs.map(r => r.control.id)} feedback={eventLog[0]} project={project} onChange={persist} overlay={draftOverlay} onTrigger={trigger} onWorkshop={()=>chooseWorkflowStep(0,1)} youtubeOpen={youtubeToolOpen} onOpenYoutube={()=>setYoutubeToolOpen(true)} onCloseYoutube={()=>setYoutubeToolOpen(false)} onYoutubeCommand={previewYoutube} youtubeState={youtubePreview} youtubeFeedback={youtubeFeedback} sequenceRunning={runtime.sequenceRunning} onStopSequence={runtime.stopSequence} sequenceError={runtime.sequenceError} onResetGame={resetDraftGame} dashboardExtras={()=><>{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker").map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&(t.type==="question-card"||t.type==="blank-card")).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="bank").map(t=><BankHostPanel key={t.id} tool={t} state={runtime.bankStates[t.id]} onCommand={runtime.bankCommand}/>)}</>}/>}
+      {workflowStep===1 && !stageReviewView && <BuildSpace ccssEntitled={ccssEntitled} onAddTemplate={applyTemplateToProject} onAskAi={openJewel} entryRequest={buildEntryRequest} onEntryHandled={finishBuildEntry} showNextGuidance={firstActionTaken} focusControl={aiControlFocus} onSelect={setBuildSelection} cardStates={runtime.cardStates} onPublishStep={()=>chooseWorkflowStep(2)} feedback={eventLog[0]} project={project} onChange={persist} overlay={draftOverlay} onTrigger={trigger} onWorkshop={()=>chooseWorkflowStep(0,1)} youtubeOpen={youtubeToolOpen} onOpenYoutube={()=>setYoutubeToolOpen(true)} onCloseYoutube={()=>setYoutubeToolOpen(false)} onYoutubeCommand={previewYoutube} youtubeState={youtubePreview} youtubeFeedback={youtubeFeedback} sequenceRunning={runtime.sequenceRunning} onStopSequence={runtime.stopSequence} sequenceError={runtime.sequenceError} onResetGame={resetDraftGame} dashboardExtras={toolId=><>{!toolId&&<GoogleSearch projectId={project.id} onSavePool={(name,results)=>{const current=projectRef.current||project;const pool={...createCardList(),name,config:{entries:results.map(result=>({id:crypto.randomUUID(),text:result.summary||result.title,sourceUrl:result.url,sourceTitle:result.title})),cards:[]}};persist({...current,gameTools:[...current.gameTools,pool]});}}/>}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)&&(!toolId||t.id===toolId)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker"&&(!toolId||t.id===toolId)).map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&(t.type==="question-card"||t.type==="blank-card")&&(!toolId||t.id===toolId)).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="bank"&&(!toolId||t.id===toolId)).map(t=><BankHostPanel key={t.id} tool={t} state={runtime.bankStates[t.id]} onCommand={runtime.bankCommand}/>)}</>}/>}
+      {workflowStep===0 && <section className="preview-panel"><div className="preview-head"><div><small>FULL LIVESTREAM PREVIEW</small><h2>{project.name}</h2></div><div className="preview-switch"><button type="button" aria-pressed={sideBySideTesting} onClick={()=>setSideBySideTesting(!sideBySideTesting)}>{sideBySideTesting ? "Exit side-by-side test" : "Test side by side"}</button><button className={previewMode==="overlay"?"active":""} onClick={()=>setPreviewMode("overlay")}>Audience Overlay</button><button className={previewMode==="dashboard"?"active":""} onClick={()=>setPreviewMode("dashboard")}>Host Dashboard</button><span className="preview-mode-badge">DRAFT PREVIEW</span></div></div><div className="stage" style={{display:sideBySideTesting || previewMode==="overlay" ? undefined : "none"}}>{(() => { const selected = project.assets.filter(a => assetPlaced(a) && a.url); const bg = project.assets.find(a => runtime.backgroundKey && (a.storageKey || a.name) === runtime.backgroundKey) || selected.find(a => a.role === "background"); const layers = selected.filter(a => a.role !== "background"); return <>{bg && <OverlayAsset asset={bg} background playing className="builder-preview-background"/>}{bg && assetBackdropText(bg) && <BackdropTextLayer spec={assetBackdropText(bg)!}/>}{bg && assetPromptText(bg) && <BackdropTextLayer spec={assetPromptText(bg)!} placement="lower"/>}<div className="builder-preview-layers">{layers.map((a,i) => <OverlayAsset key={(a.storageKey || a.name)+i} asset={a} className="builder-preview-media"/>)}</div>{(() => { const trivia = (project.gameTools || []).find(t => t.type === "trivia-board" && t.enabled && t.inOverlayBuild); const config:any = triviaConfig || trivia?.config; if (!trivia || !Array.isArray(config?.categories) || config.categories.length !== 5) return null; if (activeTrivia) { const [ci,qi]=activeTrivia.split(":").map(Number); const cat=config.categories[ci]; const q=cat?.questions?.[qi]; if (!cat || !q) return null; return <div className="runtime-trivia" style={overlayToolPlacement(trivia)}><div className="runtime-trivia-board-label">NEON TRIVIA NIGHT</div><div className="runtime-trivia-category">{cat.name}</div><div className="runtime-trivia-value">{q.value}</div><div className="runtime-trivia-question">{q.prompt}</div>{triviaAnswerRevealed&&<div className="runtime-trivia-answer"><span>ANSWER</span>{q.answer}</div>}{q.source&&<div className="runtime-trivia-source">Source: {q.source}</div>}</div>; } if(trivia.config.triggerOnly)return null; return <div className="runtime-jeopardy" style={overlayToolPlacement(trivia)}><BoardArtwork tool={trivia} project={project}/><div className="runtime-jeopardy-title">NEON TRIVIA NIGHT</div><div className="runtime-jeopardy-grid">{config.categories.map((cat:any,ci:number)=><div className="runtime-jeopardy-column" key={`${cat.name}-${ci}`}><div className="runtime-jeopardy-category">{cat.name}</div>{(cat.questions||[]).slice(0,5).map((q:any,qi:number)=><div className={`runtime-jeopardy-value ${q.used?"used":""}`} key={`${q.value}-${qi}`}>{q.used?"USED":`${q.value}`}</div>)}</div>)}</div><div className="runtime-jeopardy-help">Choose a clue from the Trivia Board controls</div></div>; })()}</>; })()}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId&&c.compositionId);if(!control)return null;const r=dragPlacement?.id===control.id?dragPlacement:control.overlayResult||defaultOverlayResult;return <div className="overlay-placement-marker" style={{left:`${r.x}%`,top:`${r.y}%`,width:`${r.width}%`,height:`${r.height}%`}} onPointerDown={e=>startPlacement(e,control,e.target instanceof HTMLElement&&e.target.dataset.resize==="true")} onPointerMove={movePlacement} onPointerUp={endPlacement}><span>{control.label} · drag to position</span><i data-resize="true" title="Drag to resize"/></div>})()}<StandingTools project={project} states={runtime.cardStates} bankStates={runtime.bankStates}/><RuntimeActionLayers runtime={runtime} project={project}/>{(()=>{const asset=project.assets.find(a=>(a.storageKey||a.name)===positionAssetKey&&assetPlaced(a)&&a.role!=="background");return asset?<YouTubePlacementEditor label={asset.name} top={44} placement={asset.edits?.placement||{x:0,y:0,width:100,height:100}} onChange={placement=>persist({...project,assets:project.assets.map(a=>a===asset?{...a,edits:{...a.edits,placement}}:a)})}/>:null;})()}{selectedControlId&&project.controls.some(c=>c.id===selectedControlId&&c.toolIds?.some(id=>project.gameTools.some(t=>t.id===id&&t.type==="youtube"))) && <YouTubePlacementEditor placement={safeYoutubePlacement(project.gameTools.find(t=>t.type==="youtube")?.config.placement)} onChange={placement=>{persist({...project,gameTools:project.gameTools.map(t=>t.type==="youtube"?{...t,config:{...t.config,placement}}:t)});setYoutubePreview(current=>current?{...current,placement}:current);}}/>}<YouTubeOverlayPlayer state={youtubePreview} interactive onStatus={(feedback)=>{youtubeActualPosition.current=feedback.position;setYoutubeFeedback(previous=>previous?.playbackId===feedback.playbackId && previous.status===feedback.status && previous.errorCode===feedback.errorCode ? previous : {playbackId:feedback.playbackId,status:feedback.status,errorCode:feedback.errorCode});}}/>{previewAction&&<CompositionPlayer key={`${previewAction.control.id}-${previewAction.at}`} composition={previewAction.composition} assets={project.assets} placement={previewAction.control.overlayResult||defaultOverlayResult} startedAt={previewAction.at} onEnd={()=>setPreviewAction(null)}/>}</div><div className="dashboard-preview" style={{display:sideBySideTesting || previewMode==="dashboard" ? undefined : "none"}}><h3>{project.name} · Draft dashboard</h3><p>Build the dashboard with blank trigger buttons. Choose the creations you want here, from Imagine and Create, then choose what each control does. Test these controls alongside the draft overlay before publishing.</p><div className="dashboard-toolbox"><small>CUSTOMIZED TOOLBOX</small>{(project.gameTools||[]).filter(tool=>tool.enabled && tool.type!=="trivia-board" && tool.inToolbox && (project.kind!=="talk" || TALK_TOOL_TYPES.includes(tool.type))).map(tool=>{const selected=project.controls.find(control=>control.id===selectedControlId);const assigned=Boolean(selected?.toolIds?.includes(tool.id));return <div className="tool-library-row" key={tool.id}><div><b>{tool.name}</b><small>Customized workspace tool</small></div><button className="outline-btn" disabled={!selected||assigned} onClick={()=>selected&&assignToolToButton(selected.id,tool)}>{assigned?"✓ Assigned":selected?"+ Assign to selected button":"Select a dashboard button"}</button></div>})}</div><div className="dashboard-preview-buttons">{project.controls.filter(c=>!c.toolIds?.some(id=>project.gameTools.find(t=>t.id===id)?.type==="youtube")).map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div></div><div className="preview-foot"><span>Dashboard <b>/</b> Overlay <b>/</b> Events</span><span>{project.status} · {project.updatedAt}</span></div><CollapsibleFolder title="Quick rehearsal controls" count={project.controls.length} storageKey={`${project.id}:quick-rehearsal`} keepMounted><div className="control-strip"><div><small>HOST CONTROLS</small><strong>Trigger your generated experience</strong></div><div className="control-buttons">{project.controls.filter(c=>!c.toolIds?.some(id=>project.gameTools.find(t=>t.id===id)?.type==="youtube")).map(c=><button key={c.id} onClick={()=>trigger(c)}>{c.label}</button>)}</div>{eventLog.length>0&&<div className="event-log">{eventLog.map((x,i)=><span key={i}>✓ {x}</span>)}</div>}</div></CollapsibleFolder><CollapsibleFolder title="Advanced dashboard editing" count={project.controls.length} storageKey={`${project.id}:advanced-dashboard`} keepMounted><div className="dashboard-action-editor"><h3>Dashboard buttons</h3>{project.controls.map(control=><div className="dashboard-action-row" key={control.id}><button className="outline-btn" onClick={()=>{setSelectedControlId(control.id);setPreviewMode("overlay")}}>{control.label} · Edit Overlay Result</button>{control.compositionId&&<small>{project.compositions?.find(c=>c.id===control.compositionId)?.name||"Missing composition"}</small>}</div>)}{(()=>{const control=project.controls.find(c=>c.id===selectedControlId);if(!control)return null;const result=control.overlayResult||defaultOverlayResult;return <div className="overlay-result-editor"><h4>Configure Dashboard Button · {control.label}</h4><label>Button label<input value={control.label} onChange={e=>updateControl(control.id,{label:e.target.value})}/></label><label>Background action<select value={control.action.startsWith("background.show.")?control.action:""} onChange={e=>updateControl(control.id,{action:e.target.value || "unassigned",toolIds:[],compositionId:undefined,detail:e.target.value?"Show chosen background":"Unassigned dashboard button"})}><option value="">No background change</option>{project.assets.filter(a=>isImage(a)||isVideo(a)).map((asset,i)=><option key={(asset.storageKey||asset.name)+i} value={"background.show."+(asset.storageKey||asset.name)}>{asset.name}</option>)}</select></label><label>Button type<select value={control.buttonMode||"single"} onChange={e=>updateControl(control.id,{buttonMode:e.target.value as "single"|"chain"})}><option value="single">Single Action</option><option value="chain">Multi-Link Chain Command</option></select></label><div className="tool-config-list"><small>PRIMARY TOOLS · {(control.toolIds||[]).length}/2</small>{(control.toolIds||[]).map(id=>{const tool=(project.gameTools||[]).find(t=>t.id===id);return tool?<div className="tool-config" key={id}><b>{tool.name}</b><button className="danger-btn" onClick={()=>updateControl(control.id,{toolIds:(control.toolIds||[]).filter(x=>x!==id),action:control.action===`tool.${id}`?"":control.action})}>Remove</button></div>:null})}</div>{control.buttonMode==="chain"&&<div className="tool-config-list"><strong>CHAIN SUPPORTING ACTIONS</strong><small>Add media/effects to this button. Steps run in order. Each timed delay is measured after the previous step.</small><div className="trivia-actions">{project.assets.filter(a=>a.inProject).map((asset,i)=><button className="outline-btn" key={(asset.storageKey||asset.name)+i} onClick={()=>addChainStep(control.id,"asset",asset.storageKey||asset.name,asset.name)}>＋ {asset.name}</button>)}{(project.compositions||[]).filter(x=>x.inProject).map(comp=><button className="outline-btn" key={comp.id} onClick={()=>addChainStep(control.id,"composition",comp.id,comp.name)}>＋ {comp.name}</button>)}</div>{(control.chain||[]).map((step,index)=><div className="tool-config" key={step.id}><b>{index+1}. {step.label}</b><label>Timing<select value={step.timing.mode} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{...s.timing,mode:e.target.value as "immediate"|"delay"}}:s)})}><option value="immediate">Immediately</option><option value="delay">Timed delay</option></select></label>{step.timing.mode==="delay"&&<label>Seconds<input type="number" min="0" step=".1" value={step.timing.seconds||0} onChange={e=>updateControl(control.id,{chain:(control.chain||[]).map(s=>s.id===step.id?{...s,timing:{mode:"delay",seconds:Math.max(0,+e.target.value||0)}}:s)})}/></label>}<button className="danger-btn" onClick={()=>updateControl(control.id,{chain:(control.chain||[]).filter(s=>s.id!==step.id)})}>Remove</button></div>)}</div>}<button className="build-btn" onClick={()=>trigger(control)}>Test button</button>{control.compositionId&&<><label>Composition<select value={control.compositionId} onChange={e=>updateControl(control.id,{compositionId:e.target.value})}>{(project.compositions||[]).filter(c=>c.inProject).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>{(["x","y","width","height","layer","entranceSeconds","exitSeconds"] as const).map(key=><label key={key}>{key}<input type="number" value={result[key]} min={key==="width"||key==="height"?1:0} max={key==="layer"?100:100} step={key.endsWith("Seconds")?.1:1} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:+e.target.value}})}/></label>)}{(["entrance","exit"] as const).map(key=><label key={key}>{key}<select value={result[key]} onChange={e=>updateControl(control.id,{overlayResult:{...result,[key]:e.target.value as typeof result[typeof key]}})}>{["none","fade","slide","zoom"].map(option=><option key={option}>{option}</option>)}</select></label>)}<button className="build-btn" onClick={()=>trigger(control)}>Test Trigger</button></>}<button className="danger-btn" onClick={()=>{persist({...project,controls:project.controls.filter(c=>c.id!==control.id)});setSelectedControlId(null)}}>Remove button</button></div>})()}</div></CollapsibleFolder></section>}
       {!stageReviewView && <WorkshopAssetsPanel
         workflowStep={workflowStep}
         workshopStep={workshopStep}

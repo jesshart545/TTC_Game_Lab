@@ -9,10 +9,13 @@ import "./home.css";
 /* The main site HOME page — the front door every signed-in creator lands
    on (Jessica, 2026-11-15). Brand up front, news about what has been
    added to the site, upcoming features to look out for, the Tips &
-   Tricks slides, a prominent Donate section, and doors onward: My
-   Projects (the library), New project, FAQs and Contact Us (both on
-   /help). The projects grid itself is NOT the landing — it lives at
-   /projects. The AI assistant is not here; she lives inside projects. */
+   Tricks slides, a prominent Donate section, and the nav and buttons
+   onward: My Projects (the library), New project, FAQs and Contact Us
+   (both on /help). The projects grid itself is NOT the landing — it
+   lives at /projects. The AI assistant is not here; she lives inside
+   projects. (The two big picture door cards that first shipped here
+   were removed later on 2026-11-15 at Jessica's direction — the nav
+   and buttons already do that job.) */
 
 const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL || "https://buy.stripe.com/8x25kwaJhdu23J95UGawo00";
 
@@ -90,27 +93,8 @@ export default function HomePage() {
         <p className="rd-tagline">Turning ideas into experiences</p>
         <p className="rd-homelede">
           This is home base — what&apos;s new on the site, what&apos;s coming next,
-          and the doors to everything you make here.
+          and the way to everything you make here.
         </p>
-
-        <div className="rd-doors">
-          <Link href="/projects" className="rd-proj rd-door">
-            <img src="/redesign/kind-gameshow.webp" alt="" />
-            <div className="rd-shade" />
-            <div className="rd-txt">
-              <div className="rd-t">My Projects</div>
-              <p className="rd-doorline">Your library — every show you&apos;ve built, right where you left it.</p>
-            </div>
-          </Link>
-          <Link href="/project/new" className="rd-proj rd-door">
-            <img src="/redesign/kind-multiplayer.webp" alt="" />
-            <div className="rd-shade" />
-            <div className="rd-txt">
-              <div className="rd-t">New project</div>
-              <p className="rd-doorline">Start something new — gameshow, talk &amp; classroom, radio, DJ, karaoke, or game night.</p>
-            </div>
-          </Link>
-        </div>
 
         <div className="rd-cols">
           <section aria-label="Site news">

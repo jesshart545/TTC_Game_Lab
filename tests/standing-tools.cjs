@@ -61,10 +61,6 @@ html=face(tool('cliffhanger',{items:[{label:'Toaster',price:30}],stepsToFall:10,
 assert(html.includes('Toaster'),'cliffhanger stands with its first saved item showing');
 assert(!html.includes('$'),'cliffhanger standing face renders no dollar sign');
 
-html=face(tool('prize-wheel',{values:['5¢','25¢','1.00']}));
-assert(html.includes('Ready to spin')&&html.includes('1.00'),'prize wheel stands with its saved values, ready to spin');
-assert(!html.includes('$'),'prize wheel standing face renders no dollar sign');
-
 html=face(tool('random-picker',{source:'cards',items:['Alpha','Beta','Gamma']}));
 assert(html.includes('Alpha · Beta · Gamma'),'random picker stands with its whole pool listed');
 assert(!html.includes('role="status"'),'random picker standing face presents no item as the pick');
@@ -83,7 +79,6 @@ assert(before.includes('Red')&&after.includes('Gold')&&!after.includes('Red'),'s
 assert(!standsOnOverlay(tool('plinko',{})),'a placed plinko does NOT stand by default — it is a show tool the host brings up from the dashboard');
 assert(standsOnOverlay(tool('plinko',{alwaysVisible:true})),'a plinko the creator chose to keep on the overlay the whole show stands');
 assert(!standsOnOverlay(tool('plinko',{triggerOnly:true})),'a trigger-only plinko without the opt-in appears only when fired');
-assert(!standsOnOverlay(tool('prize-wheel',{alwaysVisible:false})),'an explicit alwaysVisible:false is fire-only too');
 assert(!standsOnOverlay({...tool('plinko',{alwaysVisible:true}),inOverlayBuild:false}),'an unplaced plinko does not stand even with the opt-in');
 console.log('PASS: standing faces show the real configured games — board, deck, items, values, pool — with no fake result standing.');
 
@@ -100,17 +95,10 @@ console.log('PASS: gift guide stands exactly once (standing when idle, live stat
 
 /* ---------- (b) No dollar signs in what this build touches ---------- */
 assert(!overlay.includes('$${q.value}')&&!overlay.includes('$${triviaQuestion.value}')&&!overlay.includes('runtime-trivia-value">$'),'overlay trivia clue values render as plain numbers');
-const {PrizeWheelDisplay,CliffhangerDisplay}=loadModule('components/ChanceTools.tsx');
-html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{values:['5¢','25¢','1.00'],total:100}}));
-assert(html.includes('1.00! PERFECT!')&&!html.includes('$'),'prize wheel total formats as a plain number with no dollar sign');
-html=renderToStaticMarkup(React.createElement(PrizeWheelDisplay,{outcome:{phase:'nextplayer'}}));
-assert(html.includes('0.00')&&!html.includes('$'),'prize wheel next-player reset renders no dollar sign');
+const {CliffhangerDisplay}=loadModule('components/ChanceTools.tsx');
 html=renderToStaticMarkup(React.createElement(CliffhangerDisplay,{outcome:{phase:'guess',item:{label:'Lamp',price:50},guess:40,price:50,diff:10,steps:10,position:10,stepsToFall:25},elapsed:2000}));
 assert(html.includes('Guessed')&&html.includes('40')&&!html.includes('$'),'cliffhanger guess line renders plain numbers with no dollar sign');
-const {toolDefaults}=loadModule('lib/game-tools.ts');
-const defaults=toolDefaults('prize-wheel');
-assert(defaults.values.includes('1.00')&&defaults.values.every(v=>!String(v).includes('$')),'prize wheel default values carry no dollar sign');
-console.log('PASS: no dollar sign renders in the overlay trivia values, the prize-wheel format, or the cliffhanger guess line; defaults are plain numbers.');
+console.log('PASS: no dollar sign renders in the overlay trivia values or the cliffhanger guess line.');
 
 /* ---------- (c) Jewel build-edits can create and edit the key config ---------- */
 const {applyBuildChanges}=loadModule('lib/build-edits.ts');
@@ -121,7 +109,6 @@ assert.equal(create('plinko',{slots:['A'],rows:12}).config.rows,12);
 assert.deepEqual(create('higher-lower',{cards:[{label:'3',value:3}]}).config.cards,[{label:'3',value:3}]);
 const cliff=create('cliffhanger',{items:[{label:'Lamp',price:20}],stepsToFall:15,dollarsPerStep:2});
 assert.deepEqual(cliff.config.items,[{label:'Lamp',price:20}]);assert.equal(cliff.config.stepsToFall,15);assert.equal(cliff.config.dollarsPerStep,2);
-assert.deepEqual(create('prize-wheel',{values:['5¢','1.00']}).config.values,['5¢','1.00']);
 const picker=create('random-picker',{source:'cards',listId:'list-9'});
 assert.equal(picker.config.source,'cards');assert.equal(picker.config.listId,'list-9');
 assert.equal(create('countdown',{seconds:45}).config.seconds,45);
@@ -135,10 +122,10 @@ assert.deepEqual(edited.project.gameTools.find(t=>t.type==='plinko').config.slot
 assert.equal(gameEntries(edited.project.gameTools.find(t=>t.type==='game-tool-list')).length,1,'Jewel can edit gift guide entries on an existing tool (ids assigned)');
 for(const route of ['app/api/jewel/route.ts','app/api/ai/route.ts']){
   const src=read(route);
-  assert(src.includes('"plinko"|"higher-lower"|"cliffhanger"|"prize-wheel"'),route+' documents the four chance games as creatable tool types');
+  assert(src.includes('"plinko"|"higher-lower"|"cliffhanger"|"blank-board"'),route+' documents the three chance games as creatable tool types');
   assert(src.includes('stepsToFall and dollarsPerStep'),route+' documents the chance-game config keys');
 }
-console.log('PASS: Jewel build-edits create and edit plinko slots/rows, higher-lower cards, cliffhanger items/prices/steps, prize-wheel values, gift guide entries, picker source/list and countdown seconds; both assistant prompts document them.');
+console.log('PASS: Jewel build-edits create and edit plinko slots/rows, higher-lower cards, cliffhanger items/prices/steps, gift guide entries, picker source/list and countdown seconds; both assistant prompts document them.');
 
 /* ---------- (d) A connected chance game is fire-only by default ----------
    The visibility model (Jessica, corrected 2026-11-14): the chance
@@ -151,7 +138,7 @@ console.log('PASS: Jewel build-edits create and edit plinko slots/rows, higher-l
    creator's per-tool opt-in — config.alwaysVisible === true — set
    in the tool's editor or by Jewel when the creator asks for it. */
 const connected=(type,config)=>applyBuildChanges(project([]),{newTools:[{type,name:type,config,connect:true}]});
-for(const [type,config] of [['plinko',{slots:['10','50','100'],rows:8}],['higher-lower',{cards:[{label:'7',value:7},{label:'K',value:13}]}],['cliffhanger',{items:[{label:'Lamp',price:20}],stepsToFall:15}],['prize-wheel',{values:['5¢','25¢','1.00']}]]){
+for(const [type,config] of [['plinko',{slots:['10','50','100'],rows:8}],['higher-lower',{cards:[{label:'7',value:7},{label:'K',value:13}]}],['cliffhanger',{items:[{label:'Lamp',price:20}],stepsToFall:15}]]){
   const r=connected(type,config),t=r.project.gameTools.find(x=>x.type===type);
   assert(t,`Jewel can create a connected ${type}`);
   assert.equal(t.inOverlayBuild,true,`a connected ${type} is placed on the overlay build`);
@@ -182,14 +169,14 @@ assert(!layer.includes('chance-plinko')&&!layer.includes('runtime-tool-plinko'),
 // And on the published overlay the persistent map returns nothing at
 // all for a chance game without the opt-in (the fired run layer
 // presents it when the host fires it; nothing stands in its place).
-assert(overlay.includes('if(activeTool.config?.alwaysVisible!==true&&(activeTool.type==="plinko"||activeTool.type==="higher-lower"||activeTool.type==="cliffhanger"||activeTool.type==="prize-wheel"))return null'),'published overlay renders nothing — no empty frame — for a chance game the creator did not keep visible');
+assert(overlay.includes('if(activeTool.config?.alwaysVisible!==true&&(activeTool.type==="plinko"||activeTool.type==="higher-lower"||activeTool.type==="cliffhanger"))return null'),'published overlay renders nothing — no empty frame — for a chance game the creator did not keep visible');
 assert(overlay.includes('activeTool.config?.alwaysVisible===true && (activeTool.type==="plinko"'),'published overlay renders the standing face only for an opted-in chance game');
 console.log('PASS: wiring a chance game\'s play button leaves it fire-only (no opt-in, no forced triggerOnly) with its button intact; an explicit opt-in stands and renders, and renders no frame anywhere without it.');
 
 /* ---------- (e) Placed standing games get real, separate placements ----------
-   Regression for the 2026-11-14 live recheck: Jewel placed Plinko,
-   Higher or Lower, Cliffhanger and the Big Prize Wheel in "Standing
-   Games Recheck" and all four rendered stacked at the same central
+   Regression for the 2026-11-14 live recheck: Jewel placed several
+   standing chance games in "Standing Games Recheck" and they all
+   rendered stacked at the same central
    position. Their creation defaults carry no placement, no creation
    path assigned one, overlayToolPlacement returned {} and the
    .runtime-game-tool CSS class centered every one of them. Jewel's
@@ -204,27 +191,27 @@ const rectOverlap=(a,b)=>{const w=Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x
 // shape): every placed game leaves with a placement, and no two
 // placements substantially overlap.
 let built=project([]);
-for(const [type,config] of [['plinko',{slots:['10','50','100'],rows:8,alwaysVisible:true}],['higher-lower',{cards:[{label:'7',value:7}],alwaysVisible:true}],['cliffhanger',{items:[{label:'Lamp',price:20}],alwaysVisible:true}],['prize-wheel',{values:['5¢','1.00'],alwaysVisible:true}]]){
+for(const [type,config] of [['plinko',{slots:['10','50','100'],rows:8,alwaysVisible:true}],['higher-lower',{cards:[{label:'7',value:7}],alwaysVisible:true}],['cliffhanger',{items:[{label:'Lamp',price:20}],alwaysVisible:true}]]){
   built=applyBuildChanges(built,{newTools:[{type,name:type,config,connect:true}]}).project;
 }
 const placedTools=built.gameTools.filter(t=>standingSlots&&t.config.placement);
-assert.equal(placedTools.length,4,'every opted-in chance game leaves creation with a placement');
+assert.equal(placedTools.length,3,'every opted-in chance game leaves creation with a placement');
 assert.deepEqual(built.gameTools.find(t=>t.type==='plinko').config.placement,standingSlots[0],'the first standing game takes the center slot');
 for(let i=0;i<placedTools.length;i++)for(let j=i+1;j<placedTools.length;j++){
   const a=placedTools[i].config.placement,b=placedTools[j].config.placement;
   assert(rectOverlap(a,b)<=0.2*Math.min(a.width*a.height,b.width*b.height),`placements of ${placedTools[i].type} and ${placedTools[j].type} do not stack`);
 }
 // The same four in ONE creation edit slot in order too.
-const batch=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{alwaysVisible:true},connect:true},{type:'higher-lower',name:'H',config:{alwaysVisible:true},connect:true},{type:'cliffhanger',name:'C',config:{alwaysVisible:true},connect:true},{type:'prize-wheel',name:'W',config:{alwaysVisible:true},connect:true}]}).project;
-assert.equal(JSON.stringify(batch.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,4)),'four opted-in games created in one edit take center + three quadrants in order');
+const batch=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{alwaysVisible:true},connect:true},{type:'higher-lower',name:'H',config:{alwaysVisible:true},connect:true},{type:'cliffhanger',name:'C',config:{alwaysVisible:true},connect:true}]}).project;
+assert.equal(JSON.stringify(batch.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,3)),'three opted-in games created in one edit take center + two quadrants in order');
 // Fire-only chance games (no opt-in) get NO placement completion —
 // they are not standing pieces of the overlay, so there is nothing
 // to spread out and nothing to drag in Set the Stage.
-const fireOnly=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{},connect:true},{type:'prize-wheel',name:'W',config:{},connect:true}]}).project;
+const fireOnly=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{},connect:true},{type:'higher-lower',name:'W',config:{},connect:true}]}).project;
 assert(fireOnly.gameTools.every(t=>!t.config.placement),'fire-only chance games leave creation with no placement');
-const fireOnlyPass=assignStandingPlacements(project([tool('plinko',{}),tool('prize-wheel',{})]));
+const fireOnlyPass=assignStandingPlacements(project([tool('plinko',{}),tool('higher-lower',{})]));
 assert(fireOnlyPass.gameTools.every(t=>!t.config.placement),'the slot pass skips fire-only chance games entirely');
-const mixedPass=assignStandingPlacements(project([tool('plinko',{}),tool('prize-wheel',{alwaysVisible:true})]));
+const mixedPass=assignStandingPlacements(project([tool('plinko',{}),tool('higher-lower',{alwaysVisible:true})]));
 assert(!mixedPass.gameTools[0].config.placement&&mixedPass.gameTools[1].config.placement,'in a mixed set only the opted-in game is slotted');
 // A lone standing game is unchanged in spirit: the center slot.
 const lone=applyBuildChanges(project([]),{newTools:[{type:'plinko',name:'P',config:{alwaysVisible:true},connect:true}]}).project.gameTools[0];
@@ -241,11 +228,11 @@ assert.equal(partial.config.placement.x,0);assert.equal(partial.config.placement
 assert.equal(typeof partial.config.placement.width,'number','a partial placement is completed with a slot size');
 // Existing saved placements are never moved by a later edit.
 const kept=applyBuildChanges(batch,{gameTools:[{id:batch.gameTools[0].id,config:{slots:['1','2']}}]}).project;
-assert.equal(JSON.stringify(kept.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,4)),'an unrelated later edit never re-slots placed games');
+assert.equal(JSON.stringify(kept.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,3)),'an unrelated later edit never re-slots placed games');
 // The slot pass itself: deterministic, and a no-op (same object) when
 // nothing needs a placement.
 assert.equal(assignStandingPlacements(batch),batch,'assignStandingPlacements returns the project untouched when every standing game is placed');
-const healed=assignStandingPlacements(project([tool('plinko',{alwaysVisible:true}),tool('prize-wheel',{alwaysVisible:true})]));
+const healed=assignStandingPlacements(project([tool('plinko',{alwaysVisible:true}),tool('higher-lower',{alwaysVisible:true})]));
 assert.equal(JSON.stringify(healed.gameTools.map(t=>t.config.placement)),JSON.stringify(standingSlots.slice(0,2)),'the slot pass heals saved unplaced opted-in games in saved order');
 console.log('PASS: placed standing games leave every creation path with the next free slot — center, then quadrants — stated placements respected, existing ones never moved.');
 

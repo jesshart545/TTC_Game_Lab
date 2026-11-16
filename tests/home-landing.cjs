@@ -12,6 +12,9 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 // FAQs and the company Contact Us, a prominent rundown on how to donate
 // (not hidden inside somewhere else), and the Tips & Tricks slides. The
 // projects grid is a destination (My Projects), not the front door.
+// Later on 2026-11-15 Jessica directed the two big picture door cards
+// (My Projects / New project) removed from Home: the nav link and the
+// New project button already do that job, so the cards were duplicates.
 
 // 1. The root route: signed-in lands on HOME, signed-out keeps the
 // public landing. The old workspace grid no longer renders at root.
@@ -24,8 +27,9 @@ console.log('PASS: sign-in lands on Home; the public landing is unchanged.');
 // 2. Home carries every section Jessica named.
 const home = read('app/home-page.tsx');
 assert(home.includes('Turning ideas into experiences'), 'brand tagline on Home');
-assert(home.includes('href="/projects"') && home.includes('My Projects'), 'My Projects door leads to the library route');
-assert(home.includes('href="/project/new"') && home.includes('New project'), 'New project door leads to the create flow');
+assert(home.includes('href="/projects"') && home.includes('My Projects'), 'My Projects button leads to the library route');
+assert(home.includes('href="/project/new"') && home.includes('New project'), 'New project button leads to the create flow');
+assert(!home.includes('rd-doors') && !home.includes('rd-doorline'), 'the duplicate picture door cards are removed from Home');
 assert(home.includes('New on the site'), 'news section present');
 for (const title of ['Game Night templates are here', 'Perfect Match deals personal hands', "Plinko's neon board"]) {
   assert(home.includes(title), 'news item present: ' + title);
@@ -34,7 +38,7 @@ assert(home.includes('Coming soon'), 'coming soon section present');
 for (const title of ['Game Night opens to everyone', 'More painted game faces']) {
   assert(home.includes(title), 'coming soon item present: ' + title);
 }
-console.log('PASS: Home shows brand, both doors, site news, and coming soon.');
+console.log('PASS: Home shows brand, both buttons, site news, and coming soon.');
 
 // 3. Tips & Tricks slides live on Home via the ONE shared carousel —
 // the component and its data stay in workspace-home.tsx (not duplicated).

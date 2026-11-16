@@ -1,7 +1,7 @@
 import type { Project, ProjectEvent, OverlayResult, GameToolType } from './project';
 import { mediaKind } from './board-design';
 import { connectQuestionCard } from './control-connections';
-/** The four chance games are show tools (Jessica, corrected
+/** The three chance games are show tools (Jessica, corrected
  *  2026-11-14): they are features of the whole gameshow live — the
  *  host brings one up on the overlay by firing it from the
  *  dashboard, and it is not on the overlay the whole time unless the
@@ -13,7 +13,7 @@ import { connectQuestionCard } from './control-connections';
  *  config.alwaysVisible, set in the tool's editor or by Jewel when
  *  the creator asks for it — and an opt-in already in the tool's own
  *  config is preserved exactly as saved. */
-const chanceToolTypes: GameToolType[] = ['plinko','higher-lower','cliffhanger','prize-wheel'];
+const chanceToolTypes: GameToolType[] = ['plinko','higher-lower','cliffhanger'];
 export const initialResult:OverlayResult={x:15,y:20,width:70,height:60,entrance:'none',exit:'none',entranceSeconds:0,exitSeconds:0,layer:20};
 export function clarifyYoutubeSearch(project:Project):Project {
  const youtubeIds=new Set(project.gameTools.filter(t=>t.type==='youtube').map(t=>t.id));
@@ -47,6 +47,15 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
   return {project:{...project,controls,gameTools:project.gameTools.map(t=>t.id===id?{...t,inToolbox:true,inOverlayBuild:true}:t)},controlId:controls.find(c=>c.action===`timer.show.${id}`)!.id};
  }
  if(tool?.type==='coin-toss'){const cycle=project.controls.find(control=>control.action===`coin.cycle.${id}`);if(cycle)return {project:{...project,gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true}:item)},controlId:cycle.id};}
+ if(tool?.type==='bank'){
+  // The scoreboard model: connecting the Bank places it in the overlay
+  // build and adds ONE show/remove button. The rounds themselves run from
+  // the Bank's host panel (press value + Start Round, the add press and
+  // the bank press), never from auto-wired controls.
+  const existing=project.controls.find(control=>control.action===`bank.toggle.${id}`);
+  const control:ProjectEvent=existing||{id:crypto.randomUUID(),label:`Show ${tool.name}`,action:`bank.toggle.${id}`,detail:'Press once to show; press the same button again to remove.',toolIds:[id]};
+  return {project:{...project,controls:existing?project.controls:[...project.controls,control],gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true,config:{...item.config,triggerOnly:true}}:item)},controlId:control.id};
+ }
  if(tool&&(tool.type==='random-picker'||['scoreboard','game-tool-list'].includes(tool.type))){
   const action=`cards.toggle.${id}`,noun=tool.type==='random-picker'?(tool.config.source==='images'?'image':'card'):tool.name;
   let controls=project.controls.filter(c=>!(tool.type==='random-picker'&&c.action===`cards.clear.${id}`)).map(c=>c.action===`cards.draw.${id}`||c.action===`tool.${id}`?{...c,action,toolIds:[id],label:tool.type==='random-picker'?`Draw random ${noun}: ${tool.name}`:`Show ${tool.name}`,detail:'Press once to show; press the same button again to remove'}:c);
@@ -61,7 +70,7 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
  const action=asset?`asset.show.${id}`:composition?`composition.play.${id}`:tool?.type==='blank-card'?`cards.blank.${id}`:`tool.${id}`;
  const name=(asset||tool||composition)!.name;
  const playsMedia=!!composition||!!asset&&["audio","video"].includes(mediaKind(asset));
- const verb=playsMedia?"Play ":tool?.type==="wheel"?"Spin ":tool?.type==="dice"?"Roll ":tool?.type==="coin-toss"?"Flip ":tool?.type==="plinko"?"Drop ":tool?.type==="prize-wheel"?"Spin ":"Show ";
+ const verb=playsMedia?"Play ":tool?.type==="wheel"?"Spin ":tool?.type==="dice"?"Roll ":tool?.type==="coin-toss"?"Flip ":tool?.type==="plinko"?"Drop ":"Show ";
  let control=project.controls.find(c=>c.action===action);
  if(!control)control={id:crypto.randomUUID(),label:verb+name,action,detail:playsMedia?`${verb}${name} — keeps playing until Stop is pressed`:`${verb}${name} — stays on the overlay until Hide is pressed`,toolIds:tool?[id]:[],compositionId:composition?.id,overlayResult:{...initialResult}};
  // Wiring an asset to its button takes it OFF the standing overlay
@@ -82,6 +91,7 @@ export function buttonFacts(control:ProjectEvent,project:Project):ButtonFacts{
  if(action==='sequence')return {does:'Runs its steps',clicks:control.sequenceMode==='per-press'?'One step per click':'One click runs all its steps',effect:false};
  if(action.startsWith('result.hide.')){const stop=/^stop/i.test(control.label);return {does:(stop?'Stops: ':'Hides: ')+factObject(control.label),clicks:stop?'One click stops it':'One click hides it',effect:false};}
  if(action.startsWith('coin.cycle.'))return {does:'Coin: show, flip, hide',clicks:'One step per click',effect:false};
+ if(action.startsWith('bank.toggle.'))return {does:'Shows: '+(tool?.name||factObject(control.label)),clicks:'Click to show · click again to hide',effect:false};
  if(action.startsWith('timer.')){const op=action.split('.')[1];return {does:op==='toggle'?'Starts / pauses the timer':op==='reset'?'Resets the timer':op==='hide'?'Hides the timer':'Shows the timer',clicks:op==='toggle'?'Click to start · click again to pause':op==='reset'?'One click resets it':op==='hide'?'One click hides it':'One click shows it',effect:false};}
  if(card){const kind=card[1];const name=tool?.name||factObject(control.label);
   if(kind==='toggle'&&tool?.type==='question-card')return {does:'Question card: draw, reveal, clear',clicks:'One button: press to draw · press again to reveal · press again to clear',effect:false};
@@ -98,7 +108,7 @@ export function buttonFacts(control:ProjectEvent,project:Project):ButtonFacts{
  if(action.startsWith('tool.')&&tool){
   if(tool.type==='youtube')return {does:'Opens YouTube search',clicks:'Search stays on the dashboard',effect:false};
   if(tool.type==='dice')return {does:'Rolls the dice',clicks:'Every click rolls again',effect:true};
-  if(tool.type==='wheel'||tool.type==='prize-wheel')return {does:'Spins: '+tool.name,clicks:'Every click spins again',effect:true};
+  if(tool.type==='wheel')return {does:'Spins: '+tool.name,clicks:'Every click spins again',effect:true};
   if(tool.type==='coin-toss')return {does:'Flips the coin',clicks:'Every click flips again',effect:true};
   if(tool.type==='plinko')return {does:'Drops a ball',clicks:'Every click drops again',effect:true};
   if(tool.type==='trivia-list')return {does:'Next question, then its answer',clicks:'Every click: next one',effect:true};

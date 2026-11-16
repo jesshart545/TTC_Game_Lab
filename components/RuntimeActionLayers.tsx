@@ -5,7 +5,7 @@ import {runSequence,type SequenceProgress} from "../lib/sequences";
 import type { Project, ProjectEvent, GameTool, ProjectAsset } from "../lib/project";
 import {controlConnectionError} from "../lib/control-connections";
 import {mediaKind} from "../lib/board-design";
-import {WheelDisplay,DiceDisplay,CoinDisplay,PlinkoDisplay,HigherLowerDisplay,CliffhangerDisplay,PrizeWheelDisplay} from "./ChanceTools";
+import {WheelDisplay,DiceDisplay,CoinDisplay,PlinkoDisplay,HigherLowerDisplay,CliffhangerDisplay} from "./ChanceTools";
 import CityCrimeSceneOverlay from "./CityCrimeSceneOverlay";
 import {nextCoinPhase,type CoinPhase} from "../lib/coin-cycle";
 import {timerAction,timerTransition,type TimerState} from "../lib/timer-controls";
@@ -13,9 +13,12 @@ import {coinOutcome} from "../lib/coin-toss";
 import {BoardSurface} from "./BoardDesigner";
 import {GameInfoOverlay} from './GameInfoTools';
 import {infoTypes} from '../lib/game-tools';
+import {plinkoBoardArtUrl} from '../lib/plinko-art';
+import {chanceArtUrl} from '../lib/chance-art';
 import {toolShowsTitle,toolTitle} from '../lib/tool-style';
 import QuestionCards,{FittedCard,StyledTimer} from './QuestionCards';
 import {cardControl,cardPhase,cardTransition,freshCardState,isCardTool,questionPool,type CardState,type CardAction} from '../lib/question-cards';
+import {bankTransition,freshBankState,type BankAction,type BankState} from '../lib/bank';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
@@ -27,13 +30,16 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const cardRef=useRef<Record<string,CardState>>({});
   const [cardStates,setCardStates]=useState<Record<string,CardState>>({});
   const cardCommand=useCallback((id:string,action:CardAction,text='')=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.enabled);if(!p||!tool)throw new Error('Card system unavailable.');const next=cardTransition(p,tool,cardRef.current[id]||freshCardState(),action,Date.now(),undefined,text);cardRef.current={...cardRef.current,[id]:next};setCardStates(cardRef.current);savedCallback.current?.(cardRef.current);},[]);
+  const bankRef=useRef<Record<string,BankState>>({});
+  const [bankStates,setBankStates]=useState<Record<string,BankState>>({});
+  const bankCommand=useCallback((id:string,action:BankAction,pressValue?:number)=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.type==='bank'&&t.enabled);if(!p||!tool)throw new Error('Bank unavailable.');const next=bankTransition(bankRef.current[id]||freshBankState(tool.config),action,Date.now(),{pressValue,roundSeconds:tool.config.roundSeconds});bankRef.current={...bankRef.current,[id]:next};setBankStates(bankRef.current);},[]);
   const latest = useRef(project); latest.current = project;
   useEffect(()=>{if(project&&initialized.current!==project.id){initialized.current=project.id;cardRef.current=project.cardPreviewStates||{};setCardStates(cardRef.current);}},[project?.id]);
   const sequence=useRef<AbortController|null>(null);
   const sequenceProgress=useRef<SequenceProgress>({});
   const [sequenceRunning,setSequenceRunning]=useState(false),[sequenceError,setSequenceError]=useState("");
   const stopSequence=useCallback(()=>{sequence.current?.abort();setSequenceRunning(false);},[]);
-  const resetGame=useCallback(()=>{const p=latest.current;if(!p)return;sequence.current?.abort();setSequenceRunning(false);setSequenceError('');timers.current.forEach(clearTimeout);timers.current=[];timerStates.current={};coinPhases.current={};trivia.current={};setRuns([]);setBackgroundKey(null);setFlash(false);const next={...cardRef.current};for(const tool of p.gameTools){if(tool.enabled&&(infoTypes.includes(tool.type)||['question-card','blank-card','random-picker'].includes(tool.type)))next[tool.id]=cardTransition(p,tool,cardRef.current[tool.id]||freshCardState(),'new-game',Date.now());}cardRef.current=next;setCardStates(next);savedCallback.current?.(next);},[]);
+  const resetGame=useCallback(()=>{const p=latest.current;if(!p)return;sequence.current?.abort();setSequenceRunning(false);setSequenceError('');timers.current.forEach(clearTimeout);timers.current=[];timerStates.current={};coinPhases.current={};trivia.current={};setRuns([]);setBackgroundKey(null);setFlash(false);const next={...cardRef.current};for(const tool of p.gameTools){if(tool.enabled&&(infoTypes.includes(tool.type)||['question-card','blank-card','random-picker'].includes(tool.type)))next[tool.id]=cardTransition(p,tool,cardRef.current[tool.id]||freshCardState(),'new-game',Date.now());}cardRef.current=next;setCardStates(next);savedCallback.current?.(next);const banks={...bankRef.current};for(const tool of p.gameTools){if(tool.enabled&&tool.type==='bank')banks[tool.id]=bankTransition(bankRef.current[tool.id]||freshBankState(tool.config),'new-game',Date.now(),{roundSeconds:tool.config.roundSeconds,pressValue:tool.config.pressValue});}bankRef.current=banks;setBankStates(banks);},[]);
   useEffect(()=>()=>sequence.current?.abort(),[]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
@@ -44,7 +50,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const [flash, setFlash] = useState(false);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
-  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[];phase?:CoinPhase;timer?:TimerState}>) {
+  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[];phase?:CoinPhase;timer?:TimerState;bank?:BankState}>) {
     const p = latest.current; if (!p) return;
     if(control.action==='sequence'){
       const error=controlConnectionError(p,control);if(error)throw new Error(error);
@@ -62,6 +68,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     const connectionError=controlConnectionError(p,control);if(connectionError)throw new Error(connectionError);
     const legacyPicker=p.gameTools.find(t=>t.type==='random-picker'&&control.action===`tool.${t.id}`);if(legacyPicker){cardCommand(legacyPicker.id,'draw');return;}
     const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action,String(p.gameTools.find(t=>t.id===card.toolId)?.config.text||""));return;}
+    const bankToggleId=/^bank\.toggle\.(.+)$/.exec(control.action||'')?.[1];if(bankToggleId){const tool=p.gameTools.find(t=>t.id===bankToggleId&&t.type==='bank'&&t.enabled);if(!tool)return;const next=outcomes?.[tool.id]?.bank||bankTransition(bankRef.current[tool.id]||freshBankState(tool.config),'toggle',Date.now());bankRef.current={...bankRef.current,[tool.id]:next};setBankStates(bankRef.current);return;}
     const later = (fn: () => void, ms: number) => { const timer = setTimeout(() => { timers.current = timers.current.filter(x => x !== timer); fn(); }, ms); timers.current.push(timer); };
     const add = (entry: Omit<Run, "id" | "at" | "control">, seconds: number) => {
       const id = ++serial.current;
@@ -134,7 +141,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     }
     if (!control.toolIds?.length && !control.compositionId && !control.chain?.length) { setFlash(true); later(() => setFlash(false), 700); }
   }, [remove,cardCommand]);
-  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand,sequenceRunning,sequenceError,stopSequence,resetGame };
+  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand,bankStates,bankCommand,sequenceRunning,sequenceError,stopSequence,resetGame };
 }
 
 
@@ -173,14 +180,13 @@ function ToolRun({ run, assets, index, count, live, slug }: { run: Run; assets: 
   const revealResult = now - run.at >= 1800;
   return <section aria-label={tool.name} style={{ boxSizing:"border-box", position:"absolute", left:"20%", top:`${12 + index * (76 / Math.max(1,count))}%`, width:"60%", padding:"1rem", zIndex:30, ...toolStyle(tool), maxHeight:`${76 / Math.max(1,count) - 3}%`, overflow:"auto", ...overlayToolPlacement(tool), ...(placement?{left:placement.x+"%",top:placement.y+"%",width:placement.width+"%",height:placement.height+"%",maxHeight:"none",zIndex:placement.layer}: {}), ...motionStyle(run) }}>
     <ToolArtwork tool={tool} assets={assets}/>{toolShowsTitle(tool)&&<h3>{toolTitle(tool)}</h3>}
-    {tool.type === "wheel" && <WheelDisplay colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} entries={(Array.isArray(config.segments)?config.segments:[]).map(String)} result={run.result||""} elapsed={now-run.at} preview={run.id===0}/>}
+    {tool.type === "wheel" && <WheelDisplay colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} entries={(Array.isArray(config.segments)?config.segments:[]).map(String)} result={run.result||""} elapsed={now-run.at} preview={run.id===0} artSrc={chanceArtUrl(tool,assets)}/>}
     {tool.type === "random-picker" && <><div>{(Array.isArray(config.segments) ? config.segments : Array.isArray(config.items) ? config.items : []).map(String).join(" · ")}</div><strong role="status">{revealResult ? run.result : "Choosing…"}</strong></>}
     {tool.type === "coin-toss" && <CoinDisplay result={run.result} elapsed={now-run.at} preview={run.id===0} ready={run.coinPhase==='show'} faceColor={String(config.faceColor||"#ffd166")} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#382608")}/>}
-    {tool.type === "dice" && <DiceDisplay faceColor={String(config.faceColor||"#f5faff")} pipColor={String(config.pipColor||"#102132")} result={Number(run.result)||1} sides={Math.min(100,Math.max(2,Math.floor(Number(config.sides)||6)))} elapsed={now-run.at} preview={run.id===0}/>}
-    {tool.type === "plinko" && (()=>{let o:any={};try{o=JSON.parse(String(run.result||"{}"));}catch{}const slots=Array.isArray(o.slots)?o.slots.map(String):(Array.isArray(config.slots)?config.slots.map(String):[]);return <PlinkoDisplay title={String(config.title||tool.name)} slots={slots} winner={Number(o.winner)||0} rows={Math.min(14,Math.max(4,Number(config.rows)||9))} elapsed={now-run.at} preview={run.id===0} pegColor={String(config.pegColor||"#8b9bb4")} ballColor={String(config.ballColor||"#ff5d5d")} colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")}/>})()}
-    {tool.type === "higher-lower" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}return <HigherLowerDisplay outcome={o||undefined} elapsed={now-run.at} preview={run.id===0} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")}/>})()}
-    {tool.type === "cliffhanger" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}return <CliffhangerDisplay outcome={o||undefined} elapsed={now-run.at} preview={run.id===0} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")}/>})()}
-    {tool.type === "prize-wheel" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}const values=Array.isArray(o?.values)?o.values.map(String):(Array.isArray(config.values)?config.values.map(String):[]);return <PrizeWheelDisplay outcome={o?{...o,values}:undefined} elapsed={now-run.at} preview={run.id===0} colors={[String(config.slotColor||"#b3123f"),String(config.alternateSlotColor||"#0f6b4f")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")}/>})()}
+    {tool.type === "dice" && <DiceDisplay faceColor={String(config.faceColor||"#f5faff")} pipColor={String(config.pipColor||"#102132")} result={Number(run.result)||1} sides={Math.min(100,Math.max(2,Math.floor(Number(config.sides)||6)))} elapsed={now-run.at} preview={run.id===0} artSrc={chanceArtUrl(tool,assets)}/>}
+    {tool.type === "plinko" && (()=>{let o:any={};try{o=JSON.parse(String(run.result||"{}"));}catch{}const slots=Array.isArray(o.slots)?o.slots.map(String):(Array.isArray(config.slots)?config.slots.map(String):[]);return <PlinkoDisplay title={String(config.title||tool.name)} slots={slots} winner={Number(o.winner)||0} rows={Math.min(14,Math.max(4,Number(config.rows)||9))} elapsed={now-run.at} preview={run.id===0} pegColor={String(config.pegColor||"#8b9bb4")} ballColor={String(config.ballColor||"#ff5d5d")} colors={[String(config.slotColor||"#154c69"),String(config.alternateSlotColor||"#512b75")]} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} artSrc={plinkoBoardArtUrl(tool,assets)}/>})()}
+    {tool.type === "higher-lower" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}return <HigherLowerDisplay outcome={o||undefined} elapsed={now-run.at} preview={run.id===0} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} artSrc={chanceArtUrl(tool,assets)}/>})()}
+    {tool.type === "cliffhanger" && (()=>{let o:any=null;try{o=JSON.parse(String(run.result||"null"));}catch{}return <CliffhangerDisplay outcome={o||undefined} elapsed={now-run.at} preview={run.id===0} textColor={String((config.appearance as Record<string,unknown>)?.textColor||"#ffffff")} artSrc={chanceArtUrl(tool,assets)}/>})()}
     {tool.type === "city-crime-scene" && <CityCrimeSceneOverlay tool={tool} result={run.result} assets={assets}/>}
     {tool.type === "poll" && <PollRun tool={tool} controlId={run.control.id} slug={slug} live={live}/>}
     {tool.type === "trivia-board" && <div className="runtime-jeopardy-grid">{(Array.isArray(config.categories)?config.categories:[]).map((category:any,i:number)=><div key={i}><strong>{String(category.name)}</strong>{(Array.isArray(category.questions)?category.questions:[]).map((q:any,j:number)=><p key={j}>{q.used?'USED':String(q.value)}</p>)}</div>)}</div>}

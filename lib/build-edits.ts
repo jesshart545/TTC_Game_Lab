@@ -4,7 +4,8 @@ import type {Project,GameToolType} from './project';
 import {applyDraftChanges,normalizeDraftChanges} from './draft-edit';
 import {mergeCityCrimeSceneMysteryPatch} from './city-crime-scene';
 import {addCreationControl} from './build-controls';
-import {toolDefaults,infoTypes,cleanInfoEntries} from './game-tools';
+import {toolDefaults,infoTypes,cleanInfoEntries,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText} from './game-tools';
+import {clampBankPressValue,clampBankRoundSeconds} from './bank';
 import {assignStandingPlacements,standingPlacementTypes} from './standing-placement';
 import {cleanTriviaQuestions} from './quiz';
 import {createCardSystem} from './question-cards';
@@ -17,7 +18,7 @@ const placementPatch=(raw:unknown):Partial<Record<'x'|'y'|'width'|'height',numbe
  for(const key of ['width','height'] as const){const n=p[key];if(typeof n==='number'&&Number.isFinite(n))out[key]=Math.min(100,Math.max(1,n));}
  return Object.keys(out).length?out as Partial<Record<'x'|'y'|'width'|'height',number>>:null;
 };
-export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','prize-wheel','blank-board','youtube','scoreboard','game-tool-list','card-list','city-crime-scene','trivia-list','question-card'];
+export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','blank-board','youtube','scoreboard','game-tool-list','card-list','city-crime-scene','trivia-list','question-card','bank'];
 export function applyBuildChanges(project:Project,input:unknown){
  const changes=normalizeDraftChanges(input),warnings:string[]=[];let extra=0;
  let next={...project,gameTools:[...project.gameTools],assetPools:(project.assetPools||[]).map(p=>({...p,assetKeys:[...p.assetKeys]}))};
@@ -41,7 +42,42 @@ export function applyBuildChanges(project:Project,input:unknown){
    next={...withCards,assetPools:next.assetPools,gameTools:withCards.gameTools.map(t=>t.id===cardTool.id?{...t,name:String(item.name||t.name).slice(0,80),config:{...t.config,...(poolId?{poolId}:{}),...(Object.keys(record(cfg.questionCard)).length?{questionCard:{...record(t.config.questionCard),...record(cfg.questionCard)}}:{}),...(Object.keys(record(cfg.answerCard)).length?{answerCard:{...record(t.config.answerCard),...record(cfg.answerCard)}}:{})}}:t)};
    extra++;continue;
   }
-  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{}),...(infoTypes.includes(item.type)?{entries:cleanInfoEntries(record(item.config).entries)}:{})}});
+  // A Plinko board Jewel creates must carry the creator's own slot
+  // labels: dollar signs are stripped (absolute rule), and the stock
+  // defaults are never padded in — boards must not all come out the
+  // same (Jessica, 2026-11-15). The list is otherwise kept exactly as
+  // supplied: partial boards are legitimate, guarded behavior (the
+  // standing-tools guard pins a 2-label board stored verbatim, and
+  // the renderer spreads any list across the painted slots), so no
+  // count gate is enforced here — the exactly-9 instruction lives in
+  // the Jewel prompt. Slots absent entirely keep the toolDefaults
+  // spread below — nothing of the creator's exists to preserve then.
+  let plinkoSlots:string[]|undefined;
+  if(item.type==='plinko'&&record(item.config).slots!==undefined)plinkoSlots=cleanPlinkoSlots(record(item.config).slots);
+  // A Bank Jewel creates: any numeric config the model supplies is
+  // coerced and clamped to sane ranges (round length 5-3600 seconds,
+  // press value 1-1000000) — the sanitizer lesson from the Plinko fix.
+  let bankConfig:Record<string,unknown>|undefined;
+  if(item.type==='bank')bankConfig={roundSeconds:clampBankRoundSeconds(record(item.config).roundSeconds),pressValue:clampBankPressValue(record(item.config).pressValue)};
+  // The other chance games get the Plinko treatment at creation
+  // (Jessica, 2026-11-15): every label Jewel supplies — wheel
+  // segments, Higher or Lower card labels, Cliffhanger item labels —
+  // is cleaned the same way, dollar signs stripped and the creator's
+  // own values preserved in position, with the stock defaults never
+  // padded into a supplied list (in the 2026-11-15 creation check a
+  // Jewel-made wheel carried a dollar-signed segment). A title Jewel
+  // wrote for one of these
+  // tools is cleaned the same way: it renders on the overlay, where
+  // no dollar sign may ever appear.
+  let chanceConfig:Record<string,unknown>|undefined;
+  if(['wheel','dice','higher-lower','cliffhanger'].includes(item.type)){
+   const cfg=record(item.config);chanceConfig={};
+   if(item.type==='wheel'&&cfg.segments!==undefined)chanceConfig.segments=cleanWheelSegments(cfg.segments);
+   if(item.type==='higher-lower'&&cfg.cards!==undefined)chanceConfig.cards=cleanHigherLowerCards(cfg.cards);
+   if(item.type==='cliffhanger'&&cfg.items!==undefined)chanceConfig.items=cleanCliffhangerItems(cfg.items);
+   if(typeof cfg.title==='string')chanceConfig.title=cleanLabelText(cfg.title);
+  }
+  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{}),...(infoTypes.includes(item.type)?{entries:cleanInfoEntries(record(item.config).entries)}:{}),...(plinkoSlots?{slots:plinkoSlots}:{}),...(bankConfig||{}),...(chanceConfig||{})}});
   // A slotted standing type whose placement the model did not state
   // must not inherit a stock default placement (the random picker's
   // centered default would otherwise read as its chosen home and

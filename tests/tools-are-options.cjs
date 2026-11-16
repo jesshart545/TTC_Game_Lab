@@ -14,7 +14,7 @@ const {GAME_TEMPLATES}=load('lib/game-templates.ts');
 
 // 1. The shelf of options is unchanged — every piece is still offered on
 // the setup screen — but nothing is on by default, for any kind.
-eq(SETUP_PIECES.map(p=>p.id),['question-cards','prize-wheel','dice','timer','scoreboard','video-clips'],'the setup shelf still offers every piece');
+eq(SETUP_PIECES.map(p=>p.id),['question-cards','game-wheel','dice','timer','scoreboard','video-clips'],'the setup shelf still offers every piece');
 assert(SETUP_PIECES.every(p=>p.defaultOn===false),'no setup piece is on by default');
 for(const kind of ['gameshow','talk','radio','multiplayer'])eq(defaultSetupPieces(kind),[],kind+' pre-taps no pieces');
 eq(setupPiecesForKind('talk').map(p=>p.id),['question-cards','video-clips'],'talk still offers its own two options');
@@ -33,7 +33,7 @@ console.log('PASS: fresh projects built the app way contain no unchosen default 
 
 // 3. Pieces the creator actually taps still mint their tools — choosing
 // remains a real choice with its existing result.
-const tapped=applySetupPieces({...createProject(''),kind:'gameshow'},['prize-wheel','timer']);
+const tapped=applySetupPieces({...createProject(''),kind:'gameshow'},['game-wheel','timer']);
 eq(tapped.gameTools.map(t=>t.type),['wheel','countdown'],'tapped pieces still mint their tools');
 console.log('PASS: pieces the creator taps still add their tools.');
 
