@@ -14,10 +14,14 @@ import type { GameTool, Project, ProjectAsset } from "./project";
  *   app/api/jewel/route.ts and app/api/ai/route.ts).
  * - When the project page's Jewel executor creates a Plinko board —
  *   or a draft edit rewrites a board's `artStyle` (a restyle) — it
- *   generates the artwork through the site's existing image pipeline
- *   (/api/generate-asset, the same funnel as every Jewel image), with
- *   the shipped board as the reference image, files the result into
- *   the project like any other Jewel-generated media
+ *   generates the artwork text-to-image through the site's existing
+ *   image pipeline (/api/generate-asset, the same funnel as every
+ *   Jewel image), from the code-built prompt in plinkoBoardArtPrompt
+ *   plus the creator's style words — no reference image, exactly as
+ *   the other chance tools generate theirs (lib/chance-art); an
+ *   image-to-image restyle of the shipped board made every board a
+ *   near-copy of it and defeated the creator's theme. It files the
+ *   result into the project like any other Jewel-generated media
  *   (lib/asset-filing), and stores the asset's key on the tool's
  *   config as `boardArtKey` (the attach step is an ordinary
  *   applyBuildChanges gameTools patch, the way City Crime Scene media

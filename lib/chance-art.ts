@@ -39,10 +39,12 @@ import type { GameTool, GameToolType, Project, ProjectAsset } from "./project";
  *   design and the executor tells the creator plainly — custom art
  *   is never claimed when it does not exist.
  *
- * One honest difference from Plinko: these tools ship no artwork
- * file to restyle from, so their generation is text-to-image through
- * the same pipeline rather than an image-to-image restyle of a
- * shipped board.
+ * Like Plinko, the generation is text-to-image through the same
+ * pipeline — no reference image — so the creator's style words fully
+ * direct the result. (Plinko originally generated as an
+ * image-to-image restyle of its shipped board; the reference
+ * dominated and every board came out a near-copy, so Plinko moved to
+ * this same text-to-image shape on 2026-11-15.)
  */
 
 /** The tool config field holding the asset key of the tool's own artwork. */
