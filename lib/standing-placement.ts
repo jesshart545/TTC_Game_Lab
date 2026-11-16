@@ -4,7 +4,7 @@ import type {GameTool,Project} from './project';
  * Default placements for standing game tools (the 2026-11-14 live
  * recheck defect): a placed tool's overlay position lives in
  * tool.config.placement ({x,y,width,height}, percent of the
- * 1920x1080 canvas), but the four chance games' defaults carry no
+ * 1920x1080 canvas), but the three chance games' defaults carry no
  * placement and neither creation path assigned one — so
  * overlayToolPlacement returned {} and the .runtime-game-tool CSS
  * class centered every standing tool at left:50% / top:50%, stacking
@@ -24,11 +24,11 @@ import type {GameTool,Project} from './project';
 export type PlacementRect={x:number;y:number;width:number;height:number};
 
 /** The standing types rendered through the shared placed-tool
- *  wrapper (toolStyle + overlayToolPlacement): the four chance games
+ *  wrapper (toolStyle + overlayToolPlacement): the three chance games
  *  and the random picker. Countdown and the gift guide position
  *  themselves from their own built-in defaults, so they are not
  *  slotted. */
-export const standingPlacementTypes=['plinko','higher-lower','cliffhanger','prize-wheel','random-picker'];
+export const standingPlacementTypes=['plinko','higher-lower','cliffhanger','random-picker'];
 
 /** Deterministic slots, percent of the canvas: center first, then
  *  the four quadrants (top-left, top-right, bottom-left,

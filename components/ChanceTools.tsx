@@ -4,7 +4,14 @@ import './chance-tools.css';
 
 // The animation presents an already-selected result; it never draws another winner.
 export function wheelRotation(winner:number,count:number,progress:number){return (2160-(winner+.5)*360/Math.max(1,count))*(1-Math.pow(1-Math.min(1,Math.max(0,progress)),4));}
-export function WheelDisplay({entries,result,elapsed=0,duration=4000,preview=false,colors=["#154c69","#512b75"],textColor="#ffffff"}:{entries:string[];result:string;elapsed?:number;duration?:number;preview?:boolean;colors?:string[];textColor?:string}) {
+// A wheel's OWN artwork (artSrc: the stage backboard Jewel generated
+// from the creator's style words at creation time, saved on the tool's
+// config as artKey — lib/chance-art) fills the panel BEHIND the wheel:
+// the wheel itself — its segments, the creator's colors, the lights,
+// the labels — is still drawn by the code above it, unchanged, because
+// the artwork never carries labels. Without artSrc the wheel renders
+// exactly as it always has.
+export function WheelDisplay({entries,result,elapsed=0,duration=4000,preview=false,colors=["#154c69","#512b75"],textColor="#ffffff",artSrc}:{entries:string[];result:string;elapsed?:number;duration?:number;preview?:boolean;colors?:string[];textColor?:string;artSrc?:string}) {
  const winner=Math.max(0,entries.indexOf(result));
  const slice=360/Math.max(1,entries.length);
  const progress=preview?0:Math.min(1,Math.max(0,elapsed/duration));
@@ -12,7 +19,7 @@ export function WheelDisplay({entries,result,elapsed=0,duration=4000,preview=fal
  const rotation=wheelRotation(winner,entries.length,progress);
  const point=(angle:number)=>[100+92*Math.cos((angle-90)*Math.PI/180),100+92*Math.sin((angle-90)*Math.PI/180)];
  const bulbs=Array.from({length:24},(_,i)=>{const a=i*15*Math.PI/180;return {x:100+96.3*Math.cos(a),y:100+96.3*Math.sin(a),alt:i%2===0};});
- return <div className="chance-tool"><div className={"chance-wheel"+(spinning?" is-spinning":preview?" is-idle":"")}><svg viewBox="0 0 200 200" role="img" aria-label={preview?'Wheel design':progress<1?'Wheel spinning':`Wheel landed on ${result}`}>
+ return <div className="chance-tool"><div className={"chance-wheel"+(spinning?" is-spinning":preview?" is-idle":"")} style={artSrc?{backgroundImage:`url("${artSrc}")`,backgroundSize:"cover",backgroundPosition:"center",borderRadius:22}:undefined}><svg viewBox="0 0 200 200" role="img" aria-label={preview?'Wheel design':progress<1?'Wheel spinning':`Wheel landed on ${result}`}>
  <defs>
   <radialGradient id="wheel-rim" cx="50%" cy="42%" r="68%"><stop offset="0%" stopColor="#ffe9a8"/><stop offset="55%" stopColor="#e8a93d"/><stop offset="100%" stopColor="#9a6414"/></radialGradient>
   <radialGradient id="wheel-shade" cx="50%" cy="50%" r="50%"><stop offset="60%" stopColor="#000000" stopOpacity="0"/><stop offset="88%" stopColor="#000000" stopOpacity=".10"/><stop offset="100%" stopColor="#000000" stopOpacity=".30"/></radialGradient>
@@ -30,11 +37,19 @@ export function WheelDisplay({entries,result,elapsed=0,duration=4000,preview=fal
  {!entries.length?<p role="alert">Add entries in Workshop.</p>:<strong role="status" className="chance-status">{preview?'Ready to spin':progress<1?'Spinning…':result}</strong>}</div>;
 }
 const pips:Record<number,number[]>={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
-export function DiceDisplay({result,sides=6,elapsed=0,preview=false,faceColor="#f5faff",pipColor="#102132"}:{result:number;sides?:number;elapsed?:number;preview?:boolean;faceColor?:string;pipColor?:string}){
+// The die's OWN face artwork (artSrc: the character portrait Jewel
+// generated from the creator's style words at creation time, saved on
+// the tool's config as artKey — lib/chance-art): on a six-sided die
+// the character stands in for the dots, placed by this code in the
+// pip positions, so a face always shows exactly as many characters as
+// its value — the count is the game's, never painted. A die with
+// another side count keeps its number face, and without artSrc the
+// faces are the classic dots, unchanged.
+export function DiceDisplay({result,sides=6,elapsed=0,preview=false,faceColor="#f5faff",pipColor="#102132",artSrc}:{result:number;sides?:number;elapsed?:number;preview?:boolean;faceColor?:string;pipColor?:string;artSrc?:string}){
  const rolling=!preview&&elapsed<1400;
  const face=rolling?1+Math.floor(elapsed/90)%sides:result;
  return <div className="chance-tool"><div className={'chance-die'+(rolling?' chance-die-rolling':'')} role="img" aria-label={rolling?'Dice rolling':`${sides}-sided die: ${face}`} style={{background:faceColor,color:pipColor,'--die-turn':`${Math.floor(elapsed/90)*40}deg`} as CSSProperties}>
- {sides===6?<div className="dice-pips">{Array.from({length:9},(_,i)=><span key={i} className={pips[face]?.includes(i)?'pip':'pip-empty'}/>)}</div>:<strong>{face}</strong>}</div><strong role="status">{preview?'Ready to roll':rolling?'Rolling…':`Result: ${result}`}</strong></div>;
+ {sides===6?<div className="dice-pips">{Array.from({length:9},(_,i)=>pips[face]?.includes(i)?(artSrc?<img key={i} className="pip-face" src={artSrc} alt=""/>:<span key={i} className="pip"/>):<span key={i} className="pip-empty"/>)}</div>:<strong>{face}</strong>}</div><strong role="status">{preview?'Ready to roll':rolling?'Rolling…':`Result: ${result}`}</strong></div>;
 }
 
 export function CoinDisplay({result="Heads",elapsed=0,preview=false,ready=false,faceColor="#ffd166",textColor="#382608"}:{result?:string;elapsed?:number;preview?:boolean;ready?:boolean;faceColor?:string;textColor?:string}){
@@ -53,10 +68,15 @@ export function plinkoPath(winner:number,slots:number,rows:number){
   const span=raw[rows]-raw[0]||1;
   return raw.map((v,i)=>({x:Math.min(390,Math.max(10,startX+(v-raw[0])*(targetX-startX)/span)),y:34+i*(336/Math.max(1,rows))}));
 }
-// The board IS the approved neon-cabinet artwork (public/game-art/
-// plinko-board.webp, in its own 2080x1136 space); the live elements —
+// The board artwork fills this 2080x1136 space; the live elements —
 // the marquee title, the configured slot values, the puck and its
-// light trail — are layered over it here. plinkoPath above still
+// light trail — are layered over it here. The artwork is the tool's
+// OWN board when the caller resolves one (artSrc: the board artwork
+// Jewel generated from the creator's style words at creation time,
+// saved on the tool's config as boardArtKey — lib/plinko-art), and
+// the approved shipped neon-cabinet artwork (public/game-art/
+// plinko-board.webp) otherwise. The artwork never carries values or
+// text; the layering below writes both. plinkoPath above still
 // decides everything; the mapping below only re-plots the same points
 // into the artwork's perspective (the cabinet narrows toward the
 // top), and it is exact at the bottom: the last path point lands
@@ -68,7 +88,7 @@ function plinkoArtPoint(p:{x:number;y:number}){
   const cx=1075-30*t,half=415+278.5*t;
   return {x:cx+((p.x-200)/190)*half,y:252+633*t};
 }
-export function PlinkoDisplay({slots,winner=0,rows=9,elapsed=0,duration=3000,preview=false,pegColor="#8b9bb4",ballColor="#ff5d5d",colors=["#154c69","#512b75"],textColor="#ffffff",title="Plinko"}:{slots:string[];winner?:number;rows?:number;elapsed?:number;duration?:number;preview?:boolean;pegColor?:string;ballColor?:string;colors?:string[];textColor?:string;title?:string}){
+export function PlinkoDisplay({slots,winner=0,rows=9,elapsed=0,duration=3000,preview=false,pegColor="#8b9bb4",ballColor="#ff5d5d",colors=["#154c69","#512b75"],textColor="#ffffff",title="Plinko",artSrc}:{slots:string[];winner?:number;rows?:number;elapsed?:number;duration?:number;preview?:boolean;pegColor?:string;ballColor?:string;colors?:string[];textColor?:string;title?:string;artSrc?:string}){
   const S=Math.max(2,slots.length),R=Math.min(14,Math.max(4,rows||9));
   const win=Math.min(S-1,Math.max(0,winner));
   const progress=preview?0:Math.min(1,Math.max(0,elapsed/duration));
@@ -82,7 +102,7 @@ export function PlinkoDisplay({slots,winner=0,rows=9,elapsed=0,duration=3000,pre
   const ballPos=preview?plinkoArtPoint(path[0]):landed?{x:slotCx(win),y:PLINKO_SLOT_Y}:plinkoArtPoint(ball);
   const trail=!preview&&progress>0&&!landed?[...path.slice(Math.max(0,fi-2),fi+1).map(plinkoArtPoint),ballPos]:[];
   return <div className="chance-tool"><div className="chance-plinko"><svg viewBox="0 0 2080 1136" role="img" aria-label={preview?'Plinko board design':landed?`Plinko landed on ${slots[win]}`:'Plinko ball dropping'}>
-    <image href="/game-art/plinko-board.webp" x={0} y={0} width={2080} height={1136}/>
+    <image href={artSrc || "/game-art/plinko-board.webp"} preserveAspectRatio={artSrc ? "none" : undefined} x={0} y={0} width={2080} height={1136}/>
     <text className="chance-plinko-title" x={1072} y={124} textAnchor="middle" fill={textColor} fontSize={titleSize} fontWeight={900} letterSpacing={Math.round(titleSize*0.1)} stroke="rgba(8,4,26,.9)" strokeWidth={3} paintOrder="stroke">{title}</text>
     {slots.map((s,i)=><g key={i} className={landed&&i===win?"chance-plinko-slot-win":undefined}>{landed&&i===win&&<rect x={PLINKO_SLOT_X0+i*slotW+5} y={948} width={slotW-10} height={118} rx={20} fill={colors[i%colors.length]} opacity={.45} stroke="#ffd166" strokeWidth={6}/>}<text x={slotCx(i)} y={PLINKO_SLOT_Y+labelSize*0.36} textAnchor="middle" fill={textColor} fontSize={labelSize} fontWeight={800} stroke="rgba(8,4,26,.92)" strokeWidth={Math.max(3,labelSize/10)} paintOrder="stroke">{s.length>8?s.slice(0,7)+'…':s}</text></g>)}
     {trail.length>1&&<polyline className="chance-plinko-trail" points={trail.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={ballColor} strokeWidth={24} strokeLinecap="round" strokeLinejoin="round"/>}
@@ -105,11 +125,17 @@ function PlayingCard({label,value,small=false,flip=false,deal=false}:{label:stri
   </div>;
 }
 export type HigherLowerOutcome={phase:'draw'|'reveal';card?:{label:string;value:number};prev?:{label:string;value:number};next?:{label:string;value:number};guess?:'higher'|'lower';correct?:boolean};
-export function HigherLowerDisplay({outcome,elapsed=0,preview=false,textColor="#ffffff"}:{outcome?:HigherLowerOutcome;elapsed?:number;preview?:boolean;textColor?:string}){
+// The game's OWN artwork (artSrc: the card-table stage Jewel
+// generated from the creator's style words at creation time, saved on
+// the tool's config as artKey — lib/chance-art) fills the stage
+// behind the cards; the cards themselves are drawn by the code over
+// it, unchanged, because the artwork never carries labels. Without
+// artSrc the stage is the standard design, unchanged.
+export function HigherLowerDisplay({outcome,elapsed=0,preview=false,textColor="#ffffff",artSrc}:{outcome?:HigherLowerOutcome;elapsed?:number;preview?:boolean;textColor?:string;artSrc?:string}){
   const o=outcome||{phase:'draw',card:{label:'?',value:0}};
   const revealing=o.phase==='reveal';
   const done=!preview&&revealing;
-  return <div className="chance-tool"><div className="chance-hl" role="img" aria-label={preview?'Higher or Lower design':revealing?`Was ${o.next?.label} higher or lower than ${o.prev?.label}? ${o.correct?'Correct':'Wrong'}`:`Current card ${o.card?.label}`}>
+  return <div className="chance-tool"><div className="chance-hl" role="img" style={artSrc?{backgroundImage:`url("${artSrc}")`,backgroundSize:"cover",backgroundPosition:"center"}:undefined} aria-label={preview?'Higher or Lower design':revealing?`Was ${o.next?.label} higher or lower than ${o.prev?.label}? ${o.correct?'Correct':'Wrong'}`:`Current card ${o.card?.label}`}>
     {!revealing&&<><small style={{color:textColor,opacity:.75}}>CURRENT CARD</small><div className="chance-hl-stage"><PlayingCard label={o.card?.label??'?'} value={o.card?.value??0} deal={!preview}/><div className="chance-card back" aria-hidden="true"><span>★</span></div></div><p style={{color:textColor}}>Higher or lower than the next card?</p></>}
     {revealing&&<><div className="chance-hl-row"><PlayingCard label={o.prev?.label??'?'} value={o.prev?.value??0} small/><span className="chance-hl-arrow">→</span><PlayingCard label={o.next?.label??'?'} value={o.next?.value??0} small flip/></div><p style={{color:textColor}}>You guessed <strong>{o.guess?.toUpperCase()}</strong></p><strong role="status" className={o.correct?'chance-hl-good':'chance-hl-bad'}>{done?(o.correct?'✓ CORRECT!':'✗ WRONG'):preview?'':'Revealing…'}</strong></>}
     {preview&&!revealing&&<p style={{color:textColor}}>Draw a card to begin</p>}
@@ -118,7 +144,14 @@ export function HigherLowerDisplay({outcome,elapsed=0,preview=false,textColor="#
 
 // ---------- Cliffhanger ----------
 export type CliffhangerOutcome={phase:'item'|'guess'|'reset';item?:{label:string;price:number};itemIndex?:number;guess?:number;price?:number;diff?:number;steps?:number;position?:number;fell?:boolean;stepsToFall?:number;dollarsPerStep?:number};
-export function CliffhangerDisplay({outcome,elapsed=0,preview=false,textColor="#ffffff"}:{outcome?:CliffhangerOutcome;elapsed?:number;preview?:boolean;textColor?:string}){
+// The game's OWN artwork (artSrc: the alpine stage backdrop Jewel
+// generated from the creator's style words at creation time, saved on
+// the tool's config as artKey — lib/chance-art) fills the scene's
+// frame behind the mountain; the mountain, the steps, and the
+// climber are drawn by the code over it, on the same climb path as
+// always, because the artwork never carries the game. Without artSrc
+// the scene is the standard design, unchanged.
+export function CliffhangerDisplay({outcome,elapsed=0,preview=false,textColor="#ffffff",artSrc}:{outcome?:CliffhangerOutcome;elapsed?:number;preview?:boolean;textColor?:string;artSrc?:string}){
   const o=outcome||{phase:'reset' as const,position:0,stepsToFall:25};
   const total=Math.max(5,o.stepsToFall||25),pos=Math.min(total,Math.max(0,o.position||0));
   const fromPos=o.phase==='guess'?Math.max(0,pos-(o.steps||0)):0;
@@ -137,8 +170,9 @@ export function CliffhangerDisplay({outcome,elapsed=0,preview=false,textColor="#
       <defs>
        <linearGradient id="cliff-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#274b73"/><stop offset="58%" stopColor="#7ba7cf"/><stop offset="100%" stopColor="#d9b98a"/></linearGradient>
        <linearGradient id="cliff-rock" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#77879c"/><stop offset="45%" stopColor="#54637a"/><stop offset="100%" stopColor="#333f52"/></linearGradient>
+       {artSrc&&<clipPath id="cliff-art-clip"><rect x="3" y="3" width="394" height="434" rx="18"/></clipPath>}
       </defs>
-      <rect x="3" y="3" width="394" height="434" rx="18" fill="url(#cliff-sky)" stroke="rgba(255,255,255,.35)" strokeWidth="2"/>
+      {artSrc?<><g clipPath="url(#cliff-art-clip)"><image href={artSrc} x={0} y={0} width={400} height={440} preserveAspectRatio="xMidYMid slice"/></g><rect x="3" y="3" width="394" height="434" rx="18" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2"/></>:<rect x="3" y="3" width="394" height="434" rx="18" fill="url(#cliff-sky)" stroke="rgba(255,255,255,.35)" strokeWidth="2"/>}
       <circle cx="330" cy="66" r="30" fill="#ffd166" opacity=".22"/>
       <circle cx="330" cy="66" r="19" fill="#ffd166" opacity=".9"/>
       <polygon points="0,412 92,268 178,412" fill="#54687f" opacity=".45"/>
@@ -168,14 +202,3 @@ export function CliffhangerDisplay({outcome,elapsed=0,preview=false,textColor="#
   </div></div>;
 }
 
-// ---------- Big Wheel (Price-is-Right style) ----------
-export type PrizeWheelOutcome={phase?:'spin'|'nextplayer';winner?:number;values?:string[];total?:number;busted?:boolean};
-export function PrizeWheelDisplay({outcome,elapsed=0,duration=4000,preview=false,colors=["#b3123f","#0f6b4f"],textColor="#ffffff"}:{outcome?:PrizeWheelOutcome;elapsed?:number;duration?:number;preview?:boolean;colors?:string[];textColor?:string}){
-  const values=outcome?.values||[];
-  const fmt=(c:number)=>`${(c/100).toFixed(2)}`;
-  if(outcome?.phase==='nextplayer')return <div className="chance-tool"><strong role="status" style={{color:textColor}}>Next player — total reset to 0.00</strong></div>;
-  const winner=Math.min(values.length-1,Math.max(0,outcome?.winner??0));
-  const total=outcome?.total??0,busted=!!outcome?.busted;
-  return <div className="chance-tool"><WheelDisplay entries={values} result={values[winner]||''} elapsed={elapsed} duration={duration} preview={preview} colors={colors} textColor={textColor}/>
-  <p role="status" className="chance-prize-total" style={{color:busted?'#ff7070':textColor,fontWeight:800}}>Total: {fmt(total)}{busted?' — BUSTED! Over 1.00':total===100?' — 1.00! PERFECT!':''}</p></div>;
-}

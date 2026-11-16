@@ -245,11 +245,6 @@ export const TOOL_CHANGES: Record<string, ChangeItem[]> = {
     { label: "Peg color · ball color · slot colors", say: "Make the plinko ball gold and the pegs white" },
     LOOK_ROW,
   ],
-  "prize-wheel": [
-    { label: "Wheel values", sub: "From 5¢ up to 1.00", say: "Change my big wheel values to 5, 10, 15, 20, 25 cents and a dollar" },
-    { label: "First & second wheel colors", say: "Make my big wheel red and green" },
-    { label: "Look — presets, colors, lettering font, picture · overlay shape, title, border" },
-  ],
   "higher-lower": [
     { label: "The deck — each card's label and number value", say: "Add a card to my deck: Strings on a guitar, 6" },
     LOOK_ROW,
@@ -274,10 +269,9 @@ export const TOOL_CHANGES: Record<string, ChangeItem[]> = {
 
 export type ToolTile = { type: string; name: string; description: string; icon: string; jewelMade?: boolean };
 
-/** The tools-step tiles: the product's TOOL_LIBRARY plus the four tools that exist only through Jewel. */
+/** The tools-step tiles: the product's TOOL_LIBRARY plus the three tools that exist only through Jewel. */
 export const JEWEL_ONLY_TILES: ToolTile[] = [
   { type: "plinko", name: "Plinko", description: "Drop the ball, win the slot", icon: "🔴", jewelMade: true },
-  { type: "prize-wheel", name: "Big Prize Wheel", description: "Spin money values to 1.00", icon: "💵", jewelMade: true },
   { type: "higher-lower", name: "Higher or Lower", description: "Guess the next card", icon: "🃏", jewelMade: true },
   { type: "cliffhanger", name: "Cliffhanger", description: "Price it right or he climbs", icon: "🧗", jewelMade: true },
 ];

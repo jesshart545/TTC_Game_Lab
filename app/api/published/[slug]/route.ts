@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { getAssetUrl } from "../../../../lib/object-storage";
 import type { Project } from "../../../../lib/project";
+import { convertPrizeWheelTools } from "../../../../lib/game-tools";
 
 export async function GET(_request: Request, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params;
@@ -11,8 +12,12 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
   // A trashed project is unpublished while it sits in Trash; restoring it
   // from Trash brings the published page back.
   const rows = await db`SELECT data FROM projects WHERE slug = ${slug} AND deleted_at IS NULL LIMIT 1`;
-  const snapshot = (rows[0]?.data as Project | undefined)?.publishedSnapshot;
-  if (!snapshot) return NextResponse.json({ error: "Project not published." }, { status: 404 });
+  const storedSnapshot = (rows[0]?.data as Project | undefined)?.publishedSnapshot;
+  if (!storedSnapshot) return NextResponse.json({ error: "Project not published." }, { status: 404 });
+  // A snapshot saved before the second wheel's removal can still
+  // hold one: it serves as the selector wheel it converts to
+  // (lib/game-tools convertPrizeWheelTools), never as a dead tool.
+  const snapshot = convertPrizeWheelTools(storedSnapshot as Project);
   const gameTools = (snapshot.gameTools || []).filter(tool => tool.enabled && (tool.inToolbox || tool.inOverlayBuild));
   const compositions = (snapshot.compositions || []).filter(comp => comp.inProject);
   const referenced = JSON.stringify({ gameTools, compositions, controls: snapshot.controls });

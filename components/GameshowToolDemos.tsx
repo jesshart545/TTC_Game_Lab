@@ -6,7 +6,9 @@ import type { WorkflowStepState } from "../lib/workflow-progress";
 import { gameEntries } from "../lib/game-tools";
 import { TOOL_CHANGES, JEWEL_ONLY_TILES, TOOL_ICONS, demoTool, projectWheelSegmentSets, type ToolTile } from "../lib/gameshow-path";
 import { freshCardState, type CardState } from "../lib/question-cards";
-import { WheelDisplay, DiceDisplay, CoinDisplay, PlinkoDisplay, HigherLowerDisplay, CliffhangerDisplay, PrizeWheelDisplay } from "./ChanceTools";
+import { plinkoBoardArtUrl } from "../lib/plinko-art";
+import { chanceArtUrl } from "../lib/chance-art";
+import { WheelDisplay, DiceDisplay, CoinDisplay, PlinkoDisplay, HigherLowerDisplay, CliffhangerDisplay } from "./ChanceTools";
 import { StyledTimer } from "./QuestionCards";
 import { GameInfoOverlay } from "./GameInfoTools";
 import { AskStrip, BareStageContext, ChangeList, StepShell, useNow, type GameshowWorkshopProps } from "./GameshowWorkshop";
@@ -52,6 +54,7 @@ function WheelDemo(props: GameshowWorkshopProps) {
           entries={entries} result={run ? entries[run.result] : entries[0] || ""} elapsed={elapsed} duration={duration}
           colors={[String(cfg.slotColor || "#154c69"), String(cfg.alternateSlotColor || "#512b75")]}
           textColor={appearanceColor(tool)}
+          artSrc={chanceArtUrl(tool, project.assets)}
         />
         <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
           <button type="button" className="gsw-demobtn gold" onClick={() => {
@@ -263,6 +266,7 @@ function DiceDemo(props: GameshowWorkshopProps) {
         <DiceDisplay
           result={run?.result ?? Math.min(6, sides)} sides={sides} elapsed={elapsed}
           faceColor={String(cfg.faceColor || "#f5faff")} pipColor={String(cfg.pipColor || "#102132")}
+          artSrc={chanceArtUrl(tool, project.assets)}
         />
         <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
           <button type="button" className="gsw-demobtn gold" onClick={() => setRun({ at: Date.now(), result: 1 + Math.floor(Math.random() * sides) })}>Roll</button>
@@ -297,6 +301,7 @@ function PlinkoDemo(props: GameshowWorkshopProps) {
           pegColor={String(cfg.pegColor || "#8b9bb4")} ballColor={String(cfg.ballColor || "#ff5d5d")}
           colors={[String(cfg.slotColor || "#154c69"), String(cfg.alternateSlotColor || "#512b75")]}
           textColor={appearanceColor(tool)} title={String(cfg.title || tool.name || "Plinko")}
+          artSrc={plinkoBoardArtUrl(tool, project.assets)}
         />
         <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
           <button type="button" className="gsw-demobtn gold" onClick={() => setRun({ at: Date.now(), winner: Math.floor(Math.random() * slots.length) })}>Drop the ball</button>
@@ -304,44 +309,6 @@ function PlinkoDemo(props: GameshowWorkshopProps) {
         <p className="gsw-demostatus">{fromProject ? "Your Plinko board, with your saved slots — drop it as many times as you like." : "The real Plinko board with its built-in slots — Jewel builds yours with your prizes on it."}</p>
       </DemoFrame>
       <ChangeList title="What you can change — Plinko" items={TOOL_CHANGES.plinko} onAsk={onAsk} />
-    </>
-  );
-}
-
-function PrizeWheelDemo(props: GameshowWorkshopProps) {
-  const { project, onAskJewel: onAsk } = props;
-  const { tool, fromProject } = demoTool(project, "prize-wheel");
-  const cfg = cfgOf(tool);
-  const values = segmentTexts(cfg.values);
-  const duration = 4000;
-  const [total, setTotal] = useState(0);
-  const [run, setRun] = useState<{ at: number; winner: number; total: number; busted: boolean } | null>(null);
-  const now = useNow(run !== null && Date.now() - (run?.at ?? 0) < duration + 300);
-  const elapsed = run ? now - run.at : 0;
-  const shownTotal = run ? run.total : total;
-  return (
-    <>
-      <DemoFrame tag="Live demonstration — the real prize wheel">
-        <PrizeWheelDisplay
-          outcome={{ phase: "spin", winner: run?.winner ?? 0, values, total: shownTotal, busted: run?.busted ?? false }}
-          elapsed={elapsed} duration={duration}
-          colors={[String(cfg.slotColor || "#b3123f"), String(cfg.alternateSlotColor || "#0f6b4f")]}
-          textColor={appearanceColor(tool)}
-        />
-        <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
-          <button type="button" className="gsw-demobtn gold" onClick={() => {
-            const winner = Math.floor(Math.random() * values.length);
-            const cents = Math.round(parseFloat(values[winner].replace(/[^0-9.]/g, "")) * 100) || 0;
-            const nextTotal = total + cents;
-            const busted = nextTotal > 100;
-            setRun({ at: Date.now(), winner, total: nextTotal, busted });
-            setTotal(busted ? 0 : nextTotal);
-          }}>Spin for money</button>
-          <button type="button" className="gsw-vchip" onClick={() => { setTotal(0); setRun(null); }}>New player (reset)</button>
-        </div>
-        <p className="gsw-demostatus">{fromProject ? "Your prize wheel and your values — totals add up, and over 1.00 busts, exactly like the real game." : "Values run 5¢ to 1.00 — spin twice and watch the total climb; over 1.00 busts. Jewel builds yours with your values."}</p>
-      </DemoFrame>
-      <ChangeList title="What you can change — the Big Prize Wheel" items={TOOL_CHANGES["prize-wheel"]} onAsk={onAsk} />
     </>
   );
 }
@@ -364,7 +331,7 @@ function HigherLowerDemo(props: GameshowWorkshopProps) {
   return (
     <>
       <DemoFrame tag="Live demonstration — call it">
-        <HigherLowerDisplay outcome={outcome} elapsed={9999} textColor={appearanceColor(tool)} />
+        <HigherLowerDisplay outcome={outcome} elapsed={9999} textColor={appearanceColor(tool)} artSrc={chanceArtUrl(tool, project.assets)} />
         <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
           {outcome.phase === "draw" ? (
             <>
@@ -422,7 +389,7 @@ function CliffhangerDemo(props: GameshowWorkshopProps) {
   return (
     <>
       <DemoFrame tag="Live demonstration — guess the price, watch him climb">
-        <CliffhangerDisplay outcome={outcome} elapsed={elapsed} textColor={appearanceColor(tool)} />
+        <CliffhangerDisplay outcome={outcome} elapsed={elapsed} textColor={appearanceColor(tool)} artSrc={chanceArtUrl(tool, project.assets)} />
         {outcome.phase !== "guess" && !outcome.fell && (
           <div className="gsw-chipsrow" style={{ justifyContent: "center" }}>
             <span className="gsw-vchip">Price the {item.label}:</span>
@@ -502,7 +469,6 @@ const DEMOS: Record<string, (props: GameshowWorkshopProps) => ReactNode> = {
   "game-tool-list": p => <GiftListDemo {...p} />,
   youtube: p => <YoutubeDemo {...p} />,
   plinko: p => <PlinkoDemo {...p} />,
-  "prize-wheel": p => <PrizeWheelDemo {...p} />,
   "higher-lower": p => <HigherLowerDemo {...p} />,
   cliffhanger: p => <CliffhangerDemo {...p} />,
   "city-crime-scene": p => <CityCrimeSceneDemo {...p} />,

@@ -66,7 +66,7 @@ for (const file of fixedFiles) {
   assert(!src.includes("Player's guess ($"), 'cliffhanger host panel: guess label carries no ($)');
 }
 
-// ---- Gameshow demos: cliffhanger outcome + prize-wheel prose -------------
+// ---- Gameshow demos: cliffhanger outcome prose --------------------------
 {
   const src = read('components/GameshowToolDemos.tsx');
   const line = src.split('\n').find((l) => l.includes('Off by ${'));
@@ -78,17 +78,11 @@ for (const file of fixedFiles) {
   assert(!text.includes('$'), 'cliffhanger demo outcome has no dollar sign');
   assert(!src.includes('Price the {item.label}: $'), 'cliffhanger demo: price chip carries no trailing $');
   assert(src.includes('Price the {item.label}:'), 'cliffhanger demo: price chip present');
-  assert(!src.includes('$1.00'), 'prize-wheel demo prose names the plain 1.00 bust line, never $1.00');
-  assert(src.includes('over 1.00 busts'), 'prize-wheel demo prose keeps its wording with the plain number');
 }
 
-// ---- Game tool editor: prize-wheel + cliffhanger sections -----------------
+// ---- Game tool editor: cliffhanger section --------------------------------
 {
   const src = read('components/GameToolEditor.tsx');
-  assert(!src.includes('"$1.00"'), 'editor: prize-wheel sample values carry no $ value');
-  assert(src.includes('["5¢","25¢","1.00"]'), 'editor: prize-wheel sample values show the plain 1.00');
-  assert(src.includes('"Wheel values (5¢ to 1.00)"'), 'editor: wheel values label shows plain numbers');
-  assert(src.includes('Closest to 1.00 without going over wins'), 'editor: prize-wheel explainer shows the plain number');
   assert(!src.includes('Real price ($)'), 'editor: cliffhanger price label carries no ($)');
   assert(src.includes('Classic rules: 1 off = 1 step.'), 'editor: cliffhanger rules note shows the plain number');
 }

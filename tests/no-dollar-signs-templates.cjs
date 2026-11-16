@@ -56,29 +56,15 @@ for (const file of sweptFiles) {
 {
   const src = read('lib/gameshow-path.ts');
   assert(!src.includes('$1.00') && !src.includes('$1 off'), 'gameshow-path: no $ amounts remain');
-  assert(src.includes('sub: "From 5¢ up to 1.00"'), 'gameshow-path: wheel values line keeps the amount, no $');
   assert(src.includes('sub: "Classic rules: 1 off = 1 step"'), 'gameshow-path: cliffhanger rules line keeps the amount, no $');
-  assert(src.includes('description: "Spin money values to 1.00"'), 'gameshow-path: prize wheel description keeps the amount, no $');
 }
 
 // ---- Build guide + dashboard action help --------------------------------
 {
   const guide = read('lib/build-guide.ts');
   assert(!guide.includes('$1.00'), 'build-guide: no $ amounts remain');
-  assert(guide.includes('from 5¢ to 1.00. Spin for the closest to 1.00 without going over.'),
-    'build-guide: big wheel help keeps the amounts, no $');
-
   const actions = read('lib/dashboard-actions.ts');
   assert(!actions.includes('$1.00'), 'dashboard-actions: no $ amounts remain');
-  assert(actions.includes('from 5¢ to 1.00. Closest to 1.00 without going over wins.'),
-    'dashboard-actions: spin description keeps the amounts, no $');
-}
-
-// ---- Tool defaults (prize wheel values) ----------------------------------
-{
-  const src = read('lib/game-tools.ts');
-  assert(!src.includes("'$1.00'"), 'game-tools: prize-wheel default values carry no $');
-  assert(src.includes("'95¢','1.00'"), 'game-tools: prize-wheel default ladder intact as plain values');
 }
 
 console.log('no-dollar-signs-templates: all assertions passed');
