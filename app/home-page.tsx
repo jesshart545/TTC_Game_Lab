@@ -25,16 +25,6 @@ const NEWS = [
     t: "Game Night templates are here",
     d: "Seven pictured games to start from: Bingo, Quiz Board, Survey Showdown, Perfect Match, Word Chain, Draw & Guess, and Property Tycoon. Pick one and make it yours.",
   },
-  {
-    img: "/redesign/kind-gameshow.webp",
-    t: "Perfect Match deals personal hands",
-    d: "Every player is dealt their own hand from one deck — a card can never sit in two hands at once.",
-  },
-  {
-    img: "/game-art/plinko-board.webp",
-    t: "Plinko's neon board",
-    d: "Plinko now stands on the overlay as a full neon cabinet, with your own slot values shining along the bottom.",
-  },
 ];
 
 const COMING_SOON = [

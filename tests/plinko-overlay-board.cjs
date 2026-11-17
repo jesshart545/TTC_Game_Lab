@@ -102,7 +102,6 @@ assert.ok(fs.existsSync('public/game-art/plinko-board-default.webp'), 'the neutr
   const skipDirs = new Set(['node_modules', '.git']);
   const binaryExt = new Set(['.webp', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.woff', '.woff2', '.mp3', '.mp4', '.zip']);
   const allowed = new Map([
-    ['app/home-page.tsx', 'flagged news card about her specific board — hers to retire'],
     ['tests/plinko-own-art.cjs', 'the not-equal pin naming the old path'],
     ['tests/plinko-overlay-board.cjs', 'this guard'],
   ]);
