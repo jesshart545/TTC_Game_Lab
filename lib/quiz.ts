@@ -99,3 +99,29 @@ export function scrubQuizQuestionsForPublish(questions: unknown): unknown {
     return rest;
   });
 }
+
+/**
+ * Publish scrub for a trivia-board tool's categories: the audience-facing
+ * snapshot keeps every category, question, value and source, but never an
+ * answer. The host's draft keeps the full board untouched — the live route
+ * reads the answer from the draft server-side at the reveal moment (the
+ * City Crime Scene verdict pattern), and Game Night room creation restores
+ * the answers from the draft on the server (lib/quiz-board.ts). Only the
+ * snapshot copy passed in is scrubbed; the input is never mutated.
+ */
+export function scrubTriviaBoardForPublish(categories: unknown): unknown {
+  if (!Array.isArray(categories)) return categories;
+  return categories.map(category => {
+    if (!category || typeof category !== "object" || Array.isArray(category)) return category;
+    const raw = category as Record<string, unknown>;
+    if (!Array.isArray(raw.questions)) return category;
+    return {
+      ...raw,
+      questions: raw.questions.map(entry => {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+        const { answer: _answer, ...rest } = entry as Record<string, unknown>;
+        return rest;
+      }),
+    };
+  });
+}

@@ -29,6 +29,24 @@ async function published(slug: string) {
   return project?.publishedSnapshot ? { db, project: convertPrizeWheelTools(project.publishedSnapshot as Project) } : null;
 }
 
+/**
+ * One trivia-board answer, read from the project's DRAFT server-side. The
+ * published snapshot is scrubbed of trivia-board answers at publish time,
+ * so when the host reveals an answer the live route fetches it from the
+ * draft — the same pattern the City Crime Scene verdict uses (judged
+ * server-side against the full draft config; only the revealed answer
+ * leaves the server, inside the reveal event itself).
+ */
+async function triviaBoardAnswer(db: ReturnType<typeof getDb>, projectId: string, toolId: string, categoryIndex: number, questionIndex: number): Promise<string> {
+  if (!db) return "";
+  const rows = await db`SELECT data FROM projects WHERE id = ${projectId} LIMIT 1`;
+  const draft = rows[0]?.data as Project | undefined;
+  const tool = draft?.gameTools?.find(t => t.id === toolId && t.type === "trivia-board");
+  const categories = Array.isArray(tool?.config?.categories) ? tool.config.categories as Array<{ questions?: Array<{ answer?: unknown }> }> : [];
+  const answer = categories[categoryIndex]?.questions?.[questionIndex]?.answer;
+  return typeof answer === "string" ? answer : "";
+}
+
 async function ensureLiveEvents(db: ReturnType<typeof getDb>) {
   if (!db) return;
   await db`CREATE TABLE IF NOT EXISTS live_events (id BIGSERIAL PRIMARY KEY, project_id TEXT NOT NULL, control_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
@@ -417,7 +435,14 @@ export async function POST(request: Request, context: Context) {
       if (!Number.isInteger(categoryIndex) || !Number.isInteger(questionIndex) || !category || !question) {
         return NextResponse.json({ error: "Trivia question is not in the published board." }, { status: 400 });
       }
-      payload = { action, categoryIndex, questionIndex, category: category.name || "Trivia", value: question.value || 0, prompt: question.prompt || "", answer: question.answer || "", source: question.source || "", sourceUrl: question.sourceUrl || "" };
+      payload = { action, categoryIndex, questionIndex, category: category.name || "Trivia", value: question.value || 0, prompt: question.prompt || "", source: question.source || "", sourceUrl: question.sourceUrl || "" };
+      if (action === "answer") {
+        // The answer joins the event stream only at the reveal itself,
+        // read from the host's draft server-side (the published snapshot
+        // is scrubbed of answers) — never in the question event, which
+        // the overlay receives before the reveal.
+        payload.answer = await triviaBoardAnswer(live.db, live.project.id, triviaTool.id, categoryIndex, questionIndex);
+      }
     }
     const payloadJson = JSON.stringify(payload);
     const rows = await live.db`INSERT INTO live_events (project_id, control_id, event_type, payload) VALUES (${live.project.id}, ${"trivia"}, ${"trivia"}, ${payloadJson}::jsonb) RETURNING id`;

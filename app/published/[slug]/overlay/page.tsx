@@ -76,7 +76,10 @@ export default function PublishedProject() {
                 setTriviaRevealed(false);
                 if (Number.isInteger(payload.categoryIndex) && Number.isInteger(payload.questionIndex)) setUsedTrivia(prev => ({ ...prev, [`${payload.categoryIndex}:${payload.questionIndex}`]: true }));
               } else if (payload.action === "answer") {
-                setTriviaQuestion((current:any) => current || payload);
+                // The answer travels only in this reveal event (the question
+                // event no longer carries it), so merge it into the question
+                // already on screen instead of keeping the earlier payload.
+                setTriviaQuestion((current:any) => current ? { ...current, ...payload } : payload);
                 setTriviaRevealed(true);
               } else if (payload.action === "close") {
                 setTriviaQuestion(null);

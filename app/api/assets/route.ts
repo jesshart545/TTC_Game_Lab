@@ -1,5 +1,7 @@
 import { capMusicWav } from "../../../lib/music-wav";
 import { NextResponse } from "next/server";
+import { getDb } from "../../../lib/db";
+import { requireCreator, isAdmin } from "../../../lib/auth/server";
 import { deleteAssetsByPrefix, getAssetUploadUrl, getAssetUrl, putAsset } from "../../../lib/object-storage";
 
 export const runtime = "nodejs";
@@ -65,6 +67,22 @@ export async function GET(request: Request) {
 export async function DELETE(request: Request) {
   const key = new URL(request.url).searchParams.get("key") || "";
   if (!/^projects\/[^/]+\/[^/]+$/.test(key)) return NextResponse.json({ error: "Invalid asset key." }, { status: 400 });
+  // Deleting stored media is destructive, so — like every other project
+  // route — the caller must be signed in and own the project the asset
+  // belongs to (the key's second segment is the project id). Admins keep
+  // the broader access they have everywhere else. Anything else fails
+  // closed and nothing is deleted.
+  const user = await requireCreator();
+  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const db = getDb();
+  if (!db) return NextResponse.json({ configured: false, error: "DATABASE_URL is not configured." }, { status: 503 });
+  await db`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'Draft', theme TEXT NOT NULL DEFAULT 'cyan', prompt TEXT NOT NULL DEFAULT '', data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
+  await db`ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id TEXT`;
+  const projectId = key.split("/")[1];
+  const rows = isAdmin(user)
+    ? await db`SELECT id, owner_id FROM projects WHERE id = ${projectId} LIMIT 1`
+    : await db`SELECT id, owner_id FROM projects WHERE id = ${projectId} AND owner_id = ${user.id} LIMIT 1`;
+  if (!rows.length) return NextResponse.json({ error: "Project not found." }, { status: 404 });
   try { const deleted = await deleteAssetsByPrefix(key); return NextResponse.json({ deleted }); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Asset delete failed." }, { status: 500 }); }
 }

@@ -128,6 +128,12 @@ function loadAssetsRoute(puts, fetchImpl) {
     fetch: fetchImpl,
     modules: {
       '../../../lib/music-wav': { capMusicWav: bytes => bytes },
+      // The route's DELETE handler checks auth + project ownership; these
+      // tests exercise only the POST store path, so the neighbours the
+      // delete path needs are stubbed inert (the tier1-security-fixes
+      // guard exercises the real delete behavior against its own stubs).
+      '../../../lib/db': { getDb: () => null },
+      '../../../lib/auth/server': { requireCreator: async () => null, isAdmin: () => false },
       '../../../lib/object-storage': {
         putAsset: async (key, bytes, type) => { puts.push({ key, bytes, type }); },
         getAssetUrl: async key => `https://storage.test/${key}`,
