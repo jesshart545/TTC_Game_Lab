@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCreator, isAdmin } from "../../../../../lib/auth/server";
 import { ensureGameTables, gameDb, findRoomForProject, createGameRoom } from "../../../../../lib/game-room-store";
 import { pickGame } from "../../../../../lib/game-room";
+import { restoreTriviaBoardAnswers } from "../../../../../lib/quiz-board";
 import type { Project } from "../../../../../lib/project";
 
 type Context = { params: Promise<{ id: string }> };
@@ -53,10 +54,16 @@ export async function POST(_request: Request, context: Context) {
   if (existing) {
     return NextResponse.json({ room: { token: existing.token, path: `/play/${existing.token}`, status: existing.status, gameType: existing.gameType }, reused: true });
   }
-  const snapshot = project.publishedSnapshot;
-  if (!snapshot) {
+  const storedSnapshot = project.publishedSnapshot;
+  if (!storedSnapshot) {
     return NextResponse.json({ error: "Publish this game first — the share link is made from the published version, so what your friends play is exactly what you approved." }, { status: 400 });
   }
+  // The published snapshot is scrubbed of trivia-board answers (the
+  // audience must never receive them), but a room's quiz/survey content is
+  // read from the snapshot and the room config never leaves the server —
+  // so the answers are restored from the creator's own draft here, on the
+  // server, for room creation only. The stored snapshot stays scrubbed.
+  const snapshot = restoreTriviaBoardAnswers(storedSnapshot, project) as typeof storedSnapshot;
   const picked = pickGame(snapshot);
   if ("error" in picked) return NextResponse.json({ error: picked.error }, { status: 422 });
   const title = typeof (picked.config as { title?: unknown }).title === "string" ? String((picked.config as { title: string }).title) : project.name;

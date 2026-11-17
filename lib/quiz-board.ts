@@ -206,6 +206,56 @@ export function quizConfigFromSnapshot(snapshot: unknown): { config: QuizConfig 
   };
 }
 
+/**
+ * Server-side only: put the trivia-board answers back into a COPY of the
+ * published snapshot, taking them from the project's full draft. Published
+ * snapshots are scrubbed of trivia-board answers at publish time (the
+ * audience must never receive them), but Game Night room creation reads
+ * its quiz/survey content from the snapshot — and the room config it
+ * builds never leaves the server. The share route passes the snapshot
+ * through this restore first, so a room plays exactly the board the
+ * creator published. Answers are matched by tool id, then category and
+ * question position (the snapshot is a copy of the draft, so positions
+ * line up); only answers missing from the snapshot are filled, and
+ * neither input is mutated.
+ */
+export function restoreTriviaBoardAnswers(snapshot: unknown, draft: unknown): unknown {
+  const snap = (snapshot || {}) as { gameTools?: unknown };
+  const full = (draft || {}) as { gameTools?: unknown };
+  if (!Array.isArray(snap.gameTools) || !Array.isArray(full.gameTools)) return snapshot;
+  const draftBoards = new Map<string, Record<string, unknown>>();
+  for (const tool of full.gameTools as Array<Record<string, unknown>>) {
+    if (tool && typeof tool === "object" && tool.type === "trivia-board" && typeof tool.id === "string") draftBoards.set(tool.id, tool);
+  }
+  if (!draftBoards.size) return snapshot;
+  let changed = false;
+  const gameTools = (snap.gameTools as Array<Record<string, unknown>>).map(tool => {
+    if (!tool || typeof tool !== "object" || tool.type !== "trivia-board" || typeof tool.id !== "string") return tool;
+    const draftTool = draftBoards.get(tool.id);
+    const draftCategories = Array.isArray((draftTool?.config as Record<string, unknown> | undefined)?.categories)
+      ? ((draftTool!.config as Record<string, unknown>).categories as Array<Record<string, unknown>>) : null;
+    const config = (tool.config || {}) as Record<string, unknown>;
+    if (!draftCategories || !Array.isArray(config.categories)) return tool;
+    const categories = (config.categories as Array<Record<string, unknown>>).map((category, ci) => {
+      if (!category || typeof category !== "object" || !Array.isArray(category.questions)) return category;
+      const draftQuestions = Array.isArray(draftCategories[ci]?.questions) ? (draftCategories[ci].questions as Array<Record<string, unknown>>) : [];
+      let categoryChanged = false;
+      const questions = (category.questions as Array<Record<string, unknown>>).map((entry, qi) => {
+        if (!entry || typeof entry !== "object" || typeof entry.answer === "string") return entry;
+        const answer = draftQuestions[qi]?.answer;
+        if (typeof answer !== "string") return entry;
+        categoryChanged = true;
+        return { ...entry, answer };
+      });
+      return categoryChanged ? { ...category, questions } : category;
+    });
+    if (!categories.some((category, ci) => category !== (config.categories as unknown[])[ci])) return tool;
+    changed = true;
+    return { ...tool, config: { ...config, categories } };
+  });
+  return changed ? { ...snap, gameTools } : snapshot;
+}
+
 export function quizPlayerState(raw: unknown): QuizPlayerState {
   const state = (raw || {}) as Partial<QuizPlayerState>;
   return {

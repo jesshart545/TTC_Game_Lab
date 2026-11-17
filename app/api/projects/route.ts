@@ -4,7 +4,7 @@ import { requireCreator, isAdmin } from "../../../lib/auth/server";
 import { ensureProtectionSchema } from "../../../lib/project-protection";
 import { createHash, randomBytes } from "node:crypto";
 import { readCityCrimeSceneConfig, sanitizeCityCrimeSceneForOverlay, canUseCityCrimeScene, stripCityCrimeSceneTools } from "../../../lib/city-crime-scene";
-import { scrubQuizQuestionsForPublish } from "../../../lib/quiz";
+import { scrubQuizQuestionsForPublish, scrubTriviaBoardForPublish } from "../../../lib/quiz";
 import { creatorEmailForViewer } from "../../../lib/creator-identity";
 
 export async function GET() {
@@ -94,6 +94,14 @@ export async function POST(request: Request) {
         // reveal travels through the host-gated live card states.
         if (t?.type === "trivia-list" && t.config && Array.isArray(t.config.questions)) {
           t.config = { ...t.config, questions: scrubQuizQuestionsForPublish(t.config.questions) };
+        }
+        // Trivia-board answers are host-only too: the snapshot keeps each
+        // category, question and value, never the answer — the reveal
+        // travels through the host-gated live trivia events, and the live
+        // route reads the answer from the draft server-side at reveal
+        // time. The draft itself is never scrubbed.
+        if (t?.type === "trivia-board" && t.config && Array.isArray(t.config.categories)) {
+          t.config = { ...t.config, categories: scrubTriviaBoardForPublish(t.config.categories) };
         }
       }
     }
