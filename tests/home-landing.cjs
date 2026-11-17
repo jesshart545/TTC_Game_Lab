@@ -31,9 +31,15 @@ assert(home.includes('href="/projects"') && home.includes('My Projects'), 'My Pr
 assert(home.includes('href="/project/new"') && home.includes('New project'), 'New project button leads to the create flow');
 assert(!home.includes('rd-doors') && !home.includes('rd-doorline'), 'the duplicate picture door cards are removed from Home');
 assert(home.includes('New on the site'), 'news section present');
-for (const title of ['Game Night templates are here', 'Perfect Match deals personal hands', "Plinko's neon board"]) {
+for (const title of ['Game Night templates are here']) {
   assert(home.includes(title), 'news item present: ' + title);
 }
+// Removed at Jessica's direction (2026-11-16): both cards were not relevant
+// to the landing page, and the Plinko card pictured her own board.
+for (const title of ['Perfect Match deals personal hands', "Plinko's neon board"]) {
+  assert(!home.includes(title), 'news item removed: ' + title);
+}
+assert(!home.includes('/game-art/' + 'plinko-board.webp'), 'her board is not pictured anywhere on Home');
 assert(home.includes('Coming soon'), 'coming soon section present');
 for (const title of ['Game Night opens to everyone', 'More painted game faces']) {
   assert(home.includes(title), 'coming soon item present: ' + title);
