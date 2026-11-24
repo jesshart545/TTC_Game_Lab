@@ -6,7 +6,7 @@ import {cleanTriviaQuestions} from "./quiz";
 import {infoTypes,cleanInfoEntries,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText,mergeCleanedLabels} from "./game-tools";
 import {clampBankPressValue,clampBankRoundSeconds} from "./bank";
 import {cleanSoundPads} from "./sound-board";
-import {clampDjCrossfadeSeconds,cleanDeckKeyList} from "./dj-deck";
+import {clampDjCrossfadeSeconds,clampDjFadeInSeconds,clampDjFadeOutSeconds,cleanDeckKeyList} from "./dj-deck";
 import {standingPlacementTypes} from "./standing-placement";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
@@ -167,6 +167,8 @@ export function applyDraftChanges(project: Project, input: unknown) {
       if(config.tracks!==undefined)config.tracks=cleanDeckKeyList(config.tracks);
       if(config.poolIds!==undefined)config.poolIds=cleanDeckKeyList(config.poolIds);
       if(config.crossfadeSeconds!==undefined)config.crossfadeSeconds=clampDjCrossfadeSeconds(config.crossfadeSeconds);
+      if(config.fadeInSeconds!==undefined)config.fadeInSeconds=clampDjFadeInSeconds(config.fadeInSeconds);
+      if(config.fadeOutSeconds!==undefined)config.fadeOutSeconds=clampDjFadeOutSeconds(config.fadeOutSeconds);
       if(typeof config.title==='string')config.title=cleanLabelText(config.title);
     }
     if(tool.type==='card-list'&&config.makeCardsFromEntries===true){

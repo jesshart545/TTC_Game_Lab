@@ -27,7 +27,7 @@ export function toolDefaults(type:GameToolType):Record<string,unknown>{
   scoreboard:{entries:[]},'game-tool-list':{entries:[]},
   bank:{title:'Bank',roundSeconds:60,pressValue:10},
   'sound-board':{title:'Sound Board',pads:[]},
-  'dj-deck':{title:'DJ Deck',tracks:[],poolIds:[],crossfadeSeconds:4},
+  'dj-deck':{title:'DJ Deck',tracks:[],poolIds:[],crossfadeSeconds:4,fadeInSeconds:2,fadeOutSeconds:3},
  };
  return {...defaults[type]};
 }

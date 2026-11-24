@@ -7,7 +7,7 @@ import {addCreationControl} from './build-controls';
 import {toolDefaults,infoTypes,cleanInfoEntries,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText} from './game-tools';
 import {clampBankPressValue,clampBankRoundSeconds} from './bank';
 import {cleanSoundPads} from './sound-board';
-import {clampDjCrossfadeSeconds,cleanDeckKeyList} from './dj-deck';
+import {clampDjCrossfadeSeconds,clampDjFadeInSeconds,clampDjFadeOutSeconds,cleanDeckKeyList} from './dj-deck';
 import {assignStandingPlacements,standingPlacementTypes} from './standing-placement';
 import {cleanTriviaQuestions} from './quiz';
 import {createCardSystem} from './question-cards';
@@ -69,7 +69,7 @@ export function applyBuildChanges(project:Project,input:unknown){
   // title for either is cleaned the same way as the chance games'.
   let audioConfig:Record<string,unknown>|undefined;
   if(item.type==='sound-board'){const cfg=record(item.config);audioConfig={pads:cleanSoundPads(cfg.pads),...(typeof cfg.title==='string'?{title:cleanLabelText(cfg.title)}:{})};}
-  if(item.type==='dj-deck'){const cfg=record(item.config);audioConfig={tracks:cleanDeckKeyList(cfg.tracks),poolIds:cleanDeckKeyList(cfg.poolIds),crossfadeSeconds:clampDjCrossfadeSeconds(cfg.crossfadeSeconds),...(typeof cfg.title==='string'?{title:cleanLabelText(cfg.title)}:{})};}
+  if(item.type==='dj-deck'){const cfg=record(item.config);audioConfig={tracks:cleanDeckKeyList(cfg.tracks),poolIds:cleanDeckKeyList(cfg.poolIds),crossfadeSeconds:clampDjCrossfadeSeconds(cfg.crossfadeSeconds),fadeInSeconds:clampDjFadeInSeconds(cfg.fadeInSeconds),fadeOutSeconds:clampDjFadeOutSeconds(cfg.fadeOutSeconds),...(typeof cfg.title==='string'?{title:cleanLabelText(cfg.title)}:{})};}
   // The other chance games get the Plinko treatment at creation
   // (Jessica, 2026-11-15): every label Jewel supplies — wheel
   // segments, Higher or Lower card labels, Cliffhanger item labels —

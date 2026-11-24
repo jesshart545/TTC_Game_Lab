@@ -56,7 +56,7 @@ export async function resetAudioStates(db: NonNullable<ReturnType<typeof getDb>>
   }
 }
 
-const DJ_ACTIONS: DjAction[] = ['play', 'pause', 'stop', 'next', 'previous', 'merge', 'play-track', 'toggle'];
+const DJ_ACTIONS: DjAction[] = ['play', 'pause', 'stop', 'next', 'previous', 'merge', 'play-track', 'toggle', 'fade-out', 'loop', 'speed'];
 const SOUND_ACTIONS: SoundBoardAction[] = ['play-pad', 'stop-pad', 'toggle'];
 
 export async function changeAudio(db: NonNullable<ReturnType<typeof getDb>>, project: Project, toolId: string, action: string, expectedVersion?: number, arg?: string) {
