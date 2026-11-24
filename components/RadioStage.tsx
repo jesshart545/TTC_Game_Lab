@@ -43,10 +43,12 @@ import "./game-night-stage.css";
  * NO form, NO nav rows, NO shelves, NO pieces picker on this
  * stage: after the format + title (+ music kind) creation already
  * asked for, everything happens by talking to Jewel. The branch
- * built-in pieces (sound board, break timer, requests & shout-outs
- * board, running order, singer queue) arrive in a later slice —
- * nothing here promises them. Name editing stays where every kind
- * keeps it — the top-bar rename.
+ * pieces still arriving in a later slice (break timer, requests &
+ * shout-outs board, running order, singer queue) are promised
+ * nowhere here; the sound board and the DJ deck arrived with the
+ * music core (slice 3) and live in Jewel's vocabulary and the
+ * project library, like every tool. Name editing stays where
+ * every kind keeps it — the top-bar rename.
  */
 
 type StageProps = {
@@ -76,6 +78,14 @@ const DJ_ASKS: RadioAsk[] = [
   {
     label: "Build my playlist",
     say: "Help me build the playlist for my show — ask me which songs and artists I want in it.",
+  },
+  {
+    label: "Make my show's background",
+    say: "Make a background for my show's overlay — ask me about the style I want first, then create it.",
+  },
+  {
+    label: "Make a video cutscene",
+    say: "Make a short video cutscene for my show — an intro or a break bumper. Ask me what it should show first, then create it.",
   },
   {
     label: "Make my theme song",

@@ -9,6 +9,8 @@ import { WheelDisplay, DiceDisplay, CoinDisplay, HigherLowerDisplay, Cliffhanger
 import { chanceArtUrl } from "../lib/chance-art";
 import { PLINKO_DEFAULT_BOARD_ART } from "../lib/plinko-art";
 import { BankDisplay } from "./BankDisplay";
+import { DjDeckVisual } from "./DjDeckPlayer";
+import { SoundBoardVisual } from "./SoundBoardPlayer";
 import { FittedCard, StyledTimer } from "./QuestionCards";
 import { GameInfoOverlay } from "./GameInfoTools";
 import { StandingToolFace } from "./StandingToolFace";
@@ -160,6 +162,10 @@ function ShelfFace({ item, project }: { item: LibraryItem; project: Project }) {
     }
     case "city-crime-scene":
       return <span className="shelf-ccs" aria-hidden="true">🔎</span>;
+    case "sound-board":
+      return <span className="shelf-face-pad"><SoundBoardVisual tool={tool} preview /></span>;
+    case "dj-deck":
+      return <span className="shelf-face-pad"><DjDeckVisual tool={tool} project={project} preview /></span>;
     default:
       return null;
   }

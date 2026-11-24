@@ -4,6 +4,7 @@ import {controlConnectionError} from "../../../../lib/control-connections";
 import {convertPrizeWheelTools} from "../../../../lib/game-tools";
 import {changeCard} from "../../../../lib/card-server";
 import {changeBank} from "../../../../lib/bank-server";
+import {changeAudio,resetAudioStates} from "../../../../lib/audio-live-server";
 import {cardControl} from "../../../../lib/question-cards";
 import { NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
@@ -346,6 +347,7 @@ export async function POST(request: Request, context: Context) {
         try{ await changeBank(live.db,live.project,tool.id,'new-game'); }catch{}
       }
     }
+    try{ await resetAudioStates(live.db,live.project); }catch{}
     const payload=JSON.stringify({at:Date.now(),wipe:!!body.wipeEdits});
     const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},'reset-game','reset',${payload}::jsonb) RETURNING id`;
     return NextResponse.json({ok:true,id:Number(rows[0].id)});
@@ -493,6 +495,17 @@ export async function POST(request: Request, context: Context) {
       const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
       return NextResponse.json({ok:true,id:Number(rows[0].id)});
     }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Bank action failed."},{status:409});}
+  }
+  if(control.action.startsWith('audio.toggle.')){
+    const toolId=control.action.slice('audio.toggle.'.length);
+    const tool=live.project.gameTools.find(t=>t.id===toolId&&(t.type==='dj-deck'||t.type==='sound-board')&&t.enabled);
+    if(!tool)return NextResponse.json({error:"Audio tool not found."},{status:400});
+    try{
+      const state=await changeAudio(live.db,live.project,tool.id,'toggle');
+      const payload=JSON.stringify({outcomes:{[tool.id]:{audio:state}}});
+      const rows=await live.db`INSERT INTO live_events(project_id,control_id,event_type,payload) VALUES(${live.project.id},${control.id},'control',${payload}::jsonb) RETURNING id`;
+      return NextResponse.json({ok:true,id:Number(rows[0].id)});
+    }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Audio action failed."},{status:409});}
   }
   // ---- Higher or Lower ----
   if(control.action.startsWith('hl.')){

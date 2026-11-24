@@ -19,6 +19,8 @@ import {toolShowsTitle,toolTitle} from '../lib/tool-style';
 import QuestionCards,{FittedCard,StyledTimer} from './QuestionCards';
 import {cardControl,cardPhase,cardTransition,freshCardState,isCardTool,questionPool,type CardState,type CardAction} from '../lib/question-cards';
 import {bankTransition,freshBankState,type BankAction,type BankState} from '../lib/bank';
+import {djTransition,freshDjState,deckTrackKeys,type DjAction,type DjState} from '../lib/dj-deck';
+import {soundBoardTransition,freshSoundBoardState,type SoundBoardAction,type SoundBoardState} from '../lib/sound-board';
 import CompositionPlayer, { defaultOverlayResult } from "./CompositionPlayer";
 import { toolStyle, ToolArtwork, overlayToolPlacement } from "./GameToolEditor";
 
@@ -33,13 +35,19 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const bankRef=useRef<Record<string,BankState>>({});
   const [bankStates,setBankStates]=useState<Record<string,BankState>>({});
   const bankCommand=useCallback((id:string,action:BankAction,pressValue?:number)=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.type==='bank'&&t.enabled);if(!p||!tool)throw new Error('Bank unavailable.');const next=bankTransition(bankRef.current[id]||freshBankState(tool.config),action,Date.now(),{pressValue,roundSeconds:tool.config.roundSeconds});bankRef.current={...bankRef.current,[id]:next};setBankStates(bankRef.current);},[]);
+  const deckRef=useRef<Record<string,DjState>>({});
+  const [deckStates,setDeckStates]=useState<Record<string,DjState>>({});
+  const deckCommand=useCallback((id:string,action:DjAction,arg?:string)=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.type==='dj-deck'&&t.enabled);if(!p||!tool)throw new Error('DJ Deck unavailable.');const next=djTransition(deckRef.current[id]||freshDjState(),action,Date.now(),deckTrackKeys(p,tool),tool.config,arg);deckRef.current={...deckRef.current,[id]:next};setDeckStates(deckRef.current);},[]);
+  const soundRef=useRef<Record<string,SoundBoardState>>({});
+  const [soundStates,setSoundStates]=useState<Record<string,SoundBoardState>>({});
+  const soundCommand=useCallback((id:string,action:SoundBoardAction,padId?:string)=>{const p=latest.current,tool=p?.gameTools.find(t=>t.id===id&&t.type==='sound-board'&&t.enabled);if(!p||!tool)throw new Error('Sound Board unavailable.');const next=soundBoardTransition(soundRef.current[id]||freshSoundBoardState(),action,Date.now(),padId);soundRef.current={...soundRef.current,[id]:next};setSoundStates(soundRef.current);},[]);
   const latest = useRef(project); latest.current = project;
   useEffect(()=>{if(project&&initialized.current!==project.id){initialized.current=project.id;cardRef.current=project.cardPreviewStates||{};setCardStates(cardRef.current);}},[project?.id]);
   const sequence=useRef<AbortController|null>(null);
   const sequenceProgress=useRef<SequenceProgress>({});
   const [sequenceRunning,setSequenceRunning]=useState(false),[sequenceError,setSequenceError]=useState("");
   const stopSequence=useCallback(()=>{sequence.current?.abort();setSequenceRunning(false);},[]);
-  const resetGame=useCallback(()=>{const p=latest.current;if(!p)return;sequence.current?.abort();setSequenceRunning(false);setSequenceError('');timers.current.forEach(clearTimeout);timers.current=[];timerStates.current={};coinPhases.current={};trivia.current={};setRuns([]);setBackgroundKey(null);setFlash(false);const next={...cardRef.current};for(const tool of p.gameTools){if(tool.enabled&&(infoTypes.includes(tool.type)||['question-card','blank-card','random-picker'].includes(tool.type)))next[tool.id]=cardTransition(p,tool,cardRef.current[tool.id]||freshCardState(),'new-game',Date.now());}cardRef.current=next;setCardStates(next);savedCallback.current?.(next);const banks={...bankRef.current};for(const tool of p.gameTools){if(tool.enabled&&tool.type==='bank')banks[tool.id]=bankTransition(bankRef.current[tool.id]||freshBankState(tool.config),'new-game',Date.now(),{roundSeconds:tool.config.roundSeconds,pressValue:tool.config.pressValue});}bankRef.current=banks;setBankStates(banks);},[]);
+  const resetGame=useCallback(()=>{const p=latest.current;if(!p)return;sequence.current?.abort();setSequenceRunning(false);setSequenceError('');timers.current.forEach(clearTimeout);timers.current=[];timerStates.current={};coinPhases.current={};trivia.current={};setRuns([]);setBackgroundKey(null);setFlash(false);const next={...cardRef.current};for(const tool of p.gameTools){if(tool.enabled&&(infoTypes.includes(tool.type)||['question-card','blank-card','random-picker'].includes(tool.type)))next[tool.id]=cardTransition(p,tool,cardRef.current[tool.id]||freshCardState(),'new-game',Date.now());}cardRef.current=next;setCardStates(next);savedCallback.current?.(next);const banks={...bankRef.current};for(const tool of p.gameTools){if(tool.enabled&&tool.type==='bank')banks[tool.id]=bankTransition(bankRef.current[tool.id]||freshBankState(tool.config),'new-game',Date.now(),{roundSeconds:tool.config.roundSeconds,pressValue:tool.config.pressValue});}bankRef.current=banks;setBankStates(banks);const decks={...deckRef.current};for(const tool of p.gameTools){if(tool.enabled&&tool.type==='dj-deck')decks[tool.id]={...freshDjState(),visible:deckRef.current[tool.id]?.visible??false};}deckRef.current=decks;setDeckStates(decks);const sounds={...soundRef.current};for(const tool of p.gameTools){if(tool.enabled&&tool.type==='sound-board')sounds[tool.id]={...freshSoundBoardState(),visible:soundRef.current[tool.id]?.visible??false};}soundRef.current=sounds;setSoundStates(sounds);},[]);
   useEffect(()=>()=>sequence.current?.abort(),[]);
   const serial = useRef(0); const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const trivia = useRef<Record<string, number>>({});
@@ -50,7 +58,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
   const [flash, setFlash] = useState(false);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const remove = useCallback((id: number) => setRuns(items => items.filter(item => item.id !== id)), []);
-  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[];phase?:CoinPhase;timer?:TimerState;bank?:BankState}>) {
+  const fire = useCallback(function fire(control: ProjectEvent,outcomes?:Record<string,{result:string;segments?:string[];phase?:CoinPhase;timer?:TimerState;bank?:BankState;audio?:DjState|SoundBoardState}>) {
     const p = latest.current; if (!p) return;
     if(control.action==='sequence'){
       const error=controlConnectionError(p,control);if(error)throw new Error(error);
@@ -69,6 +77,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     const legacyPicker=p.gameTools.find(t=>t.type==='random-picker'&&control.action===`tool.${t.id}`);if(legacyPicker){cardCommand(legacyPicker.id,'draw');return;}
     const card=cardControl(control.action);if(card){cardCommand(card.toolId,card.action,String(p.gameTools.find(t=>t.id===card.toolId)?.config.text||""));return;}
     const bankToggleId=/^bank\.toggle\.(.+)$/.exec(control.action||'')?.[1];if(bankToggleId){const tool=p.gameTools.find(t=>t.id===bankToggleId&&t.type==='bank'&&t.enabled);if(!tool)return;const next=outcomes?.[tool.id]?.bank||bankTransition(bankRef.current[tool.id]||freshBankState(tool.config),'toggle',Date.now());bankRef.current={...bankRef.current,[tool.id]:next};setBankStates(bankRef.current);return;}
+    const audioToggleId=/^audio\.toggle\.(.+)$/.exec(control.action||'')?.[1];if(audioToggleId){const tool=p.gameTools.find(t=>t.id===audioToggleId&&(t.type==='dj-deck'||t.type==='sound-board')&&t.enabled);if(!tool)return;const outcome=outcomes?.[tool.id]?.audio;if(tool.type==='dj-deck'){const next=(outcome as DjState|undefined)||djTransition(deckRef.current[tool.id]||freshDjState(),'toggle',Date.now(),deckTrackKeys(p,tool),tool.config);deckRef.current={...deckRef.current,[tool.id]:next};setDeckStates(deckRef.current);}else{const next=(outcome as SoundBoardState|undefined)||soundBoardTransition(soundRef.current[tool.id]||freshSoundBoardState(),'toggle',Date.now());soundRef.current={...soundRef.current,[tool.id]:next};setSoundStates(soundRef.current);}return;}
     const later = (fn: () => void, ms: number) => { const timer = setTimeout(() => { timers.current = timers.current.filter(x => x !== timer); fn(); }, ms); timers.current.push(timer); };
     const add = (entry: Omit<Run, "id" | "at" | "control">, seconds: number) => {
       const id = ++serial.current;
@@ -141,7 +150,7 @@ export function useRuntimeActions(project: Project | null,onCardStates?:(states:
     }
     if (!control.toolIds?.length && !control.compositionId && !control.chain?.length) { setFlash(true); later(() => setFlash(false), 700); }
   }, [remove,cardCommand]);
-  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand,bankStates,bankCommand,sequenceRunning,sequenceError,stopSequence,resetGame };
+  return { runs, backgroundKey, flash, fire, remove,cardStates,cardCommand,bankStates,bankCommand,deckStates,deckCommand,soundStates,soundCommand,sequenceRunning,sequenceError,stopSequence,resetGame };
 }
 
 

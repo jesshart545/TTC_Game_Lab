@@ -43,6 +43,8 @@ function compileRuntime() {
     '../lib/plinko-art': load('lib/plinko-art.ts'),
     '../lib/chance-art': load('lib/chance-art.ts'),
     '../lib/bank': load('lib/bank.ts'),
+    '../lib/dj-deck': load('lib/dj-deck.ts'),
+    '../lib/sound-board': load('lib/sound-board.ts'),
     './QuestionCards': { default: Null, FittedCard: Null, StyledTimer: Null },
     '../lib/question-cards': load('lib/question-cards.ts'),
     '../lib/tool-style': load('lib/tool-style.ts'),

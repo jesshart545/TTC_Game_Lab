@@ -137,6 +137,19 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
           if (start.kind === "radio") {
             if (start.branch) project.radioBranch = start.branch;
             if (start.theme) project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
+            // The canned Jewel greeting is radio-worded for a radio
+            // project (Jessica, 2026-11-23): the shared seed above
+            // speaks of a trivia generator and board templates —
+            // another kind's furniture in a music show. Branch-aware,
+            // like the stage's example asks.
+            project.messages = [{
+              role: "assistant",
+              text: start.branch === "karaoke"
+                ? "Tell me about your karaoke night — build your song list, set up a sound board for intros and effects, make an intro, a background or a video cutscene, or bring your own music in with uploads. Your show is ready to shape."
+                : start.branch === "radio-dj"
+                  ? "Tell me about your show — build your playlist, set up a DJ deck to play and merge your songs, add a sound board for stings and effects, make a theme song, a background or a video cutscene, or bring your own music in with uploads. Your show is ready to shape."
+                  : "Tell me about your show — build your playlist, set up a sound board, make a theme song, a background or a video cutscene, or bring your own music in with uploads. Your show is ready to shape.",
+            }];
           }
           project = applySetupPieces(project, start.pieces);
         }

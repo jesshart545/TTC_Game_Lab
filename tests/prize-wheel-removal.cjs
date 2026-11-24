@@ -23,7 +23,7 @@ const { dashboardTargets } = load('lib/dashboard-actions.ts');
 assert(!read('lib/project.ts').includes('"prize-wheel"'), 'the GameToolType union no longer carries prize-wheel');
 assert.deepEqual(val(toolDefaults('prize-wheel')), {}, 'no tool defaults remain for prize-wheel');
 assert(!creatableTools.includes('prize-wheel'), 'Jewel can no longer create a prize-wheel');
-assert.equal(creatableTools.length, 18, 'the creatable list lost exactly the removed type');
+assert.equal(creatableTools.length, 20, 'the creatable list lost exactly the removed type (20 since the radio music tools joined, slice 3)');
 assert(!SHELF_LIBRARY.some(entry => entry.type === 'prize-wheel'), 'the Imagine and Create shelf has no prize-wheel card');
 assert(!TOOL_LIBRARY.some(entry => entry.type === 'prize-wheel'), 'the workshop library has no prize-wheel entry');
 assert(!fs.existsSync('lib/prize-wheel.ts'), 'the prize-wheel value-reading module is deleted');

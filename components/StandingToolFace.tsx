@@ -8,6 +8,10 @@ import { toolStyle, overlayToolPlacement } from "../lib/tool-style";
 import { cardPhase, freshCardState, type CardState } from "../lib/question-cards";
 import { BankDisplay } from "./BankDisplay";
 import type { BankState } from "../lib/bank";
+import { DjDeckVisual } from "./DjDeckPlayer";
+import { SoundBoardVisual } from "./SoundBoardPlayer";
+import type { DjState } from "../lib/dj-deck";
+import type { SoundBoardState } from "../lib/sound-board";
 import { plinkoBoardArtUrl } from "../lib/plinko-art";
 import { chanceArtUrl } from "../lib/chance-art";
 import { pickerCards } from "../lib/card-lists";
@@ -26,7 +30,7 @@ import { pickerCards } from "../lib/card-lists";
  * labels, or explanatory copy are added here (the site shows, it
  * doesn't tell).
  */
-export const standingToolTypes = ["plinko", "higher-lower", "cliffhanger", "game-tool-list", "random-picker", "countdown", "bank"];
+export const standingToolTypes = ["sound-board", "dj-deck", "plinko", "higher-lower", "cliffhanger", "game-tool-list", "random-picker", "countdown", "bank"];
 
 /** The three chance games. They are features of the whole gameshow
  *  live: the host brings one up on the overlay by firing it from the
@@ -50,6 +54,11 @@ export function standsOnOverlay(tool: GameTool | undefined): boolean {
   // face actually shows is the shared bank state's visible flag, flipped
   // by the host's Show button (the scoreboard's show/remove model).
   if (tool.type === "bank") return true;
+  // The radio music tools stand the same way: a placed deck or sound
+  // board is a standing candidate, and whether its face shows is its
+  // shared state's visible flag — the audio itself plays from the
+  // overlay page either way (the engines are not placement-gated).
+  if (tool.type === "dj-deck" || tool.type === "sound-board") return true;
   if (chanceToolTypes.includes(tool.type)) return tool.config?.alwaysVisible === true;
   return !tool.config?.triggerOnly;
 }
@@ -105,7 +114,7 @@ function infoToolShown(project: Project, tool: GameTool, states?: Record<string,
  * through QuestionCards when a state shows it, standing here (or in
  * the overlay's map) when none does.
  */
-export default function StandingTools({ project, states, extraStates, bankStates }: { project: Project; states?: Record<string, CardState>; extraStates?: Record<string, CardState>; bankStates?: Record<string, BankState> }) {
+export default function StandingTools({ project, states, extraStates, bankStates, deckStates, soundStates }: { project: Project; states?: Record<string, CardState>; extraStates?: Record<string, CardState>; bankStates?: Record<string, BankState>; deckStates?: Record<string, DjState>; soundStates?: Record<string, SoundBoardState> }) {
   const placed = (project.gameTools || []).filter(tool => standsOnOverlay(tool));
   return <>{placed.map(tool => {
     if (tool.type === "countdown") {
@@ -116,6 +125,16 @@ export default function StandingTools({ project, states, extraStates, bankStates
       const state = bankStates?.[tool.id];
       if (!state?.visible) return null;
       return <div key={tool.id} className={`runtime-game-tool runtime-tool-${tool.type}`} style={{ ...toolStyle(tool), ...overlayToolPlacement(tool) }}><ToolArtwork tool={tool} assets={project.assets} /><BankDisplay tool={tool} state={state} /></div>;
+    }
+    if (tool.type === "dj-deck") {
+      const state = deckStates?.[tool.id];
+      if (!state?.visible) return null;
+      return <div key={tool.id} className={`runtime-game-tool runtime-tool-${tool.type}`} style={{ ...toolStyle(tool), ...overlayToolPlacement(tool) }}><ToolArtwork tool={tool} assets={project.assets} /><DjDeckVisual tool={tool} project={project} state={state} /></div>;
+    }
+    if (tool.type === "sound-board") {
+      const state = soundStates?.[tool.id];
+      if (!state?.visible) return null;
+      return <div key={tool.id} className={`runtime-game-tool runtime-tool-${tool.type}`} style={{ ...toolStyle(tool), ...overlayToolPlacement(tool) }}><ToolArtwork tool={tool} assets={project.assets} /><SoundBoardVisual tool={tool} state={state} /></div>;
     }
     if (tool.type === "game-tool-list") {
       if (infoToolShown(project, tool, states) || infoToolShown(project, tool, extraStates)) return null;
