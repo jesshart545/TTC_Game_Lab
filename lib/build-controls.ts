@@ -56,6 +56,17 @@ function addVisibleCreationControl(project:Project,kind:'asset'|'tool'|'composit
   const control:ProjectEvent=existing||{id:crypto.randomUUID(),label:`Show ${tool.name}`,action:`bank.toggle.${id}`,detail:'Press once to show; press the same button again to remove.',toolIds:[id]};
   return {project:{...project,controls:existing?project.controls:[...project.controls,control],gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true,config:{...item.config,triggerOnly:true}}:item)},controlId:control.id};
  }
+ if(tool&&(tool.type==='sound-board'||tool.type==='dj-deck')){
+  // The radio music tools (Jessica, 2026-11-23): connecting one
+  // places it in the overlay build and adds ONE show/remove button
+  // for its face — the Bank's model. The music itself runs from the
+  // tool's host panel (pads, transport, merge), never from
+  // auto-wired controls, and it plays from the overlay page whether
+  // or not the face is showing.
+  const existing=project.controls.find(control=>control.action===`audio.toggle.${id}`);
+  const control:ProjectEvent=existing||{id:crypto.randomUUID(),label:`Show ${tool.name}`,action:`audio.toggle.${id}`,detail:'Press once to show; press the same button again to remove.',toolIds:[id]};
+  return {project:{...project,controls:existing?project.controls:[...project.controls,control],gameTools:project.gameTools.map(item=>item.id===id?{...item,inToolbox:true,inOverlayBuild:true,config:{...item.config,triggerOnly:true}}:item)},controlId:control.id};
+ }
  if(tool&&(tool.type==='random-picker'||['scoreboard','game-tool-list'].includes(tool.type))){
   const action=`cards.toggle.${id}`,noun=tool.type==='random-picker'?(tool.config.source==='images'?'image':'card'):tool.name;
   let controls=project.controls.filter(c=>!(tool.type==='random-picker'&&c.action===`cards.clear.${id}`)).map(c=>c.action===`cards.draw.${id}`||c.action===`tool.${id}`?{...c,action,toolIds:[id],label:tool.type==='random-picker'?`Draw random ${noun}: ${tool.name}`:`Show ${tool.name}`,detail:'Press once to show; press the same button again to remove'}:c);
@@ -92,6 +103,7 @@ export function buttonFacts(control:ProjectEvent,project:Project):ButtonFacts{
  if(action.startsWith('result.hide.')){const stop=/^stop/i.test(control.label);return {does:(stop?'Stops: ':'Hides: ')+factObject(control.label),clicks:stop?'One click stops it':'One click hides it',effect:false};}
  if(action.startsWith('coin.cycle.'))return {does:'Coin: show, flip, hide',clicks:'One step per click',effect:false};
  if(action.startsWith('bank.toggle.'))return {does:'Shows: '+(tool?.name||factObject(control.label)),clicks:'Click to show · click again to hide',effect:false};
+ if(action.startsWith('audio.toggle.'))return {does:'Shows: '+(tool?.name||factObject(control.label)),clicks:'Click to show · click again to hide',effect:false};
  if(action.startsWith('timer.')){const op=action.split('.')[1];return {does:op==='toggle'?'Starts / pauses the timer':op==='reset'?'Resets the timer':op==='hide'?'Hides the timer':'Shows the timer',clicks:op==='toggle'?'Click to start · click again to pause':op==='reset'?'One click resets it':op==='hide'?'One click hides it':'One click shows it',effect:false};}
  if(card){const kind=card[1];const name=tool?.name||factObject(control.label);
   if(kind==='toggle'&&tool?.type==='question-card')return {does:'Question card: draw, reveal, clear',clicks:'One button: press to draw · press again to reveal · press again to clear',effect:false};

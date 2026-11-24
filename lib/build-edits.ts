@@ -6,6 +6,8 @@ import {mergeCityCrimeSceneMysteryPatch} from './city-crime-scene';
 import {addCreationControl} from './build-controls';
 import {toolDefaults,infoTypes,cleanInfoEntries,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText} from './game-tools';
 import {clampBankPressValue,clampBankRoundSeconds} from './bank';
+import {cleanSoundPads} from './sound-board';
+import {clampDjCrossfadeSeconds,cleanDeckKeyList} from './dj-deck';
 import {assignStandingPlacements,standingPlacementTypes} from './standing-placement';
 import {cleanTriviaQuestions} from './quiz';
 import {createCardSystem} from './question-cards';
@@ -18,7 +20,7 @@ const placementPatch=(raw:unknown):Partial<Record<'x'|'y'|'width'|'height',numbe
  for(const key of ['width','height'] as const){const n=p[key];if(typeof n==='number'&&Number.isFinite(n))out[key]=Math.min(100,Math.max(1,n));}
  return Object.keys(out).length?out as Partial<Record<'x'|'y'|'width'|'height',number>>:null;
 };
-export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','blank-board','youtube','scoreboard','game-tool-list','card-list','city-crime-scene','trivia-list','question-card','bank'];
+export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','blank-board','youtube','scoreboard','game-tool-list','card-list','city-crime-scene','trivia-list','question-card','bank','sound-board','dj-deck'];
 export function applyBuildChanges(project:Project,input:unknown){
  const changes=normalizeDraftChanges(input),warnings:string[]=[];let extra=0;
  let next={...project,gameTools:[...project.gameTools],assetPools:(project.assetPools||[]).map(p=>({...p,assetKeys:[...p.assetKeys]}))};
@@ -59,6 +61,15 @@ export function applyBuildChanges(project:Project,input:unknown){
   // press value 1-1000000) — the sanitizer lesson from the Plinko fix.
   let bankConfig:Record<string,unknown>|undefined;
   if(item.type==='bank')bankConfig={roundSeconds:clampBankRoundSeconds(record(item.config).roundSeconds),pressValue:clampBankPressValue(record(item.config).pressValue)};
+  // The radio music tools Jewel creates (Jessica, 2026-11-23): a
+  // Sound Board's pads are cleaned pad by pad (labels carry no
+  // dollar signs — they render on the overlay), and a DJ Deck's
+  // track and pool lists keep only real key strings in the creator's
+  // order, with the merge's crossfade clamped to its sane range. A
+  // title for either is cleaned the same way as the chance games'.
+  let audioConfig:Record<string,unknown>|undefined;
+  if(item.type==='sound-board'){const cfg=record(item.config);audioConfig={pads:cleanSoundPads(cfg.pads),...(typeof cfg.title==='string'?{title:cleanLabelText(cfg.title)}:{})};}
+  if(item.type==='dj-deck'){const cfg=record(item.config);audioConfig={tracks:cleanDeckKeyList(cfg.tracks),poolIds:cleanDeckKeyList(cfg.poolIds),crossfadeSeconds:clampDjCrossfadeSeconds(cfg.crossfadeSeconds),...(typeof cfg.title==='string'?{title:cleanLabelText(cfg.title)}:{})};}
   // The other chance games get the Plinko treatment at creation
   // (Jessica, 2026-11-15): every label Jewel supplies — wheel
   // segments, Higher or Lower card labels, Cliffhanger item labels —
@@ -77,7 +88,7 @@ export function applyBuildChanges(project:Project,input:unknown){
    if(item.type==='cliffhanger'&&cfg.items!==undefined)chanceConfig.items=cleanCliffhangerItems(cfg.items);
    if(typeof cfg.title==='string')chanceConfig.title=cleanLabelText(cfg.title);
   }
-  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{}),...(infoTypes.includes(item.type)?{entries:cleanInfoEntries(record(item.config).entries)}:{}),...(plinkoSlots?{slots:plinkoSlots}:{}),...(bankConfig||{}),...(chanceConfig||{})}});
+  const id=crypto.randomUUID();next.gameTools.push({id,type:item.type,name:String(item.name||item.type).slice(0,80),enabled:true,inToolbox:item.type!=='card-list',config:{...toolDefaults(item.type),...record(item.config),...(item.type==='trivia-list'?{questions:cleanTriviaQuestions(record(item.config).questions)}:{}),...(item.type==='card-list'?{entries:(Array.isArray(item.config?.entries)?item.config.entries:[]).filter((e:any)=>typeof e?.text==='string'&&e.text.trim()).map((e:any)=>({...e,id:crypto.randomUUID()})),cards:(Array.isArray(item.config?.cards)?item.config.cards:[]).filter((c:any)=>typeof c?.text==='string'&&c.text.trim()).slice(0,100).map((c:any)=>({...c,id:crypto.randomUUID(),design:record(c.design)}))}:{}),...(infoTypes.includes(item.type)?{entries:cleanInfoEntries(record(item.config).entries)}:{}),...(plinkoSlots?{slots:plinkoSlots}:{}),...(bankConfig||{}),...(audioConfig||{}),...(chanceConfig||{})}});
   // A slotted standing type whose placement the model did not state
   // must not inherit a stock default placement (the random picker's
   // centered default would otherwise read as its chosen home and

@@ -26,6 +26,8 @@ export function toolDefaults(type:GameToolType):Record<string,unknown>{
   'blank-board':{title:'Custom Board',areas:[]},'city-crime-scene':{title:'City Crime Scene',mystery:cityCrimeSceneDefaults(),placement:{x:8,y:8,width:84,height:84}},youtube:{placement:{x:15,y:15,width:70,height:70}},
   scoreboard:{entries:[]},'game-tool-list':{entries:[]},
   bank:{title:'Bank',roundSeconds:60,pressValue:10},
+  'sound-board':{title:'Sound Board',pads:[]},
+  'dj-deck':{title:'DJ Deck',tracks:[],poolIds:[],crossfadeSeconds:4},
  };
  return {...defaults[type]};
 }

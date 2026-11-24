@@ -5,6 +5,8 @@ import {cleanBackdropText} from "./backdrop-text";
 import {cleanTriviaQuestions} from "./quiz";
 import {infoTypes,cleanInfoEntries,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText,mergeCleanedLabels} from "./game-tools";
 import {clampBankPressValue,clampBankRoundSeconds} from "./bank";
+import {cleanSoundPads} from "./sound-board";
+import {clampDjCrossfadeSeconds,cleanDeckKeyList} from "./dj-deck";
 import {standingPlacementTypes} from "./standing-placement";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
@@ -150,6 +152,22 @@ export function applyDraftChanges(project: Project, input: unknown) {
       // ranges, the same sanitizer treatment as at creation.
       if(config.roundSeconds!==undefined)config.roundSeconds=clampBankRoundSeconds(config.roundSeconds);
       if(config.pressValue!==undefined)config.pressValue=clampBankPressValue(config.pressValue);
+    }
+    if(tool.type==='sound-board'){
+      // Sound Board config patches get the creation treatment: pads
+      // cleaned pad by pad, and a title patch cleaned like every
+      // other overlay label.
+      if(config.pads!==undefined)config.pads=cleanSoundPads(config.pads);
+      if(typeof config.title==='string')config.title=cleanLabelText(config.title);
+    }
+    if(tool.type==='dj-deck'){
+      // DJ Deck config patches get the creation treatment: track and
+      // pool lists keep only real key strings, the merge's crossfade
+      // is clamped, and a title patch is cleaned.
+      if(config.tracks!==undefined)config.tracks=cleanDeckKeyList(config.tracks);
+      if(config.poolIds!==undefined)config.poolIds=cleanDeckKeyList(config.poolIds);
+      if(config.crossfadeSeconds!==undefined)config.crossfadeSeconds=clampDjCrossfadeSeconds(config.crossfadeSeconds);
+      if(typeof config.title==='string')config.title=cleanLabelText(config.title);
     }
     if(tool.type==='card-list'&&config.makeCardsFromEntries===true){
       const entries=Array.isArray(config.entries)?config.entries:Array.isArray(tool.config.entries)?tool.config.entries:[];
