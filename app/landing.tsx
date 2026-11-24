@@ -55,35 +55,6 @@ const overlayMock: CSSProperties = {
   background: "radial-gradient(circle at 70% 20%, #1b2b4a 0%, #0a0f1e 55%, #05070d 100%)",
   border: "1px solid #2a3348", boxShadow: "0 24px 70px rgba(0,0,0,.5)",
 };
-const liveBadge: CSSProperties = {
-  position: "absolute", top: 10, left: 10, background: "#ff3b5c", color: "#fff",
-  fontSize: 10, fontWeight: 800, letterSpacing: ".1em", padding: "4px 8px", borderRadius: 6,
-};
-const overlayTitle: CSSProperties = {
-  position: "absolute", top: 12, left: 0, right: 0, textAlign: "center",
-  color: "#20e8ff", fontWeight: 900, letterSpacing: ".22em", fontSize: 13,
-};
-const triviaGrid: CSSProperties = {
-  position: "absolute", top: "22%", left: "8%", right: "8%", bottom: "30%",
-  display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gridTemplateRows: "auto repeat(4, 1fr)", gap: 6,
-};
-const triviaCat: CSSProperties = {
-  color: "#aeb8cc", fontSize: 9, fontWeight: 700, textAlign: "center",
-  letterSpacing: ".06em", alignSelf: "end", paddingBottom: 2,
-  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-};
-const triviaTile: CSSProperties = {
-  border: "1px solid #2e3d5c", borderRadius: 6, display: "grid", placeItems: "center",
-  color: "#ffd76a", fontWeight: 800, fontSize: 12, background: "rgba(20,30,55,.75)",
-};
-const scoreStrip: CSSProperties = {
-  position: "absolute", left: "8%", right: "8%", bottom: "7%", display: "flex", gap: 8,
-};
-const scoreChip: CSSProperties = {
-  flex: 1, border: "1px solid #2e3d5c", borderRadius: 8, padding: "6px 10px",
-  background: "rgba(10,16,30,.8)", fontSize: 11, color: "#dfe5ee",
-  display: "flex", justifyContent: "space-between", alignItems: "center",
-};
 const dashMock: CSSProperties = {
   marginTop: 14, border: "1px solid #2a3348", borderRadius: 14, background: "#0b0d14", padding: 16,
 };
@@ -159,22 +130,15 @@ const FAQS = [
 ];
 
 function ProductMockup() {
-  const cats = ["MOVIES", "MUSIC", "SPORTS", "GAMES", "WILD"];
-  const values = [100, 200, 300, 400];
   return (
     <div style={mockWrap}>
       <p style={mockCaption}>AUDIENCE OVERLAY · WHAT YOUR VIEWERS SEE</p>
       <div style={overlayMock}>
-        <span style={liveBadge}>● LIVE</span>
-        <div style={overlayTitle}>NEON TRIVIA NIGHT</div>
-        <div style={triviaGrid}>
-          {cats.map(c => <div key={c} style={triviaCat}>{c}</div>)}
-          {values.flatMap(v => cats.map(c => <div key={c + v} style={triviaTile}>{v}</div>))}
-        </div>
-        <div style={scoreStrip}>
-          <div style={scoreChip}><span>🔴 Red Team</span><strong>1,200</strong></div>
-          <div style={scoreChip}><span>🔵 Blue Team</span><strong>950</strong></div>
-        </div>
+        <img
+          src="/game-art/neon-trivia-night-board.png"
+          alt="Neon Trivia Night — a neon trivia game board with five categories, value tiles and team scores"
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
       </div>
       <div style={dashMock}>
         <div style={dashTitle}>HOST DASHBOARD · YOUR PRIVATE CONTROLS</div>

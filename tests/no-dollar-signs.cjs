@@ -42,11 +42,15 @@ for (const file of fixedFiles) {
   assert(src.includes('used ? "USED" : question.value'), 'published dashboard: board buttons show the plain value');
 }
 
-// ---- Landing page trivia tiles --------------------------------------------
+// ---- Landing page trivia board --------------------------------------------
+// Jessica (2026-11-23): the landing's neon trivia board visual is her own
+// uploaded artwork (public/game-art/neon-trivia-night-board.png), whose
+// tiles show plain values (100-400) with no dollar signs. The CSS-drawn
+// tiles it replaced are gone; the file-level $ scans above still apply.
 {
   const src = read('app/landing.tsx');
-  assert(!src.includes('triviaTile}>${v}'), 'landing: trivia tiles no longer prefix values with $');
-  assert(src.includes('triviaTile}>{v}</div>'), 'landing: trivia tiles show the plain value');
+  assert(src.includes('/game-art/neon-trivia-night-board.png'), 'landing: the trivia board visual is the uploaded board artwork Jessica provided');
+  assert(!src.includes('triviaTile'), 'landing: the old CSS-drawn trivia tiles are gone');
 }
 
 // ---- Cliffhanger host panel: the status text builds without a $ ----------
