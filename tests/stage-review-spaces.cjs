@@ -13,7 +13,9 @@ const load = require('./load.cjs');
 // fire through the published runtime (including while the Overlay
 // side is toggled away), adding/staging/wiring happen through Jewel,
 // items drag across the reviews, and the page progress strip does
-// not render. Radio/multiplayer keep BuildSpace.
+// not render. Radio joined the review spaces with its own build
+// (2026-11-24); multiplayer has its own Game Night stage, and
+// kind-unset projects keep BuildSpace.
 // Existing projects — including legacy-shaped ones saved by older
 // code — must open here with every piece of generated media intact,
 // and a save round-trip must not drop fields the surface doesn't
@@ -25,13 +27,13 @@ const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
 const review = fs.readFileSync('components/StageReview.tsx', 'utf8');
 const route = fs.readFileSync('app/api/jewel/route.ts', 'utf8');
 
-assert(page.includes('const stageReviewView = workflowStep === 1 && (project.kind === "gameshow" || project.kind === "talk")'),
-  'the stage-review view is scoped to gameshow + talk at workflowStep 1');
-assert(page.includes('{workflowStep===1 && stageReviewView && <StageReview'), 'the review surface renders for gameshow/talk at stage 1');
-assert(page.includes('{workflowStep===1 && !stageReviewView && <BuildSpace'), 'BuildSpace still serves stage 1 for the other kinds (radio/multiplayer untouched)');
+assert(page.includes('const stageReviewView = workflowStep === 1 && (project.kind === "gameshow" || project.kind === "talk" || project.kind === "radio")'),
+  'the stage-review view is scoped to gameshow + talk + radio at workflowStep 1');
+assert(page.includes('{workflowStep===1 && stageReviewView && <StageReview'), 'the review surface renders for gameshow/talk/radio at stage 1');
+assert(page.includes('{workflowStep===1 && !stageReviewView && <BuildSpace'), 'BuildSpace still serves stage 1 for the kinds outside the review spaces (kind-unset projects)');
 assert(page.includes('{!stageReviewView && <WorkshopAssetsPanel'), 'the workshop shelf leaves the stage-review page');
 assert(page.includes('workflowStep !== 2 && !stageReviewView && <details className="workshop-help">'), 'the guide details leave the stage-review page');
-assert(page.includes('entryGuide={talkCreateView || gameshowCreateView || stageReviewView ? undefined :'), 'the entry guide leaves the stage-review views');
+assert(page.includes('entryGuide={talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? undefined :'), 'the entry guide leaves the stage-review views (and the radio create view)');
 assert(page.includes('{!lightCreateFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the flow heading leaves the stage-review page — nothing pushes the surface down');
 assert(page.includes('bare={lightCreateFrame || stageReviewView}'), 'the stage nav renders bare (stage buttons only) in the review view — no explanatory note stacked above the surface');
 assert(page.includes('{!stageReviewView && mediaPlayback &&'), 'the video-trim notice leaves the stage-review page');
@@ -42,7 +44,7 @@ assert(page.includes('stageReview={stageReviewView}'), 'the page passes the revi
 assert(page.includes('<StageReview ccssEntitled={ccssEntitled} jewelPanel={jewelPanelElement} onEnterJewel={enterJewelFromScene}'), 'the review surface gets the one Jewel panel and the wand-scene entry');
 assert(page.includes('overlay={draftOverlay} onTrigger={trigger}'), 'the review receives the same draft overlay node and trigger the preview uses');
 
-assert(panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || stageReview;'), 'the progress strip is withheld in the review spaces as in talk create (and now gameshow create)');
+assert(panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || radioCreateView || stageReview;'), 'the progress strip is withheld in the review spaces as in talk create (and now gameshow create and radio create)');
 assert(panel.includes('{!stripWithheld && (()=>{const stageState=workflow.stages[workflowStep];'), 'the strip renders only when not withheld');
 assert(panel.includes('hidden={workflowStep===1&&!buildAiOpen&&!stageReview}'), 'in the review spaces Jewel\'s panel is never hidden behind Ask Jewel');
 assert(panel.includes('workflowStep===1&&!stageReview&&<button type="button" className="outline-btn"'), 'the Back to Set the Stage button belongs to the old Build Space page, not the review');
@@ -122,7 +124,7 @@ assert(reviewCss.includes('.sr-review-toggle') && reviewCss.includes('.stage-rev
 // Jewel's stage-1 instruction: place, wire, move, rename, remove —
 // and the talk deck rules, including never connecting the sign.
 assert(route.includes('JEWEL_STAGE_REVIEW_ADDENDUM'), 'the route carries the stage-review instruction');
-assert(route.includes('body.workspaceStage === "build" && (body.project?.kind === "gameshow" || body.project?.kind === "talk")'), 'the instruction is scoped to gameshow/talk at the build stage');
+assert(route.includes('body.workspaceStage === "build" && (body.project?.kind === "gameshow" || body.project?.kind === "talk" || body.project?.kind === "radio")'), 'the instruction is scoped to gameshow/talk/radio at the build stage');
 assert(route.includes('deckMoments'), 'Jewel\'s talk context lists the deck moments with staged flags');
 assert(route.includes('NEVER connect the sign or backdrop asset as a button'), 'Jewel is told never to connect the sign/backdrop (it would strip the background)');
 console.log('PASS: source contracts — review surface scope, one toggled review spot first with Jewel below, strip withheld, drag persistence paths, deck shelf removed, Jewel stage-1 instruction.');
