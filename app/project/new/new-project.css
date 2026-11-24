@@ -76,6 +76,7 @@
 .np-pop .np-sub { color:#b6add4; font-size:14.5px; margin-top:6px; }
 .np-opt { display:flex; gap:16px; align-items:center; width:100%; text-align:left; background:#1c1729; border:2px solid #2b2444; border-radius:16px; padding:16px 18px; margin-top:14px; cursor:pointer; color:#f0edf7; transition:border-color .15s, transform .15s; font:inherit; }
 .np-opt:hover { border-color:#e9c979; transform:translateY(-2px); }
+.np-opt.on { border-color:#e9c979; background:#241c33; }
 .np-opt .np-ic { font-size:30px; }
 .np-opt .np-t { font-size:18px; font-weight:800; }
 .np-opt .np-d { font-size:13.5px; color:#b6add4; margin-top:2px; line-height:1.4; }

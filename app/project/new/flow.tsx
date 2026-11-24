@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { createProject, saveProjectToServer, type ProjectKind } from "../../../lib/project";
+import { createProject, saveProjectToServer, type ProjectKind, type RadioBranch } from "../../../lib/project";
 import { GAME_TEMPLATES, getGameTemplate } from "../../../lib/game-templates";
 import { GAME_NIGHT_TEMPLATES, applyGameNightTemplate, getGameNightTemplate } from "../../../lib/game-night-templates";
 import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, isKindGatedFor, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
 import "./new-project.css";
 
-type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string };
+type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string; branch?: RadioBranch };
 
 export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: { ccssEntitled: boolean; viewerIsAdmin?: boolean }) {
   const router = useRouter();
@@ -24,6 +24,9 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   const [chosenTemplate, setChosenTemplate] = useState("");
   const [start, setStart] = useState<ScratchStart | null>(null);
   const [kind, setKind] = useState<ProjectKind | null>(null);
+  // Radio only: the branch picked on the format question — the first
+  // step of radio's create flow (Jessica, 2026-11-23).
+  const [radioBranch, setRadioBranch] = useState<RadioBranch | null>(null);
   const [screen, setScreen] = useState<"kinds" | "scratch" | "templates" | "tpl-detail" | "gn-templates" | "gn-detail">("kinds");
   const [tplDetail, setTplDetail] = useState("");
   const [gnDetail, setGnDetail] = useState("");
@@ -125,6 +128,16 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
           if (start.kind === "multiplayer" && start.theme) {
             project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
           }
+          // Radio (Jessica, 2026-11-23): the branch picked on the
+          // format question is stored on the project, and on the
+          // radio/DJ branch the music-show answer seeds
+          // gamePlan.theme exactly like a talk or gameshow theme —
+          // that is what seeds Jewel. Karaoke carries no theme, and
+          // radio's scratch start carries no pieces (no pieces step).
+          if (start.kind === "radio") {
+            if (start.branch) project.radioBranch = start.branch;
+            if (start.theme) project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
+          }
           project = applySetupPieces(project, start.pieces);
         }
       }
@@ -149,8 +162,9 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   function chooseKind(next: ProjectKind) {
     // Coming Soon kinds cannot be chosen — the card is disabled, and this
     // guard keeps every other caller out of the scratch screen too. The
-    // one exception is the site admin starting a multiplayer project
-    // for testing (Jessica, 2026-11-12); radio stays gated for everyone.
+    // exception is the site admin starting a multiplayer project for
+    // testing (Jessica, 2026-11-12) or a radio project to build and
+    // test that builder (Jessica, 2026-11-23).
     if (isKindGatedFor(next, viewerIsAdmin)) return;
     setKind(next);
     setPieces(defaultSetupPieces(next));
@@ -170,11 +184,24 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
 
   function startScratch() {
     if (!kind || isKindGatedFor(kind, viewerIsAdmin)) return;
+    // Radio's format question comes first (Jessica, 2026-11-23): with
+    // no branch picked there is nothing to create — the branch is
+    // stored on the project, so creation cannot start without it.
+    if (kind === "radio" && !radioBranch) return;
     const scratch: ScratchStart = { kind, pieces: [...pieces], theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined };
     // A game night starts with the same two-input ask (Jessica,
     // 2026-11-15): the creator's theme rides along exactly like a
     // show's, so creation can seed it the same way.
     if (kind === "multiplayer") scratch.theme = theme.trim() || undefined;
+    // Radio (Jessica, 2026-11-23): no pieces step, so the scratch
+    // start carries no pieces. The branch rides along, and on the
+    // radio/DJ branch the music-show answer is the theme that seeds
+    // the project; karaoke asks nothing more, so it carries no theme.
+    if (kind === "radio") {
+      scratch.pieces = [];
+      scratch.branch = radioBranch ?? undefined;
+      scratch.theme = radioBranch === "radio-dj" ? theme.trim() || undefined : undefined;
+    }
     setStart(scratch);
     setBegun(true);
   }
@@ -211,9 +238,10 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                   // The gate is per-viewer: a Coming Soon kind renders its
                   // disabled banded card for everyone except the site
                   // admin opening multiplayer for testing (Jessica,
-                  // 2026-11-12) — for her that one card is a normal
-                  // selectable card carrying a small "Admin testing" chip
-                  // instead of the band. Radio stays banded for everyone.
+                  // 2026-11-12) or radio to build and test it (Jessica,
+                  // 2026-11-23) — for her those cards are normal
+                  // selectable cards carrying a small "Admin testing"
+                  // chip instead of the band.
                   const gated = isKindGatedFor(info.id, viewerIsAdmin);
                   const adminTesting = !gated && !!info.comingSoon;
                   return gated ? (
@@ -246,7 +274,7 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
 
           {screen === "scratch" && kindInfo && (
             <div>
-              <button type="button" className="np-back" onClick={() => { setScreen("kinds"); setKind(null); }}>← Back to kinds</button>
+              <button type="button" className="np-back" onClick={() => { setScreen("kinds"); setKind(null); setRadioBranch(null); }}>← Back to kinds</button>
               <div className="np-setuphead">
                 <div className="display">{kindInfo.scratchHeading}</div>
                 <div className="np-chip set">From scratch</div>
@@ -263,12 +291,36 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                   <input className="np-nameinput" aria-label="Game title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
                   <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder="Its theme, vibe, or subject — e.g. spooky Halloween sleepover" value={theme} onChange={event => setTheme(event.target.value)} />
                 </>
+              ) : kind === "radio" ? (
+                <>
+                  <div className="np-ask">First things first — <b>is this a radio/DJ live stream, or a karaoke live?</b></div>
+                  <button type="button" className={`np-opt${radioBranch === "radio-dj" ? " on" : ""}`} aria-pressed={radioBranch === "radio-dj"} onClick={() => setRadioBranch("radio-dj")}>
+                    <div className="np-ic">🎧</div>
+                    <div>
+                      <div className="np-t">Radio / DJ live stream</div>
+                      <div className="np-d">You run the music live — a DJ set or a music show of your own.</div>
+                    </div>
+                  </button>
+                  <button type="button" className={`np-opt${radioBranch === "karaoke" ? " on" : ""}`} aria-pressed={radioBranch === "karaoke"} onClick={() => setRadioBranch("karaoke")}>
+                    <div className="np-ic">🎤</div>
+                    <div>
+                      <div className="np-t">Karaoke live</div>
+                      <div className="np-d">Your singers take the mic, one at a time.</div>
+                    </div>
+                  </button>
+                  <div className="np-ask" style={{ marginTop: "22px" }}>And <b>the title of your show</b>{radioBranch === "radio-dj" ? <> — plus <b>what kind of music show is it?</b></> : null}</div>
+                  <input className="np-nameinput" aria-label="Show title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+                  {radioBranch === "radio-dj" && (
+                    <input className="np-nameinput" aria-label="What kind of music show" maxLength={200} placeholder="What kind of music show — e.g. old-school R&B slow jams" value={theme} onChange={event => setTheme(event.target.value)} />
+                  )}
+                </>
               ) : (
                 <>
                   <div className="np-ask">Two things on this screen: <b>name it</b>, and <b>tap the pieces your show needs</b>.</div>
                   <input className="np-nameinput" aria-label="Show name" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
                 </>
               )}
+              {kind !== "radio" && (
               <div className="np-pieces">
                 {setupPiecesForKind(kindInfo.id).map(piece => {
                   const on = pieces.includes(piece.id);
@@ -292,9 +344,10 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                   );
                 })}
               </div>
+              )}
               <div className="np-nextrow">
-                <button type="button" className="np-nextbtn" onClick={startScratch}>Next — make it look like yours →</button>
-                <span className="np-hint">You can add or remove pieces any time. Nothing is final here.</span>
+                <button type="button" className="np-nextbtn" disabled={kind === "radio" && !radioBranch} onClick={startScratch}>Next — make it look like yours →</button>
+                <span className="np-hint">{kind === "radio" ? "Then Jewel takes it from there and helps you build the show." : "You can add or remove pieces any time. Nothing is final here."}</span>
               </div>
             </div>
           )}
