@@ -10,21 +10,24 @@ const { isKindComingSoon, isKindGatedFor } = kinds;
 // Multiplayer is LIVE for all users (Jessica, 2026-11-23: "make
 // multiplayer game night live for all users"). The 2026-11-12
 // admin-testing exception is retired with the gate itself: multiplayer
-// carries no comingSoon flag, so no viewer is gated from it. Radio
-// stays gated for everyone, admin included, until its own build lands.
+// carries no comingSoon flag, so no viewer is gated from it. Radio is
+// now the only gated kind, and the per-viewer predicate carries one
+// exemption again: the site admin may start radio projects to build
+// and test that builder (Jessica, 2026-11-23; see
+// tests/radio-create-flow.cjs).
 
-// 1. Multiplayer is open to everyone; radio is the only gated kind,
-// for every viewer.
+// 1. Multiplayer is open to everyone; radio is gated for everyone
+// except the admin building it.
 assert.equal(isKindGatedFor('multiplayer', true), false, 'admin can start a multiplayer project');
 assert.equal(isKindGatedFor('multiplayer', false), false, 'any user can start a multiplayer project — it is live');
-assert.equal(isKindGatedFor('radio', true), true, 'radio stays gated even for the admin');
+assert.equal(isKindGatedFor('radio', true), false, 'admin can start a radio project to build and test it (Jessica, 2026-11-23)');
 assert.equal(isKindGatedFor('radio', false), true, 'radio stays gated for non-admins');
 assert.equal(isKindGatedFor('gameshow', false), false, 'gameshow stays open');
 assert.equal(isKindGatedFor('gameshow', true), false, 'gameshow stays open for the admin too');
 assert.equal(isKindGatedFor('talk', false), false, 'talk stays open');
 assert.equal(isKindGatedFor(undefined, true), false, 'unset kind is never gated');
 assert.equal(isKindGatedFor(undefined, false), false, 'unset kind is never gated for non-admins either');
-console.log('PASS: multiplayer is gated for no one; radio is gated for everyone.');
+console.log('PASS: multiplayer is gated for no one; radio is gated for everyone except the admin.');
 
 // 2. The Coming Soon flags carry the state: multiplayer's flag is gone,
 // radio's is untouched.

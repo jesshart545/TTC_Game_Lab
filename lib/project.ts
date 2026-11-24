@@ -49,6 +49,11 @@ export type GameWheel = { enabled: boolean; title: string; segments: string[]; s
 export type GameToolType = "wheel" | "random-picker" | "card-list" | "countdown" | "poll" | "dice" | "coin-toss" | "plinko" | "higher-lower" | "cliffhanger" | "trivia-board" | "blank-board" | "trivia-list" | "youtube" | "question-card" | "blank-card" | "scoreboard" | "game-tool-list" | "city-crime-scene" | "bank";
 export type GameTool = { id: string; type: GameToolType; name: string; enabled: boolean; config: Record<string, unknown>; inToolbox?: boolean; inOverlayBuild?: boolean };
 export type ProjectKind = "gameshow" | "talk" | "radio" | "multiplayer";
+/** Radio, DJ, or Karaoke: which branch of the radio kind the creator
+ * picked at creation — the format question is the FIRST step of radio's
+ * create flow (Jessica, 2026-11-23): a radio/DJ live stream, or a
+ * karaoke live. Only radio projects carry it. */
+export type RadioBranch = "radio-dj" | "karaoke";
 /**
  * The few workflow facts that cannot be derived from project data (see
  * lib/workflow-progress.ts): the creator opened the toolbox review, a
@@ -81,6 +86,9 @@ export type Project = {
   pendingVideos?: { videoId: string; model: string; prompt: string; durationSeconds?: number }[];
   id: string;
   kind?: ProjectKind;
+  /** Radio, DJ, or Karaoke only: the branch picked on the create flow's
+   * format question ("radio-dj" or "karaoke"). */
+  radioBranch?: RadioBranch;
   name: string;
   slug: string;
   description: string;

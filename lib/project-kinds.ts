@@ -49,7 +49,7 @@ export const PROJECT_KINDS: ProjectKindInfo[] = [
     id: "radio",
     kicker: "Voice & music · Always live",
     title: "Radio, DJ, or Karaoke",
-    description: "A live broadcast, start to finish — a DJ set, karaoke night, or talk radio. This one always streams.",
+    description: "A live broadcast, start to finish — a DJ set, karaoke night, or a music show of your own. This one always streams.",
     image: "/redesign/kind-radio.webp",
     tagLabel: "Radio, DJ, karaoke",
     chipLabel: "Radio project",
@@ -81,23 +81,30 @@ export function isKindComingSoon(kind: ProjectKind | undefined): boolean {
 /** The Coming Soon gate as it applies to a specific viewer. Multiplayer
  * went LIVE for all users on Jessica's direction (2026-11-23), so its
  * former admin-testing exemption (2026-11-12) is retired — the kind
- * simply carries no comingSoon flag anymore. Radio stays gated for
- * everyone, admin included, until its own build lands. The
- * `viewerIsAdmin` parameter stays in the signature so every caller
- * keeps passing the site's admin verdict (server-side lib/auth/server's
- * isAdmin, surfaced as the viewerIsAdmin flag) for the day a kind
- * needs a per-viewer exemption again. */
+ * simply carries no comingSoon flag anymore. Radio is now the gated
+ * kind, and its build is landing: the gate holds for everyone EXCEPT
+ * the site admin (Jessica, 2026-11-23 — she may create and open Radio,
+ * DJ, or Karaoke projects to build and test that builder while the
+ * kind stays gated for everyone else), the same per-viewer exemption
+ * shape multiplayer used under PR #181. `viewerIsAdmin` is the site's
+ * own admin notion — server-side that is lib/auth/server's isAdmin
+ * (role "admin" or an ADMIN_EMAILS address), surfaced to client
+ * surfaces as the viewerIsAdmin flag the project APIs already return. */
 export function isKindGatedFor(kind: ProjectKind | undefined, viewerIsAdmin: boolean): boolean {
-  void viewerIsAdmin;
-  return isKindComingSoon(kind);
+  if (!isKindComingSoon(kind)) return false;
+  return !(viewerIsAdmin && kind === "radio");
 }
 
 /** The setup pieces a kind's from-scratch screen offers. A talk show's
  * screen offers only talk pieces — quiz cards and YouTube clips — never
  * pictured gameshow tools (Jessica, 2026-11-03: the Talk space holds only
- * talk pieces). Other kinds keep the full shared list. */
+ * talk pieces). Radio offers NONE: there is no pieces step in radio's
+ * create flow at all (Jessica, 2026-11-23 — radio's pieces are built in
+ * per branch, and customization happens by asking Jewel). Other kinds
+ * keep the full shared list. */
 export function setupPiecesForKind(kind: ProjectKind): SetupPiece[] {
   if (kind === "talk") return SETUP_PIECES.filter(piece => piece.id === "question-cards" || piece.id === "video-clips");
+  if (kind === "radio") return [];
   return SETUP_PIECES;
 }
 
