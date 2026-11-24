@@ -135,7 +135,7 @@ const quizTool = (overrides = {}) => ({
   const bgStage = stage.slice(stage.indexOf('function BackgroundStage'), stage.indexOf('/* ---------------- Opening prompt'));
   assert(!bgStage.includes('{jewelPanel}'), 'the background topic carries no second copy of her panel');
   assert(page.includes('jewelPanel={jewelPanelElement}'), 'the page hands its one Jewel panel to the talk stage');
-  assert(page.includes('talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement'), 'in the talk create view (and the gameshow create and stage-review views) the grid does not render the panel a second time');
+  assert(page.includes('talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? null : jewelPanelElement'), 'in the talk create view (and the gameshow create, radio create and stage-review views) the grid does not render the panel a second time');
   assert.equal((page.match(/<WorkshopAiPanel/g) || []).length, 1, 'the panel element is built exactly once and placed, never duplicated');
   const panel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
   assert(panel.includes('hidden={workflowStep===1&&!buildAiOpen&&!stageReview}'), 'the panel can only be hidden in Set the Stage outside the review spaces — in Imagine and Create it stands open by default, and in the review spaces it always stands open');
@@ -611,8 +611,8 @@ const quizTool = (overrides = {}) => ({
   assert(panel.includes('!isTalk && <div className="detail-block" id="workshop-game-templates"'), 'game templates are not offered inside a talk project');
   assert(panel.includes('title={isTalk ? "Show tools & cards" : "Game tools & cards"}'), 'the tools folder takes talk framing for talk projects');
   const aiPanel = fs.readFileSync('components/WorkshopAiPanel.tsx', 'utf8');
-  assert(aiPanel.includes('project.kind!=="talk"&&<div id="tool-templates"'), 'the pictured tool-template gallery never opens in a talk project');
-  assert(aiPanel.includes('project.kind!=="talk"&&<div id="board-templates"'), 'board templates never open in a talk project');
+  assert(aiPanel.includes('project.kind!=="talk"&&project.kind!=="radio"&&<div id="tool-templates"'), 'the pictured tool-template gallery never opens in a talk project (nor in a radio project)');
+  assert(aiPanel.includes('project.kind!=="talk"&&project.kind!=="radio"&&<div id="board-templates"'), 'board templates never open in a talk project (nor in a radio project)');
 
   // Fix 3 refinement: a NEW talk project starts with the ask.
   const flow = fs.readFileSync('app/project/new/flow.tsx', 'utf8');
@@ -646,9 +646,9 @@ const quizTool = (overrides = {}) => ({
   // and no gameshow-shaped game plan form — the theme was settled at
   // creation and never becomes a page area again.
   assert(page.includes('{!lightCreateFrame && !stageReviewView && <div className="workshop-flow-heading">'), 'the Brainstorm & create heading block leaves the talk view (and the stage-review views)');
-  assert(page.includes('entryGuide={talkCreateView || gameshowCreateView || stageReviewView ? undefined :'), 'the Current Task card leaves the talk view (and the stage-review views)');
+  assert(page.includes('entryGuide={talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? undefined :'), 'the Current Task card leaves the talk view (and the stage-review views)');
   assert(page.includes('bare={lightCreateFrame || stageReviewView}'), 'the nav renders bare for the talk views (and the stage-review views) — stage buttons only');
-  assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && <details key="game-plan"'), 'the gameshow-shaped game plan form leaves the talk view');
+  assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && project.kind !== "radio" && <details key="game-plan"'), 'the gameshow-shaped game plan form leaves the talk view (and the radio view)');
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(!stage.includes('gamePlan') || !stage.includes('theme: event.target.value'), 'the stage carries no theme editing — theme is a fact from creation');
   assert(!stage.includes('<textarea'), 'the stage carries no typing boxes at all — words are settled in conversation');
@@ -707,8 +707,8 @@ const quizTool = (overrides = {}) => ({
   // stage.
   assert(panel.includes('const talkCreateView = project.kind === "talk" && workflowStep === 0'),
     'the panel computes the talk create view to withhold the strip');
-  assert(panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || stageReview;') && panel.includes('{!stripWithheld && (()=>{const stageState=workflow.stages[workflowStep];'),
-    'the progress strip renders only where it is not withheld (talk create, gameshow create, or the stage-review spaces)');
+  assert(panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || radioCreateView || stageReview;') && panel.includes('{!stripWithheld && (()=>{const stageState=workflow.stages[workflowStep];'),
+    'the progress strip renders only where it is not withheld (talk create, gameshow create, radio create, or the stage-review spaces)');
   assert(panel.includes('jewel-progress') && panel.includes('Next: {nextTask.label}') && panel.includes('Go there →'),
     'the generic progress strip itself is untouched — other kinds keep their chips and Next line');
   assert(panel.includes('<CompactConversation') && panel.includes('AI CREATIVE DIRECTOR'),

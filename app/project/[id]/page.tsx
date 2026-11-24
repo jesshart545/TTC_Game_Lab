@@ -86,6 +86,7 @@ import GameshowStage from "../../../components/GameshowStage";
 import TalkshowStage from "../../../components/TalkshowStage";
 import GameNightStage from "../../../components/GameNightStage";
 import GameNightSetStage from "../../../components/GameNightSetStage";
+import RadioStage from "../../../components/RadioStage";
 import BackdropTextLayer from "../../../components/BackdropText";
 import { assetBackdropText, assetPromptText } from "../../../lib/backdrop-text";
 import ConfirmDialog from "../../../components/ConfirmDialog";
@@ -2275,8 +2276,8 @@ export default function ProjectWorkspace() {
   // Stage stays gated until every topic is complete — done or skipped.
   // Every other kind and stage renders as before.
   const talkCreateView = project.kind === "talk" && workflowStep === 0;
-  // Set the Stage — review spaces (Jessica, 2026-11-04): for gameshow
-  // and talk, stage 1 is no longer the Build Space workbench. The
+  // Set the Stage — review spaces (Jessica, 2026-11-04): for gameshow,
+  // talk and radio, stage 1 is no longer the Build Space workbench. The
   // page shows ONLY Jewel's conversation at the top and, immediately
   // past her, the overlay and dashboard reviews sharing one spot on
   // a toggle (components/StageReview.tsx); adding, staging and
@@ -2284,11 +2285,13 @@ export default function ProjectWorkspace() {
   // everything stays editable up to publish. Nothing else renders on
   // this page — no flow heading, no nav note, no pending-video or
   // background-destination blocks above the surface, no workshop
-  // shelf or guide below it. Radio and multiplayer keep the existing
-  // Build Space untouched — their categories are parked. Talk's
-  // frame at this stage follows its finished stage-0 treatment (the
-  // bare top), since Talk never had a buildspace of its own.
-  const stageReviewView = workflowStep === 1 && (project.kind === "gameshow" || project.kind === "talk");
+  // shelf or guide below it. Talk's frame at this stage follows its
+  // finished stage-0 treatment (the bare top), since Talk never had
+  // a buildspace of its own. Radio joined the review spaces with its
+  // own build (2026-11-24) — before that it kept the existing Build
+  // Space untouched, its category parked; multiplayer has its own
+  // Game Night stage instead.
+  const stageReviewView = workflowStep === 1 && (project.kind === "gameshow" || project.kind === "talk" || project.kind === "radio");
   const talkBareFrame = talkCreateView || (project.kind === "talk" && stageReviewView);
   // Gameshow Imagine and Create (Jessica, 2026-11-04): the same
   // light frame as Talk — a bare top (Rename · Save project ·
@@ -2297,7 +2300,14 @@ export default function ProjectWorkspace() {
   // the sidebar, with her progress strip withheld: the checklist
   // is hers, held in her conversation, never piled onto the page.
   const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0;
-  const lightCreateFrame = talkBareFrame || gameshowCreateView;
+  // Radio, DJ, or Karaoke Imagine and Create (2026-11-24): the same
+  // light frame again — a bare top, Jewel's conversation inside her
+  // own stage (components/RadioStage) instead of the sidebar, her
+  // progress strip withheld, and no game-plan form: the branch the
+  // creator picked at creation (project.radioBranch) heads the
+  // stage, and everything else happens by talking to her.
+  const radioCreateView = project.kind === "radio" && workflowStep === 0;
+  const lightCreateFrame = talkBareFrame || gameshowCreateView || radioCreateView;
   // Game Night (Off-Stream Multiplayer) — Imagine & Create and Set
   // the Stage (Jessica, 2026-11-15): the same light treatment as
   // Gameshow/Talk, for the kind that has no host, no stream and no
@@ -2373,7 +2383,7 @@ export default function ProjectWorkspace() {
         bare={lightCreateFrame || stageReviewView}
         lockedStages={project.kind === "talk" && !talkCreateComplete ? [1, 2] : undefined}
         lockNote={project.kind === "talk" && !talkCreateComplete ? "Set the Stage unlocks when Jewel has checked off every topic in Imagine and Create — done, or skipped. Nothing is locked against changes: finished work stays open." : undefined}
-        entryGuide={talkCreateView || gameshowCreateView || stageReviewView ? undefined : <WorkflowEntryGuide {...entryCopy} started={firstActionTaken}
+        entryGuide={talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? undefined : <WorkflowEntryGuide {...entryCopy} started={firstActionTaken}
           firstAction={{ ...entryCopy.firstAction, onClick: () => { markEntryStage(workflowStep, true); entryCopy.firstAction.onClick(); } }}
           onShowFirst={() => markEntryStage(workflowStep, false)} />} />
       {workflowStep === 0 && project.kind === "gameshow" && (
@@ -2432,7 +2442,18 @@ export default function ProjectWorkspace() {
           }}
         />
       )}
-      {workflowStep === 0 && project.kind !== "talk" && <details key="game-plan" hidden={gameshowCreateView ? false : workshopStep !== 0} open={gameshowCreateView ? Boolean(planOpen) : workshopStep === 0 && (planOpen ?? planIsEmpty)} onToggle={event => setPlanOpen(event.currentTarget.open)} className="game-plan" id="game-plan" aria-label="Game plan"><summary style={{cursor:"pointer",fontWeight:700}}>Your game plan{workshopStep !== 0 && <span style={{fontWeight:400}}> · {project.name || "Untitled project"} · Open to review or edit</span>}</summary><div className="game-plan-fields"><label htmlFor="game-title">Project or game title<span id="game-title-help">Give your project a name so you can find it in your saved projects. You can change it later.</span><input id="game-title" type="text" aria-describedby="game-title-help" value={project.name === "New Project" ? "" : project.name} placeholder="Example: Lady Lovelace’s Lyric Showdown" onChange={event => persist({...project,name:event.target.value,updatedAt:"just now"})}/></label>{[
+      {workflowStep === 0 && project.kind === "radio" && (
+        <RadioStage
+          jewelPanel={jewelPanelElement}
+          onEnterJewel={enterJewelFromScene}
+          project={project}
+          onAskJewel={askJewel}
+          doors={{
+            showSavedWork: () => openSavedWorkshop(1),
+          }}
+        />
+      )}
+      {workflowStep === 0 && project.kind !== "talk" && project.kind !== "radio" && <details key="game-plan" hidden={gameshowCreateView ? false : workshopStep !== 0} open={gameshowCreateView ? Boolean(planOpen) : workshopStep === 0 && (planOpen ?? planIsEmpty)} onToggle={event => setPlanOpen(event.currentTarget.open)} className="game-plan" id="game-plan" aria-label="Game plan"><summary style={{cursor:"pointer",fontWeight:700}}>Your game plan{workshopStep !== 0 && <span style={{fontWeight:400}}> · {project.name || "Untitled project"} · Open to review or edit</span>}</summary><div className="game-plan-fields"><label htmlFor="game-title">Project or game title<span id="game-title-help">Give your project a name so you can find it in your saved projects. You can change it later.</span><input id="game-title" type="text" aria-describedby="game-title-help" value={project.name === "New Project" ? "" : project.name} placeholder="Example: Lady Lovelace’s Lyric Showdown" onChange={event => persist({...project,name:event.target.value,updatedAt:"just now"})}/></label>{[
         ["theme","Game theme & style","Example: a futuristic neon music gameshow; a spooky haunted-hotel mystery; or a colorful tropical trivia night."],
         ["purpose","Purpose and goal","What should players or the audience accomplish?"],
         ["rules","Rules and play-through","Describe what happens from the start to the end of a game."],
@@ -2515,7 +2536,7 @@ export default function ProjectWorkspace() {
     </section>
     {!gameNightViews && <div data-workshop-section={workflowStep === 0 ? workshopStep : undefined} className={"workspace-grid workflow-layout workflow-stage-" + workflowStep + (workflowStep!==0 ? " general-build-space" : "")}>
       {!stageReviewView && Boolean(project.pendingVideos?.length) && <section aria-label="Pending video generation" className="idea-card"><strong>Video requests awaiting a result</strong><p>Check a saved request without generating another copy.</p>{project.pendingVideos?.map(job => <div key={job.videoId}><p>{job.prompt}</p>{assetBusy ? <p role="status">Already checking — the finished video will appear in your assets automatically.</p> : <button type="button" className="outline-btn" disabled={building} onClick={() => void generateAsset("video", job.prompt, { pendingVideo: job }).catch(() => undefined)}>Check video result</button>}</div>)}</section>}
-      {talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement}
+      {talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? null : jewelPanelElement}
       {!stageReviewView && backgroundDestinationKey&&(()=>{const asset=project.assets.find(a=>(a.storageKey||a.name)===backgroundDestinationKey);return asset?<section><BackgroundDestination project={project} asset={asset} onChange={persist}/><button type="button" onClick={()=>setBackgroundDestinationKey("")}>Done choosing background destination</button></section>:null;})()}
       {workflowStep===1 && stageReviewView && <StageReview ccssEntitled={ccssEntitled} jewelPanel={jewelPanelElement} onEnterJewel={enterJewelFromScene} focusControl={aiControlFocus} onSelect={setBuildSelection} cardStates={runtime.cardStates} liveControlIds={runtime.runs.map(r => r.control.id)} feedback={eventLog[0]} project={project} onChange={persist} overlay={draftOverlay} onTrigger={trigger} onWorkshop={()=>chooseWorkflowStep(0,1)} youtubeOpen={youtubeToolOpen} onOpenYoutube={()=>setYoutubeToolOpen(true)} onCloseYoutube={()=>setYoutubeToolOpen(false)} onYoutubeCommand={previewYoutube} youtubeState={youtubePreview} youtubeFeedback={youtubeFeedback} sequenceRunning={runtime.sequenceRunning} onStopSequence={runtime.stopSequence} sequenceError={runtime.sequenceError} onResetGame={resetDraftGame} dashboardExtras={()=><>{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker").map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&(t.type==="question-card"||t.type==="blank-card")).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="bank").map(t=><BankHostPanel key={t.id} tool={t} state={runtime.bankStates[t.id]} onCommand={runtime.bankCommand}/>)}</>}/>}
       {workflowStep===1 && !stageReviewView && <BuildSpace ccssEntitled={ccssEntitled} onAddTemplate={applyTemplateToProject} onAskAi={openJewel} entryRequest={buildEntryRequest} onEntryHandled={finishBuildEntry} showNextGuidance={firstActionTaken} focusControl={aiControlFocus} onSelect={setBuildSelection} cardStates={runtime.cardStates} onPublishStep={()=>chooseWorkflowStep(2)} feedback={eventLog[0]} project={project} onChange={persist} overlay={draftOverlay} onTrigger={trigger} onWorkshop={()=>chooseWorkflowStep(0,1)} youtubeOpen={youtubeToolOpen} onOpenYoutube={()=>setYoutubeToolOpen(true)} onCloseYoutube={()=>setYoutubeToolOpen(false)} onYoutubeCommand={previewYoutube} youtubeState={youtubePreview} youtubeFeedback={youtubeFeedback} sequenceRunning={runtime.sequenceRunning} onStopSequence={runtime.stopSequence} sequenceError={runtime.sequenceError} onResetGame={resetDraftGame} dashboardExtras={toolId=><>{!toolId&&<GoogleSearch projectId={project.id} onSavePool={(name,results)=>{const current=projectRef.current||project;const pool={...createCardList(),name,config:{entries:results.map(result=>({id:crypto.randomUUID(),text:result.summary||result.title,sourceUrl:result.url,sourceTitle:result.title})),cards:[]}};persist({...current,gameTools:[...current.gameTools,pool]});}}/>}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&infoTypes.includes(t.type)&&(!toolId||t.id===toolId)).map(t=><GameInfoHostPanel key={t.id} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="random-picker"&&(!toolId||t.id===toolId)).map(t=><PickerHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&(t.type==="question-card"||t.type==="blank-card")&&(!toolId||t.id===toolId)).map(t=><QuestionHostPanel key={t.id} project={project} tool={t} state={runtime.cardStates[t.id]} onCommand={runtime.cardCommand}/>)}{project.gameTools.filter(t=>t.enabled&&t.inOverlayBuild&&t.type==="bank"&&(!toolId||t.id===toolId)).map(t=><BankHostPanel key={t.id} tool={t} state={runtime.bankStates[t.id]} onCommand={runtime.bankCommand}/>)}</>}/>}

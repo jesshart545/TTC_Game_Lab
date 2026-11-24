@@ -77,8 +77,8 @@ assert(page.includes('{!gameNightViews && workflowStep !== 2 && !stageReviewView
 assert(page.includes('const gameNightJewelPanel = cloneElement(jewelPanelElement, { stageReview: true, gameNight: true });'), 'Jewel\'s panel in the Game Night views is her shared panel cloned strip-free with game-night words');
 assert(page.includes('<GameNightStage') && page.includes('<GameNightSetStage'), 'both Game Night stages render from the page');
 assert(page.includes('jewelPanel={gameNightJewelPanel}'), 'the Game Night stages receive the cloned panel');
-assert(page.includes('{workflowStep===1 && !stageReviewView && <BuildSpace'), 'Build Space still stands for the kinds that keep it (radio)');
-assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && <details key="game-plan"'), 'the game-plan form still stands for the kinds that keep it');
+assert(page.includes('{workflowStep===1 && !stageReviewView && <BuildSpace'), 'Build Space still stands for the kinds that keep it (kind-unset projects)');
+assert(page.includes('{workflowStep === 0 && project.kind !== "talk" && project.kind !== "radio" && <details key="game-plan"'), 'the game-plan form still stands for the kinds that keep it');
 console.log('PASS: page wiring — Game Night views carved out, old workshop stands down inside them only.');
 
 // ---------------------------------------------------------------------------

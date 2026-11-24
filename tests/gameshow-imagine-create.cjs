@@ -140,10 +140,10 @@ function baseProject(overrides = {}) {
   assert.equal((stage.match(/\{props\.jewelPanel\}/g) || []).length, 1, 'her conversation renders exactly once in the gameshow stage');
   const stageRender = stage.slice(stage.indexOf('return (\n    <section'));
   assert(stageRender.indexOf('{props.jewelPanel}') > -1 && stageRender.indexOf('{props.jewelPanel}') < stageRender.indexOf('gsw-liberty'), 'her conversation stands at the head of the stage, before the banner');
-  assert(page.includes('talkCreateView || gameshowCreateView || stageReviewView ? null : jewelPanelElement'), 'the sidebar does not render a second copy of her panel in the gameshow create view');
-  assert(panel.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || stageReview;'),
+  assert(page.includes('talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? null : jewelPanelElement'), 'the sidebar does not render a second copy of her panel in the gameshow create view');
+  assert(panel.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || radioCreateView || stageReview;'),
     'her panel carries no progress strip in the gameshow create view — no duplicate list, no Next/Go there');
-  assert(page.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && page.includes('entryGuide={talkCreateView || gameshowCreateView || stageReviewView ? undefined :'),
+  assert(page.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && page.includes('entryGuide={talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? undefined :'),
     'no Current Task entry guide stands over the gameshow create view');
   // The area shown is the model's first unfinished gameshow step, in
   // Jewel's order; the toolbox is the resting area when all are done.
