@@ -115,11 +115,13 @@ assert(flow.includes('applySetupPieces'), 'scratch creation adds pieces through 
 assert(flow.includes('project.kind = "gameshow"'), 'template starts are stamped gameshow');
 console.log('PASS: new-project flow gates City Crime Scene and reuses existing creation paths.');
 
-// 8. Coming Soon kinds (Jessica, 2026-11-04): radio and multiplayer are
-// shown in the picker under a "Coming Soon!" band and cannot be chosen;
-// gameshow and talk stay open. The gate is on STARTING only.
-eq(PROJECT_KINDS.filter(k => k.comingSoon).map(k => k.id), ['radio', 'multiplayer']);
-assert(kinds.isKindComingSoon('radio') && kinds.isKindComingSoon('multiplayer'), 'radio and multiplayer are coming-soon');
+// 8. Coming Soon kinds (Jessica, 2026-11-04): radio is shown in the
+// picker under a "Coming Soon!" band and cannot be chosen; gameshow and
+// talk stay open. Multiplayer went live for all users on Jessica's
+// direction (2026-11-23), so it carries no flag anymore. The gate is on
+// STARTING only.
+eq(PROJECT_KINDS.filter(k => k.comingSoon).map(k => k.id), ['radio']);
+assert(kinds.isKindComingSoon('radio') && !kinds.isKindComingSoon('multiplayer'), 'radio is coming-soon; multiplayer is live');
 assert(!kinds.isKindComingSoon('gameshow') && !kinds.isKindComingSoon('talk'), 'gameshow and talk are not gated');
 assert(!kinds.isKindComingSoon(undefined), 'unset kind is not gated');
 assert(flow.includes('np-soonband') && flow.includes('Coming Soon!'), 'picker pastes a Coming Soon! band across gated cards');
@@ -131,4 +133,4 @@ const projectPage = fs.readFileSync(path.join(root, 'app/project/[id]/page.tsx')
 assert(projectPage.includes('isKindGatedFor(info.id, viewerIsAdmin) && project.kind !== info.id'), 'kind dropdown blocks converting a project INTO a kind gated for this viewer, current kind exempt');
 const newCss = fs.readFileSync(path.join(root, 'app/project/new/new-project.css'), 'utf8');
 assert(newCss.includes('.np-soonband'), 'band styling ships with the picker stylesheet');
-console.log('PASS: radio and multiplayer carry the Coming Soon! band and cannot be started; gameshow and talk unchanged.');
+console.log('PASS: radio carries the Coming Soon! band and cannot be started; multiplayer is live; gameshow and talk unchanged.');
