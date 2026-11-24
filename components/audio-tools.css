@@ -1,0 +1,51 @@
+/* The radio music tools — DJ Deck and Sound Board (2026-11-24).
+   Host panels ride the shared .card-host shell (dashboard-remote.css);
+   these rules cover the pad grid, the deck transport and track list,
+   and the tools' overlay faces. */
+
+.sound-pads {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.sound-pads button {
+  display: grid;
+  gap: 2px;
+  padding: 10px 8px;
+  text-align: left;
+  min-height: 56px;
+}
+.sound-pads button .pad-label { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.sound-pads button .pad-sound { font-size: 11px; opacity: .75; overflow-wrap: anywhere; }
+.sound-pads button.playing { outline: 2px solid #f5c542; outline-offset: -2px; }
+
+.dj-transport { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.dj-transport button { flex: 1 1 auto; padding: 10px 8px; font-weight: 700; }
+.dj-now { display: flex; flex-wrap: wrap; gap: 12px; font-size: 14px; margin-top: 4px; }
+.dj-tracks { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow: auto; }
+.dj-tracks button {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  overflow-wrap: anywhere;
+}
+.dj-tracks button.current { outline: 2px solid #f5c542; outline-offset: -2px; }
+
+.dj-face, .sound-face {
+  width: 100%; height: 100%; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6%; padding: 6%; border-radius: 18px; text-align: center; overflow: hidden;
+  background: radial-gradient(120% 120% at 50% 0%, #26264a 0%, #12122b 55%, #0a0a1a 100%);
+  color: #ffffff;
+}
+.dj-face-title, .sound-face-title {
+  font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  font-size: clamp(13px, 2.2cqw, 26px);
+}
+.dj-face-track { font-size: clamp(15px, 3cqw, 36px); font-weight: 900; line-height: 1.1; overflow-wrap: anywhere; }
+.dj-face-status { font-size: clamp(11px, 1.6cqw, 19px); letter-spacing: .12em; text-transform: uppercase; opacity: .85; }
+.sound-face-pads { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.sound-face-pad {
+  border: 1px solid currentColor; border-radius: 10px; padding: 6px 12px;
+  font-size: clamp(11px, 1.8cqw, 20px); font-weight: 700;
+}
+.sound-face-pad.playing { background: #f5c542; color: #1a1405; border-color: #f5c542; }
