@@ -17,17 +17,17 @@ const { BOARD_LIBRARY, TOOL_LIBRARY, SHELF_LIBRARY, shelfRoute } = load('lib/wor
 const projectSrc = read('lib/project.ts');
 const typeUnion = projectSrc.match(/export type GameToolType = ([^;]+);/)[1];
 const allTypes = [...typeUnion.matchAll(/"([^"]+)"/g)].map(m => m[1]);
-assert.equal(allTypes.length, 20, 'the site has 20 game tool types');
+assert.equal(allTypes.length, 22, 'the site has 22 game tool types (20 + the radio music tools, slice 3)');
 const shelfTypes = SHELF_LIBRARY.map(item => item.type);
 assert.deepEqual([...shelfTypes].sort(), [...allTypes].sort(), 'the shelf covers every GameToolType exactly once');
-assert.equal(new Set(shelfTypes).size, 20, 'no tool appears twice on the shelf');
+assert.equal(new Set(shelfTypes).size, 22, 'no tool appears twice on the shelf');
 for (const missing of ['plinko', 'higher-lower', 'cliffhanger', 'youtube', 'question-card', 'blank-card', 'card-list', 'trivia-list']) {
   assert(shelfTypes.includes(missing), `the shelf offers ${missing} (it was missing before this batch)`);
 }
 const ccs = SHELF_LIBRARY.find(item => item.type === 'city-crime-scene');
 assert(ccs && ccs.restricted === true, 'City Crime Scene stays entitled-accounts-only on the shelf');
-assert.equal(BOARD_LIBRARY.length + TOOL_LIBRARY.length, 20, 'boards + tools libraries together are the whole shelf');
-console.log('PASS: the Imagine and Create shelf offers all 20 game tools, CCS still gated.');
+assert.equal(BOARD_LIBRARY.length + TOOL_LIBRARY.length, 22, 'boards + tools libraries together are the whole shelf');
+console.log('PASS: the Imagine and Create shelf offers all 22 game tools, CCS still gated.');
 
 // Routed tiles keep their own creation machinery; the rest are plain adds.
 for (const [type, route] of [['question-card', 'question-card'], ['blank-card', 'blank-card'], ['card-list', 'card-list'], ['trivia-list', 'trivia-list']]) {

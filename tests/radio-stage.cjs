@@ -105,7 +105,8 @@ assert(addendum.includes('PLAYLISTS ARE THE CORE WORK'), 'the addendum names pla
 assert(addendum.includes('Every radio show is a music show'), 'the addendum holds the music-show rule');
 assert(addendum.includes('talk programs belong to Talk Show projects'), 'the addendum keeps talk programming in Talk Show');
 assert(addendum.includes('CUSTOMIZE BY CONVERSATION'), 'the addendum frames customization as conversation with Jewel');
-assert(addendum.includes('no sound board, break timer, requests and shout-outs board, running order or singer queue tool to add'), 'the addendum names the not-yet-built pieces honestly');
+assert(addendum.includes('no break timer, requests and shout-outs board, running order or singer queue tool to add'), 'the addendum names the not-yet-built pieces honestly');
+assert(addendum.includes('THE SOUND BOARD AND THE DJ DECK ARE YOUR MUSIC TOOLS'), 'the addendum offers the sound board and DJ deck Jewel can now build (slice 3)');
 assert(addendum.includes('Never promise one, never invent a tool type for them'), 'the addendum forbids promising the missing pieces');
 assert(route.includes('body.workspaceStage === "build" && (body.project?.kind === "gameshow" || body.project?.kind === "talk" || body.project?.kind === "radio")'), 'the stage-review instruction covers radio at the build stage');
 assert(route.includes('SET THE STAGE — REVIEW SPACES (gameshow, talk and radio projects at the build stage)'), 'the stage-review instruction names radio');
