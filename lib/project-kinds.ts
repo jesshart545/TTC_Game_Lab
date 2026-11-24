@@ -67,7 +67,6 @@ export const PROJECT_KINDS: ProjectKindInfo[] = [
     chipLabel: "Game night project",
     scratchHeading: "Build your game night",
     nameSuggestion: "Game Night",
-    comingSoon: true,
   },
 ];
 
@@ -79,18 +78,18 @@ export function isKindComingSoon(kind: ProjectKind | undefined): boolean {
   return !!kind && PROJECT_KINDS.some(info => info.id === kind && info.comingSoon);
 }
 
-/** The Coming Soon gate as it applies to a specific viewer: gated for
- * everyone, EXCEPT the site admin starting a MULTIPLIER project for
- * testing (Jessica, 2026-11-12 — her admin account may create
- * Off-Stream Multiplayer Game Night projects while the gate stays up
- * for everyone else; radio stays gated for everyone, admin included).
- * `viewerIsAdmin` is the site's own admin notion — server-side that is
- * lib/auth/server's isAdmin (role "admin" or an ADMIN_EMAILS address),
- * surfaced to client surfaces as the viewerIsAdmin flag the project
- * APIs already return. */
+/** The Coming Soon gate as it applies to a specific viewer. Multiplayer
+ * went LIVE for all users on Jessica's direction (2026-11-23), so its
+ * former admin-testing exemption (2026-11-12) is retired — the kind
+ * simply carries no comingSoon flag anymore. Radio stays gated for
+ * everyone, admin included, until its own build lands. The
+ * `viewerIsAdmin` parameter stays in the signature so every caller
+ * keeps passing the site's admin verdict (server-side lib/auth/server's
+ * isAdmin, surfaced as the viewerIsAdmin flag) for the day a kind
+ * needs a per-viewer exemption again. */
 export function isKindGatedFor(kind: ProjectKind | undefined, viewerIsAdmin: boolean): boolean {
-  if (!isKindComingSoon(kind)) return false;
-  return !(viewerIsAdmin && kind === "multiplayer");
+  void viewerIsAdmin;
+  return isKindComingSoon(kind);
 }
 
 /** The setup pieces a kind's from-scratch screen offers. A talk show's
