@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { GameTool, Project } from "../lib/project";
-import { clampDjCrossfadeSeconds, deckTracks, freshDjState, walkDjPlayback, type DjAction, type DjState } from "../lib/dj-deck";
+import { DJ_SPEED_PRESETS, clampDjCrossfadeSeconds, clampDjFadeOutSeconds, clampDjSpeed, cleanDjLoopMode, deckTracks, freshDjState, walkDjPlayback, type DjAction, type DjState } from "../lib/dj-deck";
 import { useDjDurations } from "./DjDeckPlayer";
 import "./audio-tools.css";
 
 // The DJ Deck's host panel (Jessica, 2026-11-23): the host runs the
 // show's music from here — play, pause, previous, next, tap any song
 // to play it, and MERGE to blend the song playing into the next one
-// over the deck's crossfade. This panel sends instructions only:
+// over the deck's crossfade. The DJ customization rides the same
+// panel (2026-11-24): FADE OUT brings the song down smoothly into a
+// pause, LOOP repeats the song or the whole list, and SPEED plays
+// the music slower or faster. This panel sends instructions only:
 // every sound plays on the overlay page (components/DjDeckPlayer),
 // never from the dashboard. The now-playing readout walks the shared
 // state across the songs' measured lengths, so it follows the show
@@ -28,6 +31,10 @@ export function DjDeckHostPanel({ tool, project, state, onCommand }: { tool: Gam
   const walk = walkDjPlayback(shown, tracks.map(t => ({ key: t.key, duration: durations[t.key] })), now);
   const current = walk.index >= 0 ? tracks[walk.index] : undefined;
   const fadeSeconds = clampDjCrossfadeSeconds(tool.config.crossfadeSeconds);
+  const fadeOutSeconds = clampDjFadeOutSeconds(tool.config.fadeOutSeconds);
+  const loopMode = cleanDjLoopMode(shown.loopMode);
+  const speed = clampDjSpeed(shown.speed);
+  const fadingOut = Boolean(shown.fadeOut && shown.status === "playing");
   const run = async (action: DjAction, arg?: string) => {
     try { await onCommand(tool.id, action, arg); setMessage(""); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Deck action failed."); }
@@ -40,8 +47,10 @@ export function DjDeckHostPanel({ tool, project, state, onCommand }: { tool: Gam
       : <>
         <div className="dj-now">
           <span>On the deck <strong>{current ? current.name : "—"}</strong></span>
-          <span>{walk.status === "ended" ? "Finished" : shown.status === "playing" ? (shown.fade ? "Merging" : "Playing") : shown.status === "paused" ? "Paused" : "Stopped"}</span>
+          <span>{walk.status === "ended" ? "Finished" : shown.status === "playing" ? (fadingOut ? "Fading out" : shown.fade ? "Merging" : "Playing") : shown.status === "paused" ? "Paused" : "Stopped"}</span>
           {current && durations[current.key] ? <span>{clock(walk.position)} / {clock(durations[current.key])}</span> : null}
+          {loopMode !== "off" ? <span>{loopMode === "one" ? "Looping this song" : "Looping the list"}</span> : null}
+          {speed !== 1 ? <span>Speed {speed}×</span> : null}
         </div>
         <div className="dj-transport">
           <button type="button" onClick={() => void run("previous")} aria-label="Previous song">⏮ Prev</button>
@@ -50,7 +59,18 @@ export function DjDeckHostPanel({ tool, project, state, onCommand }: { tool: Gam
             : <button type="button" onClick={() => void run("play")}>▶ Play</button>}
           <button type="button" onClick={() => void run("next")} aria-label="Next song">Next ⏭</button>
           <button type="button" onClick={() => void run("merge")} aria-label={`Merge into the next song over ${fadeSeconds} seconds`}>Merge ⤵ {fadeSeconds}s</button>
+          <button type="button" onClick={() => void run("fade-out")} disabled={!playing || fadingOut} aria-label={`Fade the song out over ${fadeOutSeconds} seconds and pause`}>Fade out ⤵ {fadeOutSeconds}s</button>
           <button type="button" onClick={() => void run("stop")} aria-label="Stop the deck">⏹ Stop</button>
+        </div>
+        <div className="dj-mixrow">
+          <span className="dj-mixlabel">Loop</span>
+          <button type="button" aria-pressed={loopMode === "off"} className={loopMode === "off" ? "current" : ""} onClick={() => void run("loop", "off")}>Off</button>
+          <button type="button" aria-pressed={loopMode === "one"} className={loopMode === "one" ? "current" : ""} onClick={() => void run("loop", "one")}>Loop song</button>
+          <button type="button" aria-pressed={loopMode === "all"} className={loopMode === "all" ? "current" : ""} onClick={() => void run("loop", "all")}>Loop all</button>
+        </div>
+        <div className="dj-mixrow">
+          <span className="dj-mixlabel">Speed</span>
+          {DJ_SPEED_PRESETS.map(preset => <button key={preset} type="button" aria-pressed={speed === preset} className={speed === preset ? "current" : ""} onClick={() => void run("speed", String(preset))}>{preset}×</button>)}
         </div>
         <ol className="dj-tracks">
           {tracks.map((track, i) => <li key={track.key}><button type="button" className={i === walk.index ? "current" : ""} aria-current={i === walk.index || undefined} onClick={() => void run("play-track", track.key)}>{i + 1}. {track.name}{i === walk.index ? " · on the deck" : ""}</button></li>)}

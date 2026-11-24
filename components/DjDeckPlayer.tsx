@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameTool, Project } from "../lib/project";
-import { deckTracks, freshDjState, walkDjPlayback, type DjState, type DjTrack } from "../lib/dj-deck";
+import { clampDjFadeInSeconds, clampDjSpeed, cleanDjLoopMode, deckTracks, freshDjState, walkDjPlayback, type DjState, type DjTrack } from "../lib/dj-deck";
 import "./audio-tools.css";
 
 // The DJ Deck's overlay side. The ENGINE is the show's music player:
@@ -9,10 +9,14 @@ import "./audio-tools.css";
 // only sends commands — and plays the project's own songs from THIS
 // page, because the overlay page is where the audience's audio comes
 // from. Two audio elements carry a merge: the incoming track fades
-// up while the outgoing one fades down. The engine runs whether or
-// not the deck's face was placed on the overlay; the FACE
-// (DjDeckVisual) is the separate, optional visual that shows the
-// current track's name when the creator placed the deck.
+// up while the outgoing one fades down. The customization rides the
+// same state: a song fades in over the deck's fade-in seconds when
+// it starts, the Fade Out control sinks the volume to silence
+// before the pause, looping wraps the walk, and the state's speed
+// is applied to both elements as their playback rate. The engine
+// runs whether or not the deck's face was placed on the overlay;
+// the FACE (DjDeckVisual) is the separate, optional visual that
+// shows the current track's name when the creator placed the deck.
 
 /** Measure the deck tracks' durations from their files' metadata,
  *  so positions can walk across track ends (see walkDjPlayback). A
@@ -55,15 +59,20 @@ export function DjDeckVisual({ tool, project, state, preview = false }: { tool: 
     ? "Your music, played live"
     : shown.fade && shown.status === "playing"
       ? "Merging"
-      : shown.status === "playing"
-        ? "Now playing"
-        : shown.status === "paused"
-          ? "Paused"
-          : "Ready";
+      : shown.fadeOut && shown.status === "playing"
+        ? "Fading out"
+        : shown.status === "playing"
+          ? "Now playing"
+          : shown.status === "paused"
+            ? "Paused"
+            : "Ready";
+  const loopMode = cleanDjLoopMode(shown.loopMode);
+  const rate = clampDjSpeed(shown.speed);
+  const suffix = preview ? "" : `${loopMode !== "off" ? ` · Loop ${loopMode === "one" ? "song" : "all"}` : ""}${rate !== 1 ? ` · ${rate}× speed` : ""}`;
   return <div className="dj-face" style={{ border: `2px solid ${accent}` }}>
     <div className="dj-face-title" style={{ color: accent }}>{title}</div>
     <div className="dj-face-track">{current ? current.name : "No songs on the deck yet"}</div>
-    <div className="dj-face-status">{status}</div>
+    <div className="dj-face-status">{status}{suffix}</div>
   </div>;
 }
 
@@ -76,19 +85,38 @@ export function DjDeckEngine({ project, tool, state }: { project: Project; tool:
   tracksRef.current = tracks;
   const durationsRef = useRef(durations);
   durationsRef.current = durations;
+  const configRef = useRef(tool.config);
+  configRef.current = tool.config;
   const mainRef = useRef<HTMLAudioElement | null>(null);
   const fadeRef = useRef<HTMLAudioElement | null>(null);
   const loadedKey = useRef<string | null>(null);
   const fadeLoadedKey = useRef<string | null>(null);
+  // A fade-in in progress on the main deck: when a song starts
+  // playing outside a merge (a merge runs its own blend), the
+  // engine ramps the volume up over the deck's fade-in seconds.
+  const rampRef = useRef<{ startedAt: number; seconds: number } | null>(null);
   const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
+    const startMain = (main: HTMLAudioElement, merging: boolean) => {
+      if (!merging) {
+        const seconds = clampDjFadeInSeconds(configRef.current?.fadeInSeconds);
+        rampRef.current = seconds > 0 ? { startedAt: Date.now(), seconds } : null;
+        if (rampRef.current) main.volume = 0;
+      }
+      return main.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
+    };
     const sync = () => {
       const main = mainRef.current;
       const fadeEl = fadeRef.current;
       if (!main) return;
       const st = stateRef.current;
       const list = tracksRef.current;
+      // The deck's speed rides on both elements, so a merge blends
+      // two songs playing at the same rate.
+      const rate = clampDjSpeed(st.speed);
+      if (main.playbackRate !== rate) main.playbackRate = rate;
+      if (fadeEl && fadeEl.playbackRate !== rate) fadeEl.playbackRate = rate;
       if (!list.length) {
         if (!main.paused) main.pause();
         if (fadeEl && !fadeEl.paused) fadeEl.pause();
@@ -96,6 +124,7 @@ export function DjDeckEngine({ project, tool, state }: { project: Project; tool:
       }
       const target = walkDjPlayback(st, list.map(t => ({ key: t.key, duration: durationsRef.current[t.key] })), Date.now());
       if (target.status === "stopped" || target.status === "ended" || target.index < 0) {
+        rampRef.current = null;
         if (!main.paused) main.pause();
         if (fadeEl && !fadeEl.paused) fadeEl.pause();
         if (target.status === "stopped") {
@@ -112,15 +141,24 @@ export function DjDeckEngine({ project, tool, state }: { project: Project; tool:
         main.src = current.url;
         loadedKey.current = current.key;
         try { main.currentTime = target.position; } catch { /* not ready */ }
-        if (target.status === "playing") void main.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
+        if (target.status === "playing") void startMain(main, Boolean(target.fade));
       } else {
         if (Math.abs(main.currentTime - target.position) > 2.5 && !main.seeking) { try { main.currentTime = target.position; } catch { /* not ready */ } }
-        if (target.status === "playing" && main.paused) void main.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
-        if (target.status === "paused" && !main.paused) main.pause();
+        if (target.status === "playing" && main.paused) void startMain(main, Boolean(target.fade));
+        if (target.status === "paused" && !main.paused) { main.pause(); rampRef.current = null; }
+      }
+      // Volumes: a merge blend governs the main deck while it runs;
+      // a fade-in ramps a fresh start; a fade-out sinks whatever is
+      // sounding toward silence on top of either.
+      const now = Date.now();
+      let fadeOutFactor = 1;
+      if (st.fadeOut && st.status === "playing" && st.fadeOut.seconds > 0) {
+        fadeOutFactor = 1 - Math.min(1, Math.max(0, (now - st.fadeOut.startedAt) / (st.fadeOut.seconds * 1000)));
       }
       if (target.fade && fadeEl) {
+        rampRef.current = null;
         const from = list[target.fade.fromIndex];
-        main.volume = target.fade.progress;
+        main.volume = target.fade.progress * fadeOutFactor;
         if (from) {
           if (fadeLoadedKey.current !== from.key) {
             fadeEl.src = from.url;
@@ -130,10 +168,16 @@ export function DjDeckEngine({ project, tool, state }: { project: Project; tool:
           } else if (Math.abs(fadeEl.currentTime - target.fade.fromPosition) > 2.5 && !fadeEl.seeking) {
             try { fadeEl.currentTime = target.fade.fromPosition; } catch { /* not ready */ }
           }
-          fadeEl.volume = 1 - target.fade.progress;
+          fadeEl.volume = (1 - target.fade.progress) * fadeOutFactor;
         }
       } else {
-        main.volume = 1;
+        let volume = 1;
+        if (rampRef.current) {
+          const progress = (now - rampRef.current.startedAt) / (rampRef.current.seconds * 1000);
+          if (progress >= 1) rampRef.current = null;
+          else volume = Math.max(0, progress);
+        }
+        main.volume = volume * fadeOutFactor;
         if (fadeEl && !fadeEl.paused) fadeEl.pause();
         fadeLoadedKey.current = null;
       }
