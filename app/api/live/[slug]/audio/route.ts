@@ -16,7 +16,7 @@ export async function POST(request: Request, context: Context) {
   const { slug } = await context.params; const live = await published(slug); if (!live) return NextResponse.json({ error: 'Published project unavailable.' }, { status: 404 });
   if (!await validLiveHost(live.db, live.project.id, request.headers.get('x-host-key') || '')) return NextResponse.json({ error: 'Open the private host dashboard from the builder.' }, { status: 403 });
   const body = await request.json().catch(() => ({}));
-  if (!['play', 'pause', 'stop', 'next', 'previous', 'merge', 'play-track', 'toggle', 'play-pad', 'stop-pad'].includes(body.action)) return NextResponse.json({ error: 'Invalid audio action.' }, { status: 400 });
+  if (!['play', 'pause', 'stop', 'next', 'previous', 'merge', 'play-track', 'toggle', 'fade-out', 'loop', 'speed', 'play-pad', 'stop-pad'].includes(body.action)) return NextResponse.json({ error: 'Invalid audio action.' }, { status: 400 });
   if (body.version !== undefined && (!Number.isSafeInteger(body.version) || body.version < 0)) return NextResponse.json({ error: 'Invalid state version.' }, { status: 400 });
   if (body.arg !== undefined && typeof body.arg !== 'string') return NextResponse.json({ error: 'Invalid action target.' }, { status: 400 });
   try { return NextResponse.json({ state: await changeAudio(live.db, live.project, String(body.toolId), body.action, body.version, body.arg) }); }
