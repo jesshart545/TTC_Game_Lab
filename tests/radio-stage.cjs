@@ -123,7 +123,7 @@ assert(page.includes('const gameNightCreateView = project.kind === "multiplayer"
 assert(page.includes('const gameNightSetView = project.kind === "multiplayer" && workflowStep === 1;'), 'the Game Night set view is unchanged');
 assert(route.includes('const JEWEL_TALKSHOW_ADDENDUM = `'), 'the talkshow addendum still stands');
 assert(route.includes('const JEWEL_GAMENIGHT_ADDENDUM = `'), 'the game-night addendum still stands');
-assert(route.includes('(talkShow ? JEWEL_TALKSHOW_ADDENDUM : "")'), 'the talkshow addendum gate is unchanged');
+assert(route.includes('const talk = talkAddendum(body.project);'), 'the talkshow addendum gate is unchanged in effect — talk-only, composed through talkAddendum since the talk branch build');
 console.log('PASS: gameshow, talk and multiplayer stage selection and addenda are unchanged.');
 
 console.log('PASS: radio stage — light Imagine & Create, review Set the Stage, radio-aware Jewel.');

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { createProject, saveProjectToServer, type ProjectKind, type RadioBranch } from "../../../lib/project";
+import { createProject, saveProjectToServer, type ProjectKind, type RadioBranch, type TalkBranch } from "../../../lib/project";
 import { GAME_TEMPLATES, getGameTemplate } from "../../../lib/game-templates";
 import { GAME_NIGHT_TEMPLATES, applyGameNightTemplate, getGameNightTemplate } from "../../../lib/game-night-templates";
 import { PROJECT_KINDS, SETUP_PIECES, applySetupPieces, defaultSetupPieces, isKindGatedFor, projectKindInfo, setupPiecesForKind } from "../../../lib/project-kinds";
 import "./new-project.css";
 
-type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string; branch?: RadioBranch };
+type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string; branch?: RadioBranch; talkBranch?: TalkBranch };
 
 export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: { ccssEntitled: boolean; viewerIsAdmin?: boolean }) {
   const router = useRouter();
@@ -27,6 +27,10 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   // Radio only: the branch picked on the format question — the first
   // step of radio's create flow (Jessica, 2026-11-23).
   const [radioBranch, setRadioBranch] = useState<RadioBranch | null>(null);
+  // Talk only: the branch picked on the branch question — "Are we
+  // building a talk show or a classroom?" — the first step of talk's
+  // create flow (Jessica, 2026-11-24).
+  const [talkBranch, setTalkBranch] = useState<TalkBranch | null>(null);
   const [screen, setScreen] = useState<"kinds" | "scratch" | "templates" | "tpl-detail" | "gn-templates" | "gn-detail">("kinds");
   const [tplDetail, setTplDetail] = useState("");
   const [gnDetail, setGnDetail] = useState("");
@@ -121,6 +125,25 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
           if ((start.kind === "talk" || start.kind === "gameshow") && start.theme) {
             project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme };
           }
+          // Talk Show or Classroom (Jessica, 2026-11-24): the branch
+          // picked on the branch question — the first question of
+          // talk's create flow — is stored on the project, and the
+          // canned Jewel greeting is talk-worded, branch-aware: the
+          // shared seed above speaks of a trivia generator and board
+          // templates — gameshow furniture inside a talk show or a
+          // classroom. Both branches then live in the same three
+          // areas as every livestream builder (Imagine and Create,
+          // Set the Stage, Showtime!); the branch frames the work
+          // inside them, nothing more.
+          if (start.kind === "talk") {
+            if (start.talkBranch) project.talkBranch = start.talkBranch;
+            project.messages = [{
+              role: "assistant",
+              text: start.talkBranch === "classroom"
+                ? "Tell me about your class — build your curriculum, make quizzes, tasks and tests from it, design a backdrop for each lesson, or set up your classroom dashboard. Your class is ready to shape."
+                : "Tell me about your talk show — design your background artwork, make music or a cutscene video, plan your opening prompt, or set up your talk show dashboard. Your show is ready to shape.",
+            }];
+          }
           // A game night seeds its theme the same way (Jessica,
           // 2026-11-15): the two-input ask is universal, so the theme
           // the creator gave on the setup screen is in gamePlan.theme
@@ -201,6 +224,10 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
     // no branch picked there is nothing to create — the branch is
     // stored on the project, so creation cannot start without it.
     if (kind === "radio" && !radioBranch) return;
+    // Talk's branch question comes first (Jessica, 2026-11-24): with
+    // no branch picked there is nothing to create — the branch is
+    // stored on the project, so creation cannot start without it.
+    if (kind === "talk" && !talkBranch) return;
     const scratch: ScratchStart = { kind, pieces: [...pieces], theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined };
     // A game night starts with the same two-input ask (Jessica,
     // 2026-11-15): the creator's theme rides along exactly like a
@@ -214,6 +241,19 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
       scratch.pieces = [];
       scratch.branch = radioBranch ?? undefined;
       scratch.theme = radioBranch === "radio-dj" ? theme.trim() || undefined : undefined;
+    }
+    // Talk Show or Classroom (Jessica, 2026-11-24): her sequence has
+    // no pieces step — after the branch question, the title, and the
+    // topic (talk show) or subject content (classroom), the creator
+    // goes to Jewel. The branch rides along, and the topic/subject
+    // answer is the theme that seeds the project exactly as talk's
+    // theme seeding already works (it is already on the scratch
+    // start above). The two talk pieces (question cards, video
+    // clips) stay available through Jewel and the Library — no
+    // capability is removed, only the step.
+    if (kind === "talk") {
+      scratch.pieces = [];
+      scratch.talkBranch = talkBranch ?? undefined;
     }
     setStart(scratch);
     setBegun(true);
@@ -287,16 +327,38 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
 
           {screen === "scratch" && kindInfo && (
             <div>
-              <button type="button" className="np-back" onClick={() => { setScreen("kinds"); setKind(null); setRadioBranch(null); }}>← Back to kinds</button>
+              <button type="button" className="np-back" onClick={() => { setScreen("kinds"); setKind(null); setRadioBranch(null); setTalkBranch(null); }}>← Back to kinds</button>
               <div className="np-setuphead">
                 <div className="display">{kindInfo.scratchHeading}</div>
                 <div className="np-chip set">From scratch</div>
               </div>
-              {kind === "talk" || kind === "gameshow" ? (
+              {kind === "talk" ? (
+                <>
+                  <div className="np-ask">First things first — <b>are we building a talk show or a classroom?</b></div>
+                  <button type="button" className={`np-opt${talkBranch === "talk-show" ? " on" : ""}`} aria-pressed={talkBranch === "talk-show"} onClick={() => setTalkBranch("talk-show")}>
+                    <div className="np-ic">🎙️</div>
+                    <div>
+                      <div className="np-t">Talk show</div>
+                      <div className="np-d">Your show, your topic — you host the conversation live.</div>
+                    </div>
+                  </button>
+                  <button type="button" className={`np-opt${talkBranch === "classroom" ? " on" : ""}`} aria-pressed={talkBranch === "classroom"} onClick={() => setTalkBranch("classroom")}>
+                    <div className="np-ic">🎓</div>
+                    <div>
+                      <div className="np-t">Classroom</div>
+                      <div className="np-d">Your class, your subject — you teach it live, lesson by lesson.</div>
+                    </div>
+                  </button>
+                  <div className="np-ask" style={{ marginTop: "22px" }}>And {talkBranch === "classroom" ? <><b>the title of your class</b> — plus <b>its subject content</b></> : <><b>the title of your talk show</b> — plus <b>its topic</b></>}</div>
+                  <input className="np-nameinput" aria-label={talkBranch === "classroom" ? "Class title" : "Show title"} maxLength={100} value={name} onChange={event => setName(event.target.value)} />
+                  <input className="np-nameinput" aria-label={talkBranch === "classroom" ? "Subject content" : "Topic"} maxLength={200} placeholder={talkBranch === "classroom" ? "Its subject content — e.g. beginner Spanish, week by week" : "Its topic — e.g. cozy faith-and-life chat"} value={theme} onChange={event => setTheme(event.target.value)} />
+                  <div className="np-ask" style={{ marginTop: "18px" }}>Okay, now let’s talk to Jewel and get started on your ideas — let’s start with the background.</div>
+                </>
+              ) : kind === "gameshow" ? (
                 <>
                   <div className="np-ask">First things first — two things only you can give: <b>the title of your show</b>, and <b>its theme, vibe, or subject</b>. Then tap the pieces your show needs.</div>
                   <input className="np-nameinput" aria-label="Show title" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
-                  <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder={kind === "talk" ? "Its theme, vibe, or subject — e.g. cozy faith-and-life chat" : "Its theme, vibe, or subject — e.g. neon 90s music trivia"} value={theme} onChange={event => setTheme(event.target.value)} />
+                  <input className="np-nameinput" aria-label="Theme, vibe, or subject" maxLength={200} placeholder="Its theme, vibe, or subject — e.g. neon 90s music trivia" value={theme} onChange={event => setTheme(event.target.value)} />
                 </>
               ) : kind === "multiplayer" ? (
                 <>
@@ -333,7 +395,7 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                   <input className="np-nameinput" aria-label="Show name" maxLength={100} value={name} onChange={event => setName(event.target.value)} />
                 </>
               )}
-              {kind !== "radio" && (
+              {kind !== "radio" && kind !== "talk" && (
               <div className="np-pieces">
                 {setupPiecesForKind(kindInfo.id).map(piece => {
                   const on = pieces.includes(piece.id);
@@ -359,8 +421,8 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
               </div>
               )}
               <div className="np-nextrow">
-                <button type="button" className="np-nextbtn" disabled={kind === "radio" && !radioBranch} onClick={startScratch}>Next — make it look like yours →</button>
-                <span className="np-hint">{kind === "radio" ? "Then Jewel takes it from there and helps you build the show." : "You can add or remove pieces any time. Nothing is final here."}</span>
+                <button type="button" className="np-nextbtn" disabled={(kind === "radio" && !radioBranch) || (kind === "talk" && !talkBranch)} onClick={startScratch}>Next — make it look like yours →</button>
+                <span className="np-hint">{kind === "radio" || kind === "talk" ? "Then Jewel takes it from there and helps you build the show." : "You can add or remove pieces any time. Nothing is final here."}</span>
               </div>
             </div>
           )}

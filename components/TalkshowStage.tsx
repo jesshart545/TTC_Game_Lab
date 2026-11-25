@@ -100,6 +100,11 @@ const assetKey = (asset: ProjectAsset) => asset.storageKey || asset.name;
 /* ---------------- Background — the combined background + sign piece ---------------- */
 
 function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProps) {
+  // Talk branch (Jessica, 2026-11-24): a classroom gets a backdrop per
+  // topic or lesson; a talk show (and any talk project with no branch
+  // stored) gets its one show background. Same stage, same combined
+  // background + sign piece — only the framing words differ.
+  const classroom = project.talkBranch === "classroom";
   const backgrounds = backgroundAssets(project);
   const animated = backgrounds.find(asset => isVideo(asset)) || null;
   const flat = backgrounds.find(asset => !isVideo(asset)) || null;
@@ -108,7 +113,7 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
   const heroPrompt = hero ? assetPromptText(hero) : null;
   return (
     <div>
-      <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>First let’s decide on a background (flat/animated)</div>
+      <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>{classroom ? "First let’s decide on a backdrop for this lesson (flat/animated)" : "First let’s decide on a background (flat/animated)"}</div>
       <div className="gsw-grid2">
         <div>
           <span className="gsw-demotag">Flat — a still, artistic backdrop</span>
@@ -118,7 +123,7 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
               ? assetBackdropText(flat) && <BackdropTextLayer spec={assetBackdropText(flat)!} />
               : <BackdropTextLayer spec={demoTextSpec(project, null)} />}
             <div style={{ position: "absolute", left: 12, bottom: 10 }}>
-              <span className="gsw-vchip gold">{flat ? `Your flat backdrop · ${flat.name}` : "Example · a pictured talk-show stage, your title lettered on it"}</span>
+              <span className="gsw-vchip gold">{flat ? `Your flat backdrop · ${flat.name}` : classroom ? "Example · a pictured classroom backdrop, your class title lettered on it" : "Example · a pictured talk-show stage, your title lettered on it"}</span>
             </div>
           </div>
         </div>
@@ -127,7 +132,7 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
           <div className="gsw-stage-visual" style={{ minHeight: 190, position: "relative" }}>
             <AnimatedExampleMedia project={project} />
             <div style={{ position: "absolute", left: 12, bottom: 10 }}>
-              <span className="gsw-vchip gold">{animated ? `Your animated backdrop · ${animated.name}` : "Example · an animated talk-show backdrop, playing"}</span>
+              <span className="gsw-vchip gold">{animated ? `Your animated backdrop · ${animated.name}` : classroom ? "Example · an animated classroom backdrop, playing" : "Example · an animated talk-show backdrop, playing"}</span>
             </div>
           </div>
         </div>
@@ -257,7 +262,7 @@ function ResearchStage({ project, jewelPanel }: StageProps) {
     <div>
       <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>Research on your topic — Jewel gathers the data points</div>
       <div className="gsw-card">
-        <h4>{promptSpec ? `Your talking point: “${promptSpec.text}”` : theme ? `Your show is about: ${theme}` : "Your talking point"}</h4>
+        <h4>{promptSpec ? `Your talking point: “${promptSpec.text}”` : theme ? (project.talkBranch === "classroom" ? `Your class is about: ${theme}` : `Your show is about: ${theme}`) : "Your talking point"}</h4>
         <p>That is what Jewel researches in your conversation — data points about it, from the web, with the sources attached.</p>
       </div>
 
@@ -291,7 +296,7 @@ function QuizStage({ project, doors, jewelPanel }: StageProps) {
   const anyCardTool = cardTools[0];
   return (
     <div>
-      <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>Quiz your class or create follow up questions for your prompt</div>
+      <div className="gsw-display" style={{ fontSize: 22, marginBottom: 10 }}>{project.talkBranch === "classroom" ? "Quiz your class — quizzes, tasks and tests from your curriculum" : "Quiz your class or create follow up questions for your prompt"}</div>
       <span className="gsw-demotag">{saved.length ? "Your quiz — tap a card to see the answer side" : "Live demonstration — tap a card to see the answer side"}</span>
       {!saved.length && <p className="gsw-hint" style={{ marginBottom: 10 }}>Example questions — the quiz you build with Jewel is stored here, flipped the same way.</p>}
       <div className="gsw-grid2">

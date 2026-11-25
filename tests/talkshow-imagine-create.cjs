@@ -314,7 +314,7 @@ const quizTool = (overrides = {}) => ({
   assert(page.includes('skipped: [...(current.skipped || []), stepId]'), 'a skip persists in workflowProgress.skipped');
   // The gate: every topic done or skipped → Imagine and Create is complete.
   const allSkipped = baseProject({ gamePlan: { theme: 'x' }, name: 'Galaxy Talk', assets: [bgAsset({ inProject: true, sign: true, promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
-  assert.equal(allCreateStepsComplete(evaluateWorkflow(allSkipped)), true, 'done-or-skipped everywhere unlocks Set the Stage');
+  assert.equal(allCreateStepsComplete(evaluateWorkflow(allSkipped)), true, 'done-or-skipped everywhere still computes complete — bookkeeping only since the stage lock was removed (Jessica, 2026-11-24)');
   const oneOpen = baseProject({ gamePlan: { theme: 'x' }, workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
   assert.equal(allCreateStepsComplete(evaluateWorkflow(oneOpen)), false, 'a missing background keeps the gate closed');
   console.log('PASS: skips — optional topics complete by skip with an honest skipped flag; core topics never; Jewel records skips by directive; the gate reads done-or-skipped.');
@@ -468,7 +468,8 @@ const quizTool = (overrides = {}) => ({
 {
   const route = fs.readFileSync('app/api/jewel/route.ts', 'utf8');
   assert(route.includes('JEWEL_TALKSHOW_ADDENDUM'), 'the Jewel route carries Talk Show guidance');
-  assert(route.includes('talkShow ? JEWEL_TALKSHOW_ADDENDUM : ""'), 'the guidance is added only for talk projects');
+  assert(route.includes('function talkAddendum(project: any): string'), 'the guidance is composed by the branch-framing talkAddendum (talk branch build)');
+  assert(route.includes('if (!project || project.kind !== "talk") return "";'), 'the guidance is added only for talk projects');
   assert(route.includes('talkShowContextBlock(body.project)'), 'the route computes the talkShow facts block');
   assert(route.includes('...(talkShow ? { talkShow } : {})'), 'her per-turn context carries the talkShow facts block');
   assert(route.includes('YOU carry the whole Imagine and Create sequence in this conversation'), 'the sequence lives in her conversation, not on the page');
@@ -496,7 +497,8 @@ const quizTool = (overrides = {}) => ({
   assert(route.includes('BASED ON the show\'s opening prompt'), 'follow-up suggestions grow from the initial prompt');
   assert(route.includes('DATA POINTS'), 'research answers are data points with sources');
   assert(route.includes('a skip counts as complete'), 'she knows the optional topics can be skipped, and that it counts');
-  assert(route.includes('direct the creator on to Set the Stage'), 'when every topic is done or skipped, she directs them onward');
+  assert(route.includes('MOVEMENT BETWEEN THE AREAS IS THE CREATOR\'S OWN CLICK'), 'movement between the areas is the creator\'s own click — Jewel never prompts the move to staging (Jessica, 2026-11-24)');
+  assert(!route.includes('direct the creator on to Set the Stage'), 'she no longer directs the creator on to Set the Stage when the topics finish');
   assert(route.includes('skippedAreas'), 'her per-turn context carries the skipped topics');
   assert(route.includes('promptSet'), 'her per-turn context carries the opening prompt fact');
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
@@ -652,15 +654,19 @@ const quizTool = (overrides = {}) => ({
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
   assert(!stage.includes('gamePlan') || !stage.includes('theme: event.target.value'), 'the stage carries no theme editing — theme is a fact from creation');
   assert(!stage.includes('<textarea'), 'the stage carries no typing boxes at all — words are settled in conversation');
-  // The gate: Set the Stage and Showtime! lock until every topic is
-  // complete (done or skipped); the nav carries the lock state.
-  assert(page.includes('lockedStages={project.kind === "talk" && !talkCreateComplete ? [1, 2] : undefined}'), 'the page locks stages 1 and 2 for talk until the topics are complete');
-  assert(page.includes('allCreateStepsComplete(evaluateWorkflow(project))'), 'the gate reads the workflow model, done-or-skipped');
-  assert(page.includes('Set the Stage unlocks when Jewel has checked off every topic'), 'the lock note names Jewel as the one who checks topics off');
+  // Free movement (Jessica, 2026-11-24): the talk stage lock is
+  // REMOVED — the creator moves between Imagine and Create, Set the
+  // Stage and Showtime! by their own click, in both directions, with
+  // no topic-completion gate. Jewel's check-offs are bookkeeping
+  // only. (The nav component keeps its lockedStages mechanism for
+  // any future use; the page no longer passes it for talk.)
+  assert(!page.includes('lockedStages={project.kind === "talk"'), 'the page no longer locks stages 1 and 2 for talk');
+  assert(!page.includes('talkCreateComplete'), 'the talk completion gate is gone from the page');
+  assert(!page.includes('Set the Stage unlocks when Jewel has checked off every topic'), 'the lock note is gone');
   const nav = fs.readFileSync('components/ProjectWorkflowNav.tsx', 'utf8');
   assert(nav.includes('lockedStages') && nav.includes('disabled={locked.has(index)}'), 'locked stages render disabled in the nav');
   assert(nav.includes('bare') && nav.includes('!bare && stage === 0'), 'bare mode hides the section tab trio');
-  console.log('PASS: Jessica\'s layout — bare top with "Save project", no generic frame, no theme area, and the Set the Stage gate intact.');
+  console.log('PASS: Jessica\'s layout — bare top with "Save project", no generic frame, no theme area, and free stage movement (the talk lock removed).');
 }
 
 // --- The scene is the doorway; no progress strip on the page ----------------
@@ -719,11 +725,12 @@ const quizTool = (overrides = {}) => ({
   assert(!stage.includes('checks this topic off') && !stage.includes('has researched in this project'),
     'no per-topic check-off status line stands on the stage anymore');
   // The model underneath is untouched: topics still complete by work
-  // or by skip, and done-or-skipped still opens the gate.
+  // or by skip — but completion is bookkeeping only now; it gates
+  // nothing (Jessica, 2026-11-24: free movement between the areas).
   const gated = baseProject({ gamePlan: { theme: 'x' }, assets: [bgAsset({ inProject: true, promptOverlay: { text: 'Hi', fontFamily: FONT, textColor: '#fff' } })], workflowProgress: { skipped: ['research', 'quiz', 'media', 'missed'] } });
-  assert.equal(allCreateStepsComplete(evaluateWorkflow(gated)), true, 'the Set the Stage gate still reads the model, done-or-skipped');
-  assert(page.includes('lockedStages={project.kind === "talk" && !talkCreateComplete ? [1, 2] : undefined}'), 'the gate wiring on the page is unchanged');
-  console.log('PASS: doorway + strip — the wand scene is the button into Jewel (label on the picture, reveal + focus wired); no chips/Next strip in the talk create view; the generic strip and the workflow gate are untouched.');
+  assert.equal(allCreateStepsComplete(evaluateWorkflow(gated)), true, 'the model still computes done-or-skipped completion');
+  assert(!page.includes('lockedStages={project.kind === "talk"'), 'no gate wiring remains on the page — stage navigation is not gated on topic completion');
+  console.log('PASS: doorway + strip — the wand scene is the button into Jewel (label on the picture, reveal + focus wired); no chips/Next strip in the talk create view; the generic strip is untouched and the workflow model stays as bookkeeping.');
 }
 
 console.log('talkshow-imagine-create: all assertions passed');
