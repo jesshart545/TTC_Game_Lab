@@ -31,7 +31,7 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   // building a talk show or a classroom?" — the first step of talk's
   // create flow (Jessica, 2026-11-24).
   const [talkBranch, setTalkBranch] = useState<TalkBranch | null>(null);
-  const [screen, setScreen] = useState<"kinds" | "scratch" | "templates" | "tpl-detail" | "gn-templates" | "gn-detail">("kinds");
+  const [screen, setScreen] = useState<"kinds" | "talk-choice" | "scratch" | "templates" | "tpl-detail" | "gn-templates" | "gn-detail">("kinds");
   const [tplDetail, setTplDetail] = useState("");
   const [gnDetail, setGnDetail] = useState("");
   const [popup, setPopup] = useState(false);
@@ -208,8 +208,29 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
       setPopup(true);
       return;
     }
+    // Talk Show or Classroom (Jessica, 2026-11-24): the branch
+    // question stands alone as its own first step, the way the
+    // gameshow start stands alone — no fields on it, and picking a
+    // branch is what brings up that branch's start screen. The name
+    // suggestion waits for the pick (pickTalkBranch): a talk show is
+    // suggested "My Talk Show"; a classroom is not a talk show.
+    if (next === "talk") {
+      setScreen("talk-choice");
+      return;
+    }
     const info = projectKindInfo(next);
     if (info && !name.trim()) setName(info.nameSuggestion);
+    setScreen("scratch");
+  }
+
+  // Talk's standalone choice step: picking a branch sets it and
+  // advances to that branch's start screen, whose headings and
+  // fields are the branch's own (Jessica, 2026-11-24).
+  function pickTalkBranch(branch: TalkBranch) {
+    setTalkBranch(branch);
+    const info = projectKindInfo("talk");
+    if (branch === "talk-show" && info && !name.trim()) setName(info.nameSuggestion);
+    if (branch === "classroom" && info && name.trim() === info.nameSuggestion) setName("");
     setScreen("scratch");
   }
 
@@ -266,6 +287,15 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
 
   if (plain && !begun && !error) {
     const kindInfo = kind ? projectKindInfo(kind) : undefined;
+    // Talk's headings carry the branch (Jessica, 2026-11-24): the
+    // choice step is badged for both branches, and each branch's
+    // start screen is badged and headed for that branch alone — a
+    // classroom never wears talk show headings.
+    const chipText = !kindInfo ? "New project"
+      : kind === "talk" && screen === "talk-choice" ? "Talk show or classroom project"
+      : kind === "talk" && talkBranch === "classroom" ? "Classroom project"
+      : kindInfo.chipLabel;
+    const scratchHeadingText = kindInfo && kind === "talk" && talkBranch === "classroom" ? "Build your classroom" : kindInfo?.scratchHeading;
     // City Crime Scene is not a template — it has its own builder inside a
     // project — so restricted entries never appear in this gallery.
     const visibleTemplates = GAME_TEMPLATES.filter(template => !template.restricted);
@@ -280,7 +310,7 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
 
         <div className="np-main">
           <div className="np-proj">
-            <div className={`np-chip${kindInfo ? " set" : ""}`}>{kindInfo ? kindInfo.chipLabel : "New project"}</div>
+            <div className={`np-chip${kindInfo ? " set" : ""}`}>{chipText}</div>
           </div>
 
           {screen === "kinds" && (
@@ -325,31 +355,38 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
             </div>
           )}
 
-          {screen === "scratch" && kindInfo && (
+          {screen === "talk-choice" && kind === "talk" && (
             <div>
               <button type="button" className="np-back" onClick={() => { setScreen("kinds"); setKind(null); setRadioBranch(null); setTalkBranch(null); }}>← Back to kinds</button>
+              <div className="np-kick">Talk show or classroom project</div>
+              <h3 className="display np-choicehead">Are we building a talk show or a classroom?</h3>
+              <button type="button" className="np-opt" onClick={() => pickTalkBranch("talk-show")}>
+                <div className="np-ic">🎙️</div>
+                <div>
+                  <div className="np-t">Talk show</div>
+                  <div className="np-d">Your show, your topic — you host the conversation live.</div>
+                </div>
+              </button>
+              <button type="button" className="np-opt" onClick={() => pickTalkBranch("classroom")}>
+                <div className="np-ic">🎓</div>
+                <div>
+                  <div className="np-t">Classroom</div>
+                  <div className="np-d">Your class, your subject — you teach it live, lesson by lesson.</div>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {screen === "scratch" && kindInfo && (
+            <div>
+              <button type="button" className="np-back" onClick={() => { if (kind === "talk") { setScreen("talk-choice"); } else { setScreen("kinds"); setKind(null); setRadioBranch(null); setTalkBranch(null); } }}>← {kind === "talk" ? "Back" : "Back to kinds"}</button>
               <div className="np-setuphead">
-                <div className="display">{kindInfo.scratchHeading}</div>
+                <div className="display">{scratchHeadingText}</div>
                 <div className="np-chip set">From scratch</div>
               </div>
               {kind === "talk" ? (
                 <>
-                  <div className="np-ask">First things first — <b>are we building a talk show or a classroom?</b></div>
-                  <button type="button" className={`np-opt${talkBranch === "talk-show" ? " on" : ""}`} aria-pressed={talkBranch === "talk-show"} onClick={() => setTalkBranch("talk-show")}>
-                    <div className="np-ic">🎙️</div>
-                    <div>
-                      <div className="np-t">Talk show</div>
-                      <div className="np-d">Your show, your topic — you host the conversation live.</div>
-                    </div>
-                  </button>
-                  <button type="button" className={`np-opt${talkBranch === "classroom" ? " on" : ""}`} aria-pressed={talkBranch === "classroom"} onClick={() => setTalkBranch("classroom")}>
-                    <div className="np-ic">🎓</div>
-                    <div>
-                      <div className="np-t">Classroom</div>
-                      <div className="np-d">Your class, your subject — you teach it live, lesson by lesson.</div>
-                    </div>
-                  </button>
-                  <div className="np-ask" style={{ marginTop: "22px" }}>And {talkBranch === "classroom" ? <><b>the title of your class</b> — plus <b>its subject content</b></> : <><b>the title of your talk show</b> — plus <b>its topic</b></>}</div>
+                  <div className="np-ask">First things first — {talkBranch === "classroom" ? <><b>the title of your class</b>, and <b>its subject content</b></> : <><b>the title of your talk show</b>, and <b>its topic</b></>}</div>
                   <input className="np-nameinput" aria-label={talkBranch === "classroom" ? "Class title" : "Show title"} maxLength={100} value={name} onChange={event => setName(event.target.value)} />
                   <input className="np-nameinput" aria-label={talkBranch === "classroom" ? "Subject content" : "Topic"} maxLength={200} placeholder={talkBranch === "classroom" ? "Its subject content — e.g. beginner Spanish, week by week" : "Its topic — e.g. cozy faith-and-life chat"} value={theme} onChange={event => setTheme(event.target.value)} />
                   <div className="np-ask" style={{ marginTop: "18px" }}>Okay, now let’s talk to Jewel and get started on your ideas — let’s start with the background.</div>

@@ -28,6 +28,12 @@ const panel = fs.readFileSync(path.join(root, 'components/WorkshopAiPanel.tsx'),
 // (Imagine and Create, Set the Stage, Showtime!); the branch only
 // frames the wording and Jewel's guidance inside them. The flow
 // ships LIVE for all users — no gate, no admin chip, no Coming Soon.
+// Jessica's live review of the first build added two corrections:
+// the question STANDS ALONE as its own step, the way the gameshow
+// start stands alone (an eyebrow, the question as the heading, two
+// pictured choices, no fields until a choice is picked), and each
+// branch's start screen carries that branch's OWN headings — a
+// classroom never wears "BUILD YOUR TALK SHOW".
 
 // 1. No gate: talk is open to every signed-in user, admin or not, and
 // is not a Coming Soon kind. Nothing about the branch question is
@@ -37,24 +43,59 @@ assert.equal(isKindGatedFor('talk', true), false, 'talk is open to the admin too
 assert.equal(isKindComingSoon('talk'), false, 'talk is not a Coming Soon kind');
 console.log('PASS: talk carries no gate — the branch question and both branches ship live for all users.');
 
-// 2. The branch question comes before the title in talk's flow, the
-// title and the topic/subject fields are branch-aware, and creation
-// cannot start until a branch is picked.
+// 2. The branch question STANDS ALONE as its own first step: an
+// eyebrow, the question as the heading, and exactly two pictured
+// choices in the gameshow start's pattern — no title/topic fields
+// and no Next button on that step; picking a choice is the advance.
+// Picking sets the branch and lands on that branch's own start
+// screen, whose badge and heading are the branch's own. The start
+// screen's fields stay branch-aware, its back returns to the
+// choice step, and creation cannot start until a branch is picked.
+const choiceAt = flow.indexOf('{screen === "talk-choice"');
+assert(choiceAt >= 0, 'talk has a standalone choice step');
+const scratchAt = flow.indexOf('{screen === "scratch"');
+assert(scratchAt > choiceAt, 'the choice step renders before the scratch screen — the question comes first, alone');
+const choiceStep = flow.slice(choiceAt, scratchAt);
+assert(choiceStep.includes('Talk show or classroom project'), 'the choice step carries the eyebrow naming both branches');
+assert(choiceStep.includes('Are we building a talk show or a classroom?'), 'the choice step asks the branch question as its heading, in Jessica\'s words');
+assert(choiceStep.includes('pickTalkBranch("talk-show")'), 'the talk show choice picks the talk-show branch');
+assert(choiceStep.includes('pickTalkBranch("classroom")'), 'the classroom choice picks the classroom branch');
+assert(choiceStep.includes('Your show, your topic — you host the conversation live.'), 'the talk show choice carries its one short line');
+assert(choiceStep.includes('Your class, your subject — you teach it live, lesson by lesson.'), 'the classroom choice carries its one short line');
+assert(!choiceStep.includes('np-nameinput'), 'no title or topic fields stand on the choice step — nothing is asked until a choice is picked');
+assert(!choiceStep.includes('np-nextbtn'), 'no Next button stands on the choice step — picking a choice is the advance');
+assert(flow.includes('if (next === "talk")') && flow.includes('setScreen("talk-choice")'), 'choosing the talk kind opens the choice step, not the form');
+assert(flow.includes('function pickTalkBranch(branch: TalkBranch)'), 'picking a choice goes through the branch picker');
+assert(flow.includes('setTalkBranch(branch);'), 'the picker sets the picked branch');
+const pickerAt = flow.indexOf('function pickTalkBranch(branch: TalkBranch)');
+const picker = flow.slice(pickerAt, pickerAt + 500);
+assert(picker.includes('setScreen("scratch")'), 'the picker advances to the picked branch\'s start screen');
+assert(picker.includes('nameSuggestion'), 'the picker handles the name suggestion per branch — a talk show is suggested its title, a classroom is not handed a talk show\'s');
+// Each branch's start screen carries its own headings: the badge
+// and the heading switch for a classroom, and the talk show keeps
+// today's headings (the kind info's, which the classroom ternaries
+// fall through from).
+assert(flow.includes('kind === "talk" && screen === "talk-choice" ? "Talk show or classroom project"'), 'the choice step is badged for both branches');
+assert(flow.includes('kind === "talk" && talkBranch === "classroom" ? "Classroom project"'), 'the classroom start screen is badged Classroom project');
+assert(flow.includes('kind === "talk" && talkBranch === "classroom" ? "Build your classroom"'), 'the classroom start screen is headed Build your classroom');
+const talkInfo = kinds.PROJECT_KINDS.find(k => k.id === 'talk');
+assert.equal(talkInfo.chipLabel, 'Talk show project', 'the talk-show start screen keeps today\'s badge');
+assert.equal(talkInfo.scratchHeading, 'Build your talk show', 'the talk-show start screen keeps today\'s heading');
+assert.equal(talkInfo.nameSuggestion, 'My Talk Show', 'the talk-show title keeps today\'s prefill');
+// The branch start screens themselves: branch-aware fields, the
+// question no longer on the same screen, back to the choice step.
 const talkBranchStart = flow.indexOf('{kind === "talk" ? (');
 assert(talkBranchStart >= 0, 'the scratch screen has a dedicated talk branch');
 const talkScreen = flow.slice(talkBranchStart, talkBranchStart + 4000);
-const questionAt = talkScreen.indexOf('are we building a talk show or a classroom?');
-const pickAt = talkScreen.indexOf('setTalkBranch("talk-show")');
 const titleAt = talkScreen.indexOf('"Class title"');
-assert(questionAt >= 0, 'talk asks the branch question, in Jessica\'s words');
-assert(pickAt > questionAt, 'the branch choices follow the question');
-assert(titleAt > pickAt, 'the title is asked AFTER the branch question');
-assert(talkScreen.includes('setTalkBranch("classroom")'), 'the classroom choice sets the classroom branch');
+assert(titleAt >= 0, 'the branch start screen asks for the title');
+assert(!talkScreen.includes('are we building a talk show or a classroom?'), 'the branch question does not stand on the start screen — it had its own step');
 assert(talkScreen.includes('talkBranch === "classroom" ? "Class title" : "Show title"'), 'the title field is branch-aware: class title vs show title');
 assert(talkScreen.includes('talkBranch === "classroom" ? "Subject content" : "Topic"'), 'the second field is branch-aware: subject content vs topic');
+assert(flow.includes('if (kind === "talk") { setScreen("talk-choice"); }'), 'the scratch screen\'s back returns to the choice step for talk');
 assert(flow.includes('if (kind === "talk" && !talkBranch) return;'), 'creation cannot start until a branch is picked');
 assert(flow.includes('(kind === "talk" && !talkBranch)'), 'the Next button stays disabled until a branch is picked');
-console.log('PASS: branch question first, then a branch-aware title and topic/subject; advance refused without a pick.');
+console.log('PASS: the branch question stands alone as its own step; picking a branch lands on that branch\'s own start screen, headings and fields its own.');
 
 // 3. No pieces step for talk — the scratch screen renders no pieces
 // grid for talk and a talk scratch start carries no pieces. The two
