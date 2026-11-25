@@ -54,6 +54,15 @@ export type ProjectKind = "gameshow" | "talk" | "radio" | "multiplayer";
  * create flow (Jessica, 2026-11-23): a radio/DJ live stream, or a
  * karaoke live. Only radio projects carry it. */
 export type RadioBranch = "radio-dj" | "karaoke";
+/** Talk Show or Classroom: which branch of the talk kind the creator
+ * picked at creation — "Are we building a talk show or a classroom?"
+ * is the FIRST question of talk's create flow (Jessica, 2026-11-24).
+ * Both branches live in the same builder and the same three areas
+ * (Imagine and Create, Set the Stage, Showtime!); the branch only
+ * frames the wording and Jewel's guidance inside them. Only talk
+ * projects carry it; a talk project without it predates the question
+ * and behaves as a talk show. */
+export type TalkBranch = "talk-show" | "classroom";
 /**
  * The few workflow facts that cannot be derived from project data (see
  * lib/workflow-progress.ts): the creator opened the toolbox review, a
@@ -89,6 +98,11 @@ export type Project = {
   /** Radio, DJ, or Karaoke only: the branch picked on the create flow's
    * format question ("radio-dj" or "karaoke"). */
   radioBranch?: RadioBranch;
+  /** Talk Show or Classroom only: the branch picked on the create
+   * flow's first question ("talk-show" or "classroom"). Unset on
+   * talk projects created before the question existed — those behave
+   * as talk shows, exactly as they always have. */
+  talkBranch?: TalkBranch;
   name: string;
   slug: string;
   description: string;
