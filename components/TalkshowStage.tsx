@@ -118,7 +118,7 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
         <div>
           <span className="gsw-demotag">Flat — a still, artistic backdrop</span>
           <div className="gsw-stage-visual" style={{ minHeight: 190, position: "relative" }}>
-            {flat ? <BackdropStageMedia asset={flat} /> : <ExampleStageMedia />}
+            {flat ? <BackdropStageMedia asset={flat} classroom={classroom} /> : <ExampleStageMedia classroom={classroom} />}
             {flat
               ? assetBackdropText(flat) && <BackdropTextLayer spec={assetBackdropText(flat)!} />
               : <BackdropTextLayer spec={demoTextSpec(project, null)} />}
@@ -154,7 +154,7 @@ function BackgroundStage({ project, doors, jewelPanel, onEnterJewel }: StageProp
         <>
           <span className="gsw-demotag" style={{ marginTop: 22 }}>Your background — stored here, sign and all</span>
           <div className="gsw-stage-visual" style={{ minHeight: 260, position: "relative" }}>
-            <BackdropStageMedia asset={hero} />
+            <BackdropStageMedia asset={hero} classroom={classroom} />
             {heroSign && <BackdropTextLayer spec={heroSign} />}
             {heroPrompt && <BackdropTextLayer spec={heroPrompt} placement="lower" />}
             <div style={{ position: "absolute", left: 14, top: 10 }}>
@@ -211,7 +211,7 @@ function PromptStage({ project, jewelPanel }: StageProps) {
       <div>
         <div className="gsw-seclabel">Yours — your opening prompt, on your background</div>
         <div className="gsw-stage-visual" style={{ minHeight: 300, position: "relative" }}>
-          <BackdropStageMedia asset={target} />
+          <BackdropStageMedia asset={target} classroom={project.talkBranch === "classroom"} />
           {sign && <BackdropTextLayer spec={sign} />}
           <BackdropTextLayer spec={current} placement="lower" />
           <div style={{ position: "absolute", left: 14, bottom: 12 }}>
@@ -229,7 +229,7 @@ function PromptStage({ project, jewelPanel }: StageProps) {
         <div>
           <span className="gsw-demotag">In a thought bubble · flat background</span>
           <div className="gsw-stage-visual" style={{ minHeight: 190, position: "relative" }}>
-            <ExampleStageMedia />
+            <ExampleStageMedia classroom={project.talkBranch === "classroom"} />
             <BackdropTextLayer spec={exampleSpec("bubble")} placement="lower" />
           </div>
         </div>
@@ -244,7 +244,7 @@ function PromptStage({ project, jewelPanel }: StageProps) {
       <div style={{ marginTop: 12 }}>
         <span className="gsw-demotag">Plain · flat background</span>
         <div className="gsw-stage-visual" style={{ minHeight: 170, position: "relative" }}>
-          <ExampleStageMedia />
+          <ExampleStageMedia classroom={project.talkBranch === "classroom"} />
           <BackdropTextLayer spec={exampleSpec("plain")} placement="lower" />
         </div>
       </div>
@@ -373,7 +373,7 @@ function MediaStage({ project, doors, jewelPanel }: StageProps) {
               <span className="gsw-an">Short commercial cutscene</span>
             </div>
             <div className="gsw-asset">
-              {backdrop ? <BackdropStageMedia asset={backdrop} /> : <ExampleStageMedia />}
+              {backdrop ? <BackdropStageMedia asset={backdrop} classroom={project.talkBranch === "classroom"} /> : <ExampleStageMedia classroom={project.talkBranch === "classroom"} />}
               <div className="gsw-shade" style={{ background: "rgba(8,6,14,.38)" }} />
               <div className="tsw-ytcenter"><div className="tsw-ytplay" aria-hidden="true">▶</div></div>
               <span className="gsw-ak">Video moment · Example</span>

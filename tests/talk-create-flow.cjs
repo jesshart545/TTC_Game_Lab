@@ -236,4 +236,73 @@ assert(route.includes('your check-offs are bookkeeping only'), 'check-offs are b
 assert(!route.includes('direct the creator on to Set the Stage'), 'Jewel never directs the creator to begin staging');
 console.log('PASS: stage navigation is not gated on topic completion — free movement, no staging prompts from Jewel.');
 
+// 12. The background EXAMPLES match the branch (Jessica, 2026-11-24):
+// in a classroom project's Imagine & Create, the flat and animated
+// example cards must show classroom artwork — the talk-show stage
+// picture standing under a "classroom backdrop" caption is the
+// defect this pins against. ExampleStageMedia picks its picture by
+// branch, AnimatedExampleMedia's fallback loop is the classroom
+// loop for a classroom project, and the call sites pass the branch
+// through — including BackdropStageMedia's url-less fallback.
+// Talk-show projects and projects with no branch stored keep
+// today's artwork exactly.
+const steps = fs.readFileSync(path.join(root, 'components/TalkshowSteps.tsx'), 'utf8');
+assert(steps.includes('export function ExampleStageMedia({ classroom }: { classroom?: boolean })'), 'the flat example media takes a classroom flag');
+assert(steps.includes('classroom ? "/redesign/classroom-backdrop-example.webp" : "/redesign/talk-backdrop-example.webp"'), 'the flat example shows the classroom artwork for a classroom, the talk-show backdrop otherwise — the furniture-free example art, not the kind artwork');
+assert(steps.includes('project.talkBranch === "classroom" ? "/redesign/classroom-animated-backdrop.mp4" : "/redesign/talk-backdrop-example-animated.mp4"'), 'the animated example falls back to the classroom loop for a classroom project, the talk-show backdrop loop otherwise');
+assert(steps.includes('if (!asset.url) return <ExampleStageMedia classroom={classroom} />;'), 'the url-less backdrop fallback forwards the branch to the example media');
+assert(stage.includes('<ExampleStageMedia classroom={classroom} />'), 'the talk stage background area passes its branch to the flat example');
+assert(steps.includes('<ExampleStageMedia classroom={project.talkBranch === "classroom"} />'), 'the talk steps pass the project branch to the flat example');
+assert(fs.existsSync(path.join(root, 'public/redesign/classroom-backdrop-example.webp')), 'the classroom example artwork is filed under public/redesign/');
+assert(fs.existsSync(path.join(root, 'public/redesign/classroom-animated-backdrop.mp4')), 'the classroom animated example is filed under public/redesign/');
+assert(fs.existsSync(path.join(root, 'public/redesign/talk-backdrop-example.webp')), 'the talk-show example artwork is filed under public/redesign/');
+assert(fs.existsSync(path.join(root, 'public/redesign/talk-backdrop-example-animated.mp4')), 'the talk-show animated example is filed under public/redesign/');
+console.log('PASS: the background examples match the branch — classroom artwork and loop for a classroom, talk-show artwork and loop otherwise.');
+
+// 13. The branch start screens carry the background examples below
+// the title and subject (Jessica, 2026-11-24): originally a still
+// background example and an animated example sat below the title
+// and subject, and those examples prompted the user to begin
+// working with Jewel — that was correct already, and the branch
+// rebuild keeps it. Both examples stand on the branch start
+// screens (one shared block, branched by the picked branch), below
+// the fields and above the prompt line, each showing its own
+// branch's artwork, rendered straight from the public paths — no
+// project exists yet on this screen. The choice step carries no
+// examples: they belong below the title and subject, which live on
+// the branch screens.
+const fieldsAt = flow.indexOf('aria-label={talkBranch === "classroom" ? "Subject content" : "Topic"}');
+assert(fieldsAt >= 0, 'the branch start screens carry the subject/topic field');
+const stillAt = flow.indexOf('talkBranch === "classroom" ? "/redesign/classroom-backdrop-example.webp" : "/redesign/talk-backdrop-example.webp"');
+assert(stillAt > fieldsAt, 'the still background example stands below the title and subject fields');
+const animAt = flow.indexOf('talkBranch === "classroom" ? "/redesign/classroom-animated-backdrop.mp4" : "/redesign/talk-backdrop-example-animated.mp4"');
+assert(animAt > stillAt, 'the animated background example stands with the still one, below the fields');
+const promptLineFlowAt = flow.indexOf('Okay, now let’s talk to Jewel and get started on your ideas — let’s start with the background.');
+assert(promptLineFlowAt > animAt, 'the prompt line stands under the examples — the examples and the line together prompt the creator into Jewel');
+assert(flow.includes('Flat — a still, artistic backdrop'), 'the still example carries the flat tag, as in the project');
+assert(flow.includes('Animated — it moves and loops'), 'the animated example carries the animated tag, as in the project');
+assert(flow.includes('Example · a pictured classroom backdrop'), 'the classroom still example is captioned as a classroom backdrop');
+assert(flow.includes('Example · a pictured talk-show stage'), 'the talk-show still example is captioned as a talk-show stage');
+assert(flow.includes('Example · an animated classroom backdrop, playing'), 'the classroom animated example is captioned as a classroom backdrop');
+assert(flow.includes('Example · an animated talk-show backdrop, playing'), 'the talk-show animated example is captioned as a talk-show backdrop');
+assert(!choiceStep.includes('/redesign/kind-'), 'no background examples stand on the choice step — they belong below the title and subject');
+console.log('PASS: both branch start screens carry the still and animated background examples below the title and subject, branch-correct, above the prompt line.');
+
+// 14. Jewel keeps the backdrop rule (Jessica, 2026-11-24): a
+// livestream background is a backdrop, not a studio set —
+// furniture-free (no desks, chairs, sofas or tables baked into the
+// backdrop) and framed close, the backdrop surface filling the
+// frame rather than a wide shot of an empty room, because these
+// are live streams, not studio shows. The rule stands in the
+// shared generation guidance — composed into every Jewel prompt,
+// so it holds site-wide when she creates backgrounds — and in the
+// talk addendum's background bullet, which both branch framings
+// are built on (section 7 pins that composition).
+assert(route.includes('BACKGROUNDS ARE BACKDROPS, NOT STUDIO SETS'), 'the shared generation guidance carries the backdrop rule');
+assert(route.includes('no desks, chairs, sofas or tables baked into the backdrop'), 'the shared rule names the furniture to keep out of the backdrop');
+assert(route.includes('the backdrop surface filling the frame with at most a sliver of floor'), 'the shared rule frames the backdrop close');
+assert(route.includes('Frame the backdrop itself like a backdrop, not a studio set: furniture-free'), 'the talk background bullet carries the backdrop rule — both branches build on it');
+assert(route.includes('never a wide shot of an empty room; these are live streams, not studio shows'), 'the talk rule gives the reason in Jessica\'s words');
+console.log('PASS: Jewel keeps the backdrop rule — furniture-free, framed close, in the shared generation guidance and the talk addendum alike.');
+
 console.log('PASS: talk create flow — branch question first, branch stored, no pieces step, live for all users, background first, free movement.');

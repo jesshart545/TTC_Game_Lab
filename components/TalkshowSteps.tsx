@@ -23,28 +23,31 @@ type ScreenProps = TalkshowWorkshopProps & { step?: WorkflowStepState };
 
 const assetKey = (asset: ProjectAsset) => asset.storageKey || asset.name;
 
-export function BackdropStageMedia({ asset }: { asset: ProjectAsset }) {
-  if (!asset.url) return <ExampleStageMedia />;
+export function BackdropStageMedia({ asset, classroom }: { asset: ProjectAsset; classroom?: boolean }) {
+  if (!asset.url) return <ExampleStageMedia classroom={classroom} />;
   if (isVideo(asset)) {
     return <video src={asset.url} autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
   }
   return <img src={asset.url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
 }
 
-/** The pictured example stage for an empty project: the site's own Talk
- * Show artwork, so a step demonstrates with a real picture — never a flat
- * gradient void. Labelled as an example wherever it stands in. */
-export function ExampleStageMedia() {
-  return <img className="gsw-bg" src="/redesign/kind-talkshow.webp" alt="" />;
+/** The pictured example stage for an empty project: the site's own
+ * artwork for the project's branch — the Talk Show stage, or the
+ * classroom for a classroom project — so a step demonstrates with a
+ * real picture that matches the branch, never a flat gradient void.
+ * Labelled as an example wherever it stands in. */
+export function ExampleStageMedia({ classroom }: { classroom?: boolean }) {
+  return <img className="gsw-bg" src={classroom ? "/redesign/classroom-backdrop-example.webp" : "/redesign/talk-backdrop-example.webp"} alt="" />;
 }
 
 /** The animated example: the project's own moving backdrop when it has
- * one; otherwise the site's own animated artwork (Jewel waving, from the
- * home Tips card) — a real looping visual, honestly labelled. */
+ * one; otherwise the site's own animated artwork for the project's
+ * branch (the talk-show backdrop loop, or the classroom loop for a
+ * classroom project) — a real looping visual, honestly labelled. */
 export function AnimatedExampleMedia({ project }: { project: TalkshowWorkshopProps["project"] }) {
   const animated = backgroundAssets(project).find(asset => isVideo(asset) && asset.url);
   if (animated) return <BackdropStageMedia asset={animated} />;
-  return <video src="/redesign/talk-animated-backdrop.mp4" autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
+  return <video src={project.talkBranch === "classroom" ? "/redesign/classroom-animated-backdrop.mp4" : "/redesign/talk-backdrop-example-animated.mp4"} autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />;
 }
 
 /* ---------------- Area 1 · Show theme & subject ---------------- */
@@ -97,7 +100,7 @@ export function BackgroundStep(props: ScreenProps) {
             <div>
               <span className="gsw-demotag">Flat — a still, artistic backdrop</span>
               <div className="gsw-stage-visual" style={{ minHeight: 190, position: "relative" }}>
-                {flat ? <BackdropStageMedia asset={flat} /> : <ExampleStageMedia />}
+                {flat ? <BackdropStageMedia asset={flat} classroom={project.talkBranch === "classroom"} /> : <ExampleStageMedia classroom={project.talkBranch === "classroom"} />}
                 <div style={{ position: "absolute", left: 12, bottom: 10 }}>
                   <span className="gsw-vchip gold">{flat ? `Your flat backdrop · ${flat.name}` : "Example · a pictured talk-show stage"}</span>
                 </div>
@@ -126,7 +129,7 @@ export function BackgroundStep(props: ScreenProps) {
             <>
               <span className="gsw-demotag" style={{ marginTop: 22 }}>Your backdrop, on your stage</span>
               <div className="gsw-stage-visual" style={{ minHeight: 260, position: "relative" }}>
-                <BackdropStageMedia asset={hero} />
+                <BackdropStageMedia asset={hero} classroom={project.talkBranch === "classroom"} />
                 <div style={{ position: "absolute", left: 14, top: 10 }}>
                   <span className="gsw-vchip gold">{animated ? `Animated — playing · ${animated.name}` : `Flat · ${flat?.name}`}</span>
                 </div>
@@ -186,7 +189,7 @@ export function SignStep(props: ScreenProps) {
           )}
           <span className="gsw-demotag">Live demonstration — your sign, lettered for real</span>
           <div className="gsw-stage-visual" style={{ minHeight: 300, position: "relative" }}>
-            {demoAsset ? <BackdropStageMedia asset={demoAsset} /> : <ExampleStageMedia />}
+            {demoAsset ? <BackdropStageMedia asset={demoAsset} classroom={project.talkBranch === "classroom"} /> : <ExampleStageMedia classroom={project.talkBranch === "classroom"} />}
             {!uploadedSign && <BackdropTextLayer spec={spec} />}
             <div className="gsw-shade" style={{ background: "linear-gradient(180deg, transparent 55%, rgba(8,6,14,.72))" }} />
             <div style={{ position: "absolute", left: 14, bottom: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -250,7 +253,7 @@ export function PromptStep(props: ScreenProps) {
             <div>
               <span className="gsw-demotag">In a thought bubble · flat background</span>
               <div className="gsw-stage-visual" style={{ minHeight: 190, position: "relative" }}>
-                <ExampleStageMedia />
+                <ExampleStageMedia classroom={project.talkBranch === "classroom"} />
                 <BackdropTextLayer spec={exampleSpec("bubble")} placement="lower" />
               </div>
             </div>
@@ -265,7 +268,7 @@ export function PromptStep(props: ScreenProps) {
           <div style={{ marginTop: 12 }}>
             <span className="gsw-demotag">Plain · flat background</span>
             <div className="gsw-stage-visual" style={{ minHeight: 170, position: "relative" }}>
-              <ExampleStageMedia />
+              <ExampleStageMedia classroom={project.talkBranch === "classroom"} />
               <BackdropTextLayer spec={exampleSpec("plain")} placement="lower" />
             </div>
           </div>
@@ -274,7 +277,7 @@ export function PromptStep(props: ScreenProps) {
           {target ? (
             <>
               <div className="gsw-stage-visual" style={{ minHeight: 260, position: "relative" }}>
-                <BackdropStageMedia asset={target} />
+                <BackdropStageMedia asset={target} classroom={project.talkBranch === "classroom"} />
                 {assetBackdropText(target) && <BackdropTextLayer spec={assetBackdropText(target)!} />}
                 {current && <BackdropTextLayer spec={current} placement="lower" />}
                 {!current && <div style={{ position: "absolute", left: 14, bottom: 12 }}><span className="gsw-vchip gold">Type your talking point below — it appears here, on your background</span></div>}
@@ -509,7 +512,7 @@ export function MediaStep(props: ScreenProps) {
               </button>
             ))}
             <button type="button" className="gsw-asset" onClick={() => onAsk("Add the YouTube feature to my show")}>
-              {backdrop ? <BackdropStageMedia asset={backdrop} /> : <ExampleStageMedia />}
+              {backdrop ? <BackdropStageMedia asset={backdrop} classroom={project.talkBranch === "classroom"} /> : <ExampleStageMedia classroom={project.talkBranch === "classroom"} />}
               <div className="gsw-shade" style={{ background: "rgba(8,6,14,.38)" }} />
               <div className="tsw-ytcenter"><div className="tsw-ytplay" aria-hidden="true">▶</div></div>
               <span className="gsw-ak">Video moment · Example</span>
@@ -636,7 +639,7 @@ export function DeckArranger({ project, onSaveProject, onAskJewel, bare }: {
             return (
               <div key={slide.id} className="tsw-slide">
                 <div className="tsw-slidevis">
-                  {asset ? <AssetThumbnail asset={asset} kind={assetCategory(asset)} /> : slide.kind === "backdrop" || slide.kind === "sign" ? <ExampleStageMedia /> : <SlideFace kind={slide.kind} />}
+                  {asset ? <AssetThumbnail asset={asset} kind={assetCategory(asset)} /> : slide.kind === "backdrop" || slide.kind === "sign" ? <ExampleStageMedia classroom={project.talkBranch === "classroom"} /> : <SlideFace kind={slide.kind} />}
                   <span className="tsw-sliden">{i + 1}</span>
                 </div>
                 <div className="tsw-slidelabel">{slide.label}</div>
@@ -657,7 +660,7 @@ export function DeckArranger({ project, onSaveProject, onAskJewel, bare }: {
             {([["sign", "Your sign"], ["backdrop", "Opening backdrop"], ["quiz", "Quiz"], ["youtube", "Video moment"]] as [TalkSlide["kind"], string][]).map(([kind, label], i) => (
               <div key={kind} className="tsw-slide">
                 <div className="tsw-slidevis">
-                  {kind === "sign" || kind === "backdrop" ? <ExampleStageMedia /> : <SlideFace kind={kind} />}
+                  {kind === "sign" || kind === "backdrop" ? <ExampleStageMedia classroom={project.talkBranch === "classroom"} /> : <SlideFace kind={kind} />}
                   <span className="tsw-sliden">{i + 1}</span>
                 </div>
                 <div className="tsw-slidelabel">{label}</div>
