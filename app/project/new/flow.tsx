@@ -389,6 +389,22 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                   <div className="np-ask">First things first — {talkBranch === "classroom" ? <><b>the title of your class</b>, and <b>its subject content</b></> : <><b>the title of your talk show</b>, and <b>its topic</b></>}</div>
                   <input className="np-nameinput" aria-label={talkBranch === "classroom" ? "Class title" : "Show title"} maxLength={100} value={name} onChange={event => setName(event.target.value)} />
                   <input className="np-nameinput" aria-label={talkBranch === "classroom" ? "Subject content" : "Topic"} maxLength={200} placeholder={talkBranch === "classroom" ? "Its subject content — e.g. beginner Spanish, week by week" : "Its topic — e.g. cozy faith-and-life chat"} value={theme} onChange={event => setTheme(event.target.value)} />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 18 }}>
+                    <div>
+                      <div className="np-d" style={{ marginBottom: 6 }}>Flat — a still, artistic backdrop</div>
+                      <div style={{ position: "relative", minHeight: 150, borderRadius: 16, overflow: "hidden", background: "#17131f" }}>
+                        <img src={talkBranch === "classroom" ? "/redesign/classroom-backdrop-example.webp" : "/redesign/talk-backdrop-example.webp"} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                        <span style={{ position: "absolute", left: 10, bottom: 8, background: "rgba(8,6,14,.72)", color: "#e9c979", borderRadius: 999, padding: "4px 10px", fontSize: 12.5, fontWeight: 700 }}>{talkBranch === "classroom" ? "Example · a pictured classroom backdrop" : "Example · a pictured talk-show stage"}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="np-d" style={{ marginBottom: 6 }}>Animated — it moves and loops</div>
+                      <div style={{ position: "relative", minHeight: 150, borderRadius: 16, overflow: "hidden", background: "#17131f" }}>
+                        <video src={talkBranch === "classroom" ? "/redesign/classroom-animated-backdrop.mp4" : "/redesign/talk-backdrop-example-animated.mp4"} autoPlay loop muted playsInline style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                        <span style={{ position: "absolute", left: 10, bottom: 8, background: "rgba(8,6,14,.72)", color: "#e9c979", borderRadius: 999, padding: "4px 10px", fontSize: 12.5, fontWeight: 700 }}>{talkBranch === "classroom" ? "Example · an animated classroom backdrop, playing" : "Example · an animated talk-show backdrop, playing"}</span>
+                      </div>
+                    </div>
+                  </div>
                   <div className="np-ask" style={{ marginTop: "18px" }}>Okay, now let’s talk to Jewel and get started on your ideas — let’s start with the background.</div>
                 </>
               ) : kind === "gameshow" ? (

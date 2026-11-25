@@ -100,8 +100,8 @@ const quizTool = (overrides = {}) => ({
   // example, and no longer appears anywhere in the talk stage or steps.
   const stepsSrc = fs.readFileSync('components/TalkshowSteps.tsx', 'utf8');
   assert(!stage.includes('jewel-wave') && !stepsSrc.includes('jewel-wave'), 'the character clip is gone from the talk stage and the step library');
-  assert(stepsSrc.includes('/redesign/talk-animated-backdrop.mp4'), 'the animated example is the real animated talk-show backdrop loop');
-  assert(fs.existsSync('public/redesign/talk-animated-backdrop.mp4'), 'the animated backdrop asset is filed under public/redesign/');
+  assert(stepsSrc.includes('/redesign/talk-backdrop-example-animated.mp4'), 'the animated example is the real animated talk-show backdrop loop');
+  assert(fs.existsSync('public/redesign/talk-backdrop-example-animated.mp4'), 'the animated backdrop asset is filed under public/redesign/');
   assert(stage.includes('Example · an animated talk-show backdrop, playing'), 'the animated card is labelled honestly — an animated talk-show backdrop');
   // Only the genuine manual doors for the current topic are controls.
   // The upload-your-own-sign concept is gone ENTIRELY (Jessica,
