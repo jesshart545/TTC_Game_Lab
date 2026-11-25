@@ -59,7 +59,7 @@ assert(radioScreen.includes('setRadioBranch("radio-dj")'), 'the radio/DJ choice 
 assert(radioScreen.includes('setRadioBranch("karaoke")'), 'the karaoke choice sets the karaoke branch');
 assert(radioScreen.includes('radioBranch === "radio-dj" && ('), 'the music-show question renders only on the radio/DJ branch');
 assert(flow.includes('if (kind === "radio" && !radioBranch) return;'), 'creation cannot start until a branch is picked');
-assert(flow.includes('disabled={kind === "radio" && !radioBranch}'), 'the Next button stays disabled until a branch is picked');
+assert(flow.includes('disabled={(kind === "radio" && !radioBranch) || (kind === "talk" && !talkBranch)}'), 'the Next button stays disabled until a branch is picked (radio, and talk likewise since the talk branch build)');
 console.log('PASS: format question first, then title on both branches, music-show question on the radio/DJ branch only.');
 
 // 4. No pieces step for radio — the kind offers no setup pieces, the
@@ -68,7 +68,7 @@ console.log('PASS: format question first, then title on both branches, music-sho
 eq(setupPiecesForKind('radio'), [], 'radio offers no setup pieces');
 assert.equal(setupPiecesForKind('gameshow').length, 6, 'gameshow still offers the full shared list');
 eq(setupPiecesForKind('talk').map(p => p.id), ['question-cards', 'video-clips'], 'talk still offers only its own pieces');
-assert(flow.includes('{kind !== "radio" && ('), 'the pieces grid is not rendered for radio');
+assert(flow.includes('{kind !== "radio" && kind !== "talk" && ('), 'the pieces grid is not rendered for radio (nor for talk, which folded its pieces step into the Jewel flow in the talk branch build)');
 assert(flow.includes('scratch.pieces = [];'), 'a radio scratch start carries no pieces');
 console.log('PASS: radio has no pieces step; gameshow and talk pieces are unchanged.');
 

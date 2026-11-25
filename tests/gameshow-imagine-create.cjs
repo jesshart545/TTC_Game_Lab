@@ -171,7 +171,8 @@ function baseProject(overrides = {}) {
 // template shelf is picture + name only, never a paragraph card.
 {
   const flow = fs.readFileSync('app/project/new/flow.tsx', 'utf8');
-  assert(flow.includes('kind === "talk" || kind === "gameshow" ? ('), 'the gameshow scratch screen shares the talk title + theme ask');
+  assert(flow.includes('kind === "gameshow" ? ('), 'the gameshow scratch screen keeps the title + theme ask (its own block since talk got its branch-first block in the talk branch build)');
+  assert(flow.includes('Then tap the pieces your show needs.'), 'the gameshow ask still ends by inviting the pieces tap, exactly as before');
   assert(flow.includes('theme: kind === "talk" || kind === "gameshow" ? theme.trim() || undefined : undefined'), 'starting a gameshow scratch project carries the theme answer forward');
   assert(flow.includes('if ((start.kind === "talk" || start.kind === "gameshow") && start.theme)'), 'gameshow creation seeds the theme exactly like talk creation');
   assert(flow.includes('project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme }'), 'the creation theme lands in gamePlan.theme');
