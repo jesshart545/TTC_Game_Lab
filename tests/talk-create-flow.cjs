@@ -38,8 +38,8 @@ const panel = fs.readFileSync(path.join(root, 'components/WorkshopAiPanel.tsx'),
 // 1. No gate: talk is open to every signed-in user, admin or not, and
 // is not a Coming Soon kind. Nothing about the branch question is
 // admin-only.
-assert.equal(isKindGatedFor('talk', false), false, 'talk is open to non-admins — the branch flow ships live for all users');
-assert.equal(isKindGatedFor('talk', true), false, 'talk is open to the admin too, with no special testing gate');
+assert.equal(isKindGatedFor('talk', null), false, 'talk is open to non-admins — the branch flow ships live for all users');
+assert.equal(isKindGatedFor('talk', 'ladylovelace0627@gmail.com'), false, 'talk is open to Jessica too, with no special testing gate');
 assert.equal(isKindComingSoon('talk'), false, 'talk is not a Coming Soon kind');
 console.log('PASS: talk carries no gate — the branch question and both branches ship live for all users.');
 
