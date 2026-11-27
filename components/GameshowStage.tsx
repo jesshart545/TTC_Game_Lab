@@ -183,6 +183,23 @@ function PlanArea(props: StageProps) {
         <JewelWandScene onEnter={onEnterJewel} />
       </div>
       <PlanTemplates doors={doors} />
+      {/* The liberty banner stands BELOW the ready-made shows it
+          speaks about (Jessica, 2026-11-26): directly under Jewel it
+          read as if the creator's own work with her were "only
+          examples." It never stands on a Game Night page (Jessica,
+          2026-11-15): there, creative freedom is shown, never written.
+          The page mounts this frame only for gameshow projects; this
+          gate keeps the banner off a multiplayer project regardless. */}
+      {props.project.kind !== "multiplayer" && (
+        <div className="gsw-liberty">
+          <JewelAvatar size={58} />
+          <div>
+            <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
+            <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
+          </div>
+          <div className="gsw-lwand" aria-hidden="true">🪄</div>
+        </div>
+      )}
       <div className="gsw-card" style={{ marginTop: 14 }}>
         <div className="gsw-chipsrow" style={{ marginTop: 0, justifyContent: "space-between" }}>
           <span>Prefer to type it yourself?</span>
@@ -226,26 +243,14 @@ export default function GameshowStage(props: StageProps) {
   return (
     <section className="gsw gsw-stage" aria-label="Imagine and Create — your show, as Jewel builds it with you">
       {/* Jewel stands FIRST in the working area (Jessica, 2026-11-15):
-          her panel heads the stage, and everything else — the banner,
-          the library door, the "Your show" block, the area's own
-          demonstrations and shelves — keeps its content and its
-          relative order after her. The areas below no longer carry
-          their own copy of her panel. */}
+          her panel heads the stage, and everything else — the library
+          door, the "Your show" block, the area's own demonstrations
+          and shelves — keeps its content and its relative order after
+          her. The areas below no longer carry their own copy of her
+          panel. (The liberty banner no longer stands here under her:
+          it moved below the ready-made shows in the plan area —
+          Jessica, 2026-11-26.) */}
       {props.jewelPanel}
-      {/* The liberty banner never stands on a Game Night page (Jessica,
-          2026-11-15): there, creative freedom is shown, never written.
-          The page mounts this frame only for gameshow projects; this
-          gate keeps the banner off a multiplayer project regardless. */}
-      {props.project.kind !== "multiplayer" && (
-        <div className="gsw-liberty">
-          <JewelAvatar size={58} />
-          <div>
-            <div className="gsw-lkick gsw-display">✦ Your creative liberty</div>
-            <div className="gsw-ltext">{CREATIVE_LIBERTY_TEXT}</div>
-          </div>
-          <div className="gsw-lwand" aria-hidden="true">🪄</div>
-        </div>
-      )}
       <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={() => props.doors.showSavedWork()}>Your library & uploads</button>
       <YourShow key={props.project.id} project={props.project} onSaveProject={props.onSaveProject} />
       <BareStageContext.Provider value={true}>

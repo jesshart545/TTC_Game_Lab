@@ -34,7 +34,7 @@ export const TALK_SKIPPABLE_STEPS: TalkStepId[] = ["research", "quiz", "media", 
  * the talk toolbox shows talk pieces only (Jessica, 2026-11-03). */
 export const TALK_TOOL_TYPES: readonly string[] = ["trivia-list", "question-card", "blank-card", "card-list", "youtube"];
 
-export const TALK_CREATIVITY_BANNER = "These are examples, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.";
+export const TALK_CREATIVITY_BANNER = "The ready-made shows are starting points, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.";
 
 export type TalkStepInfo = {
   id: TalkStepId;

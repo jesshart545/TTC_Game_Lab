@@ -116,11 +116,19 @@ console.log('PASS: the published trivia overlay shows only what the creator put 
 // ---------- Fix 6: Jewel stands FIRST in Gameshow and Talk I&C ----------
 const gameshowStage = read('components/GameshowStage.tsx');
 assert.equal((gameshowStage.match(/\{props\.jewelPanel\}/g) || []).length, 1, 'the Gameshow frame renders Jewel\u2019s panel exactly once');
-assert(gameshowStage.indexOf('{props.jewelPanel}') < gameshowStage.indexOf('gsw-liberty'), 'in the Gameshow frame Jewel stands before the banner, the door and the show block');
+const gameshowRender = gameshowStage.slice(gameshowStage.indexOf('return (\n    <section'));
+assert(gameshowRender.indexOf('{props.jewelPanel}') > -1 && gameshowRender.indexOf('{props.jewelPanel}') < gameshowRender.indexOf('gsw-library-door'), 'in the Gameshow frame Jewel stands before the door and the show block');
+// The liberty banner no longer stands directly under Jewel in the
+// Gameshow frame (Jessica, 2026-11-26): it stands below the
+// ready-made shows in the plan area, which it speaks about.
+const gameshowPlan = gameshowStage.slice(gameshowStage.indexOf('function PlanArea'), gameshowStage.indexOf('/* ---------------- Media'));
+assert(gameshowPlan.indexOf('<PlanTemplates') > -1 && gameshowPlan.indexOf('<PlanTemplates') < gameshowPlan.indexOf('gsw-liberty'), 'in the Gameshow frame the banner stands below the ready-made shows');
 const talkStage = read('components/TalkshowStage.tsx');
 assert.equal((talkStage.match(/\{jewelPanel\}/g) || []).length, 1, 'the Talk frame renders Jewel\u2019s panel exactly once');
-assert(talkStage.indexOf('{jewelPanel}') < talkStage.indexOf('gsw-liberty'), 'in the Talk frame Jewel stands before the banner and the topics');
-assert(gameshowStage.includes('CREATIVE_LIBERTY_TEXT') && talkStage.includes('TALK_CREATIVITY_BANNER'), 'the liberty banner content still renders on both frames (its wording is Jessica\u2019s pending call, untouched)');
-console.log('PASS: Jewel\u2019s panel heads both Imagine and Create frames; the banner still renders after her.');
+const talkRender = talkStage.slice(talkStage.indexOf('return (\n    <section'));
+assert(talkRender.indexOf('{jewelPanel}') > -1 && talkRender.indexOf('{jewelPanel}') < talkRender.indexOf('gsw-liberty'), 'in the Talk frame Jewel stands before the banner and the topics');
+assert(talkRender.indexOf('topic === "missed"') > -1 && talkRender.indexOf('topic === "missed"') < talkRender.indexOf('gsw-liberty'), 'in the Talk frame the banner stands below the topics and their examples');
+assert(gameshowStage.includes('CREATIVE_LIBERTY_TEXT') && talkStage.includes('TALK_CREATIVITY_BANNER'), 'the liberty banner content still renders on both frames (wording updated at Jessica\u2019s direction, 2026-11-26)');
+console.log('PASS: Jewel\u2019s panel heads both Imagine and Create frames; the banner stands below the examples in both.');
 
 console.log('ALL SIX-FIX GUARDS PASS');

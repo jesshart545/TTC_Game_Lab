@@ -46,13 +46,21 @@ function baseProject(overrides = {}) {
 
 // --- The creative-freedom banner: Jessica's exact wording, stored once -----
 {
-  assert.equal(CREATIVE_LIBERTY_TEXT, 'These are examples, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.');
+  assert.equal(CREATIVE_LIBERTY_TEXT, 'The ready-made shows are starting points, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.');
   const files = ['components/GameshowWorkshop.tsx', 'components/GameshowSteps.tsx', 'components/GameshowToolDemos.tsx', 'components/GameshowStage.tsx', 'lib/gameshow-path.ts'];
   const occurrences = files.reduce((count, file) => count + (fs.readFileSync(file, 'utf8').match(/accommodate your creativity/g) || []).length, 0);
   assert.equal(occurrences, 1, 'the banner wording lives in exactly one place');
   const stage = fs.readFileSync('components/GameshowStage.tsx', 'utf8');
-  assert(stage.includes('{CREATIVE_LIBERTY_TEXT}'), 'the light stage renders the banner text once, above the areas');
-  console.log('PASS: creative-freedom banner wording is exact and rendered exactly once.');
+  assert(stage.includes('{CREATIVE_LIBERTY_TEXT}'), 'the light stage renders the banner text once');
+  // Placement (Jessica, 2026-11-26): the banner no longer stands
+  // directly below Jewel, where it read as if the creator's own work
+  // with her were "only examples" — it stands below the ready-made
+  // shows it speaks about, inside the plan area, under the shelf.
+  const planArea = stage.slice(stage.indexOf('function PlanArea'), stage.indexOf('/* ---------------- Media'));
+  assert(planArea.indexOf('<PlanTemplates') > -1 && planArea.indexOf('<PlanTemplates') < planArea.indexOf('gsw-liberty'), 'the banner stands below the ready-made shows shelf in the plan area');
+  const frameRender = stage.slice(stage.indexOf('return (\n    <section'));
+  assert(!frameRender.includes('gsw-liberty'), 'the banner no longer stands in the frame directly below Jewel');
+  console.log('PASS: creative-freedom banner wording is exact and rendered exactly once, below the ready-made shows.');
 }
 
 // --- The three Jewel-only tools are tiles, in the demo's order ---------------
@@ -135,11 +143,14 @@ function baseProject(overrides = {}) {
   // area, and her conversation stands FIRST in the work area
   // (Jessica, 2026-11-15 — she heads the stage, never buried below
   // the areas): rendered exactly once, at the head of the stage,
-  // before the banner, the library door and the "Your show" block.
+  // before the library door and the "Your show" block. (The liberty
+  // banner used to stand right after her here; Jessica moved it
+  // below the ready-made shows on 2026-11-26 — pinned in the banner
+  // section above.)
   assert(stage.includes('<JewelWandScene onEnter={onEnterJewel} />'), 'the plan area opens the way into Jewel with her landing-page wand scene');
   assert.equal((stage.match(/\{props\.jewelPanel\}/g) || []).length, 1, 'her conversation renders exactly once in the gameshow stage');
   const stageRender = stage.slice(stage.indexOf('return (\n    <section'));
-  assert(stageRender.indexOf('{props.jewelPanel}') > -1 && stageRender.indexOf('{props.jewelPanel}') < stageRender.indexOf('gsw-liberty'), 'her conversation stands at the head of the stage, before the banner');
+  assert(stageRender.indexOf('{props.jewelPanel}') > -1 && stageRender.indexOf('{props.jewelPanel}') < stageRender.indexOf('gsw-library-door'), 'her conversation stands at the head of the stage, before the library door');
   assert(page.includes('talkCreateView || gameshowCreateView || radioCreateView || stageReviewView ? null : jewelPanelElement'), 'the sidebar does not render a second copy of her panel in the gameshow create view');
   assert(panel.includes('const gameshowCreateView = project.kind === "gameshow" && workflowStep === 0') && panel.includes('const stripWithheld = talkCreateView || gameshowCreateView || radioCreateView || stageReview;'),
     'her panel carries no progress strip in the gameshow create view — no duplicate list, no Next/Go there');
@@ -239,11 +250,13 @@ function baseProject(overrides = {}) {
   assert(block.includes('gamePlan: { ...(project.gamePlan || {}), theme }'), 'a theme edit writes gamePlan.theme and preserves the rest of the plan');
   assert(block.includes('onBlur={saveTitle}') && block.includes('onBlur={saveTheme}'), 'both inputs save on blur — no save button needed');
   assert(block.includes('event.currentTarget.blur()'), 'Enter saves too, by leaving the field');
-  // Placement: the first block of the work area — under the banner
-  // (never above it), ahead of every area, so in the plan area it
-  // stands before Jewel's wand-scene doorway.
+  // Placement: the first block of the work area — ahead of every
+  // area, so in the plan area it stands before Jewel's wand-scene
+  // doorway. (It used to be pinned under the liberty banner; the
+  // banner moved below the ready-made shows on 2026-11-26, at
+  // Jessica's direction, and no longer stands in the frame at all.)
   const render = stage.slice(stage.indexOf('return (\n    <section'));
-  assert(render.indexOf('gsw-liberty') < render.indexOf('<YourShow'), 'the block is not above the creative-liberty banner');
+  assert(render.indexOf('{props.jewelPanel}') < render.indexOf('<YourShow'), 'the block stands below Jewel, at the head of the work area');
   assert(render.indexOf('<YourShow') < render.indexOf('<BareStageContext.Provider'), 'the block stands ahead of the areas — before the wand-scene doorway in the plan area');
   const page = fs.readFileSync('app/project/[id]/page.tsx', 'utf8');
   const stageElement = page.slice(page.indexOf('<GameshowStage'), page.indexOf('/>', page.indexOf('<GameshowStage')));
