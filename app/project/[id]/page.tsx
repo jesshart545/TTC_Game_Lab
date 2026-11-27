@@ -1689,7 +1689,7 @@ export default function ProjectWorkspace() {
       guard();
       progress?.("Applying the changes to your draft…");
       const baseProject={...(projectRef.current||updated),messages:updated.messages};
-      const result = applyBuildChanges(baseProject, data.changes);
+      const result = applyBuildChanges(baseProject, data.changes, { createArea: workflowStep !== 1 });
       const changeLines = result.applied ? detailedChangeLines(baseProject, result.project) : [];
       const steps = Array.isArray(data.manualSteps) ? data.manualSteps.filter((step: unknown) => typeof step === "string") : [];
       const unapplied = Object.keys(data.changes || {}).length > 0 && !result.applied && !data.action;
@@ -1943,7 +1943,7 @@ export default function ProjectWorkspace() {
           if (!generated && feedbackData) {
             guard();
             if (feedbackData.changes && Object.keys(feedbackData.changes).length) {
-              const feedbackResult = applyBuildChanges(projectRef.current || updated, feedbackData.changes);
+              const feedbackResult = applyBuildChanges(projectRef.current || updated, feedbackData.changes, { createArea: workflowStep !== 1 });
               if (feedbackResult.applied) {
                 const feedbackReply = typeof feedbackData.reply === "string" && feedbackData.reply.trim() ? feedbackData.reply.trim() : "Jewel adjusted your draft instead.";
                 persist({ ...feedbackResult.project, messages: [...updated.messages, { role: "assistant", text: feedbackReply }] });

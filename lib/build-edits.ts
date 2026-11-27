@@ -21,7 +21,18 @@ const placementPatch=(raw:unknown):Partial<Record<'x'|'y'|'width'|'height',numbe
  return Object.keys(out).length?out as Partial<Record<'x'|'y'|'width'|'height',number>>:null;
 };
 export const creatableTools:GameToolType[]=['wheel','random-picker','countdown','poll','dice','coin-toss','plinko','higher-lower','cliffhanger','blank-board','youtube','scoreboard','game-tool-list','card-list','city-crime-scene','trivia-list','question-card','bank','sound-board','dj-deck'];
-export function applyBuildChanges(project:Project,input:unknown){
+export function applyBuildChanges(project:Project,input:unknown,options?:{createArea?:boolean}){
+ // Create-area backstop (Jessica, 2026-11-26): when the edit arrives
+ // from Imagine & Create (any workspaceStage that is not Set the
+ // Stage's "build"), creating must only FILE work in the project — a
+ // new tool is never connected, placed on the stage/overlay, or given
+ // dashboard wiring by the act of creating it, even if a connect slips
+ // through in the changes. Staging and connecting belong to Set the
+ // Stage, or to the same edit only when the creator explicitly asked
+ // for placement/wiring — which arrives as changes.connections and is
+ // honored in both areas. Callers that do not pass the option keep
+ // the long-standing behavior exactly.
+ const createArea=options?.createArea===true;
  const changes=normalizeDraftChanges(input),warnings:string[]=[];let extra=0;
  let next={...project,gameTools:[...project.gameTools],assetPools:(project.assetPools||[]).map(p=>({...p,assetKeys:[...p.assetKeys]}))};
  const created:string[]=[];
@@ -38,7 +49,11 @@ export function applyBuildChanges(project:Project,input:unknown){
    // pool, and card designs land on it — and nothing new is created.
    const cfg=record(item.config);
    const existing=next.gameTools.find(t=>t.type==='question-card');
-   const withCards=existing?next:createCardSystem(next,undefined,'question');
+   // In the create area the card system is filed unplaced with no
+   // cycle button minted (see createCardSystem's fileOnly note); the
+   // button and placement arrive when it is connected in Set the
+   // Stage, and the live cycle then runs exactly as before.
+   const withCards=existing?next:createCardSystem(next,undefined,'question',createArea?{fileOnly:true}:undefined);
    const cardTool=existing||withCards.gameTools[withCards.gameTools.length-1];
    const poolId=typeof cfg.poolId==='string'&&withCards.gameTools.some(t=>t.id===cfg.poolId&&t.type==='trivia-list'&&t.enabled)?cfg.poolId:undefined;
    next={...withCards,assetPools:next.assetPools,gameTools:withCards.gameTools.map(t=>t.id===cardTool.id?{...t,name:String(item.name||t.name).slice(0,80),config:{...t.config,...(poolId?{poolId}:{}),...(Object.keys(record(cfg.questionCard)).length?{questionCard:{...record(t.config.questionCard),...record(cfg.questionCard)}}:{}),...(Object.keys(record(cfg.answerCard)).length?{answerCard:{...record(t.config.answerCard),...record(cfg.answerCard)}}:{})}}:t)};
@@ -95,7 +110,9 @@ export function applyBuildChanges(project:Project,input:unknown){
   // block every slot for the next game placed). The slot pass at the
   // end of this function assigns the placement instead.
   if(standingPlacementTypes.includes(item.type)&&!Object.keys(record(record(item.config).placement)).length){const createdTool=next.gameTools[next.gameTools.length-1];const{placement:_stock,...restConfig}=createdTool.config;createdTool.config=restConfig;}
-  extra++;if(item.connect===true)created.push(id);
+  // A connect riding on a create is honored only outside the create
+  // area; in Imagine & Create the tool is filed and nothing more.
+  extra++;if(item.connect===true&&!createArea)created.push(id);
  }
  for(const raw of Array.isArray(changes.assetPools)?changes.assetPools:[]){
   const item=record(raw),keys=Array.isArray(item.assetKeys)?item.assetKeys.filter((key:unknown)=>typeof key==='string'&&next.assets.some(a=>(a.storageKey||a.name)===key)):null;
@@ -109,7 +126,11 @@ export function applyBuildChanges(project:Project,input:unknown){
   if(!coin){warnings.push('Choose an existing Coin Toss tool for this three-press button.');continue;}
   const existing=item.controlId?next.controls.find(control=>control.id===item.controlId):next.controls.find(control=>control.action===`tool.${coin.id}`||control.action===`coin.cycle.${coin.id}`);
   if(item.controlId&&!existing){warnings.push('The coin button could not be found.');continue;}
-  const linked=existing?{project:{...next,gameTools:next.gameTools.map(tool=>tool.id===coin.id?{...tool,inToolbox:true,inOverlayBuild:true,config:{...tool.config,triggerOnly:true}}:tool)},controlId:existing.id}:addCreationControl(next,'tool',coin.id);next={...linked.project,assetPools:next.assetPools};
+  const linked=existing?{project:{...next,gameTools:next.gameTools.map(tool=>tool.id===coin.id?{...tool,inToolbox:true,inOverlayBuild:createArea?tool.inOverlayBuild:true,config:{...tool.config,triggerOnly:true}}:tool)},controlId:existing.id}:addCreationControl(next,'tool',coin.id);next={...linked.project,assetPools:next.assetPools};
+  // Wiring a button in the create area must not place the coin: the
+  // connect path stamps placement as a side effect, so restore the
+  // coin's own placement state — the minted button stays.
+  if(createArea)next={...next,gameTools:next.gameTools.map(tool=>tool.id===coin.id?{...tool,inOverlayBuild:coin.inOverlayBuild}:tool)};
   const target=existing||next.controls.find(control=>control.id===linked.controlId)!;
   const cycle={...target,action:`coin.cycle.${coin.id}`,toolIds:[coin.id],buttonMode:'single' as const,chain:undefined,compositionId:undefined,label:typeof item.label==='string'?item.label.slice(0,80):target.label===`Flip ${coin.name}`?coin.name:target.label,detail:'Press once to show the coin; again to flip and reveal; a third time to remove. Then repeat.'};
   next.controls=next.controls.map(control=>control.id===target.id?cycle:control).filter(control=>{
@@ -127,7 +148,7 @@ export function applyBuildChanges(project:Project,input:unknown){
   const start=next.controls.find(c=>c.id!==show.id&&(c.action===`tool.${tool.id}`||c.action===`timer.toggle.${tool.id}`));
   const toggle={...start,id:start?.id||crypto.randomUUID(),label:'Start / Stop Timer',action:`timer.toggle.${tool.id}`,toolIds:[tool.id],buttonMode:'single' as const,chain:undefined,compositionId:undefined,detail:'Start the countdown or pause it at its remaining time.'};
   next.controls=start?next.controls.map(c=>c.id===start.id?toggle:c):[...next.controls,toggle];
-  next.gameTools=next.gameTools.map(t=>t.id===tool.id?{...t,inToolbox:true,inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t);extra++;
+  next.gameTools=next.gameTools.map(t=>t.id===tool.id?{...t,inToolbox:true,inOverlayBuild:createArea?t.inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t);extra++;
  }
  // Start + optional auto-hide at zero using real control IDs (never invent sequence.ID actions)
  for(const raw of Array.isArray(changes.timerLifecycle)?changes.timerLifecycle:[]){
@@ -136,6 +157,9 @@ export function applyBuildChanges(project:Project,input:unknown){
   try{
    const linked=addCreationControl(next,'tool',tool.id);
    next={...linked.project,assetPools:next.assetPools};
+   // Same create-area rule as the coin wiring above: the lifecycle's
+   // buttons are minted, but the timer is not placed by wiring it here.
+   if(createArea)next={...next,gameTools:next.gameTools.map(t=>t.id===tool.id?{...t,inOverlayBuild:tool.inOverlayBuild}:t)};
   }catch{warnings.push('Timer controls could not be created for this countdown.');continue;}
   const seconds=Math.max(1,Math.min(86400,Number(tool.config.seconds)||10));
   const startCtrl=next.controls.find(c=>c.action===`timer.toggle.${tool.id}`)||next.controls.find(c=>c.action===`tool.${tool.id}`);
@@ -143,7 +167,7 @@ export function applyBuildChanges(project:Project,input:unknown){
   if(!startCtrl||!hideCtrl){warnings.push('Start and Hide controls are required for this timer lifecycle.');continue;}
   const startLabel=typeof item.startLabel==='string'&&item.startLabel.trim()?item.startLabel.trim().slice(0,80):`Start ${tool.name}`;
   next.controls=next.controls.map(c=>c.id===startCtrl.id?{...c,label:startLabel,action:`timer.toggle.${tool.id}`,toolIds:[tool.id],detail:'Start the countdown from the saved duration; press again to pause.'}:c);
-  next.gameTools=next.gameTools.map(t=>t.id===tool.id?{...t,inToolbox:true,inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t);
+  next.gameTools=next.gameTools.map(t=>t.id===tool.id?{...t,inToolbox:true,inOverlayBuild:createArea?t.inOverlayBuild:true,config:{...t.config,triggerOnly:true}}:t);
   if(item.autoHide!==false){
    const existingSeq=next.controls.find(c=>c.action==='sequence'&&c.chain?.some(s=>s.refId===startCtrl.id)&&c.chain?.some(s=>s.refId===hideCtrl.id));
    const steps:NonNullable<ProjectEvent['chain']>=[

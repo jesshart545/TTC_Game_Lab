@@ -128,7 +128,7 @@ export function cardDisplayText(question:CardQuestion|null|undefined,phase:'hidd
 export function cardControl(action:string):{toolId:string;action:CardAction}|null{
  const m=action.match(/^cards\.(toggle|score|award|draw|show|reveal|clear|new-game|blank)\.(.+)$/);return m?{action:m[1] as CardAction,toolId:m[2]}:null;
 }
-export function createCardSystem(project:Project,backgroundKey?:string,kind:'question'|'answer'|'blank'='question'):Project{
+export function createCardSystem(project:Project,backgroundKey?:string,kind:'question'|'answer'|'blank'='question',options?:{fileOnly?:boolean}):Project{
  // One Question Cards tool per project (owner ruling, 2026-11-12). Every
  // creation path funnels through here — the Workshop's Create cards button,
  // Jewel's build changes, the new-project starter, and the background
@@ -141,8 +141,17 @@ export function createCardSystem(project:Project,backgroundKey?:string,kind:'que
  if(kind!=='blank'&&project.gameTools.some(t=>t.type==='question-card'))return project;
  const id='card-'+crypto.randomUUID();
  const design={backgroundKey:backgroundKey||'',fontFamily:'Arial, sans-serif',fontSize:48,textColor:'#ffffff',backgroundColor:'#101827',accentColor:'#20e8ff',borderRadius:18,alignment:'center',vertical:'center',padding:28,width:65,height:25,x:17.5,y:30,marginTop:6,marginBottom:6,marginLeft:5,marginRight:5,entrance:'fade',exit:'fade',entranceSeconds:.5,exitSeconds:.5,delaySeconds:0,outline:0,glow:0};
- const tool:GameTool={id,type:kind==='blank'?'blank-card':'question-card',name:kind==='blank'?'Blank Card':'Question Cards',enabled:true,inToolbox:true,inOverlayBuild:true,config:{questionCard:{...design,...(kind==='answer'?{backgroundKey:''}:{})},answerCard:{...design,backgroundKey:kind==='answer'?backgroundKey||'':backgroundKey||''}}};
- const controls:ProjectEvent[]=kind==='blank'?[]:[{id:id+'-toggle',label:'Question Cards',action:'cards.toggle.'+id,detail:'Press to draw a random unused question, press again to reveal the answer, and press once more to clear the card.',toolIds:[id]}];
+ // Filed-only creation (Jewel in Imagine & Create, Jessica 2026-11-26):
+ // the system is saved in the project UNPLACED and its cycle button is
+ // NOT minted — creating never stages or wires. The button and the
+ // placement arrive when the creator connects the tool in Set the
+ // Stage: connectQuestionCard mints the missing cards.toggle control
+ // and sets inOverlayBuild, which is also what the live card cycle
+ // gates on (lib/card-server), so a staged system runs exactly as one
+ // born connected. Every other caller keeps the born-connected default.
+ const fileOnly=options?.fileOnly===true;
+ const tool:GameTool={id,type:kind==='blank'?'blank-card':'question-card',name:kind==='blank'?'Blank Card':'Question Cards',enabled:true,inToolbox:true,inOverlayBuild:!fileOnly,config:{questionCard:{...design,...(kind==='answer'?{backgroundKey:''}:{})},answerCard:{...design,backgroundKey:kind==='answer'?backgroundKey||'':backgroundKey||''}}};
+ const controls:ProjectEvent[]=kind==='blank'||fileOnly?[]:[{id:id+'-toggle',label:'Question Cards',action:'cards.toggle.'+id,detail:'Press to draw a random unused question, press again to reveal the answer, and press once more to clear the card.',toolIds:[id]}];
  if(kind!=='blank')tool.config={...tool.config,poolId:project.gameTools.find(t=>t.type==='trivia-list'&&t.enabled)?.id||''};
  return {...project,gameTools:[...project.gameTools,tool],controls:[...project.controls,...controls]};
 }
