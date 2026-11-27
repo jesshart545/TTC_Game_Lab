@@ -520,12 +520,18 @@ const quizTool = (overrides = {}) => ({
 
 // --- Banner once; avatar in the banner + at the entry; no self-generation ----
 {
-  assert.equal(TALK_CREATIVITY_BANNER, 'These are examples, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.');
+  assert.equal(TALK_CREATIVITY_BANNER, 'The ready-made shows are starting points, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.');
   const files = ['components/TalkshowStage.tsx', 'components/TalkshowSteps.tsx', 'components/TalkshowWorkshop.tsx', 'lib/talkshow-path.ts'];
   const occurrences = files.reduce((count, file) => count + (fs.readFileSync(file, 'utf8').match(/accommodate your creativity/g) || []).length, 0);
   assert.equal(occurrences, 1, 'the banner wording lives in exactly one place across the talk files');
   const stage = fs.readFileSync('components/TalkshowStage.tsx', 'utf8');
-  assert(stage.includes('{TALK_CREATIVITY_BANNER}'), 'the stage renders the banner once, above the topic visual');
+  assert(stage.includes('{TALK_CREATIVITY_BANNER}'), 'the stage renders the banner once');
+  // Placement (Jessica, 2026-11-26): the banner no longer stands
+  // directly below Jewel, where it read as if the creator's own work
+  // with her were "only examples" — it stands at the foot of the
+  // stage, below the topics and the pictured examples they carry.
+  const talkRender = stage.slice(stage.indexOf('return (\n    <section'));
+  assert(talkRender.indexOf('topic === "missed"') > -1 && talkRender.indexOf('topic === "missed"') < talkRender.indexOf('gsw-liberty'), 'the banner stands below every topic and its examples, at the foot of the stage');
   // Jewel's avatar and wand stand on the talk page (Jessica,
   // 2026-11-04): the liberty banner's continuity instance (58px,
   // unchanged) — and at the entry into Jewel in the background

@@ -447,16 +447,29 @@ export default function TalkshowStage({ project, workflow, doors, onSaveProject,
   return (
     <section className="gsw" aria-label="Imagine and Create — your show, as Jewel builds it with you">
       {/* Jewel stands FIRST in the working area (Jessica, 2026-11-15):
-          her panel heads the stage, and everything else — the banner,
-          the library door, the current topic's demonstrations and
-          shelves — keeps its content and its relative order after
-          her. The topics below no longer carry their own copy of her
-          panel. */}
+          her panel heads the stage, and everything else — the library
+          door, the current topic's demonstrations and shelves — keeps
+          its content and its relative order after her. The topics
+          below no longer carry their own copy of her panel. (The
+          liberty banner no longer stands here under her: it moved
+          below the topics' examples, at the foot of the stage —
+          Jessica, 2026-11-26.) */}
       {jewelPanel}
-      {/* The liberty banner never stands on a Game Night page (Jessica,
-          2026-11-15): there, creative freedom is shown, never written.
-          The page mounts this frame only for talk projects; this gate
-          keeps the banner off a multiplayer project regardless. */}
+      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={doors.showSavedWork}>Your library & uploads</button>
+      {topic === "background" && <BackgroundStage {...stageProps} />}
+      {topic === "prompt" && <PromptStage {...stageProps} />}
+      {topic === "research" && <ResearchStage {...stageProps} />}
+      {topic === "quiz" && <QuizStage {...stageProps} />}
+      {topic === "media" && <MediaStage {...stageProps} />}
+      {topic === "missed" && <MissedStage {...stageProps} />}
+      {/* The liberty banner stands BELOW the examples it speaks
+          about — the pictured demonstrations standing in the topic
+          above (Jessica, 2026-11-26): directly under Jewel it read
+          as if the creator's own work with her were "only examples."
+          It never stands on a Game Night page (Jessica, 2026-11-15):
+          there, creative freedom is shown, never written. The page
+          mounts this frame only for talk projects; this gate keeps
+          the banner off a multiplayer project regardless. */}
       {project.kind !== "multiplayer" && (
         <div className="gsw-liberty">
           <JewelAvatar size={58} />
@@ -467,13 +480,6 @@ export default function TalkshowStage({ project, workflow, doors, onSaveProject,
           <div className="gsw-lwand" aria-hidden="true">🪄</div>
         </div>
       )}
-      <button type="button" className="gsw-demobtn gold gsw-library-door" onClick={doors.showSavedWork}>Your library & uploads</button>
-      {topic === "background" && <BackgroundStage {...stageProps} />}
-      {topic === "prompt" && <PromptStage {...stageProps} />}
-      {topic === "research" && <ResearchStage {...stageProps} />}
-      {topic === "quiz" && <QuizStage {...stageProps} />}
-      {topic === "media" && <MediaStage {...stageProps} />}
-      {topic === "missed" && <MissedStage {...stageProps} />}
     </section>
   );
 }

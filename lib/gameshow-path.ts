@@ -19,9 +19,11 @@ import { fontFamilies } from "./fonts";
 export type ChangeItem = { label: string; sub?: string; say?: string };
 export type AskChip = { chip: string; say: string };
 
-/** Jessica's creative-freedom wording (2026-11-02), shown exactly once in the area. */
+/** Jessica's creative-freedom wording (2026-11-02; first sentence
+ * reworded 2026-11-26, when the banner moved below the ready-made
+ * shows it speaks about), shown exactly once in the area. */
 export const CREATIVE_LIBERTY_TEXT =
-  "These are examples, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.";
+  "The ready-made shows are starting points, not limits. If you can describe it, Jewel will try to make it happen — this site exists to accommodate your creativity.";
 
 export type GameshowStepMeta = { kicker: string; intro: string; doneWhen: string; jewelNote: string };
 
