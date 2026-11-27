@@ -42,7 +42,11 @@ const T0 = 1_000_000;
   for (const route of ['app/api/jewel/route.ts', 'app/api/ai/route.ts']) {
     const src = read(route);
     assert(src.includes('"bank"|"sound-board"|"dj-deck","config"'), `${route}: the tool action vocabulary names both music tools`);
-    assert(src.includes('"city-crime-scene"|"sound-board"|"dj-deck",name,config,connect:true'), `${route}: changes.newTools names both music tools`);
+    // Pin updated 2026-11-26: Jewel's newTools instruction no longer teaches
+    // connect:true — creating in the create area is create-only now (the
+    // connect survives only in the Set the Stage addendum). The vocabulary
+    // itself (both music tools named in changes.newTools) is unchanged.
+    assert(src.includes('"city-crime-scene"|"sound-board"|"dj-deck",name,config}]'), `${route}: changes.newTools names both music tools`);
     assert(src.includes('toolType "sound-board" with config pads'), `${route}: the prompt teaches the sound board config`);
     assert(src.includes('toolType "dj-deck" with config tracks'), `${route}: the prompt teaches the DJ deck config`);
   }
