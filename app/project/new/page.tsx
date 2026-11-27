@@ -1,4 +1,4 @@
-import { requireCreator, isAdmin } from "../../../lib/auth/server";
+import { requireCreator } from "../../../lib/auth/server";
 import { canUseCityCrimeScene } from "../../../lib/city-crime-scene";
 import NewProjectFlow from "./flow";
 
@@ -12,17 +12,20 @@ export const dynamic = "force-dynamic";
 // creator, so the creator's own entitlement is the right verdict.
 export default async function NewProjectPage() {
   let ccssEntitled = false;
-  // The admin testing exception to the Coming Soon gate (Jessica,
-  // 2026-11-12) is decided here too, with the site's own isAdmin —
-  // the flow receives a plain boolean, never the rule itself.
-  let viewerIsAdmin = false;
+  // The Coming Soon gate's exemption is decided here too. Radio's
+  // exemption is an entitlement of exactly two accounts (Jessica,
+  // 2026-11-25 — see canUseRadioKind in lib/project-kinds), keyed on
+  // the account EMAIL, not the admin role, so the flow receives the
+  // viewer's own email and the gate predicate (isKindGatedFor) applies
+  // the rule; an unknown email resolves closed.
+  let viewerEmail: string | null = null;
   try {
     const user = await requireCreator();
     ccssEntitled = canUseCityCrimeScene(user?.email);
-    viewerIsAdmin = isAdmin(user);
+    viewerEmail = user?.email ?? null;
   } catch {
     ccssEntitled = false;
-    viewerIsAdmin = false;
+    viewerEmail = null;
   }
-  return <NewProjectFlow ccssEntitled={ccssEntitled} viewerIsAdmin={viewerIsAdmin} />;
+  return <NewProjectFlow ccssEntitled={ccssEntitled} viewerEmail={viewerEmail} />;
 }

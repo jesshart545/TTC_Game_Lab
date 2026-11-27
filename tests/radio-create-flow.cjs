@@ -9,7 +9,7 @@ const eq = (actual, expected, msg) => assert.equal(JSON.stringify(actual), JSON.
 
 const root = path.join(__dirname, '..');
 const kinds = load('lib/project-kinds.ts');
-const { isKindComingSoon, isKindGatedFor, setupPiecesForKind, projectKindInfo } = kinds;
+const { isKindComingSoon, isKindGatedFor, setupPiecesForKind, projectKindInfo, canUseRadioKind, radioPilotEmails } = kinds;
 const projectLib = load('lib/project.ts');
 const flow = fs.readFileSync(path.join(root, 'app/project/new/flow.tsx'), 'utf8');
 const projectTs = fs.readFileSync(path.join(root, 'lib/project.ts'), 'utf8');
@@ -18,22 +18,38 @@ const projectTs = fs.readFileSync(path.join(root, 'lib/project.ts'), 'utf8');
 // FIRST — radio/DJ live stream or karaoke live — then the title (both
 // branches), then, on the radio/DJ branch only, what kind of music show
 // it is (that answer is the theme that seeds Jewel). No pieces step.
-// The kind stays Coming Soon for everyone except the site admin, who
-// can create and open radio projects to build and test the builder —
-// the multiplayer admin exemption (PR #181) extended to radio.
+// The kind stays Coming Soon for everyone except two pilot accounts
+// (Jessica, 2026-11-25: ladylovelace0627@gmail.com and
+// sycoinc23@gmail.com), entitled by EMAIL so the two of them can finish
+// the builder together — this supersedes the 2026-11-23 admin-role
+// exemption: another admin's account stays gated like any other.
 
-// 1. The gate: admin can create radio; non-admins stay gated. The raw
-// Coming Soon flags do not move, and no other kind's gate changes.
-assert.equal(isKindGatedFor('radio', true), false, 'admin can start a radio project to build and test it');
-assert.equal(isKindGatedFor('radio', false), true, 'non-admin still cannot start a radio project');
-assert.equal(isKindGatedFor('multiplayer', true), false, 'multiplayer stays open to the admin');
-assert.equal(isKindGatedFor('multiplayer', false), false, 'multiplayer is live for all users (PR #222) and stays that way');
-assert.equal(isKindGatedFor('gameshow', false), false, 'gameshow stays open');
-assert.equal(isKindGatedFor('talk', false), false, 'talk stays open');
-assert.equal(isKindGatedFor(undefined, false), false, 'unset kind is never gated');
+// 1. The gate: the two pilot emails can create radio; everyone else
+// stays gated, whatever their role. The raw Coming Soon flags do not
+// move, and no other kind's gate changes.
+assert.equal(isKindGatedFor('radio', 'ladylovelace0627@gmail.com'), false, 'Jessica can start a radio project');
+assert.equal(isKindGatedFor('radio', 'sycoinc23@gmail.com'), false, 'sycoinc23 can start a radio project on his email alone — no admin role assumed');
+assert.equal(isKindGatedFor('radio', 'LadyLovelace0627@Gmail.com'), false, 'the entitlement match is case-insensitive');
+assert.equal(isKindGatedFor('radio', 'fellow-admin@example.com'), true, 'a generic admin email stays gated — the admin role no longer exempts');
+assert.equal(isKindGatedFor('radio', 'regular-user@example.com'), true, 'a regular user still cannot start a radio project');
+assert.equal(isKindGatedFor('radio', null), true, 'an unknown viewer stays gated');
+assert.equal(isKindGatedFor('radio', undefined), true, 'no email, no entry');
+assert.equal(isKindGatedFor('multiplayer', 'ladylovelace0627@gmail.com'), false, 'multiplayer stays open to a pilot account');
+assert.equal(isKindGatedFor('multiplayer', null), false, 'multiplayer is live for all users (PR #222) and stays that way');
+assert.equal(isKindGatedFor('gameshow', null), false, 'gameshow stays open');
+assert.equal(isKindGatedFor('talk', null), false, 'talk stays open');
+assert.equal(isKindGatedFor(undefined, 'sycoinc23@gmail.com'), false, 'unset kind is never gated');
+// The entitlement list itself: exactly the two pilot accounts.
+eq(radioPilotEmails(), ['ladylovelace0627@gmail.com', 'sycoinc23@gmail.com'], 'the radio pilot list is exactly the two accounts');
+assert.equal(canUseRadioKind('ladylovelace0627@gmail.com'), true, 'canUseRadioKind: Jessica is entitled');
+assert.equal(canUseRadioKind('SYCOINC23@GMAIL.COM'), true, 'canUseRadioKind: sycoinc23 is entitled, any case');
+assert.equal(canUseRadioKind('fellow-admin@example.com'), false, 'canUseRadioKind: another admin is not entitled');
+assert.equal(canUseRadioKind(''), false, 'canUseRadioKind: an empty email is not entitled');
+assert.equal(canUseRadioKind(null), false, 'canUseRadioKind: null is not entitled');
+assert.equal(canUseRadioKind(undefined), false, 'canUseRadioKind: undefined is not entitled');
 assert.equal(isKindComingSoon('radio'), true, 'radio is still a Coming Soon kind');
 assert.equal(isKindComingSoon('multiplayer'), false, 'multiplayer is no longer a Coming Soon kind (PR #222)');
-console.log('PASS: radio is open to the admin only; every other viewer and kind is gated exactly as before.');
+console.log('PASS: radio is open to the two pilot accounts by email only; every other viewer and kind is gated exactly as before.');
 
 // 2. Card copy: every radio show is a music show (Jessica, 2026-11-23) —
 // talk programs belong to Talk Show, so the card never advertises talk.
@@ -98,4 +114,4 @@ assert(radioSeed.includes('project.radioBranch = start.branch'), 'the radio bloc
 assert(radioSeed.includes('project.gamePlan = { ...(project.gamePlan || {}), theme: start.theme }'), 'the radio block seeds gamePlan.theme like the other kinds');
 console.log('PASS: the radio/DJ music-show answer seeds the project theme; karaoke carries none.');
 
-console.log('PASS: radio create flow — format first, branch stored, no pieces, admin-only gate.');
+console.log('PASS: radio create flow — format first, branch stored, no pieces, two-account pilot gate.');

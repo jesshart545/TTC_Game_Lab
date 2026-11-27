@@ -11,7 +11,7 @@ import "./new-project.css";
 
 type ScratchStart = { kind: ProjectKind; pieces: string[]; theme?: string; branch?: RadioBranch; talkBranch?: TalkBranch };
 
-export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: { ccssEntitled: boolean; viewerIsAdmin?: boolean }) {
+export default function NewProjectFlow({ ccssEntitled, viewerEmail = null }: { ccssEntitled: boolean; viewerEmail?: string | null }) {
   const router = useRouter();
   // Keep one creation request across React's development effect replay.
   const creation = useRef<Promise<string> | null>(null);
@@ -198,10 +198,9 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   function chooseKind(next: ProjectKind) {
     // Coming Soon kinds cannot be chosen — the card is disabled, and this
     // guard keeps every other caller out of the scratch screen too. The
-    // exception is the site admin starting a multiplayer project for
-    // testing (Jessica, 2026-11-12) or a radio project to build and
-    // test that builder (Jessica, 2026-11-23).
-    if (isKindGatedFor(next, viewerIsAdmin)) return;
+    // exception is a radio pilot account (Jessica, 2026-11-25): radio is
+    // available to her account and sycoinc23's account only, by email.
+    if (isKindGatedFor(next, viewerEmail)) return;
     setKind(next);
     setPieces(defaultSetupPieces(next));
     if (next === "gameshow" || next === "multiplayer") {
@@ -240,7 +239,7 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
   }
 
   function startScratch() {
-    if (!kind || isKindGatedFor(kind, viewerIsAdmin)) return;
+    if (!kind || isKindGatedFor(kind, viewerEmail)) return;
     // Radio's format question comes first (Jessica, 2026-11-23): with
     // no branch picked there is nothing to create — the branch is
     // stored on the project, so creation cannot start without it.
@@ -319,14 +318,14 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
               <div className="np-kinds">
                 {PROJECT_KINDS.map(info => {
                   // The gate is per-viewer: a Coming Soon kind renders its
-                  // disabled banded card for everyone except the site
-                  // admin opening multiplayer for testing (Jessica,
-                  // 2026-11-12) or radio to build and test it (Jessica,
-                  // 2026-11-23) — for her those cards are normal
-                  // selectable cards carrying a small "Admin testing"
-                  // chip instead of the band.
-                  const gated = isKindGatedFor(info.id, viewerIsAdmin);
-                  const adminTesting = !gated && !!info.comingSoon;
+                  // disabled banded card for everyone except the accounts
+                  // entitled to it. Radio's entitlement is exactly two
+                  // accounts (Jessica, 2026-11-25: hers and
+                  // sycoinc23's, by email — see canUseRadioKind) — for
+                  // them the card is a plain selectable card, exactly
+                  // like an open kind's; everyone else, other admins
+                  // included, gets the banded Coming Soon card.
+                  const gated = isKindGatedFor(info.id, viewerEmail);
                   return gated ? (
                     <button key={info.id} type="button" className="np-kind soon" disabled aria-disabled="true" aria-label={`${info.title} — Coming Soon!`}>
                       <img src={info.image} alt="" />
@@ -347,7 +346,6 @@ export default function NewProjectFlow({ ccssEntitled, viewerIsAdmin = false }: 
                         <div className="np-t display">{info.title}</div>
                         <div className="np-d">{info.description}</div>
                       </div>
-                      {adminTesting && <div className="np-adminchip display" aria-hidden="true">Admin testing</div>}
                     </button>
                   );
                 })}

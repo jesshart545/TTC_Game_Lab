@@ -78,21 +78,39 @@ export function isKindComingSoon(kind: ProjectKind | undefined): boolean {
   return !!kind && PROJECT_KINDS.some(info => info.id === kind && info.comingSoon);
 }
 
+/** Accounts entitled to use the Radio, DJ, or Karaoke kind while it
+ * stays Coming Soon for everyone else. Jessica's direction (2026-11-25)
+ * narrows the earlier admin-testing exemption (2026-11-23) to exactly
+ * two accounts: hers and sycoinc23's, so the two of them can finish the
+ * radio builder together. Entitlement is by EMAIL, not by the admin
+ * role — an entitled account gets in whether or not it carries the
+ * admin role, and every other account, other site admins included,
+ * stays gated. Overridable via RADIO_PILOT_EMAILS (comma-separated).
+ * Mirrors the City Crime Scene entitlement shape in
+ * lib/city-crime-scene.ts (canUseCityCrimeScene). */
+const DEFAULT_RADIO_PILOT_EMAILS = ["ladylovelace0627@gmail.com", "sycoinc23@gmail.com"];
+export function radioPilotEmails(): string[] {
+  const raw = typeof process !== "undefined" ? (process.env.RADIO_PILOT_EMAILS || "") : "";
+  const fromEnv = raw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  return fromEnv.length ? fromEnv : DEFAULT_RADIO_PILOT_EMAILS;
+}
+export function canUseRadioKind(email: string | null | undefined): boolean {
+  return !!email && radioPilotEmails().includes(email.toLowerCase());
+}
+
 /** The Coming Soon gate as it applies to a specific viewer. Multiplayer
  * went LIVE for all users on Jessica's direction (2026-11-23), so its
  * former admin-testing exemption (2026-11-12) is retired — the kind
  * simply carries no comingSoon flag anymore. Radio is now the gated
- * kind, and its build is landing: the gate holds for everyone EXCEPT
- * the site admin (Jessica, 2026-11-23 — she may create and open Radio,
- * DJ, or Karaoke projects to build and test that builder while the
- * kind stays gated for everyone else), the same per-viewer exemption
- * shape multiplayer used under PR #181. `viewerIsAdmin` is the site's
- * own admin notion — server-side that is lib/auth/server's isAdmin
- * (role "admin" or an ADMIN_EMAILS address), surfaced to client
- * surfaces as the viewerIsAdmin flag the project APIs already return. */
-export function isKindGatedFor(kind: ProjectKind | undefined, viewerIsAdmin: boolean): boolean {
+ * kind: the gate holds for everyone EXCEPT the two pilot accounts in
+ * radioPilotEmails() (Jessica, 2026-11-25 — see canUseRadioKind), so
+ * the predicate takes the viewer's EMAIL, never their admin role.
+ * Surfaces pass the signed-in viewer's own email (the server wrapper
+ * hands it to the create flow; the project page reads it from /api/me),
+ * and an unknown email resolves closed: gated. */
+export function isKindGatedFor(kind: ProjectKind | undefined, viewerEmail: string | null | undefined): boolean {
   if (!isKindComingSoon(kind)) return false;
-  return !(viewerIsAdmin && kind === "radio");
+  return !(kind === "radio" && canUseRadioKind(viewerEmail));
 }
 
 /** The setup pieces a kind's from-scratch screen offers. A talk show's
