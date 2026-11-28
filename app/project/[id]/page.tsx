@@ -51,6 +51,7 @@ import AssetComposer from "../../../components/AssetComposer";
 import CompositionPlayer, { defaultOverlayResult } from "../../../components/CompositionPlayer";
 import { applyBuildChanges } from "../../../lib/build-edits";
 import { ccssMediaAttachPatch } from "../../../lib/city-crime-scene";
+import { characterAttachPatch } from "../../../lib/characters";
 import {addCreationControl,clarifyYoutubeSearch} from "../../../lib/build-controls";
 import {toolDefaults,infoTypes,cleanPlinkoSlots,cleanWheelSegments,cleanHigherLowerCards,cleanCliffhangerItems,cleanLabelText,convertPrizeWheelTools} from "../../../lib/game-tools";
 import {clampBankPressValue,clampBankRoundSeconds} from "../../../lib/bank";
@@ -1919,7 +1920,7 @@ export default function ProjectWorkspace() {
         let generationFailure = "";
         const attemptGeneration = async (mediaAction: typeof action) => {
           try {
-            const attempt = await generateAsset(mediaAction.type as GeneratorType, mediaAction.prompt, { sourceKey: mediaAction.sourceKey, voice: mediaAction.voice, baseProject: working, durationSeconds: mediaAction.durationSeconds, lyrics: mediaAction.lyrics, aspectRatio: mediaAction.aspectRatio, stability: mediaAction.stability, instrumental: mediaAction.instrumental, forCaseItem: Boolean((mediaAction as any)?.ccssAttach) });
+            const attempt = await generateAsset(mediaAction.type as GeneratorType, mediaAction.prompt, { sourceKey: mediaAction.sourceKey, voice: mediaAction.voice, baseProject: working, durationSeconds: mediaAction.durationSeconds, lyrics: mediaAction.lyrics, aspectRatio: mediaAction.aspectRatio, stability: mediaAction.stability, instrumental: mediaAction.instrumental, forCaseItem: Boolean((mediaAction as any)?.ccssAttach || (mediaAction as any)?.characterAttach) });
             if (!attempt) throw new Error("Generation could not start. Check whether another generation is already running.");
             return attempt;
           } catch (generationError) {
@@ -1987,6 +1988,31 @@ export default function ProjectWorkspace() {
             if (attachResult.applied && !attachResult.warnings.length) { finalProject = { ...generatedAsset.project, gameTools: attachResult.project.gameTools }; attachNote = " It is attached to the case in your draft."; }
             else attachNote = " It was saved to your assets, but could not be attached to the case automatically — you can attach it from the City Crime Scene editor.";
           } catch { attachNote = " It was saved to your assets, but could not be attached to the case automatically — you can attach it from the City Crime Scene editor."; }
+        }
+        // Character Studio attachment (lib/characters): the finished
+        // media becomes the character's portrait, voice, or a clip on
+        // the character — filed in the Characters collection, never
+        // placed on the overlay. Same truth-telling rule: the reply
+        // claims the attachment only when it actually landed.
+        const charAttach = (successfulAction as any)?.characterAttach;
+        if (charAttach && typeof charAttach === "object") {
+          try {
+            const beforeKeys = new Set((working.assets || []).map(a => a.storageKey || a.name));
+            const stored = [...finalProject.assets].reverse().find(a => !beforeKeys.has(a.storageKey || a.name)) || finalProject.assets.find(a => a.name === generatedAsset.name);
+            const assetKey = stored ? (stored.storageKey || stored.name) : "";
+            if (!assetKey) throw new Error("stored asset identity missing");
+            const attachResult = applyBuildChanges(finalProject, characterAttachPatch(charAttach, assetKey));
+            if (attachResult.applied && !attachResult.warnings.length) {
+              finalProject = { ...finalProject, characters: attachResult.project.characters };
+              attachNote = charAttach.profile
+                ? " The character is filed in your Characters collection."
+                : charAttach.field === "portrait"
+                  ? " It is now the character's portrait in your Characters collection."
+                  : charAttach.field === "voice"
+                    ? " It is saved as the character's voice in your Characters collection."
+                    : " It is saved on the character in your Characters collection.";
+            } else attachNote = " It was saved to your assets, but could not be filed on the character automatically — ask Jewel to file it on the character.";
+          } catch { attachNote = " It was saved to your assets, but could not be filed on the character automatically — ask Jewel to file it on the character."; }
         }
         const finished = generatedAsset.name + " is generated and saved in your assets for review." + attachNote + (jewelRecovered ? " Jewel adjusted the approach after the first attempt ran into trouble." : "");
         persist({ ...finalProject, messages: [...updated.messages, { role: "assistant", text: finished }] });

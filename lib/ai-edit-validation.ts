@@ -55,6 +55,17 @@ export function validateExplicitSettings(request:string,response:unknown){
 
 export function validateSavedReferences(project:any,input:unknown) {
  const changes=record(input);
+ // Character Studio edits: a list of profile edits; an entry that
+ // carries an id patches a saved character, so that id must be one —
+ // creates omit the id entirely (the app makes it), so only stated
+ // ids are checked, never required.
+ if(changes.characters!==undefined){
+  if(!Array.isArray(changes.characters))throw new Error('changes.characters must be a list of edits.');
+  for(const raw of changes.characters) {
+   const item=record(raw);
+   if(item.id!==undefined&&!(project?.characters||[]).some((existing:any)=>existing.id===item.id))throw new Error('changes.characters references an unknown saved id. Use the exact saved character id to edit one, or omit id to create a new character.');
+  }
+ }
  const fields=[['gameTools','gameTools','id'],['controls','controls','id'],['compositions','compositions','id'],['assets','assets','storageKey']] as const;
  for(const [field,collection,key] of fields) {
   if(changes[field]!==undefined&&!Array.isArray(changes[field]))throw new Error(`changes.${field} must be a list of edits.`);

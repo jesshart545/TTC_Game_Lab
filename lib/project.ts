@@ -42,6 +42,45 @@ export type ProjectAssetGeneration = { type: string; prompt: string; aspectRatio
 export type BackdropTextSpec = { text: string; fontFamily: string; textColor: string; accentColor?: string; presentation?: "plain" | "bubble" | "frame" };
 export type ProjectAsset = { name: string; type: string; url?: string; storageKey?: string; edits?: ProjectAssetEdits; inProject?: boolean; inOverlayBuild?: boolean; role?: "background" | "layer" | "video" | "audio"; generation?: ProjectAssetGeneration; textOverlay?: BackdropTextSpec | null; promptOverlay?: BackdropTextSpec | null; sign?: boolean };
 export type AssetPool = { id: string; name: string; assetKeys: string[] };
+/**
+ * One saved cast member of the Character Studio (see lib/characters.ts):
+ * a character the creator designed once — profile words in their own
+ * words, a portrait asset, an optional voice clip asset, and the clips
+ * animated from the portrait. The media itself stays ordinary project
+ * assets; the profile only points at them by their saved key
+ * (storageKey, or name for assets without one — the same identity
+ * every other saved reference on the site uses). A character is a
+ * library entry, never a placement: nothing here puts anything on
+ * the overlay.
+ */
+export type CharacterProfile = {
+  id: string;
+  name: string;
+  /** The character's role or archetype, in the creator's words. */
+  archetype: string;
+  /** The appearance description, in the creator's words. */
+  details: string;
+  bodyType?: string;
+  /** A mobility aid or distinctive physical feature, when the creator gave one. */
+  mobilityAid?: string;
+  /** The portrait's art style, in the creator's words — never a default. */
+  artStyle?: string;
+  /** How the character's voice is described, in the creator's words. */
+  voicePersona?: string;
+  /** Anything more the creator said about the voice. */
+  voiceDescription?: string;
+  /** Saved key of the portrait image asset. */
+  portraitKey?: string;
+  /** Saved keys of the reference images the creator uploaded for this
+   *  character — the visual references Jewel generates from. */
+  referenceKeys?: string[];
+  /** Saved key of the character's voice clip asset. */
+  voiceKey?: string;
+  /** Saved keys of the video clips animated from this character. */
+  clipKeys?: string[];
+  createdAt: string;
+  updatedAt: string;
+};
 export type CompositionTrackType = "video" | "visual" | "voice" | "music" | "sfx" | "text" | "effect";
 export type CompositionClip = { id:string; track:CompositionTrackType; assetName:string; storageKey?:string; url?:string; start:number; duration:number; trimStart?:number; loop?:boolean; volume:number; fadeIn:number; fadeOut:number; playbackRate:number; text?:string; effect?:string };
 export type AssetComposition = { id:string; name:string; duration:number; clips:CompositionClip[]; createdAt:string; inProject?:boolean };
@@ -114,6 +153,8 @@ export type Project = {
   controls: ProjectEvent[];
   assets: ProjectAsset[];
   assetPools?: AssetPool[];
+  /** The project's saved cast: Character Studio profiles (lib/characters.ts). */
+  characters?: CharacterProfile[];
   compositions?: AssetComposition[];
   overlay: { title: string; subtitle: string; showChat: boolean; showAlerts: boolean; showCharacter: boolean };
   wheel: GameWheel;
