@@ -8,6 +8,7 @@ import {clampBankPressValue,clampBankRoundSeconds} from "./bank";
 import {cleanSoundPads} from "./sound-board";
 import {clampDjCrossfadeSeconds,cleanDeckKeyList} from "./dj-deck";
 import {standingPlacementTypes} from "./standing-placement";
+import {applyCharacterEdits} from "./characters";
 import { OverlayResult, Project, ProjectAssetEdits } from "./project";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -42,7 +43,17 @@ export function normalizeDraftChanges(input: unknown) {
 export function applyDraftChanges(project: Project, input: unknown) {
   const changes = normalizeDraftChanges(input);
   let applied = 0;
-  const next: Project = { ...project, overlay: { ...project.overlay }, assets: project.assets.map(asset => ({ ...asset })), compositions: (project.compositions || []).map(c => ({ ...c, clips: c.clips.map(clip => ({ ...clip })) })), controls: project.controls.map(c => ({ ...c })), gameTools: (project.gameTools || []).map(tool => ({ ...tool, config: { ...tool.config } })) };
+  const next: Project = { ...project, overlay: { ...project.overlay }, assets: project.assets.map(asset => ({ ...asset })), compositions: (project.compositions || []).map(c => ({ ...c, clips: c.clips.map(clip => ({ ...clip })) })), controls: project.controls.map(c => ({ ...c })), gameTools: (project.gameTools || []).map(tool => ({ ...tool, config: { ...tool.config } })), characters: (project.characters || []).map(character => ({ ...character, clipKeys: character.clipKeys ? [...character.clipKeys] : undefined, referenceKeys: character.referenceKeys ? [...character.referenceKeys] : undefined })) };
+  // Character Studio edits (lib/characters.ts): changes.characters
+  // creates and patches saved cast members. A character is a library
+  // entry only — this never places, connects or deletes anything,
+  // and its media keys are checked against the project's own assets
+  // inside applyCharacterEdits.
+  if (Array.isArray(changes.characters)) {
+    const edited = applyCharacterEdits(next, changes.characters);
+    next.characters = edited.characters;
+    applied += edited.applied;
+  }
   const name = text(changes.name, 120);
   if (name && name !== next.name) { next.name = name; applied++; }
   const plan = object(changes.gamePlan);

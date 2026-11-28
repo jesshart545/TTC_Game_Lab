@@ -20,6 +20,7 @@ import AssetDetailsDialog from "./AssetDetailsDialog";
 import AssetThumbnail from "./AssetThumbnail";
 import { isAudio, isVideo } from "../lib/workshop-libraries";
 import { TALK_TOOL_TYPES } from "../lib/talkshow-path";
+import { characterRoster, removeCharacter } from "../lib/characters";
 
 /**
  * The questions saved inside a trivia-list tool, shown in the item itself:
@@ -124,6 +125,9 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
   } = props;
 
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+  const roster = characterRoster(project);
+  const selectedCharacter = roster.find(entry => entry.character.id === selectedCharacterId) || null;
 
   // Space purity (Jessica, 2026-11-03): a talk project's creation space
   // holds talk pieces only. Gameshow tools stay in the project's data —
@@ -193,6 +197,17 @@ export default function WorkshopAssetsPanel(props: WorkshopAssetsPanelProps) {
     </button>
     <p className="upload-caption">{UPLOAD_CAPTION}</p>
     <CollapsibleFolder title="Asset pools" count={(project.assetPools || []).length} description="Named groups used by your game controls" storageKey={`${project.id}:pools`} keepMounted><AssetPoolManager pools={project.assetPools || []} assets={project.assets} onChange={saveAssetPools} saveStatus={saveStatus} /></CollapsibleFolder>
+    <CollapsibleFolder title="Characters" count={roster.length} description="Your saved cast — describe one to Jewel to create or animate them" storageKey={`${project.id}:characters`} keepMounted><div className="detail-block">
+      {roster.length === 0 ? <p className="empty-note">No characters yet. Describe a character to Jewel and she will build their portrait with you.</p> : <div className="workshop-assets-grid">{roster.map(entry => { const key = entry.character.id; const portrait = entry.portrait; return <button type="button" key={key} className={`workshop-asset-tile${selectedCharacterId===key?" selected":""}`} aria-pressed={selectedCharacterId===key} aria-label={`Select character ${entry.character.name}`} onClick={()=>setSelectedCharacterId(selectedCharacterId===key?null:key)}>{portrait ? <AssetThumbnail asset={portrait} kind="image"/> : <span className="workshop-asset-name">No portrait yet</span>}<span className="workshop-asset-name">{entry.character.name}</span><small>{entry.character.archetype || "Character"}</small></button>; })}</div>}
+      {selectedCharacter && <div className="character-detail">
+        <h4>{selectedCharacter.character.name}</h4>
+        {selectedCharacter.character.archetype && <p>{selectedCharacter.character.archetype}</p>}
+        {selectedCharacter.character.details && <p>{selectedCharacter.character.details}</p>}
+        <p><small>{selectedCharacter.portrait ? "Portrait saved" : "No portrait yet"} · {selectedCharacter.voice ? "Voice clip saved" : "No voice clip"} · {selectedCharacter.clips.length} animated clip{selectedCharacter.clips.length === 1 ? "" : "s"}{selectedCharacter.references.length ? ` · ${selectedCharacter.references.length} reference image${selectedCharacter.references.length === 1 ? "" : "s"}` : ""}</small></p>
+        <p className="empty-note">Ask Jewel to change this character, give them a new portrait, a voice, or an animated scene.</p>
+        <button type="button" className="danger-btn" onClick={()=>{persist({...project, characters: removeCharacter(project, selectedCharacter.character.id)}); setSelectedCharacterId(null);}}>Delete character</button>
+      </div>}
+    </div></CollapsibleFolder>
     <div className="workshop-assets-toolbar">
       <label className="workshop-assets-search">Find an asset<input type="search" value={assetSearch} onChange={event => setAssetSearch(event.target.value)} placeholder="Search by name" /></label>
       <label className="workshop-assets-filter">Show<select value={assetKindFilter} onChange={event => setAssetKindFilter(event.target.value as typeof assetKindFilter)}><option value="all">All media</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="other">Other files</option></select></label>
